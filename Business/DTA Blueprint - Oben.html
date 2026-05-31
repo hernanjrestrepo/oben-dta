@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<!-- saved from url=(0112)file:///C:/Users/jorgerestrepo/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/YTP02209/oben-demo.html -->
+<html lang="es"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<title>DTA Blueprint - Oben</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.header {
+  padding: 20px;
+  background: #020617;
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+  border-bottom: 1px solid #1e293b;
+}
+
+.container {
+  max-width: 1100px;
+  margin: auto;
+  padding: 30px;
+}
+
+.card {
+  background: #1e293b;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 22px;
+  margin-bottom: 15px;
+  color: #22c55e;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.section {
+  background: #020617;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.label {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 5px;
+}
+
+.value {
+  font-size: 14px;
+}
+
+textarea {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  background: #0f172a;
+  color: white;
+}
+
+.options label {
+  display: block;
+  margin-top: 5px;
+}
+
+button {
+  margin-top: 20px;
+  width: 100%;
+  padding: 15px;
+  background: #22c55e;
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+🧠 DTA Blueprint - Oben Group
+</div>
+
+<div class="container">
+
+<div class="card">
+
+<div class="title">1. Recepción de Solicitud</div>
+
+<div class="grid">
+
+<div class="section">
+<div class="label">AS-IS | Qué pasa hoy</div>
+<div class="value">
+Cliente envía solicitudes por múltiples canales. El comercial interpreta manualmente y registra en Oben+.
+</div>
+</div>
+
+<div class="section">
+<div class="label">Quién interviene</div>
+<div class="value">
+Cliente, Ejecutivo comercial, Soporte administrativo
+</div>
+</div>
+
+<div class="section">
+<div class="label">Sistemas</div>
+<div class="value">
+Email, WhatsApp, Teléfono, Oben+
+</div>
+</div>
+
+<div class="section">
+<div class="label">Inputs</div>
+<div class="value">
+Correos, mensajes, llamadas, historial
+</div>
+</div>
+
+<div class="section">
+<div class="label">Outputs</div>
+<div class="value">
+Solicitud estructurada en Oben+
+</div>
+</div>
+
+<div class="section">
+<div class="label">Problemas</div>
+<div class="value">
+Errores manuales, reprocesos, dependencia del comercial
+</div>
+</div>
+
+</div>
+
+<div class="section" style="margin-top:15px;">
+<div class="label">TO-BE (DTA)</div>
+<div class="value">
+Recepción automática omnicanal + interpretación con IA + estructuración inmediata.
+</div>
+</div>
+
+<!-- PREGUNTAS -->
+
+<div class="section" style="margin-top:15px;">
+<div class="label">Canales actuales</div>
+<div class="options">
+<label><input type="checkbox"> Email</label>
+<label><input type="checkbox"> WhatsApp</label>
+<label><input type="checkbox"> Teléfono</label>
+<label><input type="checkbox"> Otro</label>
+</div>
+</div>
+
+<div class="section">
+<div class="label">¿Canales unificados?</div>
+<label><input type="radio" name="canales"> Sí</label>
+<label><input type="radio" name="canales"> No</label>
+</div>
+
+<div class="section">
+<div class="label">Problemas actuales</div>
+<textarea></textarea>
+</div>
+
+</div>
+
+<button onclick="guardar()">Guardar Blueprint</button>
+
+</div>
+
+<script>
+function guardar() {
+  alert("Blueprint guardado (demo)");
+}
+</script>
+
+
+</body></html>

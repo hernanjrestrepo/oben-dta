@@ -1,0 +1,58 @@
+Solicitud de cotización: email, whatsapp, llamada telefónica,
+
+Esta solicitud se ingresa en Oben+ manualmente, conexión via API
+
+Parametrización de clientes, esta en Oben+, IA consulta precio con Comercial
+
+Requerimientos especiales clientes
+
+SKU: código del producto, cliente, cantidad y precio
+
+Pedidos Nacionales y de Exportación, el sistema calcula el cubicaje y balanceo, proceso de balanceo (area de planificación)
+
+Sistema Cube IQ: para calcular el cubicaje y el balanceo
+
+Se envía cotización formal (proforma) al cliente de acuerdo al cubicaje y al balanceo, Oben+
+
+Cartera aprueba
+
+Cliente recibe cotización por correo puede aprobar o puede pedir un cambio, si hay cambio se inicia el proceso
+
+La aprobación el cliente la hace a traves de orden de compra o simplemente dando un ok en el correo electrónico
+
+
+
+**Facturación y Despacho**
+
+Hay disponibilidad de inventario
+
+Lista de empaque: Oben+, confirmar materia prima que se están consumiendo, se genera la lista unificada, la lista detallada, el consumo de material de empaque, el consumo de materia prima, una hoja de costo, y una lista especial (clientes de exportación), hay dos clientes con otra lista especial, cuando se genera la lista de empaque se genera otro ciclo:
+
+Exportación: liquidación del pedido, costo de flete, seguro, otros gastos, sistema hace un prorrateo de pelicula por SKU, se hace de acuerdo al Incoterm, se saca el precio real de la pelicula es decir precio liquidado, en la cotización se desglosan los 3 valores, ahora si viene el precio de la factura, en paralelo hay un proceso de cambios de cantidades, en el cual se genera un predespacho con los pallets que van el pedido con las cantidades reales con las cuales se van a facturar, cuando es exportación también se actualiza el precio, y aquí se genera la factura
+
+Cuando el pedido se termina en piso
+
+ejecución y ensamble, cuando he cerrado la producción del rollo madre
+
+Pendiente proceso de la DIAN: tienen agente inhouse en la planta el que hace todo lo correspondiente,
+
+Proceso de la Naviera (cotizador inteligente)
+
+Tracking logístico (Dashborad)
+
+
+
+**Integraciones**
+
+Oracle
+
+Oben+
+
+Navieras
+
+DIAN - EFranco
+
+
+
+Cube IQ - no entra en facturación
+
