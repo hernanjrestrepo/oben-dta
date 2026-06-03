@@ -196,7 +196,11 @@ export class ProductionOrder {
   })
   holdReason: string | null;
 
-  @Column({ type: 'text', nullable: true, comment: 'User who put order on hold' })
+  @Column({
+    type: 'text',
+    nullable: true,
+    comment: 'User who put order on hold',
+  })
   heldBy: string | null;
 
   @Column({ type: 'timestamp', nullable: true, comment: 'Hold timestamp' })

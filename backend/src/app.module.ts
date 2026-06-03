@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { HealthController } from './controllers/health.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { ProductsModule } from './modules/products/products.module';
@@ -53,7 +54,7 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
         host: config.get('DB_HOST', 'localhost'),
         port: config.get('DB_PORT', 5432),
         username: config.get('DB_USERNAME', 'dta'),
-        password: config.get('DB_PASSWORD', 'dta_secret'),
+        password: config.get('DB_PASSWORD'),
         database: config.get('DB_NAME', 'dta_db'),
         entities: [
           AuditEvent,
@@ -97,7 +98,7 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
     SeedModule,
     DashboardModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [AppService],
 })
 export class AppModule {}
