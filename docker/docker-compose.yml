@@ -73,11 +73,15 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_BACKEND_URL: http://backend:3004
+        # NEXT_PUBLIC_* is baked into the client bundle and consumed by the
+        # browser on the host, so it must point to a host-reachable URL — NOT
+        # the docker-internal hostname "backend". For remote deploy, override
+        # this with the address the client's browser uses to reach the backend.
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:3004}
     container_name: dta-frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_BACKEND_URL: http://backend:3004
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:3004}
     ports:
       - "3000:3000"
     depends_on:

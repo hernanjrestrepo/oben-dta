@@ -50,12 +50,24 @@ class ApiClient {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
+    // Mirror token removal into the cookie the Next.js middleware reads.
+    if (typeof document !== 'undefined') {
+      document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
+    }
   }
 
   setAuth(response: AuthResponse) {
     localStorage.setItem('access_token', response.access_token);
     localStorage.setItem('refresh_token', response.refresh_token);
     localStorage.setItem('user', JSON.stringify(response.user));
+    // The Next.js middleware (src/middleware.ts) gates protected routes by
+    // looking for an `access_token` cookie. The API client authenticates via
+    // the Authorization header from localStorage, so without also writing the
+    // cookie the middleware bounces every post-login navigation back to
+    // /login. Keep the cookie in sync with the stored token.
+    if (typeof document !== 'undefined') {
+      document.cookie = `access_token=${response.access_token}; path=/; max-age=900; SameSite=Lax`;
+    }
   }
 
   getUser(): User | null {
