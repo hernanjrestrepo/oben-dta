@@ -11,10 +11,12 @@ import {
   ChevronRight,
   Menu,
   X,
+  Bot,
 } from 'lucide-react';
 import { useState } from 'react';
 
 const navItems = [
+  { href: '/operaciones', label: 'Centro IA', icon: Bot },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/orders', label: 'Órdenes', icon: ShoppingCart },
   { href: '/clients', label: 'Clientes', icon: Users },

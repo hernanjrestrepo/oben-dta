@@ -109,3 +109,35 @@ export interface ApiError {
   timestamp: string;
   path: string;
 }
+
+// EVA — resultado del pipeline de orquestación IA (/flow/process)
+export interface FlowResult {
+  step: string;
+  parsed: {
+    clientId: string;
+    items: {
+      sku: string;
+      name: string;
+      qty: number;
+      unitPrice: number;
+      total: number;
+    }[];
+  };
+  creditCheck: {
+    creditLimit: number;
+    used: number;
+    available: number;
+    orderTotal: number;
+    passed: boolean;
+  };
+  inventoryCheck: {
+    sku: string;
+    requested: number;
+    available: number;
+    passed: boolean;
+  };
+  decision: string;
+  status: 'CONFIRMED' | 'PENDING_PRODUCTION' | 'BLOCKED';
+  order: { orderId: string; status: string } | null;
+  invoice: { invoiceId: string; status: string; dianStatus: string } | null;
+}

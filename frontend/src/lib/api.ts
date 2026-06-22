@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
-import { ApiError, AuthResponse, Client, CreateOrderDto, DashboardKPIs, Order, Product, UpdateOrderStatusDto, User } from '@/types';
+import { ApiError, AuthResponse, Client, CreateOrderDto, DashboardKPIs, FlowResult, Order, Product, UpdateOrderStatusDto, User } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
 
@@ -101,6 +101,13 @@ class ApiClient {
   }): Promise<AuthResponse> {
     const { data } = await this.client.post<AuthResponse>('/auth/register', dto);
     this.setAuth(data);
+    return data;
+  }
+
+  // EVA — AI flow orchestration (interpreta lenguaje natural y ejecuta el
+  // pipeline pedido->credito->inventario->decision->orden->factura DIAN)
+  async processFlow(text: string): Promise<FlowResult> {
+    const { data } = await this.client.post<FlowResult>('/flow/process', { text });
     return data;
   }
 

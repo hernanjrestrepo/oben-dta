@@ -10,7 +10,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (api.isAuthenticated()) {
-      router.replace('/dashboard');
+      router.replace('/operaciones');
     } else {
       router.replace('/login');
     }
