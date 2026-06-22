@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Client } from '../../entities/client.entity';
 import { CreateClientDto, UpdateClientDto } from './dto/create-client.dto';
 import { UserRole } from '../auth/dto/auth.dto';
@@ -39,11 +39,19 @@ export class ClientsService {
     return this.clientRepository.save(client);
   }
 
-  async findAll(userId?: string, page: number = 1, limit: number = 50): Promise<Client[]> {
-    const where: any = {};
-    if (userId) {
-      where.createdBy = userId;
-    }
+  async findAll(
+    requestingUser?: RequestingUser,
+    page: number = 1,
+    limit: number = 50,
+  ): Promise<Client[]> {
+    // ADMIN sees every record. Other roles see records they created plus
+    // unowned "house" records (createdBy IS NULL) — consistent with the
+    // ownership rule in assertOwnership(). This keeps private records of
+    // other users isolated while still showing shared/seed data.
+    const isAdmin = !requestingUser || requestingUser.role === UserRole.ADMIN;
+    const where = isAdmin
+      ? {}
+      : [{ createdBy: requestingUser!.sub }, { createdBy: IsNull() }];
     return this.clientRepository.find({
       where,
       skip: (page - 1) * limit,

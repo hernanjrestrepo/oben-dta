@@ -38,11 +38,11 @@ export class ClientsController {
 
   @Get()
   async findAll(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser() requestingUser: RequestingUser,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ): Promise<Client[]> {
-    return this.clientsService.findAll(userId, page ? +page : 1, limit ? +limit : 50);
+    return this.clientsService.findAll(requestingUser, page ? +page : 1, limit ? +limit : 50);
   }
 
   @Get(':id')

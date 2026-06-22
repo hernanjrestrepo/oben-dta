@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Order, OrderStatus } from '../../entities/order.entity';
 import { OrderItem } from '../../entities/order-item.entity';
 import { Client } from '../../entities/client.entity';
@@ -97,11 +97,17 @@ export class OrdersService {
     return result;
   }
 
-  async findAll(userId?: string, page: number = 1, limit: number = 50): Promise<Order[]> {
-    const where: any = {};
-    if (userId) {
-      where.createdBy = userId;
-    }
+  async findAll(
+    requestingUser?: RequestingUser,
+    page: number = 1,
+    limit: number = 50,
+  ): Promise<Order[]> {
+    // ADMIN sees every order. Other roles see their own orders plus unowned
+    // "house" orders (createdBy IS NULL) — consistent with assertOwnership().
+    const isAdmin = !requestingUser || requestingUser.role === UserRole.ADMIN;
+    const where = isAdmin
+      ? {}
+      : [{ createdBy: requestingUser!.sub }, { createdBy: IsNull() }];
     return this.orderRepository.find({
       where,
       relations: ['client', 'items', 'items.product'],
