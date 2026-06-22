@@ -137,7 +137,15 @@ function ClientCard({
   onDelete: (id: string) => void;
   deleting: boolean;
 }) {
-  const availableCredit = client.creditLimit - client.usedCredit;
+  // Values arrive as decimal strings from the API; coerce explicitly and
+  // guard against a 0 credit limit (0/0 -> NaN previously painted a full red
+  // "critical" bar for clients that simply have no limit set).
+  const creditLimit = Number(client.creditLimit) || 0;
+  const usedCredit = Number(client.usedCredit) || 0;
+  const availableCredit = creditLimit - usedCredit;
+  const usagePct = creditLimit > 0 ? Math.min(100, (usedCredit / creditLimit) * 100) : 0;
+  const hasLimit = creditLimit > 0;
+  const healthyCredit = hasLimit ? availableCredit / creditLimit > 0.3 : true;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition">
@@ -203,18 +211,18 @@ function ClientCard({
           <span className="text-gray-500 flex items-center gap-1">
             <CreditCard className="w-4 h-4" /> Crédito
           </span>
-          <span className="font-medium">
-            ${Number(client.creditLimit).toLocaleString('es-CO')} COP
+          <span className="font-semibold text-gray-900">
+            {hasLimit
+              ? `$${creditLimit.toLocaleString('es-CO')} COP`
+              : 'Sin límite asignado'}
           </span>
         </div>
         <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full ${
-              availableCredit / client.creditLimit > 0.3 ? 'bg-green-500' : 'bg-red-500'
+              !hasLimit ? 'bg-gray-300' : healthyCredit ? 'bg-green-500' : 'bg-red-500'
             }`}
-            style={{
-              width: `${Math.min(100, (client.usedCredit / client.creditLimit) * 100)}%`,
-            }}
+            style={{ width: `${usagePct}%` }}
           />
         </div>
         <div className="flex justify-between text-xs mt-1">
