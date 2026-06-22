@@ -241,9 +241,6 @@ $RECYCLE.BIN/
 # Docker
 .docker/
 .dockerignore
-Dockerfile*
-docker-compose*.yml
-docker-compose*.yaml
 
 # Kubernetes
 kubeconfig
@@ -265,12 +262,6 @@ crash.log
 # Testing
 *.test.js
 *.spec.js
-*.test.ts
-*.spec.ts
-__tests__/
-__mocks__/
-test/
-tests/
 coverage/
 .nyc_output/
 
@@ -411,19 +402,16 @@ _site/
 build/
 
 # Hugo
-public/
 
 # Pelican
 output/
 
 # Hexo
-public/
 
 # Docpad
 out/
 
 # Harp
-public/
 
 # Metalsmith
 build/
@@ -445,7 +433,6 @@ assets/css/master.css
 assets/js/master.js
 
 # Brunch
-public/
 
 # Ember
 dist/
@@ -621,9 +608,6 @@ babel.config.mjs
 # Docker
 .docker/
 .dockerignore
-Dockerfile*
-docker-compose*.yml
-docker-compose*.yaml
 
 # Kubernetes
 kubeconfig
@@ -654,7 +638,6 @@ environments/
 nodes/
 
 # Puppet
-modules/
 manifests/
 facts/
 *.facts
@@ -952,19 +935,16 @@ _site/
 build/
 
 # Hugo
-public/
 
 # Pelican
 output/
 
 # Hexo
-public/
 
 # Docpad
 out/
 
 # Harp
-public/
 
 # Metalsmith
 build/
@@ -986,7 +966,6 @@ assets/css/master.css
 assets/js/master.js
 
 # Brunch
-public/
 
 # Ember
 dist/
@@ -1162,9 +1141,6 @@ babel.config.mjs
 # Docker
 .docker/
 .dockerignore
-Dockerfile*
-docker-compose*.yml
-docker-compose*.yaml
 
 # Kubernetes
 kubeconfig
@@ -1195,7 +1171,6 @@ environments/
 nodes/
 
 # Puppet
-modules/
 manifests/
 facts/
 *.facts
@@ -1614,19 +1589,16 @@ _site/
 build/
 
 # Hugo
-public/
 
 # Pelican
 output/
 
 # Hexo
-public/
 
 # Docpad
 out/
 
 # Harp
-public/
 
 # Metalsmith
 build/
@@ -1648,7 +1620,6 @@ assets/css/master.css
 assets/js/master.js
 
 # Brunch
-public/
 
 # Ember
 dist/
@@ -1824,9 +1795,6 @@ babel.config.mjs
 # Docker
 .docker/
 .dockerignore
-Dockerfile*
-docker-compose*.yml
-docker-compose*.yaml
 
 # Kubernetes
 kubeconfig
@@ -1857,7 +1825,6 @@ environments/
 nodes/
 
 # Puppet
-modules/
 manifests/
 facts/
 *.facts

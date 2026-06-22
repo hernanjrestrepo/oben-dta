@@ -37,6 +37,9 @@ export class Client {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ name: 'created_by', nullable: true })
+  createdBy: string;
+
   @OneToMany(() => Order, (order) => order.client)
   orders: Order[];
 

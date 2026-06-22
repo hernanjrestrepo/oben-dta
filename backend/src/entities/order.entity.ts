@@ -60,6 +60,9 @@ export class Order {
   @Column({ nullable: true })
   invoiceNumber: string;
 
+  @Column({ name: 'created_by', nullable: true })
+  createdBy: string;
+
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: true })
   items: OrderItem[];
 
