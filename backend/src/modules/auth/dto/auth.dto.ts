@@ -48,6 +48,14 @@ export class LoginDto {
   tenantSlug?: string;
 }
 
+export class PlatformLoginDto {
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  password: string;
+}
+
 export class UpdateUserDto {
   @IsOptional()
   @IsString()

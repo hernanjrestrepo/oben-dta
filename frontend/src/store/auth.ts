@@ -11,6 +11,7 @@ interface AuthState {
   // Actions
   initialize: () => void;
   login: (email: string, password: string) => Promise<void>;
+  platformLogin: (email: string, password: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
 }
@@ -31,6 +32,29 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await api.login(email, password);
+      set({
+        user: response.user,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      const message = msg || 'Error al iniciar sesión';
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: message,
+      });
+      throw err;
+    }
+  },
+
+  platformLogin: async (email: string, password: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.platformLogin(email, password);
       set({
         user: response.user,
         isAuthenticated: true,

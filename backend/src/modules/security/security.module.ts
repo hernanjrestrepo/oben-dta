@@ -20,9 +20,15 @@ import { RolesService } from './roles.service';
 import { PermissionsService } from './permissions.service';
 import { PlansService } from './plans.service';
 import { PlatformRolesService } from './platform-roles.service';
+import { PlatformUsersService } from './platform-users.service';
+import { PlatformAuditService } from './platform-audit.service';
+import { PlatformSystemStatusService } from './platform-system-status.service';
 import { PermissionsGuard } from './permissions.guard';
 import { SecurityController } from './security.controller';
 import { PlatformSecurityController } from './platform-security.controller';
+import { PlatformUsersController } from './platform-users.controller';
+import { PlatformAuditController } from './platform-audit.controller';
+import { PlatformSystemController } from './platform-system.controller';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @Global()
@@ -59,10 +65,19 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     PermissionsService,
     PlansService,
     PlatformRolesService,
+    PlatformUsersService,
+    PlatformAuditService,
+    PlatformSystemStatusService,
     PermissionsGuard,
     JwtAuthGuard,
   ],
-  controllers: [SecurityController, PlatformSecurityController],
+  controllers: [
+    SecurityController,
+    PlatformSecurityController,
+    PlatformUsersController,
+    PlatformAuditController,
+    PlatformSystemController,
+  ],
   exports: [
     AuthorizationService,
     LicenseService,
@@ -71,6 +86,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     RolesService,
     PermissionsService,
     PlansService,
+    PlatformRolesService,
   ],
 })
 export class SecurityModule {}

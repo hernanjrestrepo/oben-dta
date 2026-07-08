@@ -1,11 +1,11 @@
 import { Injectable, UnauthorizedException, BadRequestException, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User } from '../../entities/user.entity';
 import { Tenant, TenantStatus } from '../../entities/tenant.entity';
-import { RegisterDto, LoginDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, PlatformLoginDto } from './dto/auth.dto';
 import { AuthorizationService } from '../security/authorization.service';
 
 export interface AuthResponse {
@@ -86,6 +86,23 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) throw new UnauthorizedException('Credenciales inválidas');
     return this.generateTokens(user, tenant);
+  }
+
+  /**
+   * Login exclusivo para usuarios de plataforma (tenantId=null). El login regular
+   * siempre resuelve un tenant y filtra por tenantId=tenant.id, por lo que un
+   * platform user jamás matchea ahí — este es el único camino de entrada para
+   * SuperAdmin Paradixe y demás roles de plataforma.
+   */
+  async platformLogin(dto: PlatformLoginDto): Promise<AuthResponse> {
+    const user = await this.userRepository.findOne({
+      where: { email: dto.email, tenantId: IsNull() },
+    });
+    if (!user) throw new UnauthorizedException('Credenciales inválidas');
+    if (!user.isActive) throw new UnauthorizedException('Usuario inactivo');
+    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!isPasswordValid) throw new UnauthorizedException('Credenciales inválidas');
+    return this.generateTokens(user, null);
   }
 
   async refresh(refreshToken: string): Promise<{ access_token: string; user: AuthResponse['user'] }> {

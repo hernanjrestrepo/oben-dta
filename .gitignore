@@ -28,7 +28,6 @@ coverage/
 dist/
 build/
 out/
-lib/
 .release/
 .releases/
 *.release
@@ -669,7 +668,6 @@ target/
 
 # Leiningen
 target/
-lib/
 classes/
 checkouts/
 
@@ -1202,7 +1200,6 @@ target/
 
 # Leiningen
 target/
-lib/
 classes/
 checkouts/
 
@@ -1376,7 +1373,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -1856,7 +1852,6 @@ target/
 
 # Leiningen
 target/
-lib/
 classes/
 checkouts/
 

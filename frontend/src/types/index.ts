@@ -6,6 +6,111 @@ export interface User {
   firstName: string;
   lastName: string;
   role: string;
+  tenantId?: string | null;
+  tenantSlug?: string | null;
+  isSuperAdmin?: boolean;
+  permissions?: string[];
+}
+
+// --- Panel SuperAdmin de plataforma ---------------------------------------
+
+export type TenantStatus = 'active' | 'suspended' | 'trial' | 'archived';
+
+export interface Tenant {
+  id: string;
+  slug: string;
+  name: string;
+  legalName?: string;
+  taxId?: string;
+  countryCode: string;
+  defaultCurrency: string;
+  timezone: string;
+  status: TenantStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Plan {
+  id: string;
+  key: string;
+  name: string;
+  description?: string;
+  priceMonthly: number;
+  currency: string;
+  maxUsers: number;
+  maxStorageGb: number;
+  isActive: boolean;
+  modules: string[];
+}
+
+export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'cancelled';
+
+export interface TenantSubscription {
+  id: string;
+  tenantId: string;
+  planId: string;
+  plan?: Plan;
+  status: SubscriptionStatus;
+  startsAt: string;
+  endsAt: string | null;
+}
+
+export interface TenantFeatureFlag {
+  id: string;
+  tenantId: string;
+  moduleKey: string;
+  enabled: boolean;
+  reason: string | null;
+  setBy: string | null;
+}
+
+export interface PlatformRole {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+}
+
+export interface PlatformUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  isActive: boolean;
+  isSuperAdmin: boolean;
+  createdAt: string;
+  platformRoles: string[];
+}
+
+export interface AuditRow {
+  id: string;
+  tenantId: string | null;
+  userId: string | null;
+  permissionKey: string | null;
+  moduleKey: string | null;
+  route: string | null;
+  method: string | null;
+  ip: string | null;
+  granted: boolean;
+  deniedReason: string | null;
+  createdAt: string;
+}
+
+export interface AuditPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: AuditRow[];
+}
+
+export interface SystemStatus {
+  status: 'ok' | 'degraded';
+  timestamp: string;
+  uptimeSeconds: number;
+  database: { status: 'ok' | 'error'; migrationsApplied: number };
+  tenants: Record<string, number> & { total: number };
+  subscriptions: Record<string, number> & { total: number };
+  platformUsers: { total: number; active: number; superAdmins: number };
 }
 
 export interface AuthResponse {

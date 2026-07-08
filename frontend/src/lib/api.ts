@@ -1,5 +1,10 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
-import { AdanAnswer, AdanStats, ApiError, AuthResponse, Client, CreateOrderDto, DashboardKPIs, EvaResult, Invoice, Order, Product, UpdateOrderStatusDto, User } from '@/types';
+import {
+  AdanAnswer, AdanStats, ApiError, AuditPage, AuthResponse, Client, CreateOrderDto,
+  DashboardKPIs, EvaResult, Invoice, Order, Plan, PlatformRole, PlatformUser,
+  Product, SystemStatus, Tenant, TenantFeatureFlag, TenantSubscription,
+  UpdateOrderStatusDto, User,
+} from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
 
@@ -88,6 +93,12 @@ class ApiClient {
   // Auth
   async login(email: string, password: string): Promise<AuthResponse> {
     const { data } = await this.client.post<AuthResponse>('/auth/login', { email, password });
+    this.setAuth(data);
+    return data;
+  }
+
+  async platformLogin(email: string, password: string): Promise<AuthResponse> {
+    const { data } = await this.client.post<AuthResponse>('/auth/platform-login', { email, password });
     this.setAuth(data);
     return data;
   }
@@ -212,6 +223,157 @@ class ApiClient {
   // Products (for order creation)
   async getProducts(): Promise<Product[]> {
     const { data } = await this.client.get<Product[]>('/products');
+    return data;
+  }
+
+  // --- Panel SuperAdmin de plataforma -------------------------------------
+
+  async getTenants(): Promise<Tenant[]> {
+    const { data } = await this.client.get<Tenant[]>('/platform/tenants');
+    return data;
+  }
+
+  async getTenant(id: string): Promise<Tenant> {
+    const { data } = await this.client.get<Tenant>(`/platform/tenants/${id}`);
+    return data;
+  }
+
+  async createTenant(dto: {
+    slug: string;
+    name: string;
+    legalName?: string;
+    taxId?: string;
+    countryCode?: string;
+    defaultCurrency?: string;
+    timezone?: string;
+  }): Promise<Tenant> {
+    const { data } = await this.client.post<Tenant>('/platform/tenants', dto);
+    return data;
+  }
+
+  async updateTenant(id: string, dto: Partial<Pick<Tenant, 'name' | 'legalName' | 'taxId' | 'status'>>): Promise<Tenant> {
+    const { data } = await this.client.patch<Tenant>(`/platform/tenants/${id}`, dto);
+    return data;
+  }
+
+  async archiveTenant(id: string): Promise<Tenant> {
+    const { data } = await this.client.delete<Tenant>(`/platform/tenants/${id}`);
+    return data;
+  }
+
+  async getPlans(): Promise<Plan[]> {
+    const { data } = await this.client.get<Plan[]>('/platform/plans');
+    return data;
+  }
+
+  async createPlan(dto: {
+    key: string;
+    name: string;
+    description?: string;
+    priceMonthly?: number;
+    currency?: string;
+    maxUsers?: number;
+    maxStorageGb?: number;
+    modules: string[];
+  }): Promise<Plan> {
+    const { data } = await this.client.post<Plan>('/platform/plans', dto);
+    return data;
+  }
+
+  async updatePlanModules(key: string, modules: string[]): Promise<Plan> {
+    const { data } = await this.client.put<Plan>(`/platform/plans/${key}/modules`, { modules });
+    return data;
+  }
+
+  async getModules(): Promise<Array<{ key: string; name: string; category: string }>> {
+    const { data } = await this.client.get('/platform/modules');
+    return data;
+  }
+
+  async getTenantSubscription(tenantId: string): Promise<TenantSubscription | null> {
+    const { data } = await this.client.get<TenantSubscription | null>(`/platform/tenants/${tenantId}/subscription`);
+    return data;
+  }
+
+  async assignSubscription(tenantId: string, dto: { planKey: string; status?: string; endsAt?: string }): Promise<TenantSubscription> {
+    const { data } = await this.client.put<TenantSubscription>(`/platform/tenants/${tenantId}/subscription`, dto);
+    return data;
+  }
+
+  async getFeatureFlags(tenantId: string): Promise<TenantFeatureFlag[]> {
+    const { data } = await this.client.get<TenantFeatureFlag[]>(`/platform/tenants/${tenantId}/feature-flags`);
+    return data;
+  }
+
+  async setFeatureFlag(tenantId: string, dto: { moduleKey: string; enabled: boolean; reason?: string }): Promise<TenantFeatureFlag> {
+    const { data } = await this.client.put<TenantFeatureFlag>(`/platform/tenants/${tenantId}/feature-flags`, dto);
+    return data;
+  }
+
+  async getTenantLicense(tenantId: string): Promise<{
+    tenantId: string;
+    planKey: string | null;
+    subscriptionStatus: string | null;
+    modulesEnabled: string[];
+    planModules: string[];
+    flagOverrides: Record<string, boolean>;
+  }> {
+    const { data } = await this.client.get(`/platform/tenants/${tenantId}/license`);
+    return data;
+  }
+
+  async getPlatformRoles(): Promise<PlatformRole[]> {
+    const { data } = await this.client.get<PlatformRole[]>('/platform/platform-roles');
+    return data;
+  }
+
+  async getPlatformUsers(): Promise<PlatformUser[]> {
+    const { data } = await this.client.get<PlatformUser[]>('/platform/users');
+    return data;
+  }
+
+  async createPlatformUser(dto: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+    platformRoleKey?: string;
+  }): Promise<PlatformUser> {
+    const { data } = await this.client.post<PlatformUser>('/platform/users', dto);
+    return data;
+  }
+
+  async updatePlatformUser(id: string, dto: { firstName?: string; lastName?: string; isActive?: boolean; password?: string }): Promise<PlatformUser> {
+    const { data } = await this.client.patch<PlatformUser>(`/platform/users/${id}`, dto);
+    return data;
+  }
+
+  async deletePlatformUser(id: string): Promise<void> {
+    await this.client.delete(`/platform/users/${id}`);
+  }
+
+  async assignPlatformRole(userId: string, platformRoleKey: string): Promise<void> {
+    await this.client.post('/platform/platform-roles/assign', { userId, platformRoleKey });
+  }
+
+  async unassignPlatformRole(userId: string, platformRoleKey: string): Promise<void> {
+    await this.client.delete('/platform/platform-roles/assign', { data: { userId, platformRoleKey } });
+  }
+
+  async getAudit(params: {
+    tenantId?: string;
+    userId?: string;
+    permissionKey?: string;
+    granted?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AuditPage> {
+    const { data } = await this.client.get<AuditPage>('/platform/audit', { params });
+    return data;
+  }
+
+  async getSystemStatus(): Promise<SystemStatus> {
+    const { data } = await this.client.get<SystemStatus>('/platform/system-status');
     return data;
   }
 }

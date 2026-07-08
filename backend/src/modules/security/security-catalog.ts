@@ -140,6 +140,9 @@ const EXTRA_PERMISSIONS: SeedPermission[] = [
   { key: 'platform.modules.manage', moduleKey: 'platform', action: 'modules.manage', name: 'administrar catálogo de módulos', isPlatform: true },
   { key: 'platform.audit.read', moduleKey: 'platform', action: 'audit.read', name: 'auditoría de plataforma', isPlatform: true },
   { key: 'platform.support.impersonate', moduleKey: 'platform', action: 'support.impersonate', name: 'impersonar tenant (soporte)', isPlatform: true },
+  { key: 'platform.users.read', moduleKey: 'platform', action: 'users.read', name: 'ver usuarios de plataforma', isPlatform: true },
+  { key: 'platform.users.manage', moduleKey: 'platform', action: 'users.manage', name: 'administrar usuarios de plataforma', isPlatform: true },
+  { key: 'platform.system.read', moduleKey: 'platform', action: 'system.read', name: 'ver estado del sistema', isPlatform: true },
 ];
 
 export const SEED_PERMISSIONS: SeedPermission[] = [
@@ -206,6 +209,7 @@ export const SEED_PLATFORM_ROLES: SeedPlatformRole[] = [
       'platform.tenants.read',
       'platform.audit.read',
       'platform.support.impersonate',
+      'platform.system.read',
     ],
   },
   {
@@ -215,6 +219,7 @@ export const SEED_PLATFORM_ROLES: SeedPlatformRole[] = [
     permissions: [
       'platform.tenants.read',
       'platform.audit.read',
+      'platform.system.read',
     ],
   },
 ];
