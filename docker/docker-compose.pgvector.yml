@@ -1,0 +1,23 @@
+# Override para activar pgvector (Fase ADÁN). NO ejecutar todavía.
+#
+# Uso (cuando el benchmark esté cerrado y se inicie ADÁN):
+#   docker compose -f docker-compose.yml -f docker-compose.pgvector.yml up -d postgres
+#   docker exec dta-postgres psql -U dta -d dta_db -f /migrations/0001_adan_pgvector.sql
+#
+# Por qué es seguro respecto a los datos:
+#   pgvector/pgvector:pg16 es PostgreSQL 16 (igual que postgres:16-alpine) con la
+#   extensión vector ya compilada. El volumen postgres_data (datos PG16) se reutiliza
+#   sin migración de datos: solo cambia la imagen del binario, no el formato on-disk
+#   del major version 16.
+#
+# Nota de base: la imagen oficial pgvector es Debian (glibc) y la actual es Alpine
+#   (musl). El cambio de imagen conserva los datos PG16, pero conviene hacer un
+#   `pg_dump` de respaldo antes de levantar, por precaución (se hará en Fase ADÁN).
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Migración pgvector disponible dentro del contenedor para ejecución manual.
+      - ../backend/migrations:/migrations:ro
