@@ -1,18 +1,20 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-export interface ParsedOrderInput {
-  clientId: string;
-  items: Array<{
-    sku: string;
-    qty: number;
-  }>;
-  confidence: number;
-  rawText: string;
+export interface ToolCall {
+  function: { name: string; arguments: Record<string, any> };
+}
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  tool_calls?: ToolCall[];
+  tool_name?: string;
 }
 
 @Injectable()
 export class OllamaService {
+  private readonly logger = new Logger(OllamaService.name);
   private readonly ollamaUrl: string;
   private readonly model: string;
 
@@ -21,94 +23,81 @@ export class OllamaService {
       'OLLAMA_URL',
       'http://localhost:11434',
     );
-    this.model = this.configService.get('OLLAMA_MODEL', 'llama3.2:3b');
+    // El modelo se decide por benchmark y se inyecta vía OLLAMA_MODEL.
+    // El default aquí es solo un placeholder; producción usa la env var.
+    this.model = this.configService.get('OLLAMA_MODEL', 'qwen2.5:7b-instruct');
   }
 
-  async parseOrder(text: string): Promise<ParsedOrderInput> {
-    const prompt = this.buildPrompt(text);
+  getModelName(): string {
+    return this.model;
+  }
 
-    try {
-      const response = await fetch(`${this.ollamaUrl}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: this.model,
-          prompt,
-          stream: false,
-          format: 'json',
-        }),
-      });
+  /**
+   * Chat con soporte de tool calling (endpoint /api/chat de Ollama).
+   * Devuelve el mensaje del asistente, que puede incluir tool_calls.
+   * No hace fallback simulado: si Ollama no responde, lanza — EVA real no inventa.
+   */
+  async chat(
+    messages: ChatMessage[],
+    tools?: readonly unknown[],
+  ): Promise<ChatMessage> {
+    const response = await fetch(`${this.ollamaUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: this.model,
+        messages,
+        tools,
+        stream: false,
+        options: { temperature: 0 },
+      }),
+    });
 
-      if (!response.ok) {
-        throw new HttpException(
-          `Ollama error: ${response.statusText}`,
-          HttpStatus.SERVICE_UNAVAILABLE,
-        );
-      }
-
-      const data = await response.json();
-      const parsed = JSON.parse(data.response);
-
-      return {
-        clientId: parsed.clientId || 'CLIENT-001',
-        items: parsed.items || [],
-        confidence: parsed.confidence || 0.5,
-        rawText: text,
-      };
-    } catch (error) {
-      // Fallback a regex si Ollama no está disponible
-      console.warn(
-        'Ollama no disponible, usando parser fallback:',
-        error.message,
+    if (!response.ok) {
+      throw new HttpException(
+        `Ollama chat error: ${response.status} ${response.statusText}`,
+        HttpStatus.SERVICE_UNAVAILABLE,
       );
-      return this.fallbackParse(text);
     }
+
+    const data = await response.json();
+    return data.message as ChatMessage;
   }
 
-  private buildPrompt(text: string): string {
-    return `Eres un asistente de IA para un sistema ERP de manufactura. Tu tarea es interpretar pedidos de clientes escritos en español y extraer la información relevante.
-
-Texto del cliente: "${text}"
-
-Extrae la información en este formato JSON exacto:
-{
-  "clientId": "CLIENT-001",
-  "items": [
-    {"sku": "SKU-001", "qty": 10}
-  ],
-  "confidence": 0.95
-}
-
-Reglas:
-- clientId: Usa "CLIENT-001" si no se menciona un cliente específico
-- sku: Extrae el código SKU del producto (formato SKU-###)
-- qty: Extrae la cantidad solicitada (número entero)
-- confidence: Confianza del parseo (0.0 a 1.0)
-- Si no puedes interpretar el pedido, devuelve items vacíos y confidence 0
-
-Responde ÚNICAMENTE con el JSON, sin explicaciones.`;
-  }
-
-  private fallbackParse(text: string): ParsedOrderInput {
-    const normalized = text.toLowerCase().trim();
-    const matches = normalized.matchAll(
-      /(?:quiero|necesito|pedir|solicito|ordena)\s+(\d+)\s+(sku-\d+)/gi,
+  /**
+   * Genera un embedding local con el modelo de embeddings (nomic-embed-text).
+   * Usado por ADÁN para indexación y búsqueda semántica. 100% local.
+   */
+  async embed(text: string): Promise<number[]> {
+    const model = this.configService.get(
+      'OLLAMA_EMBED_MODEL',
+      'nomic-embed-text',
     );
-
-    const items: Array<{ sku: string; qty: number }> = [];
-    for (const match of matches) {
-      items.push({
-        qty: parseInt(match[1], 10),
-        sku: match[2].toUpperCase(),
-      });
+    const response = await fetch(`${this.ollamaUrl}/api/embeddings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt: text }),
+    });
+    if (!response.ok) {
+      throw new HttpException(
+        `Ollama embeddings error: ${response.status} ${response.statusText}`,
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
     }
+    const data = await response.json();
+    return data.embedding as number[];
+  }
 
-    return {
-      clientId: 'CLIENT-001',
-      items,
-      confidence: items.length > 0 ? 0.7 : 0,
-      rawText: text,
-    };
+  getEmbedModelName(): string {
+    return this.configService.get('OLLAMA_EMBED_MODEL', 'nomic-embed-text');
+  }
+
+  /**
+   * Chat simple sin herramientas (usado por ADÁN para responder con contexto RAG).
+   */
+  async chatSimple(messages: ChatMessage[]): Promise<string> {
+    const msg = await this.chat(messages);
+    return msg.content ?? '';
   }
 
   async healthCheck(): Promise<{ status: string; model: string }> {
