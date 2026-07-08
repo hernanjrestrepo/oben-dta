@@ -16,18 +16,17 @@ import type { RequestingUser } from './clients.service';
 import { CreateClientDto, UpdateClientDto } from './dto/create-client.dto';
 import { Client } from '../../entities/client.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { PermissionsGuard } from '../security/permissions.guard';
+import { RequirePermission } from '../security/require-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { UserRole } from '../auth/dto/auth.dto';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('clients')
 export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.SALES)
+  @RequirePermission('clients.create')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async create(
     @Body() dto: CreateClientDto,
@@ -37,6 +36,7 @@ export class ClientsController {
   }
 
   @Get()
+  @RequirePermission('clients.read')
   async findAll(
     @CurrentUser() requestingUser: RequestingUser,
     @Query('page') page?: string,
@@ -46,6 +46,7 @@ export class ClientsController {
   }
 
   @Get(':id')
+  @RequirePermission('clients.read')
   async findOne(
     @Param('id') id: string,
     @CurrentUser() requestingUser: RequestingUser,
@@ -54,7 +55,7 @@ export class ClientsController {
   }
 
   @Put(':id')
-  @Roles(UserRole.ADMIN, UserRole.SALES)
+  @RequirePermission('clients.update')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async update(
     @Param('id') id: string,
@@ -65,7 +66,7 @@ export class ClientsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @RequirePermission('clients.delete')
   async remove(
     @Param('id') id: string,
     @CurrentUser() requestingUser: RequestingUser,

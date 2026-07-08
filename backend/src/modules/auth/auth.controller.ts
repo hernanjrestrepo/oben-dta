@@ -29,12 +29,17 @@ export class AuthController {
   }
 
   @Post('refresh')
-  @UsePipes(new ValidationPipe({ whitelist: true }))
-  async refresh(@Body() body: { refreshToken: string }) {
-    if (!body.refreshToken) {
+  async refresh(
+    @Body() body: { refreshToken?: string; refresh_token?: string },
+  ) {
+    // Acepta ambos nombres: login devuelve `refresh_token` (snake_case) y
+    // algunos clientes envían `refreshToken` (camelCase). Hardening de
+    // consistencia de API para que el refresh funcione con cualquiera.
+    const token = body.refreshToken ?? body.refresh_token;
+    if (!token) {
       throw new UnauthorizedException('Refresh token requerido');
     }
-    return this.authService.refresh(body.refreshToken);
+    return this.authService.refresh(token);
   }
 
   @Post('logout')

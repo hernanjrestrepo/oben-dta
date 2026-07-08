@@ -27,6 +27,10 @@ export class RegisterDto {
   @MinLength(8)
   password: string;
 
+  @IsOptional()
+  @IsString()
+  tenantSlug?: string;
+
   // role is intentionally NOT accepted here — self-registration must never
   // be able to choose a privileged role. Role changes require an admin-only
   // endpoint (UserRole.ADMIN), not the public register flow.
@@ -38,6 +42,10 @@ export class LoginDto {
 
   @IsString()
   password: string;
+
+  @IsOptional()
+  @IsString()
+  tenantSlug?: string;
 }
 
 export class UpdateUserDto {

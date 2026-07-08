@@ -16,18 +16,17 @@ import type { RequestingUser } from './orders.service';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/create-order.dto';
 import { Order } from '../../entities/order.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { PermissionsGuard } from '../security/permissions.guard';
+import { RequirePermission } from '../security/require-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { UserRole } from '../auth/dto/auth.dto';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.SALES)
+  @RequirePermission('orders.create')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async create(
     @Body() dto: CreateOrderDto,
@@ -37,6 +36,7 @@ export class OrdersController {
   }
 
   @Get()
+  @RequirePermission('orders.read')
   async findAll(
     @CurrentUser() requestingUser: RequestingUser,
     @Query('page') page?: string,
@@ -46,6 +46,7 @@ export class OrdersController {
   }
 
   @Get(':id')
+  @RequirePermission('orders.read')
   async findOne(
     @Param('id') id: string,
     @CurrentUser() requestingUser: RequestingUser,
@@ -54,7 +55,7 @@ export class OrdersController {
   }
 
   @Put(':id/status')
-  @Roles(UserRole.ADMIN, UserRole.SALES, UserRole.PRODUCTION)
+  @RequirePermission('orders.update')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async updateStatus(
     @Param('id') id: string,
@@ -65,7 +66,7 @@ export class OrdersController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @RequirePermission('orders.delete')
   async remove(
     @Param('id') id: string,
     @CurrentUser() requestingUser: RequestingUser,
