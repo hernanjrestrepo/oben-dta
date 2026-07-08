@@ -72,6 +72,15 @@ export class QuotesController {
     return this.quotesService.approveQuote(emailId, quoteId);
   }
 
+  @Post(':id/reject')
+  @RequirePermission('quotes.approve')
+  async rejectQuote(
+    @Param('id') quoteId: string,
+    @Body('emailId') emailId: string,
+  ) {
+    return this.quotesService.rejectQuote(emailId, quoteId);
+  }
+
   @Post(':id/payment-link')
   @RequirePermission('quotes.update')
   async createPaymentLink(@Param('id') id: string) {

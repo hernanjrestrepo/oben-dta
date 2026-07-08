@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { Quote, QuoteStatus } from '../../entities/quote.entity';
 import { QuoteItem } from '../../entities/quote-item.entity';
 import { Client } from '../../entities/client.entity';
@@ -83,7 +83,7 @@ export class QuotesService {
 
     for (const item of items) {
       const product = await this.productRepository.findOne({
-        where: { sku: item.sku, tenantId },
+        where: { sku: ILike(item.sku), tenantId },
       });
       if (product) {
         const totalPrice = Number(product.price) * item.qty;
@@ -142,6 +142,16 @@ export class QuotesService {
       ? 'Todo en inventario. Listo para producción.'
       : `Inventario parcial. ${inventoryChecks.missing.map((m) => `${m.sku} falta ${m.missing}`).join(', ')}`;
 
+    return this.quoteRepository.save(quote);
+  }
+
+  async rejectQuote(emailId: string, quoteId: string): Promise<Quote> {
+    const email = await this.emailService.simulateClientRejection(emailId);
+    if (!email) throw new NotFoundException('Email no encontrado');
+
+    const quote = await this.findOne(quoteId);
+    quote.status = QuoteStatus.REJECTED;
+    quote.notes = 'Rechazada por el cliente.';
     return this.quoteRepository.save(quote);
   }
 
@@ -224,10 +234,15 @@ export class QuotesService {
   private parseItemsFromText(
     text: string,
   ): Array<{ sku: string; qty: number }> {
-    const matches = text.matchAll(/(\d+)\s+(SKU-\d{3})/gi);
+    // El SKU real (ver buildProducts en dataset-builders.ts) es
+    // "SKU-<tag-opcional>-<6 dígitos>", no "SKU-" + 3 dígitos fijos — el
+    // patrón debe capturar cualquier sufijo alfanumérico/guiones.
+    const matches = text.matchAll(/(\d+)\s+(SKU-[A-Za-z0-9-]+)/gi);
     const items: Array<{ sku: string; qty: number }> = [];
     for (const match of matches) {
-      items.push({ qty: parseInt(match[1], 10), sku: match[2].toUpperCase() });
+      // El run-tag del SKU puede incluir minúsculas (ver buildProducts) — no
+      // forzar mayúsculas aquí, la búsqueda contra BD ya es case-insensitive.
+      items.push({ qty: parseInt(match[1], 10), sku: match[2] });
     }
     return items;
   }

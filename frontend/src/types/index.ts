@@ -293,15 +293,87 @@ export interface AdanStats {
   embeddings: number;
 }
 
+export type InvoiceStatus = 'PENDING' | 'APPROVED' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+export type DianStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
   orderId: string;
+  order?: Order;
   amount: number;
   taxAmount: number;
   totalAmount: number;
-  status: string;
-  dianStatus: string;
+  status: InvoiceStatus;
+  dianStatus: DianStatus;
+  dianCufe?: string | null;
+  dueDate?: string | null;
+  paidAt?: string | null;
   createdAt: string;
+  updatedAt?: string;
+}
+
+// Cotizaciones — pipeline automatizado correo -> cotización -> pago -> producción -> entrega
+export type QuoteStatus =
+  | 'RECEIVED'
+  | 'PARSING'
+  | 'QUOTED'
+  | 'SENT'
+  | 'APPROVED'
+  | 'ORDERED'
+  | 'PAYMENT_PENDING'
+  | 'PAID'
+  | 'IN_PRODUCTION'
+  | 'READY_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'REJECTED';
+
+export interface QuoteItem {
+  id: string;
+  productId: string;
+  product?: Product;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export interface Quote {
+  id: string;
+  quoteNumber: string;
+  clientId: string;
+  client?: Client;
+  originalEmail?: string | null;
+  items: QuoteItem[];
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  status: QuoteStatus;
+  pdfUrl?: string | null;
+  paymentLink?: string | null;
+  invoiceNumber?: string | null;
+  approvedAt?: string | null;
+  paidAt?: string | null;
+  deliveredAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InboxEmail {
+  id: string;
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  receivedAt: string;
+  status: 'UNREAD' | 'READ' | 'REPLIED';
+  replyText?: string;
+  replyAt?: string;
+}
+
+export interface QuoteFlowResult {
+  quote: Quote;
+  emailId: string;
+  steps: string[];
 }
 

@@ -12,13 +12,17 @@ import {
   Menu,
   X,
   Bot,
+  FileText,
+  Mail,
 } from 'lucide-react';
 import { useState } from 'react';
 
 const navItems = [
   { href: '/operaciones', label: 'Centro IA', icon: Bot },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/quotes', label: 'Cotizaciones', icon: Mail },
   { href: '/orders', label: 'Órdenes', icon: ShoppingCart },
+  { href: '/invoices', label: 'Facturas', icon: FileText },
   { href: '/clients', label: 'Clientes', icon: Users },
 ];
 

@@ -1,9 +1,9 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import {
   AdanAnswer, AdanStats, ApiError, AuditPage, AuthResponse, Client, CommercialLicense,
-  CreateOrderDto, DashboardKPIs, EvaResult, IntegrationStatus, Invoice, LicenseStatusView,
-  Order, Plan, PlatformRole, PlatformUser, Product, SystemStatus, Tenant, TenantFeatureFlag,
-  TenantSubscription, UpdateOrderStatusDto, User,
+  CreateOrderDto, DashboardKPIs, EvaResult, InboxEmail, IntegrationStatus, Invoice, LicenseStatusView,
+  Order, Plan, PlatformRole, PlatformUser, Product, Quote, QuoteFlowResult, SystemStatus, Tenant,
+  TenantFeatureFlag, TenantSubscription, UpdateOrderStatusDto, User,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
@@ -105,13 +105,15 @@ class ApiClient {
     localStorage.setItem('access_token', response.access_token);
     localStorage.setItem('refresh_token', response.refresh_token);
     localStorage.setItem('user', JSON.stringify(response.user));
-    // The Next.js middleware (src/middleware.ts) gates protected routes by
-    // looking for an `access_token` cookie. The API client authenticates via
-    // the Authorization header from localStorage, so without also writing the
-    // cookie the middleware bounces every post-login navigation back to
-    // /login. Keep the cookie in sync with the stored token.
+    // The Next.js middleware (src/middleware.ts) only checks for the cookie's
+    // PRESENCE — it never decodes/verifies the JWT — so its max-age should
+    // track the SESSION lifetime (the refresh token, 7d), not the 15m access
+    // token. Actual per-request freshness is handled by the Authorization
+    // header + the axios silent-refresh interceptor above. Using the access
+    // token's own 15m lifetime here was a real bug: it logged users out of
+    // navigation mid-session even though a valid refresh token still existed.
     if (typeof document !== 'undefined') {
-      document.cookie = `access_token=${response.access_token}; path=/; max-age=900; SameSite=Lax`;
+      document.cookie = `access_token=${response.access_token}; path=/; max-age=604800; SameSite=Lax`;
     }
   }
 
@@ -174,6 +176,16 @@ class ApiClient {
 
   async getInvoices(): Promise<Invoice[]> {
     const { data } = await this.client.get<Invoice[]>('/invoices');
+    return data;
+  }
+
+  async getInvoice(id: string): Promise<Invoice> {
+    const { data } = await this.client.get<Invoice>(`/invoices/${id}`);
+    return data;
+  }
+
+  async updateInvoiceStatus(id: string, dto: { status: string; paidAt?: string }): Promise<Invoice> {
+    const { data } = await this.client.put<Invoice>(`/invoices/${id}/status`, dto);
     return data;
   }
 
@@ -253,6 +265,18 @@ class ApiClient {
     creditLimit?: number;
   }): Promise<Client> {
     const { data } = await this.client.post<Client>('/clients', dto);
+    return data;
+  }
+
+  async updateClient(id: string, dto: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    creditLimit?: number;
+    isActive?: boolean;
+  }): Promise<Client> {
+    const { data } = await this.client.put<Client>(`/clients/${id}`, dto);
     return data;
   }
 
@@ -451,6 +475,73 @@ class ApiClient {
 
   async getIntegrationsStatus(): Promise<IntegrationStatus[]> {
     const { data } = await this.client.get<IntegrationStatus[]>('/integrations/status');
+    return data;
+  }
+
+  // --- Cotizaciones (pipeline correo -> pago -> producción -> entrega) ----
+
+  async getQuotes(): Promise<Quote[]> {
+    const { data } = await this.client.get<Quote[]>('/quotes');
+    return data;
+  }
+
+  async getQuote(id: string): Promise<Quote> {
+    const { data } = await this.client.get<Quote>(`/quotes/${id}`);
+    return data;
+  }
+
+  async getQuotesInbox(): Promise<InboxEmail[]> {
+    const { data } = await this.client.get<InboxEmail[]>('/quotes/inbox/emails');
+    return data;
+  }
+
+  async sendQuoteEmail(dto: { from: string; subject: string; body: string }): Promise<QuoteFlowResult> {
+    const { data } = await this.client.post<QuoteFlowResult>('/quotes/email', dto);
+    return data;
+  }
+
+  async generateQuotePdf(id: string): Promise<Quote> {
+    const { data } = await this.client.post<Quote>(`/quotes/${id}/pdf`);
+    return data;
+  }
+
+  async downloadQuotePdf(id: string): Promise<Blob> {
+    const { data } = await this.client.get(`/quotes/${id}/pdf`, { responseType: 'blob' });
+    return data;
+  }
+
+  async approveQuote(id: string, emailId: string): Promise<Quote> {
+    const { data } = await this.client.post<Quote>(`/quotes/${id}/approve`, { emailId });
+    return data;
+  }
+
+  async rejectQuote(id: string, emailId: string): Promise<Quote> {
+    const { data } = await this.client.post<Quote>(`/quotes/${id}/reject`, { emailId });
+    return data;
+  }
+
+  async createQuotePaymentLink(id: string): Promise<Quote> {
+    const { data } = await this.client.post<Quote>(`/quotes/${id}/payment-link`);
+    return data;
+  }
+
+  async simulateQuotePayment(id: string): Promise<Quote> {
+    const { data } = await this.client.post<Quote>(`/quotes/${id}/pay`);
+    return data;
+  }
+
+  async moveQuoteToProduction(id: string): Promise<Quote> {
+    const { data } = await this.client.post<Quote>(`/quotes/${id}/production`);
+    return data;
+  }
+
+  async markQuoteReady(id: string): Promise<Quote> {
+    const { data } = await this.client.post<Quote>(`/quotes/${id}/ready`);
+    return data;
+  }
+
+  async markQuoteDelivered(id: string): Promise<Quote> {
+    const { data } = await this.client.post<Quote>(`/quotes/${id}/delivered`);
     return data;
   }
 }

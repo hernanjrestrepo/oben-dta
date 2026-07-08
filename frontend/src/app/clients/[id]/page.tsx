@@ -16,6 +16,7 @@ import {
   ShoppingCart,
   Calendar,
   RefreshCw,
+  Pencil,
 } from 'lucide-react';
 
 export default function ClientDetailPage() {
@@ -25,6 +26,10 @@ export default function ClientDetailPage() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', creditLimit: '' });
 
   useEffect(() => {
     if (id) loadClient();
@@ -42,6 +47,50 @@ export default function ClientDetailPage() {
       setError(msg || 'Error cargando cliente');
     } finally {
       setLoading(false);
+    }
+  }
+
+  function startEditing() {
+    if (!client) return;
+    setForm({
+      name: client.name,
+      email: client.email,
+      phone: client.phone || '',
+      address: client.address || '',
+      creditLimit: String(client.creditLimit ?? ''),
+    });
+    setSaveError('');
+    setEditing(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!client) return;
+    setSaveError('');
+    if (!form.name.trim() || form.name.trim().length < 2) {
+      setSaveError('Ingresa un nombre válido');
+      return;
+    }
+    if (!form.email.trim()) {
+      setSaveError('Ingresa un correo válido');
+      return;
+    }
+    try {
+      setSaving(true);
+      const updated = await api.updateClient(client.id, {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || undefined,
+        address: form.address.trim() || undefined,
+        creditLimit: form.creditLimit ? Number(form.creditLimit) : undefined,
+      });
+      setClient(updated);
+      setEditing(false);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setSaveError(msg || 'Error guardando cambios');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -93,14 +142,112 @@ export default function ClientDetailPage() {
             <p className="text-gray-500 text-sm">{client.clientId}</p>
           </div>
         </div>
-        <button
-          onClick={loadClient}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={loadClient}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Actualizar
+          </button>
+          <button
+            onClick={startEditing}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition"
+          >
+            <Pencil className="w-4 h-4" />
+            Editar
+          </button>
+        </div>
       </div>
+
+      {editing && (
+        <form
+          onSubmit={handleSave}
+          className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 space-y-4"
+        >
+          <h2 className="text-lg font-semibold text-gray-900">Editar Cliente</h2>
+
+          {saveError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{saveError}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Correo *</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+              <input
+                type="text"
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Límite de Crédito (COP)</label>
+              <input
+                type="number"
+                min={0}
+                value={form.creditLimit}
+                onChange={(e) => setForm((f) => ({ ...f, creditLimit: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+            <textarea
+              value={form.address}
+              onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+              rows={2}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-2.5 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition flex items-center gap-2 disabled:opacity-60"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar Cambios'
+              )}
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

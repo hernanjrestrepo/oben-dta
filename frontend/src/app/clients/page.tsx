@@ -15,6 +15,7 @@ import {
   Phone,
   MapPin,
   CreditCard,
+  Plus,
 } from 'lucide-react';
 
 export default function ClientsPage() {
@@ -74,6 +75,13 @@ export default function ClientsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
           <p className="text-gray-500 mt-1">Directorio de clientes y crédito</p>
         </div>
+        <Link
+          href="/clients/new"
+          className="inline-flex items-center gap-2 bg-[#003366] hover:bg-[#004080] text-white px-4 py-2.5 rounded-lg font-medium transition"
+        >
+          <Plus className="w-5 h-5" />
+          Nuevo Cliente
+        </Link>
       </div>
 
       <div className="relative">
