@@ -42,6 +42,8 @@ export interface AuthResponse {
 @Injectable()
 export class AuthService {
   private static readonly DEFAULT_TENANT_SLUG = 'oben';
+  private static readonly MAX_FAILED_ATTEMPTS = 5;
+  private static readonly LOCKOUT_MS = 15 * 60 * 1000;
 
   constructor(
     @InjectRepository(User) private userRepository: Repository<User>,
@@ -92,8 +94,13 @@ export class AuthService {
     });
     if (!user) throw new UnauthorizedException('Credenciales inválidas');
     if (!user.isActive) throw new UnauthorizedException('Usuario inactivo');
+    this.assertNotLocked(user);
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isPasswordValid) throw new UnauthorizedException('Credenciales inválidas');
+    if (!isPasswordValid) {
+      await this.registerFailedAttempt(user);
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+    await this.resetFailedAttempts(user);
     return this.generateTokens(user, tenant);
   }
 
@@ -109,38 +116,88 @@ export class AuthService {
     });
     if (!user) throw new UnauthorizedException('Credenciales inválidas');
     if (!user.isActive) throw new UnauthorizedException('Usuario inactivo');
+    this.assertNotLocked(user);
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isPasswordValid) throw new UnauthorizedException('Credenciales inválidas');
+    if (!isPasswordValid) {
+      await this.registerFailedAttempt(user);
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+    await this.resetFailedAttempts(user);
     return this.generateTokens(user, null);
   }
 
-  async refresh(refreshToken: string): Promise<{ access_token: string; user: AuthResponse['user'] }> {
+  /**
+   * Rotación de refresh tokens: cada uso invalida el anterior (avanza
+   * `tokenVersion`) y emite un par nuevo. Un refresh token robado deja de
+   * servir en cuanto el dueño legítimo lo use una vez más, y logout() lo
+   * invalida de inmediato sin esperar a su expiración de 7 días.
+   */
+  async refresh(refreshToken: string): Promise<AuthResponse> {
+    let payload: { sub: string; ver?: number };
     try {
-      const payload = await this.jwtService.verifyAsync(refreshToken, {
+      payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: process.env.JWT_SECRET,
       });
-      const user = await this.userRepository.findOne({ where: { id: payload.sub } });
-      if (!user) throw new UnauthorizedException('Usuario no encontrado');
-      const tenant = user.tenantId
-        ? await this.tenantRepository.findOne({ where: { id: user.tenantId } })
-        : null;
-      const permissions = await this.loadPermissions(user);
-      const access_token = this.jwtService.sign(
-        this.buildPayload(user, tenant),
-        { secret: process.env.JWT_SECRET, expiresIn: '15m' },
-      );
-      return { access_token, user: this.buildUserView(user, tenant, permissions) };
     } catch {
       throw new UnauthorizedException('Refresh token inválido o expirado');
     }
+    const user = await this.userRepository.findOne({ where: { id: payload.sub } });
+    if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (!user.isActive) throw new UnauthorizedException('Usuario inactivo');
+    if ((payload.ver ?? 0) !== user.tokenVersion) {
+      throw new UnauthorizedException('Refresh token revocado — inicia sesión nuevamente');
+    }
+    const tenant = user.tenantId
+      ? await this.tenantRepository.findOne({ where: { id: user.tenantId } })
+      : null;
+    user.tokenVersion += 1;
+    await this.userRepository.save(user);
+    return this.generateTokens(user, tenant);
   }
 
-  async logout(_userId: string): Promise<{ message: string }> {
+  /**
+   * Invalida TODOS los refresh tokens emitidos hasta ahora para este usuario
+   * (avanza tokenVersion). Los access tokens ya emitidos siguen vivos hasta
+   * su expiración natural de 15 minutos — ventana aceptada a cambio de no
+   * requerir una consulta a BD en cada request autenticado.
+   */
+  async logout(userId: string): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (user) {
+      user.tokenVersion += 1;
+      await this.userRepository.save(user);
+    }
     return { message: 'Sesión cerrada exitosamente' };
   }
 
   async validateUser(userId: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { id: userId } });
+  }
+
+  private assertNotLocked(user: User): void {
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      const minutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
+      throw new UnauthorizedException(
+        `Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta de nuevo en ${minutes} minuto(s).`,
+      );
+    }
+  }
+
+  private async registerFailedAttempt(user: User): Promise<void> {
+    user.failedLoginAttempts += 1;
+    if (user.failedLoginAttempts >= AuthService.MAX_FAILED_ATTEMPTS) {
+      user.lockedUntil = new Date(Date.now() + AuthService.LOCKOUT_MS);
+      user.failedLoginAttempts = 0;
+    }
+    await this.userRepository.save(user);
+  }
+
+  private async resetFailedAttempts(user: User): Promise<void> {
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      user.failedLoginAttempts = 0;
+      user.lockedUntil = null;
+      await this.userRepository.save(user);
+    }
   }
 
   private buildPayload(user: User, tenant: Tenant | null) {
@@ -151,6 +208,7 @@ export class AuthService {
       tenantId: user.tenantId,
       tenantSlug: tenant?.slug ?? null,
       isSuperAdmin: user.isSuperAdmin,
+      ver: user.tokenVersion,
     };
   }
 

@@ -58,6 +58,15 @@ export class User {
   @Column({ nullable: true })
   microsoftId: string;
 
+  @Column({ name: 'failed_login_attempts', default: 0 })
+  failedLoginAttempts: number;
+
+  @Column({ name: 'locked_until', type: 'timestamptz', nullable: true })
+  lockedUntil: Date | null;
+
+  @Column({ name: 'token_version', default: 0 })
+  tokenVersion: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

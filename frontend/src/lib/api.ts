@@ -10,6 +10,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:30
 
 class ApiClient {
   private client: AxiosInstance;
+  private refreshPromise: Promise<string | null> | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -32,23 +33,62 @@ class ApiClient {
       (error) => Promise.reject(error),
     );
 
-    // Response interceptor — handle 401 and token refresh
+    // Response interceptor — on 401, attempt ONE silent refresh + retry before
+    // giving up. Avoids forcing a full re-login every 15 minutes (access token
+    // lifetime) while still respecting server-side revocation (logout, token
+    // rotation reuse-detection) since a revoked refresh token fails cleanly.
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError<ApiError>) => {
-        const originalRequest = error.config;
+        const originalRequest = error.config as (typeof error.config & { _retry?: boolean }) | undefined;
+        const url = originalRequest?.url ?? '';
+        // Login/refresh failures are handled by the caller (login form shows its
+        // own error; tryRefresh() below already uses a bare axios call so it
+        // never re-enters this interceptor) — never redirect on those.
+        const isLoginEndpoint = url.includes('/auth/login') || url.includes('/auth/platform-login');
+        const isAuthEndpoint = url.includes('/auth/');
 
-        if (error.response?.status === 401 && originalRequest) {
-          // Token expired or invalid — clear auth and redirect
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthEndpoint) {
+          originalRequest._retry = true;
+          const newToken = await this.tryRefresh();
+          if (newToken) {
+            originalRequest.headers = originalRequest.headers ?? {};
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            return this.client.request(originalRequest);
+          }
+        }
+
+        if (error.response?.status === 401 && !isLoginEndpoint) {
+          const currentUser = this.getUser();
+          const wasPlatformUser = !!currentUser && !currentUser.tenantId;
           this.clearAuth();
           if (typeof window !== 'undefined') {
-            window.location.href = '/login';
+            window.location.href = wasPlatformUser ? '/platform/login' : '/login';
           }
         }
 
         return Promise.reject(error);
       },
     );
+  }
+
+  private async tryRefresh(): Promise<string | null> {
+    const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+    if (!refreshToken) return null;
+
+    if (!this.refreshPromise) {
+      this.refreshPromise = axios
+        .post<AuthResponse>(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken })
+        .then(({ data }) => {
+          this.setAuth(data);
+          return data.access_token;
+        })
+        .catch(() => null)
+        .finally(() => {
+          this.refreshPromise = null;
+        });
+    }
+    return this.refreshPromise;
   }
 
   clearAuth() {

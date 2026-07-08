@@ -7,10 +7,15 @@ import {
   UseGuards,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, PlatformLoginDto } from './dto/auth.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+
+// Límite estricto por IP en endpoints de autenticación, más allá de los
+// buckets globales — mitiga fuerza bruta contra credenciales específicas.
+const AUTH_THROTTLE = { medium: { limit: 10, ttl: 60_000 } };
 
 @Controller('auth')
 export class AuthController {
@@ -23,12 +28,14 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle(AUTH_THROTTLE)
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
 
   @Post('platform-login')
+  @Throttle(AUTH_THROTTLE)
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async platformLogin(@Body() dto: PlatformLoginDto) {
     return this.authService.platformLogin(dto);
