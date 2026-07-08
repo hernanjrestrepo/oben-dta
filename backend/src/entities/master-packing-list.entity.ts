@@ -6,14 +6,15 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  OneToMany,
   OneToOne,
+  OneToMany,
+  Unique,
 } from 'typeorm';
 import { Order } from './order.entity';
-import { Product } from './product.entity';
 import { User } from './user.entity';
 import { Shipment } from './shipment.entity';
 import { PackingList } from './packing-list.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum MasterPackingListStatus {
   DRAFT = 'DRAFT',
@@ -32,11 +33,12 @@ export enum MasterPackingListType {
 }
 
 @Entity('master_packing_lists')
-export class MasterPackingList {
+@Unique('uq_master_packing_lists_tenant_number', ['tenantId', 'masterPackingListNumber'])
+export class MasterPackingList extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   masterPackingListNumber: string;
 
   @ManyToOne(() => Order, { eager: true })

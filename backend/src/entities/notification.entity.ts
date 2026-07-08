@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from './user.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum NotificationType {
   INFO = 'INFO',
@@ -36,7 +37,7 @@ export enum NotificationStatus {
 }
 
 @Entity('notifications')
-export class Notification {
+export class Notification extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

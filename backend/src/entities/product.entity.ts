@@ -5,15 +5,18 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Unique,
 } from 'typeorm';
 import { OrderItem } from './order-item.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 @Entity('products')
-export class Product {
+@Unique('uq_products_tenant_sku', ['tenantId', 'sku'])
+export class Product extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   sku: string;
 
   @Column()

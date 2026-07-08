@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 
 export enum AuditEventType {
@@ -52,6 +53,10 @@ export enum AuditEventSeverity {
 export class AuditEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Index()
+  @Column({ name: 'tenant_id', type: 'uuid', nullable: true, comment: 'Tenant scope; null para eventos de sistema pre-tenant' })
+  tenantId: string | null;
 
   @Column({
     type: 'enum',

@@ -9,6 +9,7 @@ import { Repository, IsNull } from 'typeorm';
 import { Client } from '../../entities/client.entity';
 import { CreateClientDto, UpdateClientDto } from './dto/create-client.dto';
 import { UserRole } from '../auth/dto/auth.dto';
+import { TenantContext } from '../../common/tenant/tenant-context.service';
 
 export interface RequestingUser {
   sub: string;
@@ -20,11 +21,16 @@ export class ClientsService {
   constructor(
     @InjectRepository(Client)
     private clientRepository: Repository<Client>,
+    private readonly ctx: TenantContext,
   ) {}
+
+  private tenantWhere<T extends object>(where: T): T & { tenantId: string } {
+    return { ...where, tenantId: this.ctx.tenantId } as T & { tenantId: string };
+  }
 
   async create(dto: CreateClientDto, userId?: string): Promise<Client> {
     const existing = await this.clientRepository.findOne({
-      where: { clientId: dto.clientId },
+      where: this.tenantWhere({ clientId: dto.clientId }),
     });
     if (existing) {
       throw new ConflictException(`El cliente con ID ${dto.clientId} ya existe`);
@@ -35,6 +41,7 @@ export class ClientsService {
       usedCredit: 0,
       isActive: dto.isActive ?? true,
       createdBy: userId,
+      tenantId: this.ctx.tenantId,
     });
     return this.clientRepository.save(client);
   }
@@ -44,14 +51,14 @@ export class ClientsService {
     page: number = 1,
     limit: number = 50,
   ): Promise<Client[]> {
-    // ADMIN sees every record. Other roles see records they created plus
-    // unowned "house" records (createdBy IS NULL) — consistent with the
-    // ownership rule in assertOwnership(). This keeps private records of
-    // other users isolated while still showing shared/seed data.
+    const tenantId = this.ctx.tenantId;
     const isAdmin = !requestingUser || requestingUser.role === UserRole.ADMIN;
     const where = isAdmin
-      ? {}
-      : [{ createdBy: requestingUser!.sub }, { createdBy: IsNull() }];
+      ? { tenantId }
+      : [
+          { tenantId, createdBy: requestingUser!.sub },
+          { tenantId, createdBy: IsNull() },
+        ];
     return this.clientRepository.find({
       where,
       skip: (page - 1) * limit,
@@ -61,7 +68,9 @@ export class ClientsService {
   }
 
   async findOne(id: string, requestingUser?: RequestingUser): Promise<Client> {
-    const client = await this.clientRepository.findOne({ where: { id } });
+    const client = await this.clientRepository.findOne({
+      where: this.tenantWhere({ id }),
+    });
     if (!client) {
       throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
     }
@@ -70,7 +79,9 @@ export class ClientsService {
   }
 
   async findByClientId(clientId: string): Promise<Client> {
-    const client = await this.clientRepository.findOne({ where: { clientId } });
+    const client = await this.clientRepository.findOne({
+      where: this.tenantWhere({ clientId }),
+    });
     if (!client) {
       throw new NotFoundException(`Cliente ${clientId} no encontrado`);
     }
@@ -82,33 +93,33 @@ export class ClientsService {
     dto: UpdateClientDto,
     requestingUser?: RequestingUser,
   ): Promise<Client> {
-    // findOne enforces ownership before any mutation is allowed
     await this.findOne(id, requestingUser);
-    await this.clientRepository.update(id, dto);
+    await this.clientRepository.update(this.tenantWhere({ id }), dto);
     return this.findOne(id, requestingUser);
   }
 
   async remove(id: string, requestingUser?: RequestingUser): Promise<void> {
     await this.findOne(id, requestingUser);
-    const result = await this.clientRepository.delete(id);
+    const result = await this.clientRepository.delete(this.tenantWhere({ id }));
     if (result.affected === 0) {
       throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
     }
   }
 
   async updateCreditUsed(clientId: string, amount: number): Promise<void> {
-    await this.clientRepository.increment({ clientId }, 'usedCredit', amount);
+    await this.clientRepository.increment(
+      this.tenantWhere({ clientId }),
+      'usedCredit',
+      amount,
+    );
   }
 
-  // Records created before ownership tracking existed (createdBy === null)
-  // are treated as house accounts and remain visible to any authenticated
-  // user. Admins bypass ownership entirely.
   private assertOwnership(client: Client, requestingUser?: RequestingUser): void {
-    if (!requestingUser || requestingUser.role === UserRole.ADMIN) {
-      return;
-    }
+    if (!requestingUser || requestingUser.role === UserRole.ADMIN) return;
     if (client.createdBy && client.createdBy !== requestingUser.sub) {
-      throw new ForbiddenException('No tiene permisos para acceder a este cliente');
+      throw new ForbiddenException(
+        'No tiene permisos para acceder a este cliente',
+      );
     }
   }
 }

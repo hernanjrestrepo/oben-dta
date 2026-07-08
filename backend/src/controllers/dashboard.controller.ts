@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { DashboardService } from '../services/dashboard.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -10,125 +10,66 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get comprehensive dashboard data' })
-  @ApiQuery({
-    name: 'days',
-    required: false,
-    type: Number,
-    description: 'Number of days to look back (default: 30)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns comprehensive dashboard data',
-  })
-  async getDashboardData(@Query('days') days: number = 30): Promise<any> {
-    return await this.dashboardService.getDashboardData(days);
+  @ApiOperation({ summary: 'Comprehensive dashboard data (tenant-scoped)' })
+  @ApiQuery({ name: 'days', required: false, type: Number })
+  @ApiResponse({ status: 200 })
+  async getDashboardData(@Query('days') days: number = 30) {
+    return this.dashboardService.getDashboardData(Number(days));
   }
 
   @Get('production')
-  @ApiOperation({ summary: 'Get production KPIs' })
-  @ApiQuery({
-    name: 'days',
-    required: false,
-    type: Number,
-    description: 'Number of days to look back (default: 30)',
-  })
-  @ApiResponse({ status: 200, description: 'Returns production KPIs' })
-  async getProductionKPIs(@Query('days') days: number = 30): Promise<any> {
-    return await this.dashboardService.getProductionKPIs(days);
+  @ApiOperation({ summary: 'Production KPIs (stub — Bloque 8)' })
+  @ApiResponse({ status: 200 })
+  async getProductionKPIs() {
+    return this.dashboardService.getProductionKPIs();
   }
 
   @Get('sales')
-  @ApiOperation({ summary: 'Get sales KPIs' })
-  @ApiQuery({
-    name: 'days',
-    required: false,
-    type: Number,
-    description: 'Number of days to look back (default: 30)',
-  })
-  @ApiResponse({ status: 200, description: 'Returns sales KPIs' })
-  async getSalesKPIs(@Query('days') days: number = 30): Promise<any> {
-    return await this.dashboardService.getSalesKPIs(days);
+  @ApiOperation({ summary: 'Sales KPIs (tenant-scoped)' })
+  @ApiQuery({ name: 'days', required: false, type: Number })
+  @ApiResponse({ status: 200 })
+  async getSalesKPIs(@Query('days') days: number = 30) {
+    return this.dashboardService.getSalesKPIs(Number(days));
   }
 
   @Get('logistics')
-  @ApiOperation({ summary: 'Get logistics KPIs' })
-  @ApiQuery({
-    name: 'days',
-    required: false,
-    type: Number,
-    description: 'Number of days to look back (default: 30)',
-  })
-  @ApiResponse({ status: 200, description: 'Returns logistics KPIs' })
-  async getLogisticsKPIs(@Query('days') days: number = 30): Promise<any> {
-    return await this.dashboardService.getLogisticsKPIs(days);
+  @ApiOperation({ summary: 'Logistics KPIs (stub — Bloque 8)' })
+  @ApiResponse({ status: 200 })
+  async getLogisticsKPIs() {
+    return this.dashboardService.getLogisticsKPIs();
   }
 
   @Get('inventory')
-  @ApiOperation({ summary: 'Get inventory KPIs' })
-  @ApiQuery({
-    name: 'days',
-    required: false,
-    type: Number,
-    description: 'Number of days to look back (default: 30)',
-  })
-  @ApiResponse({ status: 200, description: 'Returns inventory KPIs' })
-  async getInventoryKPIs(@Query('days') days: number = 30): Promise<any> {
-    return await this.dashboardService.getInventoryKPIs(days);
+  @ApiOperation({ summary: 'Inventory KPIs (tenant-scoped)' })
+  @ApiResponse({ status: 200 })
+  async getInventoryKPIs() {
+    return this.dashboardService.getInventoryKPIs();
   }
 
   @Get('clients')
-  @ApiOperation({ summary: 'Get client KPIs' })
-  @ApiQuery({
-    name: 'days',
-    required: false,
-    type: Number,
-    description: 'Number of days to look back (default: 30)',
-  })
-  @ApiResponse({ status: 200, description: 'Returns client KPIs' })
-  async getClientKPIs(@Query('days') days: number = 30): Promise<any> {
-    return await this.dashboardService.getClientKPIs(days);
+  @ApiOperation({ summary: 'Client KPIs (tenant-scoped)' })
+  @ApiQuery({ name: 'days', required: false, type: Number })
+  @ApiResponse({ status: 200 })
+  async getClientKPIs(@Query('days') days: number = 30) {
+    return this.dashboardService.getClientKPIs(Number(days));
   }
 
   @Get('system')
-  @ApiOperation({ summary: 'Get system KPIs' })
-  @ApiQuery({
-    name: 'days',
-    required: false,
-    type: Number,
-    description: 'Number of days to look back (default: 30)',
-  })
-  @ApiResponse({ status: 200, description: 'Returns system KPIs' })
-  async getSystemKPIs(@Query('days') days: number = 30): Promise<any> {
-    return await this.dashboardService.getSystemKPIs(days);
+  @ApiOperation({ summary: 'System KPIs (stub — Bloque 8)' })
+  @ApiResponse({ status: 200 })
+  async getSystemKPIs() {
+    return this.dashboardService.getSystemKPIs();
   }
 
   @Get('trend')
-  @ApiOperation({ summary: 'Get trend data for a specific KPI' })
-  @ApiQuery({
-    name: 'kpi',
-    required: true,
-    type: String,
-    description: 'KPI to get trend data for (orders, shipments, production)',
-  })
-  @ApiQuery({
-    name: 'days',
-    required: false,
-    type: Number,
-    description: 'Number of days to look back (default: 30)',
-  })
-  @ApiQuery({
-    name: 'interval',
-    required: false,
-    type: String,
-    description: 'Interval for grouping (day, week, month) (default: day)',
-  })
-  @ApiResponse({ status: 200, description: 'Returns trend data' })
+  @ApiOperation({ summary: 'Trend data (orders only por ahora)' })
+  @ApiQuery({ name: 'kpi', required: true, type: String })
+  @ApiQuery({ name: 'days', required: false, type: Number })
+  @ApiResponse({ status: 200 })
   async getTrendData(
     @Query('kpi') kpi: string,
     @Query('days') days: number = 30,
-    @Query('interval') interval: 'day' | 'week' | 'month' = 'day',
-  ): Promise<any[]> {
-    return await this.dashboardService.getTrendData(kpi, days, interval);
+  ) {
+    return this.dashboardService.getTrendData(kpi, Number(days));
   }
 }

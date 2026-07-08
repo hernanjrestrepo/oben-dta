@@ -6,11 +6,12 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  OneToOne,
+  Unique,
 } from 'typeorm';
 import { Order } from './order.entity';
 import { Client } from './client.entity';
 import { User } from './user.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum CreditValidationStatus {
   PENDING = 'PENDING',
@@ -27,11 +28,12 @@ export enum CreditValidationType {
 }
 
 @Entity('credit_validations')
-export class CreditValidation {
+@Unique('uq_credit_validations_tenant_number', ['tenantId', 'validationNumber'])
+export class CreditValidation extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   validationNumber: string;
 
   @ManyToOne(() => Order, (order) => order.creditValidations, {

@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Shipment } from './shipment.entity';
 import { User } from './user.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum TrackingStatus {
   CREATED = 'CREATED',
@@ -33,7 +34,7 @@ export enum TrackingLocationType {
 }
 
 @Entity('shipment_tracking')
-export class ShipmentTracking {
+export class ShipmentTracking extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

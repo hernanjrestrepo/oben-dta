@@ -7,9 +7,11 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Unique,
 } from 'typeorm';
 import { Client } from './client.entity';
 import { QuoteItem } from './quote-item.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum QuoteStatus {
   RECEIVED = 'RECEIVED',
@@ -27,11 +29,12 @@ export enum QuoteStatus {
 }
 
 @Entity('quotes')
-export class Quote {
+@Unique('uq_quotes_tenant_number', ['tenantId', 'quoteNumber'])
+export class Quote extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   quoteNumber: string;
 
   @ManyToOne(() => Client, { eager: true })

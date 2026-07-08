@@ -7,10 +7,12 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Unique,
 } from 'typeorm';
 import { Order } from './order.entity';
 import { Product } from './product.entity';
 import { User } from './user.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum ProductionOrderStatus {
   PENDING = 'PENDING',
@@ -31,11 +33,12 @@ export enum ProductionPriority {
 }
 
 @Entity('production_orders')
-export class ProductionOrder {
+@Unique('uq_production_orders_tenant_number', ['tenantId', 'productionOrderNumber'])
+export class ProductionOrder extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   productionOrderNumber: string;
 
   @ManyToOne(() => Order, { eager: true })

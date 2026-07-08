@@ -7,12 +7,14 @@ import {
   ManyToOne,
   JoinColumn,
   OneToOne,
+  Unique,
 } from 'typeorm';
 import { Order } from './order.entity';
 import { ExportOperation } from './export-operation.entity';
 import { PackingList } from './packing-list.entity';
 import { User } from './user.entity';
 import { MasterPackingList } from './master-packing-list.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum ShipmentStatus {
   CREATED = 'CREATED',
@@ -43,11 +45,12 @@ export enum CarrierType {
 }
 
 @Entity('shipments')
-export class Shipment {
+@Unique('uq_shipments_tenant_number', ['tenantId', 'shipmentNumber'])
+export class Shipment extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   shipmentNumber: string;
 
   @ManyToOne(() => Order, { nullable: true })

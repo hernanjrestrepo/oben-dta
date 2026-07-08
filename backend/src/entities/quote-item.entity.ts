@@ -7,9 +7,10 @@ import {
 } from 'typeorm';
 import { Product } from './product.entity';
 import { Quote } from './quote.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 @Entity('quote_items')
-export class QuoteItem {
+export class QuoteItem extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

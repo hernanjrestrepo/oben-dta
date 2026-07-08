@@ -6,8 +6,8 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  OneToMany,
   OneToOne,
+  Unique,
 } from 'typeorm';
 import { Order } from './order.entity';
 import { Client } from './client.entity';
@@ -17,6 +17,7 @@ import { FreightQuote } from './freight-quote.entity';
 import { InsuranceQuote } from './insurance-quote.entity';
 import { Shipment } from './shipment.entity';
 import { ExportCostSheet } from './export-cost-sheet.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum ExportOperationStatus {
   CREATED = 'CREATED',
@@ -37,11 +38,12 @@ export enum ExportType {
 }
 
 @Entity('export_operations')
-export class ExportOperation {
+@Unique('uq_export_ops_tenant_number', ['tenantId', 'exportNumber'])
+export class ExportOperation extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   exportNumber: string;
 
   @ManyToOne(() => Order, { eager: true })

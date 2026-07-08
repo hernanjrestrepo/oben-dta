@@ -5,15 +5,18 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Unique,
 } from 'typeorm';
 import { Order } from './order.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 @Entity('clients')
-export class Client {
+@Unique('uq_clients_tenant_client_id', ['tenantId', 'clientId'])
+export class Client extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   clientId: string;
 
   @Column()

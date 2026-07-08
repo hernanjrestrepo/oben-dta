@@ -6,10 +6,12 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { ProductionOrder } from './production-order.entity';
 import { Product } from './product.entity';
 import { User } from './user.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum MaterialType {
   RAW_MATERIAL = 'RAW_MATERIAL',
@@ -27,11 +29,12 @@ export enum ConsumptionStatus {
 }
 
 @Entity('material_consumption')
-export class MaterialConsumption {
+@Unique('uq_material_consumption_tenant_number', ['tenantId', 'consumptionNumber'])
+export class MaterialConsumption extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   consumptionNumber: string;
 
   @ManyToOne(() => ProductionOrder, { eager: true })

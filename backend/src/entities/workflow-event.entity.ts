@@ -7,6 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from './user.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum WorkflowEventType {
   STATE_TRANSITION = 'STATE_TRANSITION',
@@ -34,7 +35,7 @@ export enum WorkflowEventStatus {
 }
 
 @Entity('workflow_events')
-export class WorkflowEvent {
+export class WorkflowEvent extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

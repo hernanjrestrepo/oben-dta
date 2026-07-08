@@ -6,8 +6,10 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { Order } from './order.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum InvoiceStatus {
   PENDING = 'PENDING',
@@ -25,11 +27,12 @@ export enum DianStatus {
 }
 
 @Entity('invoices')
-export class Invoice {
+@Unique('uq_invoices_tenant_number', ['tenantId', 'invoiceNumber'])
+export class Invoice extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   invoiceNumber: string;
 
   @ManyToOne(() => Order)

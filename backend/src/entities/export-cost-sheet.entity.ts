@@ -6,11 +6,11 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  OneToMany,
+  Unique,
 } from 'typeorm';
 import { ExportOperation } from './export-operation.entity';
-import { Product } from './product.entity';
 import { User } from './user.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum CostSheetStatus {
   DRAFT = 'DRAFT',
@@ -34,11 +34,12 @@ export enum CostType {
 }
 
 @Entity('export_cost_sheets')
-export class ExportCostSheet {
+@Unique('uq_export_cost_sheets_tenant_number', ['tenantId', 'costSheetNumber'])
+export class ExportCostSheet extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   costSheetNumber: string;
 
   @ManyToOne(

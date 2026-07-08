@@ -7,10 +7,12 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Unique,
 } from 'typeorm';
 import { Client } from './client.entity';
 import { OrderItem } from './order-item.entity';
 import { CreditValidation } from './credit-validation.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum OrderStatus {
   DRAFT = 'DRAFT',
@@ -25,11 +27,12 @@ export enum OrderStatus {
 }
 
 @Entity('orders')
-export class Order {
+@Unique('uq_orders_tenant_number', ['tenantId', 'orderNumber'])
+export class Order extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   orderNumber: string;
 
   @ManyToOne(() => Client, (client) => client.orders, { eager: true })

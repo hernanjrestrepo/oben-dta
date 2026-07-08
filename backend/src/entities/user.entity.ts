@@ -4,6 +4,8 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Unique,
+  Index,
 } from 'typeorm';
 
 export enum UserRole {
@@ -13,10 +15,24 @@ export enum UserRole {
   FINANCE = 'finance',
 }
 
+/**
+ * Un usuario pertenece a un tenant. La única excepción es el superadmin de plataforma
+ * (isSuperAdmin=true, tenantId=null) que puede operar cross-tenant desde el panel de administración
+ * de la plataforma. El uniqueness de email es por tenant, no global — dos empresas distintas
+ * pueden tener usuarios con el mismo correo.
+ */
 @Entity('users')
+@Unique('uq_users_tenant_email', ['tenantId', 'email'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Index()
+  @Column({ name: 'tenant_id', type: 'uuid', nullable: true })
+  tenantId: string | null;
+
+  @Column({ name: 'is_super_admin', default: false })
+  isSuperAdmin: boolean;
 
   @Column()
   firstName: string;
@@ -24,7 +40,7 @@ export class User {
   @Column()
   lastName: string;
 
-  @Column({ unique: true })
+  @Column()
   email: string;
 
   @Column()

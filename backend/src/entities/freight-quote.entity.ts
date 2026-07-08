@@ -6,9 +6,11 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { ExportOperation } from './export-operation.entity';
 import { User } from './user.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum FreightQuoteStatus {
   REQUESTED = 'REQUESTED',
@@ -35,11 +37,12 @@ export enum FreightServiceLevel {
 }
 
 @Entity('freight_quotes')
-export class FreightQuote {
+@Unique('uq_freight_quotes_tenant_number', ['tenantId', 'quoteNumber'])
+export class FreightQuote extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   quoteNumber: string;
 
   @ManyToOne(() => ExportOperation, { eager: true })

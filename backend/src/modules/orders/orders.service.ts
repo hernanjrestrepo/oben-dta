@@ -12,6 +12,7 @@ import { Client } from '../../entities/client.entity';
 import { Product } from '../../entities/product.entity';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/create-order.dto';
 import { UserRole } from '../auth/dto/auth.dto';
+import { TenantContext } from '../../common/tenant/tenant-context.service';
 
 export interface RequestingUser {
   sub: string;
@@ -29,18 +30,21 @@ export class OrdersService {
     private clientRepository: Repository<Client>,
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
+    private readonly ctx: TenantContext,
   ) {}
 
-  async create(dto: CreateOrderDto, userId?: string): Promise<Order> {
-    // Verify client exists
-    const client = await this.clientRepository.findOne({
-      where: { id: dto.clientId },
-    });
-    if (!client) {
-      throw new NotFoundException(`Cliente ${dto.clientId} no encontrado`);
-    }
+  private tenantWhere<T extends object>(where: T): T & { tenantId: string } {
+    return { ...where, tenantId: this.ctx.tenantId } as T & { tenantId: string };
+  }
 
-    // Create the order first (without items) so we have an order_id
+  async create(dto: CreateOrderDto, userId?: string): Promise<Order> {
+    const tenantId = this.ctx.tenantId;
+
+    const client = await this.clientRepository.findOne({
+      where: { id: dto.clientId, tenantId },
+    });
+    if (!client) throw new NotFoundException(`Cliente ${dto.clientId} no encontrado`);
+
     const order = this.orderRepository.create({
       orderNumber: dto.orderNumber,
       notes: dto.notes,
@@ -49,24 +53,20 @@ export class OrdersService {
       clientId: client.id,
       status: OrderStatus.DRAFT,
       createdBy: userId,
+      tenantId,
     });
-
     const savedOrder = await this.orderRepository.save(order);
 
-    // Create and save order items explicitly with the real order_id
     const items: OrderItem[] = [];
     let totalAmount = 0;
 
     for (const itemDto of dto.items || []) {
       const product = await this.productRepository.findOne({
-        where: { id: itemDto.productId },
+        where: { id: itemDto.productId, tenantId },
       });
       if (!product) {
-        throw new NotFoundException(
-          `Producto ${itemDto.productId} no encontrado`,
-        );
+        throw new NotFoundException(`Producto ${itemDto.productId} no encontrado`);
       }
-
       const item = this.orderItemRepository.create({
         order: savedOrder,
         orderId: savedOrder.id,
@@ -74,21 +74,19 @@ export class OrdersService {
         quantity: itemDto.quantity,
         unitPrice: product.price,
         totalPrice: product.price * itemDto.quantity,
+        tenantId,
       });
-
       const savedItem = await this.orderItemRepository.save(item);
       items.push(savedItem);
       totalAmount += savedItem.totalPrice;
     }
 
-    // Update order total
     savedOrder.totalAmount = totalAmount;
     savedOrder.items = items;
     await this.orderRepository.save(savedOrder);
 
-    // Return with full relations loaded
     const result = await this.orderRepository.findOne({
-      where: { id: savedOrder.id },
+      where: { id: savedOrder.id, tenantId },
       relations: ['client', 'items', 'items.product'],
     });
     if (!result) {
@@ -102,12 +100,14 @@ export class OrdersService {
     page: number = 1,
     limit: number = 50,
   ): Promise<Order[]> {
-    // ADMIN sees every order. Other roles see their own orders plus unowned
-    // "house" orders (createdBy IS NULL) — consistent with assertOwnership().
+    const tenantId = this.ctx.tenantId;
     const isAdmin = !requestingUser || requestingUser.role === UserRole.ADMIN;
     const where = isAdmin
-      ? {}
-      : [{ createdBy: requestingUser!.sub }, { createdBy: IsNull() }];
+      ? { tenantId }
+      : [
+          { tenantId, createdBy: requestingUser!.sub },
+          { tenantId, createdBy: IsNull() },
+        ];
     return this.orderRepository.find({
       where,
       relations: ['client', 'items', 'items.product'],
@@ -119,12 +119,10 @@ export class OrdersService {
 
   async findOne(id: string, requestingUser?: RequestingUser): Promise<Order> {
     const order = await this.orderRepository.findOne({
-      where: { id },
+      where: this.tenantWhere({ id }),
       relations: ['client', 'items', 'items.product'],
     });
-    if (!order) {
-      throw new NotFoundException(`Orden ${id} no encontrada`);
-    }
+    if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
     this.assertOwnership(order, requestingUser);
     return order;
   }
@@ -135,31 +133,24 @@ export class OrdersService {
     requestingUser?: RequestingUser,
   ): Promise<Order> {
     const order = await this.findOne(id, requestingUser);
-
-    // Validate state transitions
     const validTransitions = this.getValidTransitions(order.status);
     if (!validTransitions.includes(dto.status)) {
       throw new BadRequestException(
         `Transición no válida de ${order.status} a ${dto.status}. Transiciones válidas: ${validTransitions.join(', ')}`,
       );
     }
-
     order.status = dto.status;
     if (dto.blockedReason) order.blockedReason = dto.blockedReason;
     if (dto.validatedBy) {
       order.validatedBy = dto.validatedBy;
       order.validatedAt = new Date();
     }
-
     return this.orderRepository.save(order);
   }
 
   private getValidTransitions(current: OrderStatus): OrderStatus[] {
     const transitions: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.DRAFT]: [
-        OrderStatus.PENDING_VALIDATION,
-        OrderStatus.CANCELLED,
-      ],
+      [OrderStatus.DRAFT]: [OrderStatus.PENDING_VALIDATION, OrderStatus.CANCELLED],
       [OrderStatus.PENDING_VALIDATION]: [
         OrderStatus.CONFIRMED,
         OrderStatus.BLOCKED,
@@ -177,10 +168,7 @@ export class OrdersService {
       [OrderStatus.IN_PRODUCTION]: [OrderStatus.READY_FOR_DELIVERY],
       [OrderStatus.READY_FOR_DELIVERY]: [OrderStatus.DELIVERED],
       [OrderStatus.DELIVERED]: [],
-      [OrderStatus.BLOCKED]: [
-        OrderStatus.PENDING_VALIDATION,
-        OrderStatus.CANCELLED,
-      ],
+      [OrderStatus.BLOCKED]: [OrderStatus.PENDING_VALIDATION, OrderStatus.CANCELLED],
       [OrderStatus.CANCELLED]: [],
     };
     return transitions[current] || [];
@@ -188,18 +176,12 @@ export class OrdersService {
 
   async remove(id: string, requestingUser?: RequestingUser): Promise<void> {
     await this.findOne(id, requestingUser);
-    const result = await this.orderRepository.delete(id);
-    if (result.affected === 0) {
-      throw new NotFoundException(`Orden ${id} no encontrada`);
-    }
+    const result = await this.orderRepository.delete(this.tenantWhere({ id }));
+    if (result.affected === 0) throw new NotFoundException(`Orden ${id} no encontrada`);
   }
 
-  // Orders created before ownership tracking existed (createdBy === null)
-  // remain visible to any authenticated user. Admins bypass ownership entirely.
   private assertOwnership(order: Order, requestingUser?: RequestingUser): void {
-    if (!requestingUser || requestingUser.role === UserRole.ADMIN) {
-      return;
-    }
+    if (!requestingUser || requestingUser.role === UserRole.ADMIN) return;
     if (order.createdBy && order.createdBy !== requestingUser.sub) {
       throw new ForbiddenException('No tiene permisos para acceder a esta orden');
     }

@@ -6,10 +6,12 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { PackingList } from './packing-list.entity';
 import { Product } from './product.entity';
 import { User } from './user.entity';
+import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
 export enum PackagingType {
   PRIMARY = 'PRIMARY',
@@ -28,11 +30,12 @@ export enum PackagingConsumptionStatus {
 }
 
 @Entity('packaging_consumptions')
-export class PackagingConsumption {
+@Unique('uq_packaging_consumption_tenant_number', ['tenantId', 'consumptionNumber'])
+export class PackagingConsumption extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   consumptionNumber: string;
 
   @ManyToOne(() => PackingList, { eager: true })

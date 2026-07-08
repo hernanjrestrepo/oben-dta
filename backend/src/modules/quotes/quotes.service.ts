@@ -8,6 +8,7 @@ import { Product } from '../../entities/product.entity';
 import { EmailService } from './email.service';
 import { QuotePdfService } from './quote-pdf.service';
 import { PaymentService } from './payment.service';
+import { TenantContext } from '../../common/tenant/tenant-context.service';
 
 export interface ProcessEmailDto {
   from: string;
@@ -33,18 +34,18 @@ export class QuotesService {
     private emailService: EmailService,
     private pdfService: QuotePdfService,
     private paymentService: PaymentService,
+    private readonly ctx: TenantContext,
   ) {}
 
   async processIncomingEmail(dto: ProcessEmailDto): Promise<QuoteFlowResult> {
     const steps: string[] = [];
+    const tenantId = this.ctx.tenantId;
 
-    // 1. Recibir email
     const email = await this.emailService.receiveEmail(dto);
     steps.push(`Email recibido de ${dto.from}: "${dto.subject}"`);
 
-    // 2. Buscar cliente por email
     let client = await this.clientRepository.findOne({
-      where: { email: dto.from },
+      where: { email: dto.from, tenantId },
     });
     if (!client) {
       client = await this.clientRepository.save({
@@ -54,17 +55,16 @@ export class QuotesService {
         creditLimit: 500000,
         usedCredit: 0,
         isActive: true,
+        tenantId,
       });
       steps.push(`Cliente nuevo creado: ${client.name}`);
     } else {
       steps.push(`Cliente identificado: ${client.name}`);
     }
 
-    // 3. Parsear items del email (regex simple)
     const items = this.parseItemsFromText(dto.body);
     steps.push(`Items detectados: ${items.length}`);
 
-    // 4. Crear quote
     const quote = this.quoteRepository.create({
       quoteNumber: `COT-${Date.now()}`,
       client,
@@ -75,6 +75,7 @@ export class QuotesService {
       subtotal: 0,
       taxAmount: 0,
       total: 0,
+      tenantId,
     });
 
     let subtotal = 0;
@@ -82,7 +83,7 @@ export class QuotesService {
 
     for (const item of items) {
       const product = await this.productRepository.findOne({
-        where: { sku: item.sku },
+        where: { sku: item.sku, tenantId },
       });
       if (product) {
         const totalPrice = Number(product.price) * item.qty;
@@ -92,6 +93,7 @@ export class QuotesService {
         qi.quantity = item.qty;
         qi.unitPrice = Number(product.price);
         qi.totalPrice = totalPrice;
+        qi.tenantId = tenantId;
         quoteItems.push(qi);
         subtotal += totalPrice;
       }
@@ -112,17 +114,11 @@ export class QuotesService {
   }
 
   async generateAndSendPdf(quoteId: string): Promise<Quote> {
-    const quote = await this.quoteRepository.findOne({
-      where: { id: quoteId },
-      relations: ['client', 'items', 'items.product'],
-    });
-    if (!quote) throw new NotFoundException('Cotización no encontrada');
-
+    const quote = await this.findOne(quoteId);
     const pdfBuffer = await this.pdfService.generateQuotePdf(quote);
     const pdfBase64 = pdfBuffer.toString('base64');
     quote.pdfUrl = `data:application/pdf;base64,${pdfBase64}`;
     quote.status = QuoteStatus.SENT;
-
     return this.quoteRepository.save(quote);
   }
 
@@ -130,15 +126,8 @@ export class QuotesService {
     const email = await this.emailService.simulateClientApproval(emailId);
     if (!email) throw new NotFoundException('Email no encontrado');
 
-    const quote = await this.quoteRepository.findOne({
-      where: { id: quoteId },
-      relations: ['client', 'items', 'items.product'],
-    });
-    if (!quote) throw new NotFoundException('Cotización no encontrada');
-
-    // Validar inventario
+    const quote = await this.findOne(quoteId);
     const inventoryChecks = await this.validateInventory(quote);
-    // Validar cartera
     const creditCheck = await this.validateCredit(quote);
 
     if (!creditCheck.passed) {
@@ -157,28 +146,18 @@ export class QuotesService {
   }
 
   async createPaymentLink(quoteId: string): Promise<Quote> {
-    const quote = await this.quoteRepository.findOne({
-      where: { id: quoteId },
-      relations: ['client'],
-    });
-    if (!quote) throw new NotFoundException('Cotización no encontrada');
-
+    const quote = await this.findOne(quoteId);
     const link = await this.paymentService.createPaymentLink(
       quoteId,
       Number(quote.total),
     );
     quote.paymentLink = link.url;
     quote.status = QuoteStatus.PAYMENT_PENDING;
-
     return this.quoteRepository.save(quote);
   }
 
   async simulatePayment(quoteId: string): Promise<Quote> {
-    const quote = await this.quoteRepository.findOne({
-      where: { id: quoteId },
-      relations: ['client', 'items', 'items.product'],
-    });
-    if (!quote) throw new NotFoundException('Cotización no encontrada');
+    const quote = await this.findOne(quoteId);
 
     if (quote.paymentLink) {
       const linkId = quote.paymentLink.split('/').pop()!;
@@ -189,15 +168,12 @@ export class QuotesService {
     quote.paidAt = new Date();
     quote.invoiceNumber = `FAC-${Date.now()}`;
 
-    // Reducir inventario
     for (const item of quote.items || []) {
       if (item.product) {
         item.product.stock -= item.quantity;
         await this.productRepository.save(item.product);
       }
     }
-
-    // Actualizar cartera usada del cliente
     quote.client.usedCredit =
       Number(quote.client.usedCredit) + Number(quote.total);
     await this.clientRepository.save(quote.client);
@@ -226,6 +202,7 @@ export class QuotesService {
 
   async findAll(): Promise<Quote[]> {
     return this.quoteRepository.find({
+      where: { tenantId: this.ctx.tenantId },
       relations: ['client', 'items', 'items.product'],
       order: { createdAt: 'DESC' },
     });
@@ -233,7 +210,7 @@ export class QuotesService {
 
   async findOne(id: string): Promise<Quote> {
     const quote = await this.quoteRepository.findOne({
-      where: { id },
+      where: { id, tenantId: this.ctx.tenantId },
       relations: ['client', 'items', 'items.product'],
     });
     if (!quote) throw new NotFoundException('Cotización no encontrada');
@@ -270,7 +247,6 @@ export class QuotesService {
         });
       }
     }
-
     return { allAvailable, missing };
   }
 
