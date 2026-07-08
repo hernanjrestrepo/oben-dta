@@ -5,6 +5,7 @@ import { Tenant, TenantStatus } from '../../entities/tenant.entity';
 import { CreateTenantDto, UpdateTenantDto } from './dto/tenant.dto';
 import { SecurityBootstrapService } from '../security/security-bootstrap.service';
 import { PlansService } from '../security/plans.service';
+import { LicensingService } from '../security/licensing.service';
 import { SubscriptionStatus } from '../../entities/tenant-subscription.entity';
 
 export { CreateTenantDto, UpdateTenantDto };
@@ -15,6 +16,7 @@ export class TenantsService {
     @InjectRepository(Tenant) private readonly repo: Repository<Tenant>,
     @Optional() private readonly security?: SecurityBootstrapService,
     @Optional() private readonly plans?: PlansService,
+    @Optional() private readonly licensing?: LicensingService,
   ) {}
 
   async findAll(): Promise<Tenant[]> {
@@ -69,6 +71,16 @@ export class TenantsService {
           });
         } catch {
           // Plan 'starter' aún no sembrado (arranque muy temprano) — se resuelve en el próximo boot.
+        }
+      }
+    }
+    if (this.licensing) {
+      const existingLicense = await this.licensing.getCurrent(tenant.id);
+      if (!existingLicense) {
+        try {
+          await this.licensing.issue(tenant.id, { planKey: 'starter', durationDays: 30 });
+        } catch {
+          // Igual que arriba: se resuelve en el próximo boot si el catálogo aún no está listo.
         }
       }
     }

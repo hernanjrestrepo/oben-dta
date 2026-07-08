@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 export enum TenantStatus {
@@ -54,6 +55,10 @@ export class Tenant {
 
   @Column({ name: 'trial_ends_at', type: 'timestamptz', nullable: true })
   trialEndsAt: Date | null;
+
+  @Index({ unique: true })
+  @Column({ name: 'installation_id', type: 'uuid', nullable: true })
+  installationId: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

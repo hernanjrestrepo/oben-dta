@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { useAuthStore } from '@/store/auth';
+import { LicenseGate } from '@/components/LicenseGate';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,7 +41,9 @@ export default function RootLayout({
         <meta name="description" content="Automatización de pedidos, inventario, cartera y facturación" />
       </head>
       <body className="min-h-full flex flex-col">
-        <AuthInitializer>{children}</AuthInitializer>
+        <AuthInitializer>
+          <LicenseGate>{children}</LicenseGate>
+        </AuthInitializer>
       </body>
     </html>
   );

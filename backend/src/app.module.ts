@@ -37,6 +37,7 @@ import { Plan } from './entities/plan.entity';
 import { PlanModule as PlanModuleEntity } from './entities/plan-module.entity';
 import { TenantSubscription } from './entities/tenant-subscription.entity';
 import { TenantFeatureFlag } from './entities/tenant-feature-flag.entity';
+import { License } from './entities/license.entity';
 import { MockScenario } from './entities/mock-scenario.entity';
 import { CreditValidation } from './entities/credit-validation.entity';
 import { ExportCostSheet } from './entities/export-cost-sheet.entity';
@@ -122,6 +123,7 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
           PlanModuleEntity,
           TenantSubscription,
           TenantFeatureFlag,
+          License,
           MockScenario,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',

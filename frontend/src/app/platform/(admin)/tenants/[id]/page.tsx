@@ -3,8 +3,8 @@
 import { useEffect, useState, use as usePromise } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
-import { Plan, Tenant, TenantFeatureFlag, TenantSubscription } from '@/types';
-import { Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { CommercialLicense, Plan, Tenant, TenantFeatureFlag, TenantSubscription } from '@/types';
+import { Loader2, AlertCircle, CheckCircle2, XCircle, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface LicenseView {
   tenantId: string;
@@ -13,6 +13,12 @@ interface LicenseView {
   modulesEnabled: string[];
   planModules: string[];
   flagOverrides: Record<string, boolean>;
+  commercialLicense: CommercialLicense | null;
+  valid: boolean;
+  reason: string | null;
+  graceActive: boolean;
+  daysRemaining: number | null;
+  renewalDue: boolean;
 }
 
 export default function TenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +35,9 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
   const [saving, setSaving] = useState(false);
   const [planKey, setPlanKey] = useState('');
   const [endsAt, setEndsAt] = useState('');
+  const [licenseDurationDays, setLicenseDurationDays] = useState(30);
+  const [licenseMaxUsers, setLicenseMaxUsers] = useState(10);
+  const [licenseSaving, setLicenseSaving] = useState(false);
 
   useEffect(() => {
     load();
@@ -72,6 +81,31 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
       setError(extractMessage(err, 'Error asignando suscripción'));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleIssueLicense(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      setLicenseSaving(true);
+      await api.issueLicense(id, { planKey, durationDays: licenseDurationDays, maxUsers: licenseMaxUsers });
+      await load();
+    } catch (err: unknown) {
+      setError(extractMessage(err, 'Error emitiendo licencia'));
+    } finally {
+      setLicenseSaving(false);
+    }
+  }
+
+  async function handleRenewLicense() {
+    try {
+      setLicenseSaving(true);
+      await api.renewLicense(id, { durationDays: licenseDurationDays });
+      await load();
+    } catch (err: unknown) {
+      setError(extractMessage(err, 'Error renovando licencia'));
+    } finally {
+      setLicenseSaving(false);
     }
   }
 
@@ -145,6 +179,65 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
             </div>
           </div>
         )}
+      </section>
+
+      {/* Licencia comercial */}
+      <section className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Licencia comercial</h2>
+          {license && (
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+              license.valid ? (license.graceActive ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700') : 'bg-red-100 text-red-700'
+            }`}>
+              {license.valid ? <ShieldCheck className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
+              {license.valid ? (license.graceActive ? 'Válida (período de gracia)' : 'Válida') : `Inválida (${license.reason})`}
+            </span>
+          )}
+        </div>
+
+        {license?.commercialLicense && (
+          <div className="text-sm text-gray-600 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div><span className="text-gray-400">Installation ID:</span> <span className="font-mono text-xs">{license.commercialLicense.installationId.slice(0, 8)}</span></div>
+            <div><span className="text-gray-400">Emitida:</span> {new Date(license.commercialLicense.issuedAt).toLocaleDateString('es-CO')}</div>
+            <div><span className="text-gray-400">Vence:</span> {new Date(license.commercialLicense.expiresAt).toLocaleDateString('es-CO')}</div>
+            <div><span className="text-gray-400">Máx. usuarios:</span> {license.commercialLicense.maxUsers}</div>
+            {license.daysRemaining !== null && (
+              <div><span className="text-gray-400">Días restantes:</span> {license.daysRemaining}</div>
+            )}
+            {license.renewalDue && (
+              <div className="text-amber-600 font-semibold">Renovación recomendada</div>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={handleIssueLicense} className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Duración (días)</label>
+            <input
+              type="number"
+              value={licenseDurationDays}
+              onChange={(e) => setLicenseDurationDays(Number(e.target.value))}
+              className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Máx. usuarios</label>
+            <input
+              type="number"
+              value={licenseMaxUsers}
+              onChange={(e) => setLicenseMaxUsers(Number(e.target.value))}
+              className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
+            />
+          </div>
+          <button type="submit" disabled={licenseSaving} className="bg-gray-900 hover:bg-gray-800 text-white font-semibold px-4 py-2.5 rounded-lg disabled:opacity-60">
+            {licenseSaving ? 'Guardando...' : (license?.commercialLicense ? 'Re-emitir licencia' : 'Emitir licencia')}
+          </button>
+          {license?.commercialLicense && (
+            <button type="button" onClick={handleRenewLicense} disabled={licenseSaving} className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-900 font-semibold px-4 py-2.5 rounded-lg disabled:opacity-60">
+              Renovar por {licenseDurationDays} días
+            </button>
+          )}
+        </form>
       </section>
 
       {/* Feature flags */}

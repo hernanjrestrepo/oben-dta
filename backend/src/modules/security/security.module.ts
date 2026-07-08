@@ -13,8 +13,12 @@ import { PlanModule } from '../../entities/plan-module.entity';
 import { TenantSubscription } from '../../entities/tenant-subscription.entity';
 import { TenantFeatureFlag } from '../../entities/tenant-feature-flag.entity';
 import { User } from '../../entities/user.entity';
+import { Tenant } from '../../entities/tenant.entity';
+import { License } from '../../entities/license.entity';
 import { AuthorizationService } from './authorization.service';
 import { LicenseService } from './license.service';
+import { LicenseSigningService } from './license-signing.service';
+import { LicensingService } from './licensing.service';
 import { SecurityBootstrapService } from './security-bootstrap.service';
 import { RolesService } from './roles.service';
 import { PermissionsService } from './permissions.service';
@@ -29,6 +33,7 @@ import { PlatformSecurityController } from './platform-security.controller';
 import { PlatformUsersController } from './platform-users.controller';
 import { PlatformAuditController } from './platform-audit.controller';
 import { PlatformSystemController } from './platform-system.controller';
+import { LicenseController } from './license.controller';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @Global()
@@ -46,6 +51,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
       TenantSubscription,
       TenantFeatureFlag,
       User,
+      Tenant,
+      License,
     ]),
     ConfigModule,
     JwtModule.registerAsync({
@@ -60,6 +67,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
   providers: [
     AuthorizationService,
     LicenseService,
+    LicenseSigningService,
+    LicensingService,
     SecurityBootstrapService,
     RolesService,
     PermissionsService,
@@ -77,10 +86,12 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     PlatformUsersController,
     PlatformAuditController,
     PlatformSystemController,
+    LicenseController,
   ],
   exports: [
     AuthorizationService,
     LicenseService,
+    LicensingService,
     SecurityBootstrapService,
     PermissionsGuard,
     RolesService,

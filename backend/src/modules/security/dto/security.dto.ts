@@ -137,6 +137,34 @@ export class UpdatePlatformUserDto {
   password?: string;
 }
 
+export class IssueLicenseDto {
+  @IsString()
+  planKey: string;
+
+  @IsOptional() @IsNumber()
+  durationDays?: number;
+
+  @IsOptional() @IsNumber()
+  maxUsers?: number;
+
+  @IsOptional() @IsNumber()
+  maxSites?: number;
+
+  @IsOptional() @IsNumber()
+  gracePeriodDays?: number;
+
+  @IsOptional() @IsBoolean()
+  offline?: boolean;
+}
+
+export class RenewLicenseDto {
+  @IsOptional() @IsNumber()
+  durationDays?: number;
+
+  @IsOptional() @IsString()
+  expiresAt?: string;
+}
+
 export class AuditQueryDto {
   @IsOptional() @IsString()
   tenantId?: string;

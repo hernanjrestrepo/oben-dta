@@ -12,6 +12,28 @@ export interface User {
   permissions?: string[];
 }
 
+export interface LicenseStatusView {
+  valid: boolean;
+  reason: string | null;
+  graceActive: boolean;
+  daysRemaining: number | null;
+  renewalDue: boolean;
+  expiresAt: string | null;
+  planKey: string | null;
+}
+
+export interface CommercialLicense {
+  id: string;
+  installationId: string;
+  status: 'active' | 'suspended' | 'revoked';
+  issuedAt: string;
+  expiresAt: string;
+  gracePeriodDays: number;
+  maxUsers: number;
+  maxSites: number;
+  offline: boolean;
+}
+
 // --- Panel SuperAdmin de plataforma ---------------------------------------
 
 export type TenantStatus = 'active' | 'suspended' | 'trial' | 'archived';
@@ -117,6 +139,13 @@ export interface AuthResponse {
   access_token: string;
   refresh_token: string;
   user: User;
+  license?: {
+    valid: boolean;
+    reason: string | null;
+    graceActive: boolean;
+    daysRemaining: number | null;
+    renewalDue: boolean;
+  } | null;
 }
 
 export interface Client {

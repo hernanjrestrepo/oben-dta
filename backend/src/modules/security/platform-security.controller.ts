@@ -16,10 +16,13 @@ import { PermissionsService } from './permissions.service';
 import { PlansService } from './plans.service';
 import { PlatformRolesService } from './platform-roles.service';
 import { LicenseService } from './license.service';
+import { LicensingService } from './licensing.service';
 import {
   AssignSubscriptionDto,
   CreatePlanDto,
   CreatePlatformUserRoleDto,
+  IssueLicenseDto,
+  RenewLicenseDto,
   SetFeatureFlagDto,
   UpdatePlanModulesDto,
 } from './dto/security.dto';
@@ -36,6 +39,7 @@ export class PlatformSecurityController {
     private readonly plans: PlansService,
     private readonly platformRoles: PlatformRolesService,
     private readonly licenses: LicenseService,
+    private readonly licensing: LicensingService,
   ) {}
 
   // Catálogos globales
@@ -115,6 +119,7 @@ export class PlatformSecurityController {
   @RequirePermission('platform.subscriptions.manage')
   async resolveLicense(@Param('tenantId') tenantId: string) {
     const res = await this.licenses.resolve(tenantId);
+    const commercial = await this.licensing.validate(tenantId);
     return {
       tenantId: res.tenantId,
       planKey: res.planKey,
@@ -122,7 +127,37 @@ export class PlatformSecurityController {
       modulesEnabled: [...res.modulesEnabled],
       planModules: [...res.planModules],
       flagOverrides: res.flagOverrides,
+      commercialLicense: commercial.license
+        ? {
+            id: commercial.license.id,
+            installationId: commercial.license.installationId,
+            status: commercial.license.status,
+            issuedAt: commercial.license.issuedAt,
+            expiresAt: commercial.license.expiresAt,
+            gracePeriodDays: commercial.license.gracePeriodDays,
+            maxUsers: commercial.license.maxUsers,
+            maxSites: commercial.license.maxSites,
+            offline: commercial.license.offline,
+          }
+        : null,
+      valid: commercial.valid,
+      reason: commercial.reason ?? null,
+      graceActive: commercial.graceActive ?? false,
+      daysRemaining: commercial.daysRemaining ?? null,
+      renewalDue: commercial.renewalDue ?? false,
     };
+  }
+
+  @Post('tenants/:tenantId/license')
+  @RequirePermission('platform.subscriptions.manage')
+  issueLicense(@Param('tenantId') tenantId: string, @Body() dto: IssueLicenseDto) {
+    return this.licensing.issue(tenantId, dto);
+  }
+
+  @Put('tenants/:tenantId/license/renew')
+  @RequirePermission('platform.subscriptions.manage')
+  renewLicense(@Param('tenantId') tenantId: string, @Body() dto: RenewLicenseDto) {
+    return this.licensing.renew(tenantId, dto);
   }
 
   // Platform roles

@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { LicenseService } from './license.service';
+import { LicensingService } from './licensing.service';
 import {
   AuthorizationDecision,
   AuthorizationPolicy,
@@ -39,6 +40,7 @@ export class AuthorizationService {
   constructor(
     @InjectDataSource() private readonly ds: DataSource,
     private readonly licenses: LicenseService,
+    private readonly licensing: LicensingService,
     @Optional()
     @Inject(AUTHORIZATION_POLICIES)
     private readonly policies: AuthorizationPolicy[] = [],
@@ -103,6 +105,16 @@ export class AuthorizationService {
       // Un usuario sin tenant no puede tener permisos de tenant salvo que sea superadmin
       // impersonando (en cuyo caso subject.tenantId ya vendría seteado por el interceptor).
       return { effect: 'deny', reason: 'no_tenant_in_subject', matchedPolicy: 'rbac.tenant' };
+    }
+
+    const commercialLicense = await this.licensing.validate(tenantId);
+    if (!commercialLicense.valid) {
+      return {
+        effect: 'deny',
+        reason: `license_${commercialLicense.reason}`,
+        matchedPolicy: 'license.commercial',
+        metadata: { moduleKey },
+      };
     }
 
     const moduleEnabled = await this.licenses.isModuleEnabled(tenantId, moduleKey);

@@ -24,6 +24,12 @@ function makeLicenses(enabled: string[] = []) {
   } as never;
 }
 
+function makeLicensing(valid = true, reason = 'expired') {
+  return {
+    validate: jest.fn(async () => (valid ? { valid: true } : { valid: false, reason })),
+  } as never;
+}
+
 function permRow(perm: string, isPlatform = false): QueryStep {
   return {
     match: (sql, params) =>
@@ -58,6 +64,7 @@ describe('AuthorizationService', () => {
     const svc = new AuthorizationService(
       makeDataSource([]),
       makeLicenses([]),
+      makeLicensing(),
     );
     const d = await svc.can({
       subject: { userId: 'u1', tenantId: 't1', isSuperAdmin: false },
@@ -74,6 +81,7 @@ describe('AuthorizationService', () => {
         grantPlatform('u1', 'platform.tenants.read'),
       ]),
       makeLicenses([]),
+      makeLicensing(),
     );
     const d = await svc.can({
       subject: { userId: 'u1', tenantId: null, isSuperAdmin: true },
@@ -87,6 +95,7 @@ describe('AuthorizationService', () => {
     const svc = new AuthorizationService(
       makeDataSource([permRow('platform.tenants.manage', true)]),
       makeLicenses([]),
+      makeLicensing(),
     );
     const d = await svc.can({
       subject: { userId: 'u1', tenantId: null, isSuperAdmin: false },
@@ -100,6 +109,7 @@ describe('AuthorizationService', () => {
     const svc = new AuthorizationService(
       makeDataSource([permRow('ia.use')]),
       makeLicenses([]),
+      makeLicensing(),
     );
     const d = await svc.can({
       subject: { userId: 'u1', tenantId: 't1', isSuperAdmin: false },
@@ -116,6 +126,7 @@ describe('AuthorizationService', () => {
         grantTenant('u1', 't1', 'clients.read'),
       ]),
       makeLicenses(['clients']),
+      makeLicensing(),
     );
     const d = await svc.can({
       subject: { userId: 'u1', tenantId: 't1', isSuperAdmin: false },
@@ -125,10 +136,25 @@ describe('AuthorizationService', () => {
     expect(d.matchedPolicy).toBe('rbac.tenant');
   });
 
+  it('permiso tenant + licencia comercial vencida → deny license_expired', async () => {
+    const svc = new AuthorizationService(
+      makeDataSource([permRow('clients.read')]),
+      makeLicenses(['clients']),
+      makeLicensing(false),
+    );
+    const d = await svc.can({
+      subject: { userId: 'u1', tenantId: 't1', isSuperAdmin: false },
+      permission: 'clients.read',
+    });
+    expect(d.effect).toBe('deny');
+    expect(d.reason).toBe('license_expired');
+  });
+
   it('sin tenantId y permiso tenant → deny', async () => {
     const svc = new AuthorizationService(
       makeDataSource([permRow('clients.read')]),
       makeLicenses(['clients']),
+      makeLicensing(),
     );
     const d = await svc.can({
       subject: { userId: 'u1', tenantId: null, isSuperAdmin: false },
@@ -152,6 +178,7 @@ describe('AuthorizationService', () => {
         grantTenant('u1', 't1', 'orders.approve'),
       ]),
       makeLicenses(['orders']),
+      makeLicensing(),
       [denyPolicy],
     );
     const d = await svc.can({

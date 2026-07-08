@@ -7,6 +7,7 @@ import { User } from '../../entities/user.entity';
 import { Tenant, TenantStatus } from '../../entities/tenant.entity';
 import { RegisterDto, LoginDto, PlatformLoginDto } from './dto/auth.dto';
 import { AuthorizationService } from '../security/authorization.service';
+import { LicensingService } from '../security/licensing.service';
 
 export interface AuthResponse {
   access_token: string;
@@ -22,6 +23,13 @@ export interface AuthResponse {
     isSuperAdmin: boolean;
     permissions: string[];
   };
+  license: {
+    valid: boolean;
+    reason: string | null;
+    graceActive: boolean;
+    daysRemaining: number | null;
+    renewalDue: boolean;
+  } | null;
 }
 
 /**
@@ -40,6 +48,7 @@ export class AuthService {
     @InjectRepository(Tenant) private tenantRepository: Repository<Tenant>,
     private jwtService: JwtService,
     @Optional() private readonly authz?: AuthorizationService,
+    @Optional() private readonly licensing?: LicensingService,
   ) {}
 
   private async resolveTenant(slug: string | undefined): Promise<Tenant> {
@@ -176,9 +185,26 @@ export class AuthService {
     }
   }
 
+  private async loadLicenseStatus(tenant: Tenant | null): Promise<AuthResponse['license']> {
+    if (!tenant || !this.licensing) return null;
+    try {
+      const result = await this.licensing.validate(tenant.id);
+      return {
+        valid: result.valid,
+        reason: result.reason ?? null,
+        graceActive: result.graceActive ?? false,
+        daysRemaining: result.daysRemaining ?? null,
+        renewalDue: result.renewalDue ?? false,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   private async generateTokens(user: User, tenant: Tenant | null): Promise<AuthResponse> {
     const payload = this.buildPayload(user, tenant);
     const permissions = await this.loadPermissions(user);
+    const license = await this.loadLicenseStatus(tenant);
     return {
       access_token: this.jwtService.sign(payload, {
         secret: process.env.JWT_SECRET,
@@ -189,6 +215,7 @@ export class AuthService {
         expiresIn: '7d',
       }),
       user: this.buildUserView(user, tenant, permissions),
+      license,
     };
   }
 }

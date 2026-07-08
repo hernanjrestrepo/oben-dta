@@ -1,9 +1,9 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import {
-  AdanAnswer, AdanStats, ApiError, AuditPage, AuthResponse, Client, CreateOrderDto,
-  DashboardKPIs, EvaResult, Invoice, Order, Plan, PlatformRole, PlatformUser,
-  Product, SystemStatus, Tenant, TenantFeatureFlag, TenantSubscription,
-  UpdateOrderStatusDto, User,
+  AdanAnswer, AdanStats, ApiError, AuditPage, AuthResponse, Client, CommercialLicense,
+  CreateOrderDto, DashboardKPIs, EvaResult, Invoice, LicenseStatusView, Order, Plan,
+  PlatformRole, PlatformUser, Product, SystemStatus, Tenant, TenantFeatureFlag,
+  TenantSubscription, UpdateOrderStatusDto, User,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
@@ -317,8 +317,31 @@ class ApiClient {
     modulesEnabled: string[];
     planModules: string[];
     flagOverrides: Record<string, boolean>;
+    commercialLicense: CommercialLicense | null;
+    valid: boolean;
+    reason: string | null;
+    graceActive: boolean;
+    daysRemaining: number | null;
+    renewalDue: boolean;
   }> {
     const { data } = await this.client.get(`/platform/tenants/${tenantId}/license`);
+    return data;
+  }
+
+  async issueLicense(tenantId: string, dto: {
+    planKey: string;
+    durationDays?: number;
+    maxUsers?: number;
+    maxSites?: number;
+    gracePeriodDays?: number;
+    offline?: boolean;
+  }): Promise<CommercialLicense> {
+    const { data } = await this.client.post<CommercialLicense>(`/platform/tenants/${tenantId}/license`, dto);
+    return data;
+  }
+
+  async renewLicense(tenantId: string, dto: { durationDays?: number; expiresAt?: string }): Promise<CommercialLicense> {
+    const { data } = await this.client.put<CommercialLicense>(`/platform/tenants/${tenantId}/license/renew`, dto);
     return data;
   }
 
@@ -374,6 +397,13 @@ class ApiClient {
 
   async getSystemStatus(): Promise<SystemStatus> {
     const { data } = await this.client.get<SystemStatus>('/platform/system-status');
+    return data;
+  }
+
+  // --- Licenciamiento (tenant-facing) -------------------------------------
+
+  async getLicenseStatus(): Promise<LicenseStatusView> {
+    const { data } = await this.client.get<LicenseStatusView>('/license/status');
     return data;
   }
 }
