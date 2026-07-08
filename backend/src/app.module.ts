@@ -24,7 +24,6 @@ import { IntegrationHubModule } from './modules/integrations/hub/integration-hub
 import { DatasetModule } from './modules/dataset/dataset.module';
 
 // Import all entities
-import { AuditEvent } from './entities/audit-event.entity';
 import { Client } from './entities/client.entity';
 import { Tenant } from './entities/tenant.entity';
 import { ModuleCatalog } from './entities/module-catalog.entity';
@@ -48,7 +47,6 @@ import { InsuranceQuote } from './entities/insurance-quote.entity';
 import { Invoice } from './entities/invoice.entity';
 import { MasterPackingList } from './entities/master-packing-list.entity';
 import { MaterialConsumption } from './entities/material-consumption.entity';
-import { Notification } from './entities/notification.entity';
 import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { PackagingConsumption } from './entities/packaging-consumption.entity';
@@ -61,7 +59,6 @@ import { RawMaterialConsumption } from './entities/raw-material-consumption.enti
 import { Shipment } from './entities/shipment.entity';
 import { ShipmentTracking } from './entities/shipment-tracking.entity';
 import { User } from './entities/user.entity';
-import { WorkflowEvent } from './entities/workflow-event.entity';
 
 @Module({
   imports: [
@@ -87,7 +84,6 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
         database: config.get('DB_NAME', 'dta_db'),
         entities: [
           Tenant,
-          AuditEvent,
           Client,
           CreditValidation,
           ExportCostSheet,
@@ -98,7 +94,6 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
           Invoice,
           MasterPackingList,
           MaterialConsumption,
-          Notification,
           Order,
           OrderItem,
           PackagingConsumption,
@@ -111,7 +106,6 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
           Shipment,
           ShipmentTracking,
           User,
-          WorkflowEvent,
           // Security Enterprise
           ModuleCatalog,
           Permission,
