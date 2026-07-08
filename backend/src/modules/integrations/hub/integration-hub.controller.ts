@@ -15,13 +15,16 @@ import { IntegrationHubService } from './integration-hub.service';
 import { INTEGRATION_SYSTEMS, IntegrationSystem } from './adapter.types';
 
 class ExecuteDto {
-  @IsString() @MinLength(2)
+  @IsString()
+  @MinLength(2)
   system: string;
 
-  @IsString() @MinLength(2)
+  @IsString()
+  @MinLength(2)
   operation: string;
 
-  @IsOptional() @IsObject()
+  @IsOptional()
+  @IsObject()
   args?: Record<string, unknown>;
 }
 
@@ -60,7 +63,11 @@ export class IntegrationHubController {
     if (!dto.operation) {
       throw new BadRequestException('operation requerida');
     }
-    return this.hub.call(dto.system as IntegrationSystem, dto.operation, dto.args ?? {});
+    return this.hub.call(
+      dto.system as IntegrationSystem,
+      dto.operation,
+      dto.args ?? {},
+    );
   }
 
   private assertSystem(system: string | undefined): void {

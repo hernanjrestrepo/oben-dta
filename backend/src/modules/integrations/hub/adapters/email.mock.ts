@@ -12,7 +12,16 @@ import { SCENARIO_PROVIDER, ScenarioProvider } from '../scenario.types';
 export class EmailMockAdapter extends MockAdapterBase {
   readonly system = 'email';
 
-  private readonly outbox = new Map<string, Array<{ id: string; to: string; subject: string; body: string; sentAt: string }>>();
+  private readonly outbox = new Map<
+    string,
+    Array<{
+      id: string;
+      to: string;
+      subject: string;
+      body: string;
+      sentAt: string;
+    }>
+  >();
 
   constructor(@Inject(SCENARIO_PROVIDER) scenarios: ScenarioProvider) {
     super({}, scenarios);
@@ -21,16 +30,30 @@ export class EmailMockAdapter extends MockAdapterBase {
   capabilities(): AdapterCapability[] {
     return [
       { operation: 'send', method: 'write', description: 'Enviar email' },
-      { operation: 'outbox.list', method: 'read', description: 'Ver bandeja de salida (por tenant)' },
-      { operation: 'outbox.clear', method: 'write', description: 'Vaciar bandeja de salida (por tenant)' },
+      {
+        operation: 'outbox.list',
+        method: 'read',
+        description: 'Ver bandeja de salida (por tenant)',
+      },
+      {
+        operation: 'outbox.clear',
+        method: 'write',
+        description: 'Vaciar bandeja de salida (por tenant)',
+      },
     ];
   }
 
   protected operationHandlers() {
     return {
       send: this.wrap((args, ctx) => this.send(args, ctx.tenantId), 'send'),
-      'outbox.list': this.wrap((_, ctx) => this.outboxList(ctx.tenantId), 'outbox.list'),
-      'outbox.clear': this.wrap((_, ctx) => this.outboxClear(ctx.tenantId), 'outbox.clear'),
+      'outbox.list': this.wrap(
+        (_, ctx) => this.outboxList(ctx.tenantId),
+        'outbox.list',
+      ),
+      'outbox.clear': this.wrap(
+        (_, ctx) => this.outboxClear(ctx.tenantId),
+        'outbox.clear',
+      ),
     };
   }
 

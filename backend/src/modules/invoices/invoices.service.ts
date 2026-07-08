@@ -12,7 +12,10 @@ import {
   DianStatus,
 } from '../../entities/invoice.entity';
 import { Order, OrderStatus } from '../../entities/order.entity';
-import { CreateInvoiceDto, UpdateInvoiceStatusDto } from './dto/create-invoice.dto';
+import {
+  CreateInvoiceDto,
+  UpdateInvoiceStatusDto,
+} from './dto/create-invoice.dto';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 
 // IVA por defecto. El valor real debe leerse por tenant desde tenants.settings.taxRate
@@ -38,7 +41,8 @@ export class InvoicesService {
       where: { id: dto.orderId, tenantId },
       relations: ['client', 'items'],
     });
-    if (!order) throw new NotFoundException(`Orden ${dto.orderId} no encontrada`);
+    if (!order)
+      throw new NotFoundException(`Orden ${dto.orderId} no encontrada`);
 
     if (
       order.status === OrderStatus.BLOCKED ||
@@ -111,7 +115,10 @@ export class InvoicesService {
     });
   }
 
-  async updateStatus(id: string, dto: UpdateInvoiceStatusDto): Promise<Invoice> {
+  async updateStatus(
+    id: string,
+    dto: UpdateInvoiceStatusDto,
+  ): Promise<Invoice> {
     const invoice = await this.findOne(id);
     invoice.status = dto.status;
     if (dto.status === InvoiceStatus.PAID) {

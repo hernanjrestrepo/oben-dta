@@ -35,7 +35,7 @@ export function LicenseGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!applies) {
-      setChecked(true);
+      queueMicrotask(() => setChecked(true));
       return;
     }
     let cancelled = false;
@@ -53,7 +53,6 @@ export function LicenseGate({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applies, user?.tenantId]);
 
   if (!applies || !checked || !status || status.valid) {

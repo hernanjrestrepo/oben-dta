@@ -7,8 +7,10 @@ import { ModuleCatalog } from '../../entities/module-catalog.entity';
 @Injectable()
 export class PermissionsService {
   constructor(
-    @InjectRepository(Permission) private readonly perms: Repository<Permission>,
-    @InjectRepository(ModuleCatalog) private readonly modules: Repository<ModuleCatalog>,
+    @InjectRepository(Permission)
+    private readonly perms: Repository<Permission>,
+    @InjectRepository(ModuleCatalog)
+    private readonly modules: Repository<ModuleCatalog>,
   ) {}
 
   async listAllTenantPermissions(): Promise<Permission[]> {

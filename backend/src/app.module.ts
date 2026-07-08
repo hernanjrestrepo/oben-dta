@@ -15,7 +15,6 @@ import { EvaModule } from './modules/ia/eva.module';
 import { AdanModule } from './modules/adan/adan.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
-import { SeedModule } from './modules/seed/seed.module';
 import { DashboardModule } from './modules/dashboard.module';
 import { TenantModule } from './common/tenant/tenant.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -139,13 +138,9 @@ import { User } from './entities/user.entity';
     AdanModule,
     IntegrationsModule,
     QuotesModule,
-    SeedModule,
     DashboardModule,
   ],
   controllers: [AppController, HealthController],
-  providers: [
-    AppService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
-  ],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

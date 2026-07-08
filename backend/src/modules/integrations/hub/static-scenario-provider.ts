@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { DEFAULT_SCENARIO, ScenarioConfig, ScenarioProvider } from './scenario.types';
+import {
+  DEFAULT_SCENARIO,
+  ScenarioConfig,
+  ScenarioProvider,
+} from './scenario.types';
 
 /**
  * Proveedor de escenarios sin persistencia. Devuelve happy_path para todo.
@@ -8,7 +12,11 @@ import { DEFAULT_SCENARIO, ScenarioConfig, ScenarioProvider } from './scenario.t
  */
 @Injectable()
 export class StaticScenarioProvider implements ScenarioProvider {
-  async resolve(_tenantId: string, _system: string, _operation: string): Promise<ScenarioConfig> {
+  async resolve(
+    _tenantId: string,
+    _system: string,
+    _operation: string,
+  ): Promise<ScenarioConfig> {
     return DEFAULT_SCENARIO;
   }
 }

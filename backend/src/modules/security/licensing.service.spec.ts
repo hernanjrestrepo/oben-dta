@@ -11,26 +11,29 @@ function makeSigning(): LicenseSigningService {
 
 function makeRepos() {
   const licenseStore = new Map<string, License>();
-  const tenantStore = new Map<string, { id: string; installationId: string | null }>();
+  const tenantStore = new Map<
+    string,
+    { id: string; installationId: string | null }
+  >();
 
   const licenses = {
-    findOne: jest.fn(async ({ where }: { where: { tenantId: string } }) =>
-      licenseStore.get(where.tenantId) ?? null,
+    findOne: jest.fn(({ where }: { where: { tenantId: string } }) =>
+      Promise.resolve(licenseStore.get(where.tenantId) ?? null),
     ),
     create: jest.fn((partial: Partial<License>) => ({ ...partial }) as License),
-    save: jest.fn(async (entity: License) => {
+    save: jest.fn((entity: License) => {
       licenseStore.set(entity.tenantId, entity);
-      return entity;
+      return Promise.resolve(entity);
     }),
   };
 
   const tenants = {
-    findOne: jest.fn(async ({ where }: { where: { id: string } }) =>
-      tenantStore.get(where.id) ?? null,
+    findOne: jest.fn(({ where }: { where: { id: string } }) =>
+      Promise.resolve(tenantStore.get(where.id) ?? null),
     ),
-    save: jest.fn(async (entity: { id: string; installationId: string | null }) => {
+    save: jest.fn((entity: { id: string; installationId: string | null }) => {
       tenantStore.set(entity.id, entity);
-      return entity;
+      return Promise.resolve(entity);
     }),
   };
 
@@ -43,9 +46,17 @@ describe('LicensingService', () => {
   it('issue() genera installationId, firma la licencia y queda válida', async () => {
     const { licenses, tenants } = makeRepos();
     const signing = makeSigning();
-    const svc = new LicensingService(licenses as never, tenants as never, signing);
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      signing,
+    );
 
-    const license = await svc.issue('t1', { planKey: 'starter', durationDays: 30, maxUsers: 10 });
+    const license = await svc.issue('t1', {
+      planKey: 'starter',
+      durationDays: 30,
+      maxUsers: 10,
+    });
     expect(license.installationId).toBeTruthy();
     expect(license.signature).toBeTruthy();
 
@@ -56,7 +67,11 @@ describe('LicensingService', () => {
 
   it('sin licencia emitida → no_license', async () => {
     const { licenses, tenants } = makeRepos();
-    const svc = new LicensingService(licenses as never, tenants as never, makeSigning());
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      makeSigning(),
+    );
     const result = await svc.validate('t1');
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('no_license');
@@ -64,18 +79,28 @@ describe('LicensingService', () => {
 
   it('renew() extiende expiresAt y re-firma manteniendo validez', async () => {
     const { licenses, tenants } = makeRepos();
-    const svc = new LicensingService(licenses as never, tenants as never, makeSigning());
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      makeSigning(),
+    );
     await svc.issue('t1', { planKey: 'starter', durationDays: 1 });
 
     const renewed = await svc.renew('t1', { durationDays: 60 });
     const result = await svc.validate('t1');
     expect(result.valid).toBe(true);
-    expect(renewed.expiresAt.getTime()).toBeGreaterThan(Date.now() + 30 * 86_400_000);
+    expect(renewed.expiresAt.getTime()).toBeGreaterThan(
+      Date.now() + 30 * 86_400_000,
+    );
   });
 
   it('manipulación manual de expiresAt en BD invalida la firma (tampered)', async () => {
     const { licenses, tenants, licenseStore } = makeRepos();
-    const svc = new LicensingService(licenses as never, tenants as never, makeSigning());
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      makeSigning(),
+    );
     await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
 
     // Simula un UPDATE manual directo en Postgres sobre la fila, sin pasar
@@ -91,8 +116,16 @@ describe('LicensingService', () => {
 
   it('manipulación manual de maxUsers en BD invalida la firma (tampered)', async () => {
     const { licenses, tenants, licenseStore } = makeRepos();
-    const svc = new LicensingService(licenses as never, tenants as never, makeSigning());
-    await svc.issue('t1', { planKey: 'starter', durationDays: 30, maxUsers: 10 });
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      makeSigning(),
+    );
+    await svc.issue('t1', {
+      planKey: 'starter',
+      durationDays: 30,
+      maxUsers: 10,
+    });
 
     const stored = licenseStore.get('t1')!;
     stored.maxUsers = 999999;
@@ -106,9 +139,17 @@ describe('LicensingService', () => {
   it('licencia vencida dentro del período de gracia → válida con graceActive', async () => {
     const { licenses, tenants } = makeRepos();
     const signing = makeSigning();
-    const svc = new LicensingService(licenses as never, tenants as never, signing);
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      signing,
+    );
     // durationDays negativo la deja vencida desde ya; gracePeriodDays=7 cubre la ventana.
-    await svc.issue('t1', { planKey: 'starter', durationDays: -1, gracePeriodDays: 7 });
+    await svc.issue('t1', {
+      planKey: 'starter',
+      durationDays: -1,
+      gracePeriodDays: 7,
+    });
 
     const result = await svc.validate('t1');
     expect(result.valid).toBe(true);
@@ -118,8 +159,16 @@ describe('LicensingService', () => {
 
   it('licencia vencida más allá del período de gracia → inválida (expired)', async () => {
     const { licenses, tenants } = makeRepos();
-    const svc = new LicensingService(licenses as never, tenants as never, makeSigning());
-    await svc.issue('t1', { planKey: 'starter', durationDays: -10, gracePeriodDays: 2 });
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      makeSigning(),
+    );
+    await svc.issue('t1', {
+      planKey: 'starter',
+      durationDays: -10,
+      gracePeriodDays: 2,
+    });
 
     const result = await svc.validate('t1');
     expect(result.valid).toBe(false);
@@ -128,7 +177,11 @@ describe('LicensingService', () => {
 
   it('setStatus(SUSPENDED) re-firma y validate() deniega con reason=suspended', async () => {
     const { licenses, tenants } = makeRepos();
-    const svc = new LicensingService(licenses as never, tenants as never, makeSigning());
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      makeSigning(),
+    );
     await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
 
     await svc.setStatus('t1', LicenseStatus.SUSPENDED);
@@ -139,7 +192,11 @@ describe('LicensingService', () => {
 
   it('setStatus(REVOKED) deniega con reason=revoked', async () => {
     const { licenses, tenants } = makeRepos();
-    const svc = new LicensingService(licenses as never, tenants as never, makeSigning());
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      makeSigning(),
+    );
     await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
 
     await svc.setStatus('t1', LicenseStatus.REVOKED);
@@ -150,8 +207,15 @@ describe('LicensingService', () => {
 
   it('reissue sobre un tenant ya licenciado reutiliza el mismo licenseId', async () => {
     const { licenses, tenants } = makeRepos();
-    const svc = new LicensingService(licenses as never, tenants as never, makeSigning());
-    const first = await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      makeSigning(),
+    );
+    const first = await svc.issue('t1', {
+      planKey: 'starter',
+      durationDays: 30,
+    });
     const second = await svc.issue('t1', { planKey: 'pro', durationDays: 60 });
     expect(second.id).toBe(first.id);
     expect(second.planKey).toBe('pro');

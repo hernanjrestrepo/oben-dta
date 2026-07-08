@@ -12,7 +12,10 @@ import { PaymentService } from './payment.service';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Quote, QuoteItem, Client, Product]), AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([Quote, QuoteItem, Client, Product]),
+    AuthModule,
+  ],
   controllers: [QuotesController],
   providers: [QuotesService, QuotePdfService, EmailService, PaymentService],
   exports: [QuotesService],

@@ -28,7 +28,6 @@ export async function runSqlMigrations(): Promise<void> {
   }
   if (files.length === 0) return;
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { Client } = require('pg') as {
     Client: new (opts: Record<string, unknown>) => PgClient;
   };

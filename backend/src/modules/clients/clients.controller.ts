@@ -42,7 +42,11 @@ export class ClientsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ): Promise<Client[]> {
-    return this.clientsService.findAll(requestingUser, page ? +page : 1, limit ? +limit : 50);
+    return this.clientsService.findAll(
+      requestingUser,
+      page ? +page : 1,
+      limit ? +limit : 50,
+    );
   }
 
   @Get(':id')

@@ -53,7 +53,13 @@ export class MockScenario {
   @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage: string | null;
 
-  @Column({ name: 'error_ratio', type: 'decimal', precision: 5, scale: 4, nullable: true })
+  @Column({
+    name: 'error_ratio',
+    type: 'decimal',
+    precision: 5,
+    scale: 4,
+    nullable: true,
+  })
   errorRatio: number | null;
 
   @Column({ type: 'jsonb', default: () => "'{}'" })

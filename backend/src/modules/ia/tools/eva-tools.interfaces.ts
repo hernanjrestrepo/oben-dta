@@ -107,7 +107,8 @@ export interface CreateInvoiceOutput {
 export const EVA_TOOL_SPECS = [
   {
     name: 'GetClient',
-    description: 'Busca un cliente real por su clientId de negocio (ej. CLIENT-001).',
+    description:
+      'Busca un cliente real por su clientId de negocio (ej. CLIENT-001).',
   },
   {
     name: 'GetProduct',

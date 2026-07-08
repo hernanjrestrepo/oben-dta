@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MockScenario } from '../../../entities/mock-scenario.entity';
-import { DEFAULT_SCENARIO, ScenarioConfig, ScenarioProvider } from './scenario.types';
+import {
+  DEFAULT_SCENARIO,
+  ScenarioConfig,
+  ScenarioProvider,
+} from './scenario.types';
 
 /**
  * Proveedor persistente. Lee `mock_scenarios` de BD y traduce a ScenarioConfig.
@@ -12,7 +16,10 @@ import { DEFAULT_SCENARIO, ScenarioConfig, ScenarioProvider } from './scenario.t
 @Injectable()
 export class PersistentScenarioProvider extends ScenarioProvider {
   private static readonly TTL_MS = 5000;
-  private readonly cache = new Map<string, { at: number; value: ScenarioConfig }>();
+  private readonly cache = new Map<
+    string,
+    { at: number; value: ScenarioConfig }
+  >();
 
   constructor(
     @InjectRepository(MockScenario)
@@ -21,7 +28,11 @@ export class PersistentScenarioProvider extends ScenarioProvider {
     super();
   }
 
-  async resolve(tenantId: string, system: string, operation: string): Promise<ScenarioConfig> {
+  async resolve(
+    tenantId: string,
+    system: string,
+    operation: string,
+  ): Promise<ScenarioConfig> {
     const key = `${tenantId}|${system}|${operation}`;
     const cached = this.cache.get(key);
     const now = Date.now();

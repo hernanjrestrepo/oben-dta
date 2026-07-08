@@ -72,8 +72,18 @@ describe('SeededRandom', () => {
   it('misma instancia con mismo seed reproduce la misma secuencia de llamadas mixtas', () => {
     const r1 = new SeededRandom(99);
     const r2 = new SeededRandom(99);
-    const seq1 = [r1.int(0, 100), r1.float(0, 1), r1.bool(), r1.pick([1, 2, 3])];
-    const seq2 = [r2.int(0, 100), r2.float(0, 1), r2.bool(), r2.pick([1, 2, 3])];
+    const seq1 = [
+      r1.int(0, 100),
+      r1.float(0, 1),
+      r1.bool(),
+      r1.pick([1, 2, 3]),
+    ];
+    const seq2 = [
+      r2.int(0, 100),
+      r2.float(0, 1),
+      r2.bool(),
+      r2.pick([1, 2, 3]),
+    ];
     expect(seq1).toEqual(seq2);
   });
 });

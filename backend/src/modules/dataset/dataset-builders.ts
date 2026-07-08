@@ -10,9 +10,19 @@ import {
   ProductionOrderStatus,
   ProductionPriority,
 } from '../../entities/production-order.entity';
-import { ExportOperationStatus, ExportType } from '../../entities/export-operation.entity';
-import { ShipmentStatus, ShipmentType, CarrierType } from '../../entities/shipment.entity';
-import { PackingListStatus, PackingListType } from '../../entities/packing-list.entity';
+import {
+  ExportOperationStatus,
+  ExportType,
+} from '../../entities/export-operation.entity';
+import {
+  ShipmentStatus,
+  ShipmentType,
+  CarrierType,
+} from '../../entities/shipment.entity';
+import {
+  PackingListStatus,
+  PackingListType,
+} from '../../entities/packing-list.entity';
 import { IncotermGroup } from '../../entities/incoterm.entity';
 
 /**
@@ -32,18 +42,50 @@ import { IncotermGroup } from '../../entities/incoterm.entity';
 // ---------------------------------------------------------------------------
 
 const COMPANY_PREFIXES = [
-  'Industrias', 'Comercializadora', 'Distribuidora', 'Exportadora', 'Manufacturas',
-  'Grupo', 'Corporación', 'Suministros', 'Importadora', 'Fábrica',
+  'Industrias',
+  'Comercializadora',
+  'Distribuidora',
+  'Exportadora',
+  'Manufacturas',
+  'Grupo',
+  'Corporación',
+  'Suministros',
+  'Importadora',
+  'Fábrica',
 ];
 const COMPANY_CORES = [
-  'del Norte', 'Andina', 'del Pacífico', 'Nacional', 'Continental', 'del Caribe',
-  'Central', 'Industrial', 'Colombiana', 'del Sur', 'Metropolitana', 'Global',
+  'del Norte',
+  'Andina',
+  'del Pacífico',
+  'Nacional',
+  'Continental',
+  'del Caribe',
+  'Central',
+  'Industrial',
+  'Colombiana',
+  'del Sur',
+  'Metropolitana',
+  'Global',
 ];
-const COMPANY_SUFFIXES = ['S.A.S.', 'Ltda.', 'S.A.', 'e Hijos S.A.S.', '& Cía.'];
+const COMPANY_SUFFIXES = [
+  'S.A.S.',
+  'Ltda.',
+  'S.A.',
+  'e Hijos S.A.S.',
+  '& Cía.',
+];
 
 const CITIES = [
-  'Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga',
-  'Pereira', 'Manizales', 'Ibagué', 'Santa Marta',
+  'Bogotá',
+  'Medellín',
+  'Cali',
+  'Barranquilla',
+  'Cartagena',
+  'Bucaramanga',
+  'Pereira',
+  'Manizales',
+  'Ibagué',
+  'Santa Marta',
 ];
 
 const PRODUCT_FAMILIES = [
@@ -57,8 +99,21 @@ const PRODUCT_FAMILIES = [
   { name: 'Mangueras industriales', priceRange: [12000, 95000] },
 ];
 
-const CARRIERS = ['Maersk Line', 'DHL', 'FedEx', 'Transportes Andinos', 'Servientrega'];
-const DESTINATION_COUNTRIES = ['United States', 'Mexico', 'Peru', 'Ecuador', 'Chile', 'Spain'];
+const CARRIERS = [
+  'Maersk Line',
+  'DHL',
+  'FedEx',
+  'Transportes Andinos',
+  'Servientrega',
+];
+const DESTINATION_COUNTRIES = [
+  'United States',
+  'Mexico',
+  'Peru',
+  'Ecuador',
+  'Chile',
+  'Spain',
+];
 
 // ---------------------------------------------------------------------------
 // Clients
@@ -76,7 +131,11 @@ export interface ClientSeed {
   createdAt: Date;
 }
 
-export function buildClients(rng: SeededRandom, count: number, runTag = ''): ClientSeed[] {
+export function buildClients(
+  rng: SeededRandom,
+  count: number,
+  runTag = '',
+): ClientSeed[] {
   const tag = runTag ? `${runTag}-` : '';
   const out: ClientSeed[] = [];
   for (let i = 0; i < count; i++) {
@@ -90,7 +149,10 @@ export function buildClients(rng: SeededRandom, count: number, runTag = ''): Cli
     out.push({
       clientId: `CLI-${tag}${idNum}`,
       name: `${name} #${idNum}`,
-      email: `contacto${idNum}@${name.toLowerCase().replace(/[^a-z]/g, '').slice(0, 12)}.com`,
+      email: `contacto${idNum}@${name
+        .toLowerCase()
+        .replace(/[^a-z]/g, '')
+        .slice(0, 12)}.com`,
       phone: `+57 ${rng.int(300, 320)} ${rng.int(100, 999)} ${rng.int(1000, 9999)}`,
       address: `Calle ${rng.int(1, 150)} # ${rng.int(1, 99)}-${rng.int(1, 99)}, ${rng.pick(CITIES)}, Colombia`,
       creditLimit,
@@ -117,7 +179,11 @@ export interface ProductSeed {
   createdAt: Date;
 }
 
-export function buildProducts(rng: SeededRandom, count: number, runTag = ''): ProductSeed[] {
+export function buildProducts(
+  rng: SeededRandom,
+  count: number,
+  runTag = '',
+): ProductSeed[] {
   const tag = runTag ? `${runTag}-` : '';
   const out: ProductSeed[] = [];
   for (let i = 0; i < count; i++) {
@@ -157,32 +223,47 @@ export interface IncotermSeed {
 export function buildIncoterms(): IncotermSeed[] {
   return [
     {
-      code: 'EXW', name: 'Ex Works', group: IncotermGroup.E,
-      description: 'El vendedor pone la mercancía a disposición en sus instalaciones',
+      code: 'EXW',
+      name: 'Ex Works',
+      group: IncotermGroup.E,
+      description:
+        'El vendedor pone la mercancía a disposición en sus instalaciones',
       sellerResponsibilities: 'Poner la mercancía disponible en fábrica',
       buyerResponsibilities: 'Todos los costos y riesgos desde origen',
-      isActive: true, sortOrder: 1,
+      isActive: true,
+      sortOrder: 1,
     },
     {
-      code: 'FOB', name: 'Free On Board', group: IncotermGroup.F,
+      code: 'FOB',
+      name: 'Free On Board',
+      group: IncotermGroup.F,
       description: 'El vendedor entrega la mercancía a bordo del buque',
-      sellerResponsibilities: 'Entregar a bordo del buque en puerto de embarque',
+      sellerResponsibilities:
+        'Entregar a bordo del buque en puerto de embarque',
       buyerResponsibilities: 'Costos y riesgos desde el buque',
-      isActive: true, sortOrder: 2,
+      isActive: true,
+      sortOrder: 2,
     },
     {
-      code: 'CIF', name: 'Cost, Insurance and Freight', group: IncotermGroup.C,
+      code: 'CIF',
+      name: 'Cost, Insurance and Freight',
+      group: IncotermGroup.C,
       description: 'El vendedor paga flete y seguro hasta destino',
       sellerResponsibilities: 'Pagar flete y seguro hasta puerto destino',
       buyerResponsibilities: 'Costos y riesgos desde el buque',
-      isActive: true, sortOrder: 3,
+      isActive: true,
+      sortOrder: 3,
     },
     {
-      code: 'DDP', name: 'Delivered Duty Paid', group: IncotermGroup.D,
+      code: 'DDP',
+      name: 'Delivered Duty Paid',
+      group: IncotermGroup.D,
       description: 'El vendedor asume todos los costos y riesgos hasta destino',
-      sellerResponsibilities: 'Entregar en destino, despachado para importación',
+      sellerResponsibilities:
+        'Entregar en destino, despachado para importación',
       buyerResponsibilities: 'Recibir la mercancía en destino',
-      isActive: true, sortOrder: 4,
+      isActive: true,
+      sortOrder: 4,
     },
   ];
 }
@@ -271,7 +352,12 @@ export function buildOrders(
       const product = products[idx];
       const quantity = rng.int(1, 50);
       const totalPrice = Math.round(product.price * quantity * 100) / 100;
-      items.push({ productId: product.id, quantity, unitPrice: product.price, totalPrice });
+      items.push({
+        productId: product.id,
+        quantity,
+        unitPrice: product.price,
+        totalPrice,
+      });
       totalAmount += totalPrice;
     }
 
@@ -331,7 +417,12 @@ export function isInvoiceable(status: OrderStatus): boolean {
 export function buildInvoice(
   rng: SeededRandom,
   index: number,
-  order: { id: string; totalAmount: number; status: OrderStatus; createdAt: Date },
+  order: {
+    id: string;
+    totalAmount: number;
+    status: OrderStatus;
+    createdAt: Date;
+  },
   runTag = '',
 ): InvoiceSeedInput {
   const amount = order.totalAmount;
@@ -398,9 +489,15 @@ export function buildCreditValidation(
   const projectedUsed = client.usedCredit + order.totalAmount;
   const utilizationPercentage =
     client.creditLimit > 0
-      ? Math.min(100, Math.round((projectedUsed / client.creditLimit) * 10000) / 100)
+      ? Math.min(
+          100,
+          Math.round((projectedUsed / client.creditLimit) * 10000) / 100,
+        )
       : 0;
-  const creditScore = Math.max(0, Math.min(100, Math.round(100 - utilizationPercentage)));
+  const creditScore = Math.max(
+    0,
+    Math.min(100, Math.round(100 - utilizationPercentage)),
+  );
   const status = isCreditSufficient
     ? CreditValidationStatus.APPROVED
     : CreditValidationStatus.REJECTED;
@@ -479,7 +576,12 @@ export function buildQuotes(
       const product = rng.pick(products);
       const quantity = rng.int(1, 30);
       const totalPrice = Math.round(product.price * quantity * 100) / 100;
-      items.push({ productId: product.id, quantity, unitPrice: product.price, totalPrice });
+      items.push({
+        productId: product.id,
+        quantity,
+        unitPrice: product.price,
+        totalPrice,
+      });
       subtotal += totalPrice;
     }
     const taxAmount = Math.round(subtotal * IVA_RATE * 100) / 100;
@@ -541,8 +643,12 @@ export function buildProductionOrder(
   item: OrderItemSeedInput,
   runTag = '',
 ): ProductionOrderSeedInput {
-  const isDone = order.status === OrderStatus.DELIVERED || order.status === OrderStatus.READY_FOR_DELIVERY;
-  const completedQuantity = isDone ? item.quantity : Math.round(item.quantity * rng.float(0.2, 0.8));
+  const isDone =
+    order.status === OrderStatus.DELIVERED ||
+    order.status === OrderStatus.READY_FOR_DELIVERY;
+  const completedQuantity = isDone
+    ? item.quantity
+    : Math.round(item.quantity * rng.float(0.2, 0.8));
   const poStatus = isDone
     ? ProductionOrderStatus.COMPLETED
     : rng.pickWeighted<ProductionOrderStatus>([
@@ -573,7 +679,8 @@ export function buildProductionOrder(
     actualProductionTime: isDone ? rng.int(8, 130) : 0,
     qualityChecksPassed: isDone ? rng.bool(0.95) : false,
     yieldPercentage: isDone ? rng.float(85, 100) : 0,
-    productionCost: Math.round(item.totalPrice * rng.float(0.3, 0.5) * 100) / 100,
+    productionCost:
+      Math.round(item.totalPrice * rng.float(0.3, 0.5) * 100) / 100,
     createdAt: order.createdAt,
   };
 }
@@ -622,11 +729,13 @@ export function buildExportOperation(
   const tag = runTag ? `${runTag}-` : '';
   const orderValue = order.totalAmount;
   const totalCosts = Math.round(orderValue * rng.float(0.1, 0.2) * 100) / 100;
-  const liquidatedValue = Math.round(orderValue * rng.float(1.02, 1.1) * 100) / 100;
+  const liquidatedValue =
+    Math.round(orderValue * rng.float(1.02, 1.1) * 100) / 100;
   const totalRevenue = liquidatedValue;
-  const profitMargin = totalRevenue > 0
-    ? Math.round(((totalRevenue - totalCosts) / totalRevenue) * 10000) / 100
-    : 0;
+  const profitMargin =
+    totalRevenue > 0
+      ? Math.round(((totalRevenue - totalCosts) / totalRevenue) * 10000) / 100
+      : 0;
   const departure = rng.afterDate(order.createdAt, 5, 20);
   const arrival = rng.afterDate(departure, 10, 25);
 
@@ -726,7 +835,8 @@ export function buildShipment(
     totalNetWeight: exportOp.totalNetWeight,
     totalVolume: exportOp.totalVolume,
     totalPackages: exportOp.totalPackages,
-    shippingCost: Math.round(exportOp.totalCosts * rng.float(0.4, 0.6) * 100) / 100,
+    shippingCost:
+      Math.round(exportOp.totalCosts * rng.float(0.4, 0.6) * 100) / 100,
     currency: 'USD',
     deliverySuccessful: delivered,
     createdAt: exportOp.createdAt,
@@ -754,7 +864,10 @@ export function buildShipmentTracking(
   rng: SeededRandom,
   shipment: { id: string; status: ShipmentStatus; createdAt: Date },
 ): ShipmentTrackingSeedInput[] {
-  const upToIndex = shipment.status === ShipmentStatus.DELIVERED ? TRACKING_STAGES.length : rng.int(2, 3);
+  const upToIndex =
+    shipment.status === ShipmentStatus.DELIVERED
+      ? TRACKING_STAGES.length
+      : rng.int(2, 3);
   const events: ShipmentTrackingSeedInput[] = [];
   let ts = new Date(shipment.createdAt);
   for (let i = 0; i < upToIndex; i++) {

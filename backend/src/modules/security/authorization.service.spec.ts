@@ -1,5 +1,5 @@
 import { AuthorizationService } from './authorization.service';
-import { AuthorizationPolicy, AuthorizationRequest } from './authorization.types';
+import { AuthorizationPolicy } from './authorization.types';
 
 interface QueryStep {
   match: (sql: string, params: unknown[]) => boolean;
@@ -8,25 +8,29 @@ interface QueryStep {
 
 function makeDataSource(steps: QueryStep[]) {
   return {
-    query: jest.fn(async (sql: string, params: unknown[] = []) => {
+    query: jest.fn((sql: string, params: unknown[] = []) => {
       for (const s of steps) {
-        if (s.match(sql, params)) return s.reply;
+        if (s.match(sql, params)) return Promise.resolve(s.reply);
       }
-      return [];
+      return Promise.resolve([]);
     }),
   } as never;
 }
 
 function makeLicenses(enabled: string[] = []) {
   return {
-    isModuleEnabled: jest.fn(async (_tenant: string, moduleKey: string) => enabled.includes(moduleKey)),
+    isModuleEnabled: jest.fn((_tenant: string, moduleKey: string) =>
+      Promise.resolve(enabled.includes(moduleKey)),
+    ),
     resolve: jest.fn(),
   } as never;
 }
 
 function makeLicensing(valid = true, reason = 'expired') {
   return {
-    validate: jest.fn(async () => (valid ? { valid: true } : { valid: false, reason })),
+    validate: jest.fn(() =>
+      Promise.resolve(valid ? { valid: true } : { valid: false, reason }),
+    ),
   } as never;
 }
 
@@ -38,7 +42,11 @@ function permRow(perm: string, isPlatform = false): QueryStep {
   };
 }
 
-function grantTenant(userId: string, tenantId: string, perm: string): QueryStep {
+function grantTenant(
+  userId: string,
+  tenantId: string,
+  perm: string,
+): QueryStep {
   return {
     match: (sql, params) =>
       sql.includes('FROM user_roles ur') &&
@@ -167,10 +175,11 @@ describe('AuthorizationService', () => {
   it('policy pluggable deny gana sobre RBAC allow', async () => {
     const denyPolicy: AuthorizationPolicy = {
       name: 'time-window',
-      evaluate: async (_req: AuthorizationRequest) => ({
-        effect: 'deny',
-        reason: 'outside_working_hours',
-      }),
+      evaluate: () =>
+        Promise.resolve({
+          effect: 'deny' as const,
+          reason: 'outside_working_hours',
+        }),
     };
     const svc = new AuthorizationService(
       makeDataSource([

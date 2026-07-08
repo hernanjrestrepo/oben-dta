@@ -50,10 +50,18 @@ export class MockScenariosController {
 
   @Get(':system/:operation')
   @RequirePermission('integrations.read')
-  async get(@Param('system') system: string, @Param('operation') operation: string) {
-    return (await this.service.get(system as IntegrationSystem, operation)) ?? {
-      system, operation, behavior: 'happy_path', enabled: true,
-    };
+  async get(
+    @Param('system') system: string,
+    @Param('operation') operation: string,
+  ) {
+    return (
+      (await this.service.get(system as IntegrationSystem, operation)) ?? {
+        system,
+        operation,
+        behavior: 'happy_path',
+        enabled: true,
+      }
+    );
   }
 
   @Post()
@@ -70,7 +78,10 @@ export class MockScenariosController {
 
   @Put()
   @RequirePermission('integrations.update')
-  put(@Body() dto: UpsertScenarioBodyDto, @Req() req: { user: { sub: string } }) {
+  put(
+    @Body() dto: UpsertScenarioBodyDto,
+    @Req() req: { user: { sub: string } },
+  ) {
     return this.service.upsert(
       { ...(dto as unknown as Parameters<MockScenariosService['upsert']>[0]) },
       req.user.sub,
@@ -79,7 +90,10 @@ export class MockScenariosController {
 
   @Delete(':system/:operation')
   @RequirePermission('integrations.update')
-  async remove(@Param('system') system: string, @Param('operation') operation: string) {
+  async remove(
+    @Param('system') system: string,
+    @Param('operation') operation: string,
+  ) {
     await this.service.remove(system as IntegrationSystem, operation);
     return { deleted: true };
   }

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  Optional,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant, TenantStatus } from '../../entities/tenant.entity';
@@ -35,7 +40,8 @@ export class TenantsService {
 
   async create(dto: CreateTenantDto): Promise<Tenant> {
     const existing = await this.repo.findOne({ where: { slug: dto.slug } });
-    if (existing) throw new ConflictException(`Tenant slug '${dto.slug}' ya existe`);
+    if (existing)
+      throw new ConflictException(`Tenant slug '${dto.slug}' ya existe`);
     const tenant = this.repo.create({
       slug: dto.slug,
       name: dto.name,
@@ -78,7 +84,10 @@ export class TenantsService {
       const existingLicense = await this.licensing.getCurrent(tenant.id);
       if (!existingLicense) {
         try {
-          await this.licensing.issue(tenant.id, { planKey: 'starter', durationDays: 30 });
+          await this.licensing.issue(tenant.id, {
+            planKey: 'starter',
+            durationDays: 30,
+          });
         } catch {
           // Igual que arriba: se resuelve en el próximo boot si el catálogo aún no está listo.
         }

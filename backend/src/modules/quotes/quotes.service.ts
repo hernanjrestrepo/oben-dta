@@ -127,8 +127,8 @@ export class QuotesService {
     if (!email) throw new NotFoundException('Email no encontrado');
 
     const quote = await this.findOne(quoteId);
-    const inventoryChecks = await this.validateInventory(quote);
-    const creditCheck = await this.validateCredit(quote);
+    const inventoryChecks = this.validateInventory(quote);
+    const creditCheck = this.validateCredit(quote);
 
     if (!creditCheck.passed) {
       quote.status = QuoteStatus.REJECTED;
@@ -232,7 +232,7 @@ export class QuotesService {
     return items;
   }
 
-  private async validateInventory(quote: Quote) {
+  private validateInventory(quote: Quote) {
     const missing: Array<{ sku: string; missing: number }> = [];
     let allAvailable = true;
 
@@ -250,7 +250,7 @@ export class QuotesService {
     return { allAvailable, missing };
   }
 
-  private async validateCredit(quote: Quote) {
+  private validateCredit(quote: Quote) {
     const client = quote.client;
     const available = Number(client.creditLimit) - Number(client.usedCredit);
     const passed = Number(quote.total) <= available;

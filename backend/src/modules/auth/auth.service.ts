@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  Optional,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
@@ -55,11 +60,16 @@ export class AuthService {
 
   private async resolveTenant(slug: string | undefined): Promise<Tenant> {
     const wanted = slug || AuthService.DEFAULT_TENANT_SLUG;
-    const tenant = await this.tenantRepository.findOne({ where: { slug: wanted } });
+    const tenant = await this.tenantRepository.findOne({
+      where: { slug: wanted },
+    });
     if (!tenant) {
       throw new UnauthorizedException(`Tenant '${wanted}' no existe`);
     }
-    if (tenant.status === TenantStatus.ARCHIVED || tenant.status === TenantStatus.SUSPENDED) {
+    if (
+      tenant.status === TenantStatus.ARCHIVED ||
+      tenant.status === TenantStatus.SUSPENDED
+    ) {
       throw new UnauthorizedException(`Tenant '${wanted}' no está activo`);
     }
     return tenant;
@@ -71,7 +81,9 @@ export class AuthService {
       where: { email: dto.email, tenantId: tenant.id },
     });
     if (existingUser) {
-      throw new BadRequestException('El correo ya está registrado para este tenant');
+      throw new BadRequestException(
+        'El correo ya está registrado para este tenant',
+      );
     }
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = this.userRepository.create({
@@ -95,7 +107,10 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('Credenciales inválidas');
     if (!user.isActive) throw new UnauthorizedException('Usuario inactivo');
     this.assertNotLocked(user);
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
       await this.registerFailedAttempt(user);
       throw new UnauthorizedException('Credenciales inválidas');
@@ -117,7 +132,10 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('Credenciales inválidas');
     if (!user.isActive) throw new UnauthorizedException('Usuario inactivo');
     this.assertNotLocked(user);
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
       await this.registerFailedAttempt(user);
       throw new UnauthorizedException('Credenciales inválidas');
@@ -141,11 +159,15 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Refresh token inválido o expirado');
     }
-    const user = await this.userRepository.findOne({ where: { id: payload.sub } });
+    const user = await this.userRepository.findOne({
+      where: { id: payload.sub },
+    });
     if (!user) throw new UnauthorizedException('Usuario no encontrado');
     if (!user.isActive) throw new UnauthorizedException('Usuario inactivo');
     if ((payload.ver ?? 0) !== user.tokenVersion) {
-      throw new UnauthorizedException('Refresh token revocado — inicia sesión nuevamente');
+      throw new UnauthorizedException(
+        'Refresh token revocado — inicia sesión nuevamente',
+      );
     }
     const tenant = user.tenantId
       ? await this.tenantRepository.findOne({ where: { id: user.tenantId } })
@@ -176,7 +198,9 @@ export class AuthService {
 
   private assertNotLocked(user: User): void {
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
-      const minutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
+      const minutes = Math.ceil(
+        (user.lockedUntil.getTime() - Date.now()) / 60_000,
+      );
       throw new UnauthorizedException(
         `Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta de nuevo en ${minutes} minuto(s).`,
       );
@@ -243,7 +267,9 @@ export class AuthService {
     }
   }
 
-  private async loadLicenseStatus(tenant: Tenant | null): Promise<AuthResponse['license']> {
+  private async loadLicenseStatus(
+    tenant: Tenant | null,
+  ): Promise<AuthResponse['license']> {
     if (!tenant || !this.licensing) return null;
     try {
       const result = await this.licensing.validate(tenant.id);
@@ -259,7 +285,10 @@ export class AuthService {
     }
   }
 
-  private async generateTokens(user: User, tenant: Tenant | null): Promise<AuthResponse> {
+  private async generateTokens(
+    user: User,
+    tenant: Tenant | null,
+  ): Promise<AuthResponse> {
     const payload = this.buildPayload(user, tenant);
     const permissions = await this.loadPermissions(user);
     const license = await this.loadLicenseStatus(tenant);

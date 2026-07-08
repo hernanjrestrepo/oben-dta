@@ -32,13 +32,21 @@ export class TenantInterceptor implements NestInterceptor {
     const req = context.switchToHttp().getRequest();
     const path: string = req.path || req.url || '';
 
-    if (TenantInterceptor.PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}?`))) {
+    if (
+      TenantInterceptor.PUBLIC_PATHS.some(
+        (p) => path === p || path.startsWith(`${p}?`),
+      )
+    ) {
       return next.handle();
     }
 
     // req.user es poblado por JwtAuthGuard cuando aplica. Si no existe aquí es que la ruta
     // no está protegida y no debería resolver tenant — dejamos pasar sin contexto.
-    const user = (req as { user?: { sub?: string; tenantId?: string; isSuperAdmin?: boolean } }).user;
+    const user = (
+      req as {
+        user?: { sub?: string; tenantId?: string; isSuperAdmin?: boolean };
+      }
+    ).user;
     if (!user) {
       return next.handle();
     }

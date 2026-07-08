@@ -1,10 +1,17 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { License, LicenseStatus } from '../../entities/license.entity';
 import { Tenant } from '../../entities/tenant.entity';
-import { LicenseSigningService, LicenseClaims } from './license-signing.service';
+import {
+  LicenseSigningService,
+  LicenseClaims,
+} from './license-signing.service';
 
 export type LicenseValidationReason =
   | 'no_license'
@@ -42,7 +49,14 @@ export class LicensingService {
 
   async issue(
     tenantId: string,
-    dto: { planKey: string; durationDays?: number; maxUsers?: number; maxSites?: number; gracePeriodDays?: number; offline?: boolean },
+    dto: {
+      planKey: string;
+      durationDays?: number;
+      maxUsers?: number;
+      maxSites?: number;
+      gracePeriodDays?: number;
+      offline?: boolean;
+    },
   ): Promise<License> {
     const tenant = await this.tenants.findOne({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException(`Tenant ${tenantId} no existe`);
@@ -53,7 +67,9 @@ export class LicensingService {
 
     const existing = await this.licenses.findOne({ where: { tenantId } });
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + (dto.durationDays ?? 30) * 86_400_000);
+    const expiresAt = new Date(
+      now.getTime() + (dto.durationDays ?? 30) * 86_400_000,
+    );
 
     const claims: LicenseClaims = {
       licenseId: existing?.id ?? randomUUID(),
@@ -70,7 +86,8 @@ export class LicensingService {
     };
     const { signature, keyId } = this.signing.sign(claims);
 
-    const license = existing ?? this.licenses.create({ id: claims.licenseId, tenantId });
+    const license =
+      existing ?? this.licenses.create({ id: claims.licenseId, tenantId });
     license.installationId = tenant.installationId;
     license.planKey = claims.planKey;
     license.status = LicenseStatus.ACTIVE;
@@ -86,9 +103,15 @@ export class LicensingService {
     return this.licenses.save(license);
   }
 
-  async renew(tenantId: string, dto: { durationDays?: number; expiresAt?: string }): Promise<License> {
+  async renew(
+    tenantId: string,
+    dto: { durationDays?: number; expiresAt?: string },
+  ): Promise<License> {
     const license = await this.licenses.findOne({ where: { tenantId } });
-    if (!license) throw new NotFoundException(`El tenant ${tenantId} no tiene licencia emitida`);
+    if (!license)
+      throw new NotFoundException(
+        `El tenant ${tenantId} no tiene licencia emitida`,
+      );
     if (!dto.durationDays && !dto.expiresAt) {
       throw new BadRequestException('Debe indicar durationDays o expiresAt');
     }
@@ -122,7 +145,10 @@ export class LicensingService {
 
   async setStatus(tenantId: string, status: LicenseStatus): Promise<License> {
     const license = await this.licenses.findOne({ where: { tenantId } });
-    if (!license) throw new NotFoundException(`El tenant ${tenantId} no tiene licencia emitida`);
+    if (!license)
+      throw new NotFoundException(
+        `El tenant ${tenantId} no tiene licencia emitida`,
+      );
 
     const claims = this.toClaims(license);
     claims.status = status;
@@ -160,14 +186,32 @@ export class LicensingService {
     const renewalDue = new Date().getDate() >= 15 && daysRemaining <= 30;
 
     if (now > graceEndsAtMs) {
-      return { valid: false, reason: 'expired', license, daysRemaining, renewalDue: true };
+      return {
+        valid: false,
+        reason: 'expired',
+        license,
+        daysRemaining,
+        renewalDue: true,
+      };
     }
     if (now > expiresAtMs) {
       // Vencida pero dentro del período de gracia offline: se permite operar con aviso.
-      return { valid: true, license, graceActive: true, daysRemaining, renewalDue: true };
+      return {
+        valid: true,
+        license,
+        graceActive: true,
+        daysRemaining,
+        renewalDue: true,
+      };
     }
 
-    return { valid: true, license, graceActive: false, daysRemaining, renewalDue };
+    return {
+      valid: true,
+      license,
+      graceActive: false,
+      daysRemaining,
+      renewalDue,
+    };
   }
 
   private toClaims(license: License): LicenseClaims {

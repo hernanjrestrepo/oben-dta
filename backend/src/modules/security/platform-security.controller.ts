@@ -82,7 +82,10 @@ export class PlatformSecurityController {
 
   @Put('plans/:key/modules')
   @RequirePermission('platform.plans.manage')
-  updatePlanModules(@Param('key') key: string, @Body() dto: UpdatePlanModulesDto) {
+  updatePlanModules(
+    @Param('key') key: string,
+    @Body() dto: UpdatePlanModulesDto,
+  ) {
     return this.plans.updateModules(key, dto.modules);
   }
 
@@ -95,7 +98,10 @@ export class PlatformSecurityController {
 
   @Put('tenants/:tenantId/subscription')
   @RequirePermission('platform.subscriptions.manage')
-  assignSubscription(@Param('tenantId') tenantId: string, @Body() dto: AssignSubscriptionDto) {
+  assignSubscription(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: AssignSubscriptionDto,
+  ) {
     return this.plans.assignSubscription(tenantId, dto);
   }
 
@@ -150,13 +156,19 @@ export class PlatformSecurityController {
 
   @Post('tenants/:tenantId/license')
   @RequirePermission('platform.subscriptions.manage')
-  issueLicense(@Param('tenantId') tenantId: string, @Body() dto: IssueLicenseDto) {
+  issueLicense(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: IssueLicenseDto,
+  ) {
     return this.licensing.issue(tenantId, dto);
   }
 
   @Put('tenants/:tenantId/license/renew')
   @RequirePermission('platform.subscriptions.manage')
-  renewLicense(@Param('tenantId') tenantId: string, @Body() dto: RenewLicenseDto) {
+  renewLicense(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: RenewLicenseDto,
+  ) {
     return this.licensing.renew(tenantId, dto);
   }
 
@@ -169,7 +181,10 @@ export class PlatformSecurityController {
 
   @Post('platform-roles/assign')
   @RequirePermission('platform.tenants.manage')
-  assignPlatformRole(@Body() dto: CreatePlatformUserRoleDto, @Req() req: { user: { sub: string } }) {
+  assignPlatformRole(
+    @Body() dto: CreatePlatformUserRoleDto,
+    @Req() req: { user: { sub: string } },
+  ) {
     return this.platformRoles.assign(dto, req.user.sub);
   }
 

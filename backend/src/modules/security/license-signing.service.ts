@@ -52,9 +52,15 @@ export class LicenseSigningService implements OnModuleInit {
     this.keyId = this.config.get<string>('LICENSE_SIGNING_KEY_ID') || 'default';
 
     if (privB64 && pubB64) {
-      this.privateKey = createPrivateKey(Buffer.from(privB64, 'base64').toString('utf-8'));
-      this.publicKey = createPublicKey(Buffer.from(pubB64, 'base64').toString('utf-8'));
-      this.logger.log(`Claves de firma de licencia cargadas (keyId=${this.keyId})`);
+      this.privateKey = createPrivateKey(
+        Buffer.from(privB64, 'base64').toString('utf-8'),
+      );
+      this.publicKey = createPublicKey(
+        Buffer.from(pubB64, 'base64').toString('utf-8'),
+      );
+      this.logger.log(
+        `Claves de firma de licencia cargadas (keyId=${this.keyId})`,
+      );
       return;
     }
 
@@ -87,14 +93,21 @@ export class LicenseSigningService implements OnModuleInit {
 
   sign(claims: LicenseClaims): { signature: string; keyId: string } {
     const data = this.canonicalize(claims);
-    const signature = cryptoSign(null, data, this.privateKey).toString('base64');
+    const signature = cryptoSign(null, data, this.privateKey).toString(
+      'base64',
+    );
     return { signature, keyId: this.keyId };
   }
 
   verify(claims: LicenseClaims, signature: string): boolean {
     try {
       const data = this.canonicalize(claims);
-      return cryptoVerify(null, data, this.publicKey, Buffer.from(signature, 'base64'));
+      return cryptoVerify(
+        null,
+        data,
+        this.publicKey,
+        Buffer.from(signature, 'base64'),
+      );
     } catch {
       return false;
     }

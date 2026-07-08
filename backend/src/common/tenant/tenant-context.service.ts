@@ -12,7 +12,11 @@ export class TenantContext {
   private _userId: string | null = null;
   private _isSuperAdmin = false;
 
-  setContext(tenantId: string | null, userId: string | null, isSuperAdmin = false): void {
+  setContext(
+    tenantId: string | null,
+    userId: string | null,
+    isSuperAdmin = false,
+  ): void {
     this._tenantId = tenantId;
     this._userId = userId;
     this._isSuperAdmin = isSuperAdmin;

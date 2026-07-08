@@ -94,7 +94,10 @@ describe('buildOrders', () => {
     expect(orders).toHaveLength(30);
     for (const plan of orders) {
       const expectedTotal = plan.items.reduce((s, i) => s + i.totalPrice, 0);
-      expect(plan.order.totalAmount).toBeCloseTo(Math.round(expectedTotal * 100) / 100, 2);
+      expect(plan.order.totalAmount).toBeCloseTo(
+        Math.round(expectedTotal * 100) / 100,
+        2,
+      );
       expect(plan.items.length).toBeGreaterThanOrEqual(1);
       expect(plan.items.length).toBeLessThanOrEqual(5);
     }
@@ -128,7 +131,12 @@ describe('invoices — reglas de facturación', () => {
   });
 
   it('buildInvoice calcula IVA 19% correctamente y dianStatus SIEMPRE PENDING', () => {
-    const order = { id: 'o1', totalAmount: 1_000_000, status: OrderStatus.DELIVERED, createdAt: new Date('2026-01-01') };
+    const order = {
+      id: 'o1',
+      totalAmount: 1_000_000,
+      status: OrderStatus.DELIVERED,
+      createdAt: new Date('2026-01-01'),
+    };
     const inv = buildInvoice(new SeededRandom(1), 0, order);
     expect(inv.amount).toBe(1_000_000);
     expect(inv.taxAmount).toBe(190_000);
@@ -140,7 +148,11 @@ describe('invoices — reglas de facturación', () => {
 
 describe('buildCreditValidation', () => {
   it('APPROVED cuando el monto de la orden cabe en el disponible', () => {
-    const client: ClientRef = { id: 'c1', creditLimit: 1_000_000, usedCredit: 200_000 };
+    const client: ClientRef = {
+      id: 'c1',
+      creditLimit: 1_000_000,
+      usedCredit: 200_000,
+    };
     const order = { id: 'o1', totalAmount: 500_000, createdAt: new Date() };
     const cv = buildCreditValidation(0, order, client);
     expect(cv.isCreditSufficient).toBe(true);
@@ -148,7 +160,11 @@ describe('buildCreditValidation', () => {
   });
 
   it('REJECTED cuando el monto excede el disponible', () => {
-    const client: ClientRef = { id: 'c1', creditLimit: 1_000_000, usedCredit: 900_000 };
+    const client: ClientRef = {
+      id: 'c1',
+      creditLimit: 1_000_000,
+      usedCredit: 900_000,
+    };
     const order = { id: 'o1', totalAmount: 500_000, createdAt: new Date() };
     const cv = buildCreditValidation(0, order, client);
     expect(cv.isCreditSufficient).toBe(false);
@@ -159,10 +175,16 @@ describe('buildCreditValidation', () => {
 describe('buildQuotes', () => {
   it('total = subtotal + taxAmount', () => {
     const clients: ClientRef[] = [{ id: 'c1', creditLimit: 1, usedCredit: 0 }];
-    const products: ProductRef[] = [{ id: 'p1', price: 10000 }, { id: 'p2', price: 20000 }];
+    const products: ProductRef[] = [
+      { id: 'p1', price: 10000 },
+      { id: 'p2', price: 20000 },
+    ];
     const quotes = buildQuotes(new SeededRandom(2), clients, products, 10);
     for (const q of quotes) {
-      expect(q.quote.total).toBeCloseTo(q.quote.subtotal + q.quote.taxAmount, 2);
+      expect(q.quote.total).toBeCloseTo(
+        q.quote.subtotal + q.quote.taxAmount,
+        2,
+      );
     }
   });
 });
@@ -176,16 +198,34 @@ describe('production orders', () => {
   });
 
   it('remainingQuantity nunca es negativo', () => {
-    const order = { id: 'o1', status: OrderStatus.IN_PRODUCTION, createdAt: new Date() };
-    const item = { productId: 'p1', quantity: 10, unitPrice: 100, totalPrice: 1000 };
+    const order = {
+      id: 'o1',
+      status: OrderStatus.IN_PRODUCTION,
+      createdAt: new Date(),
+    };
+    const item = {
+      productId: 'p1',
+      quantity: 10,
+      unitPrice: 100,
+      totalPrice: 1000,
+    };
     const po = buildProductionOrder(new SeededRandom(4), 0, order, item);
     expect(po.remainingQuantity).toBeGreaterThanOrEqual(0);
     expect(po.completedQuantity).toBeLessThanOrEqual(po.quantity);
   });
 
   it('orden DELIVERED siempre queda con producción completa', () => {
-    const order = { id: 'o1', status: OrderStatus.DELIVERED, createdAt: new Date() };
-    const item = { productId: 'p1', quantity: 25, unitPrice: 100, totalPrice: 2500 };
+    const order = {
+      id: 'o1',
+      status: OrderStatus.DELIVERED,
+      createdAt: new Date(),
+    };
+    const item = {
+      productId: 'p1',
+      quantity: 25,
+      unitPrice: 100,
+      totalPrice: 2500,
+    };
     const po = buildProductionOrder(new SeededRandom(4), 0, order, item);
     expect(po.completedQuantity).toBe(25);
     expect(po.remainingQuantity).toBe(0);
@@ -194,16 +234,34 @@ describe('production orders', () => {
 
 describe('export operations', () => {
   it('usa únicamente incotermId del pool provisto', () => {
-    const order = { id: 'o1', clientId: 'c1', totalAmount: 1_000_000, createdAt: new Date() };
+    const order = {
+      id: 'o1',
+      clientId: 'c1',
+      totalAmount: 1_000_000,
+      createdAt: new Date(),
+    };
     const incotermIds = ['inc-1', 'inc-2'];
-    const exp = buildExportOperation(new SeededRandom(6), 0, order, incotermIds);
+    const exp = buildExportOperation(
+      new SeededRandom(6),
+      0,
+      order,
+      incotermIds,
+    );
     expect(incotermIds).toContain(exp.incotermId);
   });
 
   it('profitMargin es coherente con totalRevenue y totalCosts', () => {
-    const order = { id: 'o1', clientId: 'c1', totalAmount: 2_000_000, createdAt: new Date() };
+    const order = {
+      id: 'o1',
+      clientId: 'c1',
+      totalAmount: 2_000_000,
+      createdAt: new Date(),
+    };
     const exp = buildExportOperation(new SeededRandom(6), 0, order, ['inc-1']);
-    const expected = Math.round(((exp.totalRevenue - exp.totalCosts) / exp.totalRevenue) * 10000) / 100;
+    const expected =
+      Math.round(
+        ((exp.totalRevenue - exp.totalCosts) / exp.totalRevenue) * 10000,
+      ) / 100;
     expect(exp.profitMargin).toBeCloseTo(expected, 2);
   });
 });
@@ -259,7 +317,9 @@ describe('shipments + tracking + packing list', () => {
 
   it('tracking de shipment DELIVERED cubre las 5 etapas', () => {
     const events = buildShipmentTracking(new SeededRandom(1), {
-      id: 's1', status: ShipmentStatus.DELIVERED, createdAt: new Date('2026-01-01'),
+      id: 's1',
+      status: ShipmentStatus.DELIVERED,
+      createdAt: new Date('2026-01-01'),
     });
     expect(events).toHaveLength(5);
     expect(events[events.length - 1].status).toBe('DELIVERED');
@@ -267,7 +327,9 @@ describe('shipments + tracking + packing list', () => {
 
   it('tracking de shipment en tránsito tiene solo 2-3 etapas', () => {
     const events = buildShipmentTracking(new SeededRandom(1), {
-      id: 's1', status: ShipmentStatus.IN_TRANSIT, createdAt: new Date('2026-01-01'),
+      id: 's1',
+      status: ShipmentStatus.IN_TRANSIT,
+      createdAt: new Date('2026-01-01'),
     });
     expect(events.length).toBeGreaterThanOrEqual(2);
     expect(events.length).toBeLessThanOrEqual(3);

@@ -20,21 +20,56 @@ export class ObenMockAdapter extends MockAdapterBase {
 
   capabilities(): AdapterCapability[] {
     return [
-      { operation: 'products.list', method: 'read', description: 'Maestro de productos Oben' },
-      { operation: 'products.get', method: 'read', description: 'Detalle de producto por SKU' },
-      { operation: 'customers.list', method: 'read', description: 'Maestro de clientes Oben' },
-      { operation: 'inventory.stock', method: 'read', description: 'Existencias por SKU y bodega' },
-      { operation: 'inventory.transfer', method: 'write', description: 'Transferir stock entre bodegas' },
+      {
+        operation: 'products.list',
+        method: 'read',
+        description: 'Maestro de productos Oben',
+      },
+      {
+        operation: 'products.get',
+        method: 'read',
+        description: 'Detalle de producto por SKU',
+      },
+      {
+        operation: 'customers.list',
+        method: 'read',
+        description: 'Maestro de clientes Oben',
+      },
+      {
+        operation: 'inventory.stock',
+        method: 'read',
+        description: 'Existencias por SKU y bodega',
+      },
+      {
+        operation: 'inventory.transfer',
+        method: 'write',
+        description: 'Transferir stock entre bodegas',
+      },
     ];
   }
 
   protected operationHandlers() {
     return {
-      'products.list': this.wrap((args) => this.productsList(args), 'products.list'),
-      'products.get': this.wrap((args) => this.productsGet(args), 'products.get'),
-      'customers.list': this.wrap((args) => this.customersList(args), 'customers.list'),
-      'inventory.stock': this.wrap((args) => this.inventoryStock(args), 'inventory.stock'),
-      'inventory.transfer': this.wrap((args) => this.inventoryTransfer(args), 'inventory.transfer'),
+      'products.list': this.wrap(
+        (args) => this.productsList(args),
+        'products.list',
+      ),
+      'products.get': this.wrap(
+        (args) => this.productsGet(args),
+        'products.get',
+      ),
+      'customers.list': this.wrap(
+        (args) => this.customersList(args),
+        'customers.list',
+      ),
+      'inventory.stock': this.wrap(
+        (args) => this.inventoryStock(args),
+        'inventory.stock',
+      ),
+      'inventory.transfer': this.wrap(
+        (args) => this.inventoryTransfer(args),
+        'inventory.transfer',
+      ),
     };
   }
 
@@ -81,9 +116,24 @@ export class ObenMockAdapter extends MockAdapterBase {
     return {
       sku,
       warehouses: [
-        { code: 'BOD-01', name: 'Bodega principal', available: 320, reserved: 15 },
-        { code: 'BOD-02', name: 'Bodega secundaria', available: 90, reserved: 5 },
-        { code: 'BOD-03', name: 'Bodega de exportación', available: 40, reserved: 0 },
+        {
+          code: 'BOD-01',
+          name: 'Bodega principal',
+          available: 320,
+          reserved: 15,
+        },
+        {
+          code: 'BOD-02',
+          name: 'Bodega secundaria',
+          available: 90,
+          reserved: 5,
+        },
+        {
+          code: 'BOD-03',
+          name: 'Bodega de exportación',
+          available: 40,
+          reserved: 0,
+        },
       ],
       totalAvailable: 450,
     };
@@ -94,9 +144,13 @@ export class ObenMockAdapter extends MockAdapterBase {
     const from = String(args.from ?? '');
     const to = String(args.to ?? '');
     const qty = Number(args.qty ?? 0);
-    if (!sku || !from || !to) throw new Error('BUSINESS_ERROR: sku/from/to requeridos');
+    if (!sku || !from || !to)
+      throw new Error('BUSINESS_ERROR: sku/from/to requeridos');
     if (qty <= 0) throw new Error('BUSINESS_ERROR: qty debe ser > 0');
-    if (from === to) throw new Error('BUSINESS_ERROR: bodega origen y destino no pueden ser iguales');
+    if (from === to)
+      throw new Error(
+        'BUSINESS_ERROR: bodega origen y destino no pueden ser iguales',
+      );
     return {
       transferId: `MOV-${Date.now()}`,
       sku,

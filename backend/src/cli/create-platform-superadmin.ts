@@ -35,37 +35,49 @@ async function run() {
   const args = parseArgs(process.argv.slice(2));
 
   if (!args.email) {
-    logger.error('Falta --email=<correo>. Ejemplo: npm run platform:bootstrap -- --email=admin@paradixe.com --password=...');
+    logger.error(
+      'Falta --email=<correo>. Ejemplo: npm run platform:bootstrap -- --email=admin@paradixe.com --password=...',
+    );
     process.exit(1);
   }
 
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['log', 'warn', 'error'] });
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    logger: ['log', 'warn', 'error'],
+  });
   try {
     const users = app.get<Repository<User>>(getRepositoryToken(User));
     const platformRoles = app.get(PlatformRolesService);
     const roleKey = args.role ?? 'platform.superadmin';
 
-    let user = await users.findOne({ where: { email: args.email, tenantId: IsNull() } });
+    let user = await users.findOne({
+      where: { email: args.email, tenantId: IsNull() },
+    });
 
     if (!user) {
       if (!args.password) {
-        logger.error('Usuario nuevo: falta --password=<password> (mínimo 8 caracteres).');
+        logger.error(
+          'Usuario nuevo: falta --password=<password> (mínimo 8 caracteres).',
+        );
         process.exit(1);
         return;
       }
       const passwordHash = await bcrypt.hash(args.password, 12);
-      user = await users.save(users.create({
-        tenantId: null,
-        firstName: args.firstName ?? 'Super',
-        lastName: args.lastName ?? 'Admin',
-        email: args.email,
-        passwordHash,
-        isActive: true,
-        isSuperAdmin: false,
-      }));
+      user = await users.save(
+        users.create({
+          tenantId: null,
+          firstName: args.firstName ?? 'Super',
+          lastName: args.lastName ?? 'Admin',
+          email: args.email,
+          passwordHash,
+          isActive: true,
+          isSuperAdmin: false,
+        }),
+      );
       logger.log(`Usuario de plataforma creado: ${user.email} (${user.id})`);
     } else {
-      logger.log(`Usuario de plataforma existente reutilizado: ${user.email} (${user.id})`);
+      logger.log(
+        `Usuario de plataforma existente reutilizado: ${user.email} (${user.id})`,
+      );
       if (args.password) {
         user.passwordHash = await bcrypt.hash(args.password, 12);
         await users.save(user);
@@ -73,16 +85,20 @@ async function run() {
       }
     }
 
-    await platformRoles.assign({ userId: user.id, platformRoleKey: roleKey }, user.id);
+    await platformRoles.assign(
+      { userId: user.id, platformRoleKey: roleKey },
+      user.id,
+    );
     logger.log(`Rol de plataforma asegurado: ${roleKey}`);
-    logger.log('LISTO. Login vía POST /auth/platform-login con email + password.');
+    logger.log(
+      'LISTO. Login vía POST /auth/platform-login con email + password.',
+    );
   } finally {
     await app.close();
   }
 }
 
 run().catch((e) => {
-  // eslint-disable-next-line no-console
   console.error(e);
   process.exit(1);
 });

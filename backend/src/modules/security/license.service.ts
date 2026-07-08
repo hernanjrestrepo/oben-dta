@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { TenantSubscription, SubscriptionStatus } from '../../entities/tenant-subscription.entity';
+import {
+  TenantSubscription,
+  SubscriptionStatus,
+} from '../../entities/tenant-subscription.entity';
 import { PlanModule } from '../../entities/plan-module.entity';
 import { TenantFeatureFlag } from '../../entities/tenant-feature-flag.entity';
 
@@ -61,7 +64,9 @@ export class LicenseService {
         subscription.status === SubscriptionStatus.TRIAL ||
         subscription.status === SubscriptionStatus.PAST_DUE;
       if (subscriptionActive) {
-        const rows = await this.planModules.find({ where: { planId: subscription.planId } });
+        const rows = await this.planModules.find({
+          where: { planId: subscription.planId },
+        });
         for (const r of rows) planModules.add(r.moduleKey);
       }
     }

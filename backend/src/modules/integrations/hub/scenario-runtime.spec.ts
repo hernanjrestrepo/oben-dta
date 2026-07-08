@@ -2,16 +2,24 @@ import { applyScenario, NotFoundSignal } from './scenario-runtime';
 
 describe('applyScenario', () => {
   it('happy_path no lanza', async () => {
-    await expect(applyScenario({ behavior: 'happy_path' })).resolves.toBeUndefined();
+    await expect(
+      applyScenario({ behavior: 'happy_path' }),
+    ).resolves.toBeUndefined();
   });
 
   it('auth_error lanza con mensaje explicativo', async () => {
-    await expect(applyScenario({ behavior: 'auth_error' })).rejects.toThrow(/auth_error/);
+    await expect(applyScenario({ behavior: 'auth_error' })).rejects.toThrow(
+      /auth_error/,
+    );
   });
 
   it('business_error incluye errorCode + errorMessage', async () => {
     await expect(
-      applyScenario({ behavior: 'business_error', errorCode: 'CREDIT_INSUFFICIENT', errorMessage: 'cupo excedido' }),
+      applyScenario({
+        behavior: 'business_error',
+        errorCode: 'CREDIT_INSUFFICIENT',
+        errorMessage: 'cupo excedido',
+      }),
     ).rejects.toThrow(/CREDIT_INSUFFICIENT.*cupo excedido/);
   });
 

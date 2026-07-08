@@ -33,7 +33,10 @@ export enum MasterPackingListType {
 }
 
 @Entity('master_packing_lists')
-@Unique('uq_master_packing_lists_tenant_number', ['tenantId', 'masterPackingListNumber'])
+@Unique('uq_master_packing_lists_tenant_number', [
+  'tenantId',
+  'masterPackingListNumber',
+])
 export class MasterPackingList extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

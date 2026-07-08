@@ -22,7 +22,13 @@ export class Plan {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ name: 'price_monthly', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'price_monthly',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
   priceMonthly: number;
 
   @Column({ length: 8, default: 'USD' })

@@ -1,20 +1,32 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Plan } from '../../entities/plan.entity';
 import { PlanModule } from '../../entities/plan-module.entity';
 import { ModuleCatalog } from '../../entities/module-catalog.entity';
-import { TenantSubscription, SubscriptionStatus } from '../../entities/tenant-subscription.entity';
+import {
+  TenantSubscription,
+  SubscriptionStatus,
+} from '../../entities/tenant-subscription.entity';
 import { TenantFeatureFlag } from '../../entities/tenant-feature-flag.entity';
 
 @Injectable()
 export class PlansService {
   constructor(
     @InjectRepository(Plan) private readonly plans: Repository<Plan>,
-    @InjectRepository(PlanModule) private readonly planModules: Repository<PlanModule>,
-    @InjectRepository(ModuleCatalog) private readonly modules: Repository<ModuleCatalog>,
-    @InjectRepository(TenantSubscription) private readonly subs: Repository<TenantSubscription>,
-    @InjectRepository(TenantFeatureFlag) private readonly flags: Repository<TenantFeatureFlag>,
+    @InjectRepository(PlanModule)
+    private readonly planModules: Repository<PlanModule>,
+    @InjectRepository(ModuleCatalog)
+    private readonly modules: Repository<ModuleCatalog>,
+    @InjectRepository(TenantSubscription)
+    private readonly subs: Repository<TenantSubscription>,
+    @InjectRepository(TenantFeatureFlag)
+    private readonly flags: Repository<TenantFeatureFlag>,
   ) {}
 
   async list(): Promise<Array<Plan & { modules: string[] }>> {
@@ -22,7 +34,9 @@ export class PlansService {
     const allModules = await this.planModules.find();
     return plans.map((p) => ({
       ...p,
-      modules: allModules.filter((m) => m.planId === p.id).map((m) => m.moduleKey),
+      modules: allModules
+        .filter((m) => m.planId === p.id)
+        .map((m) => m.moduleKey),
     }));
   }
 
@@ -46,29 +60,38 @@ export class PlansService {
     const existing = await this.plans.findOne({ where: { key: dto.key } });
     if (existing) throw new ConflictException(`Plan '${dto.key}' ya existe`);
     await this.assertModulesExist(dto.modules);
-    const plan = await this.plans.save(this.plans.create({
-      key: dto.key,
-      name: dto.name,
-      description: dto.description,
-      priceMonthly: dto.priceMonthly ?? 0,
-      currency: dto.currency ?? 'USD',
-      maxUsers: dto.maxUsers ?? 0,
-      maxStorageGb: dto.maxStorageGb ?? 0,
-      isActive: true,
-    }));
+    const plan = await this.plans.save(
+      this.plans.create({
+        key: dto.key,
+        name: dto.name,
+        description: dto.description,
+        priceMonthly: dto.priceMonthly ?? 0,
+        currency: dto.currency ?? 'USD',
+        maxUsers: dto.maxUsers ?? 0,
+        maxStorageGb: dto.maxStorageGb ?? 0,
+        isActive: true,
+      }),
+    );
     for (const moduleKey of dto.modules) {
-      await this.planModules.save(this.planModules.create({ planId: plan.id, moduleKey }));
+      await this.planModules.save(
+        this.planModules.create({ planId: plan.id, moduleKey }),
+      );
     }
     return this.getByKey(plan.key);
   }
 
-  async updateModules(key: string, modules: string[]): Promise<Plan & { modules: string[] }> {
+  async updateModules(
+    key: string,
+    modules: string[],
+  ): Promise<Plan & { modules: string[] }> {
     const plan = await this.plans.findOne({ where: { key } });
     if (!plan) throw new NotFoundException(`Plan '${key}' no existe`);
     await this.assertModulesExist(modules);
     await this.planModules.delete({ planId: plan.id });
     for (const moduleKey of modules) {
-      await this.planModules.save(this.planModules.create({ planId: plan.id, moduleKey }));
+      await this.planModules.save(
+        this.planModules.create({ planId: plan.id, moduleKey }),
+      );
     }
     return this.getByKey(plan.key);
   }
@@ -91,7 +114,8 @@ export class PlansService {
     } else {
       sub.planId = plan.id;
       if (dto.status) sub.status = dto.status;
-      if (dto.endsAt !== undefined) sub.endsAt = dto.endsAt ? new Date(dto.endsAt) : null;
+      if (dto.endsAt !== undefined)
+        sub.endsAt = dto.endsAt ? new Date(dto.endsAt) : null;
     }
     return this.subs.save(sub);
   }
@@ -101,9 +125,14 @@ export class PlansService {
     dto: { moduleKey: string; enabled: boolean; reason?: string },
     setBy?: string,
   ): Promise<TenantFeatureFlag> {
-    const module = await this.modules.findOne({ where: { key: dto.moduleKey } });
-    if (!module) throw new NotFoundException(`Módulo '${dto.moduleKey}' no existe`);
-    let flag = await this.flags.findOne({ where: { tenantId, moduleKey: dto.moduleKey } });
+    const module = await this.modules.findOne({
+      where: { key: dto.moduleKey },
+    });
+    if (!module)
+      throw new NotFoundException(`Módulo '${dto.moduleKey}' no existe`);
+    let flag = await this.flags.findOne({
+      where: { tenantId, moduleKey: dto.moduleKey },
+    });
     if (!flag) {
       flag = this.flags.create({
         tenantId,
@@ -124,7 +153,9 @@ export class PlansService {
     return this.flags.find({ where: { tenantId } });
   }
 
-  async getTenantSubscription(tenantId: string): Promise<TenantSubscription | null> {
+  async getTenantSubscription(
+    tenantId: string,
+  ): Promise<TenantSubscription | null> {
     return this.subs.findOne({ where: { tenantId }, relations: ['plan'] });
   }
 

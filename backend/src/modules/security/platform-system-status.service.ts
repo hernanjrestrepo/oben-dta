@@ -29,19 +29,27 @@ export class PlatformSystemStatusService {
     let migrationsApplied = 0;
     try {
       await this.ds.query('SELECT 1');
-      const rows = await this.ds.query('SELECT COUNT(*)::int AS count FROM schema_migrations');
+      const rows = await this.ds.query<Array<{ count: number }>>(
+        'SELECT COUNT(*)::int AS count FROM schema_migrations',
+      );
       migrationsApplied = rows[0]?.count ?? 0;
     } catch (e) {
       dbOk = false;
       this.logger.error('system-status db check failed', (e as Error).message);
     }
 
-    const tenants = dbOk ? await this.countByColumn('tenants', 'status') : { total: 0 };
-    const subscriptions = dbOk ? await this.countByColumn('tenant_subscriptions', 'status') : { total: 0 };
+    const tenants = dbOk
+      ? await this.countByColumn('tenants', 'status')
+      : { total: 0 };
+    const subscriptions = dbOk
+      ? await this.countByColumn('tenant_subscriptions', 'status')
+      : { total: 0 };
 
     let platformUsers = { total: 0, active: 0, superAdmins: 0 };
     if (dbOk) {
-      const rows = await this.ds.query(
+      const rows = await this.ds.query<
+        Array<{ total: number; active: number; super_admins: number }>
+      >(
         `SELECT COUNT(*)::int AS total,
                 COUNT(*) FILTER (WHERE "isActive")::int AS active,
                 COUNT(*) FILTER (WHERE is_super_admin)::int AS super_admins
@@ -59,16 +67,21 @@ export class PlatformSystemStatusService {
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.round(process.uptime()),
       database: { status: dbOk ? 'ok' : 'error', migrationsApplied },
-      tenants: tenants as Record<string, number> & { total: number },
-      subscriptions: subscriptions as Record<string, number> & { total: number },
+      tenants: tenants,
+      subscriptions: subscriptions,
       platformUsers,
     };
   }
 
-  private async countByColumn(table: string, column: string): Promise<Record<string, number> & { total: number }> {
-    const rows = await this.ds.query(`SELECT ${column} AS key, COUNT(*)::int AS count FROM ${table} GROUP BY ${column}`);
+  private async countByColumn(
+    table: string,
+    column: string,
+  ): Promise<Record<string, number> & { total: number }> {
+    const rows = await this.ds.query<Array<{ key: string; count: number }>>(
+      `SELECT ${column} AS key, COUNT(*)::int AS count FROM ${table} GROUP BY ${column}`,
+    );
     const out: Record<string, number> = { total: 0 };
-    for (const r of rows as Array<{ key: string; count: number }>) {
+    for (const r of rows) {
       out[r.key] = r.count;
       out.total += r.count;
     }

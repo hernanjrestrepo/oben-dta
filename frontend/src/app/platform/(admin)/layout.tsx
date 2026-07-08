@@ -13,7 +13,10 @@ export default function PlatformAdminLayout({ children }: { children: React.Reac
 
   useEffect(() => {
     initialize();
-    setChecked(true);
+    // Diferido a un microtask: evita el patrón "setState síncrono dentro del
+    // efecto" — initialize() es síncrono (lee localStorage) pero el gate de
+    // carga solo necesita reflejarse después de que React procese ese cambio.
+    queueMicrotask(() => setChecked(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

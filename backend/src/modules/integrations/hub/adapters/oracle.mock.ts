@@ -22,21 +22,56 @@ export class OracleMockAdapter extends MockAdapterBase {
 
   capabilities(): AdapterCapability[] {
     return [
-      { operation: 'gl.getAccounts', method: 'read', description: 'Catálogo de cuentas del libro mayor' },
-      { operation: 'gl.postJournal', method: 'write', description: 'Registrar asiento contable' },
-      { operation: 'ar.getCustomers', method: 'read', description: 'Cuentas por cobrar — clientes' },
-      { operation: 'ap.getSuppliers', method: 'read', description: 'Cuentas por pagar — proveedores' },
-      { operation: 'ap.postInvoice', method: 'write', description: 'Registrar factura de proveedor' },
+      {
+        operation: 'gl.getAccounts',
+        method: 'read',
+        description: 'Catálogo de cuentas del libro mayor',
+      },
+      {
+        operation: 'gl.postJournal',
+        method: 'write',
+        description: 'Registrar asiento contable',
+      },
+      {
+        operation: 'ar.getCustomers',
+        method: 'read',
+        description: 'Cuentas por cobrar — clientes',
+      },
+      {
+        operation: 'ap.getSuppliers',
+        method: 'read',
+        description: 'Cuentas por pagar — proveedores',
+      },
+      {
+        operation: 'ap.postInvoice',
+        method: 'write',
+        description: 'Registrar factura de proveedor',
+      },
     ];
   }
 
   protected operationHandlers() {
     return {
-      'gl.getAccounts': this.wrap(async () => this.glAccounts(), 'gl.getAccounts'),
-      'gl.postJournal': this.wrap(async (args) => this.glPostJournal(args), 'gl.postJournal'),
-      'ar.getCustomers': this.wrap(async (args) => this.arCustomers(args), 'ar.getCustomers'),
-      'ap.getSuppliers': this.wrap(async (args) => this.apSuppliers(args), 'ap.getSuppliers'),
-      'ap.postInvoice': this.wrap(async (args) => this.apPostInvoice(args), 'ap.postInvoice'),
+      'gl.getAccounts': this.wrap(
+        async () => this.glAccounts(),
+        'gl.getAccounts',
+      ),
+      'gl.postJournal': this.wrap(
+        async (args) => this.glPostJournal(args),
+        'gl.postJournal',
+      ),
+      'ar.getCustomers': this.wrap(
+        async (args) => this.arCustomers(args),
+        'ar.getCustomers',
+      ),
+      'ap.getSuppliers': this.wrap(
+        async (args) => this.apSuppliers(args),
+        'ap.getSuppliers',
+      ),
+      'ap.postInvoice': this.wrap(
+        async (args) => this.apPostInvoice(args),
+        'ap.postInvoice',
+      ),
     };
   }
 
@@ -56,7 +91,12 @@ export class OracleMockAdapter extends MockAdapterBase {
   }
 
   private glPostJournal(args: Record<string, unknown>) {
-    const lines = (args.lines as Array<{ account: string; debit?: number; credit?: number }>) ?? [];
+    const lines =
+      (args.lines as Array<{
+        account: string;
+        debit?: number;
+        credit?: number;
+      }>) ?? [];
     const debit = lines.reduce((s, l) => s + Number(l.debit ?? 0), 0);
     const credit = lines.reduce((s, l) => s + Number(l.credit ?? 0), 0);
     if (Math.abs(debit - credit) > 0.001) {

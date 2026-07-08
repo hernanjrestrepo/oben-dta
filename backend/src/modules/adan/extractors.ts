@@ -50,11 +50,10 @@ export async function extractText(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function loadOptional(moduleName: string, label: string): Promise<any> {
   try {
     // Carga perezosa: solo se requiere si se ingesta ese formato.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const mod = require(moduleName);
     return mod.default ?? mod;
   } catch {

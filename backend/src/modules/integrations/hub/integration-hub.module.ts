@@ -20,6 +20,9 @@ import { EFrancoMockAdapter } from './adapters/efranco.mock';
 import { ShippingMockAdapter } from './adapters/shipping.mock';
 import { EmailMockAdapter } from './adapters/email.mock';
 import { WhatsAppMockAdapter } from './adapters/whatsapp.mock';
+import { NetSuiteMockAdapter } from './adapters/netsuite.mock';
+import { VetaMockAdapter } from './adapters/veta.mock';
+import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
 
 /**
  * IntegrationHub: infraestructura común de todos los adapters + panel de escenarios.
@@ -37,7 +40,9 @@ import { WhatsAppMockAdapter } from './adapters/whatsapp.mock';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'default-jwt-secret-change-in-production',
+        secret:
+          config.get<string>('JWT_SECRET') ||
+          'default-jwt-secret-change-in-production',
         signOptions: { expiresIn: '15m' },
       }),
     }),
@@ -61,6 +66,9 @@ import { WhatsAppMockAdapter } from './adapters/whatsapp.mock';
     ShippingMockAdapter,
     EmailMockAdapter,
     WhatsAppMockAdapter,
+    NetSuiteMockAdapter,
+    VetaMockAdapter,
+    ArmstrongMockAdapter,
     AdapterRegistry,
     IntegrationHubService,
     MockScenariosService,

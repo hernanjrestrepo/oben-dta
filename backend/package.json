@@ -12,7 +12,6 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "seed": "ts-node src/cli/seed.ts",
     "dataset:generate": "ts-node src/cli/generate-dataset.ts",
     "platform:bootstrap": "ts-node src/cli/create-platform-superadmin.ts",
     "license:generate-keys": "ts-node src/cli/generate-license-keys.ts",

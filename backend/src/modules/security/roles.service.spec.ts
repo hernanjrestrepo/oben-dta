@@ -1,30 +1,38 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { RolesService } from './roles.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 
-function makeService(setup: {
-  existingRole?: unknown;
-  matchingPerms?: string[];
-  createdSaves?: unknown[];
-} = {}) {
+function makeService(
+  setup: {
+    existingRole?: unknown;
+    matchingPerms?: string[];
+    createdSaves?: unknown[];
+  } = {},
+) {
   const roles = {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(setup.existingRole ?? null),
-    create: jest.fn((partial) => partial),
-    save: jest.fn(async (entity) => entity),
+    create: jest.fn((partial: unknown) => partial),
+    save: jest.fn((entity: unknown) => Promise.resolve(entity)),
     delete: jest.fn().mockResolvedValue({ affected: 1 }),
   };
   const perms = {
-    find: jest
-      .fn()
-      .mockResolvedValue(
-        (setup.matchingPerms ?? []).map((key) => ({ id: key, key, isPlatform: false })),
-      ),
+    find: jest.fn().mockResolvedValue(
+      (setup.matchingPerms ?? []).map((key) => ({
+        id: key,
+        key,
+        isPlatform: false,
+      })),
+    ),
   };
   const userRoles = {
     findOne: jest.fn().mockResolvedValue(null),
-    create: jest.fn((partial) => partial),
-    save: jest.fn(async (entity) => entity),
+    create: jest.fn((partial: unknown) => partial),
+    save: jest.fn((entity: unknown) => Promise.resolve(entity)),
     delete: jest.fn(),
     find: jest.fn().mockResolvedValue([]),
   };
@@ -60,7 +68,9 @@ describe('RolesService', () => {
   });
 
   it('createRole persiste con permisos válidos', async () => {
-    const setup = makeService({ matchingPerms: ['clients.read', 'clients.create'] });
+    const setup = makeService({
+      matchingPerms: ['clients.read', 'clients.create'],
+    });
     const created = await setup.svc.createRole({
       key: 'op',
       name: 'Operations',
@@ -80,14 +90,23 @@ describe('RolesService', () => {
 
   it('deleteRole falla si es rol de sistema', async () => {
     const setup = makeService({
-      existingRole: { id: 'r1', tenantId: 't1', key: 'tenant.admin', isSystem: true },
+      existingRole: {
+        id: 'r1',
+        tenantId: 't1',
+        key: 'tenant.admin',
+        isSystem: true,
+      },
     });
-    await expect(setup.svc.deleteRole('tenant.admin')).rejects.toThrow(ForbiddenException);
+    await expect(setup.svc.deleteRole('tenant.admin')).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('getRoleByKey lanza NotFound', async () => {
     const setup = makeService();
-    await expect(setup.svc.getRoleByKey('x')).rejects.toThrow(NotFoundException);
+    await expect(setup.svc.getRoleByKey('x')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('assignRole crea la asignación', async () => {

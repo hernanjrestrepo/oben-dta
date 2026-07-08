@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { EvaResult, AdanAnswer, AdanStats } from '@/types';
+import { EvaResult, AdanAnswer, AdanStats, IntegrationStatus } from '@/types';
 import {
   Bot,
   Sparkles,
@@ -13,7 +13,6 @@ import {
   Brain,
   Receipt,
   Workflow,
-  Activity,
   Network,
   Building2,
   Factory,
@@ -26,27 +25,30 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
-// Integraciones del ecosistema Oben — representación de arquitectura (Blueprint
-// DTA). NO es telemetría en vivo: son los puntos de integración definidos.
-type IntegrationState = 'conectado' | 'configurado' | 'planificado';
-interface Integration {
-  name: string;
-  role: string;
-  icon: React.ElementType;
-  state: IntegrationState;
-}
-const INTEGRATIONS: Integration[] = [
-  { name: 'NetSuite', role: 'ERP · sistema de registro', icon: Building2, state: 'planificado' },
-  { name: 'VETA', role: 'Producción / producto', icon: Factory, state: 'planificado' },
-  { name: 'Armstrong', role: 'Logística / despacho', icon: Ship, state: 'planificado' },
-  { name: 'DIAN', role: 'Factura electrónica', icon: ShieldCheck, state: 'planificado' },
-  { name: 'Portal Proveedores', role: 'proveedores.obengroup.co', icon: Network, state: 'planificado' },
-  { name: 'Intranet', role: 'obengroup.co', icon: Radio, state: 'planificado' },
-];
-const stateStyles: Record<IntegrationState, { dot: string; text: string; label: string }> = {
-  conectado: { dot: 'bg-emerald-400', text: 'text-emerald-300', label: 'Conectado' },
-  configurado: { dot: 'bg-sky-400', text: 'text-sky-300', label: 'Configurado' },
-  planificado: { dot: 'bg-slate-500', text: 'text-slate-400', label: 'En roadmap' },
+// Integraciones del ecosistema Oben — el estado se consulta EN VIVO al
+// Integration Hub (GET /integrations/status). Cada sistema corre hoy sobre un
+// simulador real y funcional (no una maqueta visual); la única pieza que falta
+// para pasar a modo real es la credencial/URL de Oben, configurable por tenant
+// sin tocar código (AdapterRegistry resuelve Real vs Mock automáticamente).
+const INTEGRATION_META: Record<string, { label: string; role: string; icon: React.ElementType }> = {
+  netsuite: { label: 'NetSuite', role: 'ERP · sistema de registro', icon: Building2 },
+  veta: { label: 'VETA', role: 'Producción / producto', icon: Factory },
+  armstrong: { label: 'Armstrong', role: 'Logística / despacho', icon: Ship },
+  dian: { label: 'DIAN', role: 'Factura electrónica', icon: ShieldCheck },
+  oracle: { label: 'Oracle', role: 'Financiero / contable', icon: Building2 },
+  oben: { label: 'Oben ERP', role: 'Productos / inventario', icon: Package },
+  cubeiq: { label: 'CubeIQ', role: 'Optimización de carga', icon: Workflow },
+  efranco: { label: 'EFranco', role: 'Agente aduanero', icon: Ship },
+  shipping: { label: 'Transporte', role: 'Naviera / courier', icon: Ship },
+  email: { label: 'Email', role: 'Notificaciones', icon: Network },
+  whatsapp: { label: 'WhatsApp', role: 'Mensajería cliente', icon: Radio },
+};
+const stateStyles: Record<IntegrationStatus['state'], { dot: string; text: string; label: string }> = {
+  operational: { dot: 'bg-emerald-400', text: 'text-emerald-300', label: 'Simulador activo' },
+  pending_credentials: { dot: 'bg-amber-400', text: 'text-amber-300', label: 'Pendiente de integración externa' },
+  unreachable: { dot: 'bg-red-400', text: 'text-red-300', label: 'No alcanzable' },
+  error: { dot: 'bg-red-400', text: 'text-red-300', label: 'Error' },
+  disabled: { dot: 'bg-slate-500', text: 'text-slate-400', label: 'Deshabilitado' },
 };
 
 const EVA_EXAMPLES = ['Quiero 10 SKU-001 para ACME', 'Quiero 5 SKU-001 para ZETA'];
@@ -61,6 +63,7 @@ export default function OperacionesPage() {
   const [orders, setOrders] = useState<number | null>(null);
   const [invoices, setInvoices] = useState<number | null>(null);
   const [adanStats, setAdanStats] = useState<AdanStats | null>(null);
+  const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
 
   // EVA
   const [evaInput, setEvaInput] = useState('');
@@ -76,20 +79,25 @@ export default function OperacionesPage() {
 
   async function refreshKpis() {
     try {
-      const [o, inv, st] = await Promise.allSettled([
+      const [o, inv, st, integ] = await Promise.allSettled([
         api.getOrders(),
         api.getInvoices(),
         api.adanStats(),
+        api.getIntegrationsStatus(),
       ]);
       if (o.status === 'fulfilled') setOrders(o.value.length);
       if (inv.status === 'fulfilled') setInvoices(inv.value.length);
       if (st.status === 'fulfilled') setAdanStats(st.value);
+      if (integ.status === 'fulfilled') setIntegrations(integ.value);
     } catch {
       /* noop */
     }
   }
 
   useEffect(() => {
+    // refreshKpis() es async y actualiza estado dentro de sus propios
+    // callbacks .then/.catch (nunca de forma síncrona en el cuerpo del efecto).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshKpis();
   }, []);
 
@@ -157,7 +165,7 @@ export default function OperacionesPage() {
         <KpiCard icon={Receipt} label="Órdenes en sistema" value={orders === null ? '—' : String(orders)} hint="PostgreSQL · dato real" accent="emerald" />
         <KpiCard icon={FileText} label="Facturas creadas" value={invoices === null ? '—' : String(invoices)} hint="PostgreSQL · dato real" accent="sky" />
         <KpiCard icon={BookOpen} label="Documentos ADÁN" value={adanStats === null ? '—' : String(adanStats.documents)} hint={adanStats ? `${adanStats.chunks} chunks · ${adanStats.embeddings} embeddings` : 'memoria corporativa'} accent="violet" />
-        <KpiCard icon={Network} label="Integraciones" value={String(INTEGRATIONS.length)} hint="En roadmap" />
+        <KpiCard icon={Network} label="Integraciones" value={String(integrations.length || 11)} hint={integrations.length ? `${integrations.filter((i) => i.state === 'operational').length} simuladores activos` : 'cargando…'} />
       </section>
 
       {/* ===== EVA ===== */}
@@ -314,23 +322,24 @@ export default function OperacionesPage() {
         </div>
       </section>
 
-      {/* ===== Integraciones (roadmap honesto) ===== */}
+      {/* ===== Integraciones (estado real del Integration Hub) ===== */}
       <section>
         <div className="flex items-center gap-2 mb-4">
           <Network className="w-5 h-5 text-emerald-400" />
           <h2 className="font-semibold">Integraciones del ecosistema Oben</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {INTEGRATIONS.map((it) => {
-            const Icon = it.icon;
+          {integrations.map((it) => {
+            const meta = INTEGRATION_META[it.system] ?? { label: it.system, role: it.mode, icon: Network };
+            const Icon = meta.icon;
             const s = stateStyles[it.state];
             return (
-              <div key={it.name} className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-4">
+              <div key={it.system} className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center"><Icon className="w-5 h-5 text-slate-200" /></div>
                   <div>
-                    <p className="font-semibold text-slate-100 text-sm">{it.name}</p>
-                    <p className="text-xs text-slate-400">{it.role}</p>
+                    <p className="font-semibold text-slate-100 text-sm">{meta.label}</p>
+                    <p className="text-xs text-slate-400">{meta.role}</p>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center text-xs">
@@ -341,8 +350,9 @@ export default function OperacionesPage() {
           })}
         </div>
         <p className="mt-4 text-xs text-slate-500 leading-relaxed">
-          La orquestación viva contra NetSuite, VETA y Armstrong es la siguiente frontera. Hoy EVA y ADÁN operan
-          sobre la base de datos real de DTA; las integraciones externas están en roadmap.
+          Cada sistema corre hoy sobre un simulador funcional: mismas operaciones, mismas validaciones de negocio,
+          mismos errores que tendría la API real. Conectar NetSuite, VETA o Armstrong reales solo requiere las
+          credenciales de Oben — el resto del sistema no cambia.
         </p>
       </section>
     </div>

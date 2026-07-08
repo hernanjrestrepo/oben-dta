@@ -82,16 +82,26 @@ export class PermissionsGuard implements CanActivate {
     if (requirement.mode === 'any') {
       const failures: string[] = [];
       for (const permission of requirement.permissions) {
-        const decision = await this.authz.can({ subject, permission, context: ctxMeta });
+        const decision = await this.authz.can({
+          subject,
+          permission,
+          context: ctxMeta,
+        });
         if (decision.effect === 'allow') return true;
         failures.push(`${permission}:${decision.reason}`);
       }
-      throw new ForbiddenException(`Permiso denegado (any): ${failures.join(', ')}`);
+      throw new ForbiddenException(
+        `Permiso denegado (any): ${failures.join(', ')}`,
+      );
     }
 
     // mode = 'all'
     for (const permission of requirement.permissions) {
-      const decision = await this.authz.can({ subject, permission, context: ctxMeta });
+      const decision = await this.authz.can({
+        subject,
+        permission,
+        context: ctxMeta,
+      });
       if (decision.effect !== 'allow') {
         throw new ForbiddenException(
           `Permiso denegado: ${permission} (${decision.reason})`,

@@ -20,20 +20,29 @@ import { TenantContext } from './tenant-context.service';
  *     }
  *   }
  */
-export abstract class TenantRepository<T extends ObjectLiteral & { tenantId?: string }> {
+export abstract class TenantRepository<
+  T extends ObjectLiteral & { tenantId?: string },
+> {
   constructor(
     protected readonly repo: Repository<T>,
     protected readonly ctx: TenantContext,
   ) {}
 
-  protected withTenant<W extends FindOptionsWhere<T>>(where?: W): FindOptionsWhere<T> {
-    return { ...(where ?? {}), tenantId: this.ctx.tenantId } as FindOptionsWhere<T>;
+  protected withTenant<W extends FindOptionsWhere<T>>(
+    where?: W,
+  ): FindOptionsWhere<T> {
+    return {
+      ...(where ?? {}),
+      tenantId: this.ctx.tenantId,
+    } as FindOptionsWhere<T>;
   }
 
   find(options: FindManyOptions<T> = {}): Promise<T[]> {
     const where = options.where;
     const tenantWhere = { tenantId: this.ctx.tenantId } as FindOptionsWhere<T>;
-    const merged: FindOptionsWhere<T> | FindOptionsWhere<T>[] = Array.isArray(where)
+    const merged: FindOptionsWhere<T> | FindOptionsWhere<T>[] = Array.isArray(
+      where,
+    )
       ? where.map((w) => ({ ...w, ...tenantWhere }))
       : { ...(where ?? {}), ...tenantWhere };
     return this.repo.find({ ...options, where: merged });
@@ -42,7 +51,9 @@ export abstract class TenantRepository<T extends ObjectLiteral & { tenantId?: st
   findOne(options: FindOneOptions<T>): Promise<T | null> {
     const where = options.where;
     const tenantWhere = { tenantId: this.ctx.tenantId } as FindOptionsWhere<T>;
-    const merged: FindOptionsWhere<T> | FindOptionsWhere<T>[] = Array.isArray(where)
+    const merged: FindOptionsWhere<T> | FindOptionsWhere<T>[] = Array.isArray(
+      where,
+    )
       ? where.map((w) => ({ ...w, ...tenantWhere }))
       : { ...(where ?? {}), ...tenantWhere };
     return this.repo.findOne({ ...options, where: merged });
@@ -66,11 +77,17 @@ export abstract class TenantRepository<T extends ObjectLiteral & { tenantId?: st
   }
 
   create(entity: DeepPartial<T>): T {
-    return this.repo.create({ ...entity, tenantId: this.ctx.tenantId } as DeepPartial<T>);
+    return this.repo.create({
+      ...entity,
+      tenantId: this.ctx.tenantId,
+    } as DeepPartial<T>);
   }
 
   async save(entity: DeepPartial<T>): Promise<T> {
-    const withTenant = { ...entity, tenantId: this.ctx.tenantId } as DeepPartial<T>;
+    const withTenant = {
+      ...entity,
+      tenantId: this.ctx.tenantId,
+    } as DeepPartial<T>;
     return this.repo.save(withTenant as T);
   }
 

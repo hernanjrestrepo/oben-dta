@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MockScenario } from '../../../entities/mock-scenario.entity';
@@ -37,7 +41,8 @@ const VALID_BEHAVIORS: ScenarioBehavior[] = [
 @Injectable()
 export class MockScenariosService {
   constructor(
-    @InjectRepository(MockScenario) private readonly repo: Repository<MockScenario>,
+    @InjectRepository(MockScenario)
+    private readonly repo: Repository<MockScenario>,
     private readonly ctx: TenantContext,
     private readonly cache: PersistentScenarioProvider,
   ) {}
@@ -56,16 +61,25 @@ export class MockScenariosService {
     });
   }
 
-  async get(system: IntegrationSystem, operation: string): Promise<MockScenario | null> {
+  async get(
+    system: IntegrationSystem,
+    operation: string,
+  ): Promise<MockScenario | null> {
     return this.repo.findOne({
       where: { tenantId: this.ctx.tenantId, system, operation },
     });
   }
 
-  async upsert(dto: UpsertScenarioDto, actorUserId?: string): Promise<MockScenario> {
+  async upsert(
+    dto: UpsertScenarioDto,
+    actorUserId?: string,
+  ): Promise<MockScenario> {
     this.assertValidSystem(dto.system);
     this.assertValidBehavior(dto.behavior);
-    if (dto.errorRatio !== undefined && (dto.errorRatio < 0 || dto.errorRatio > 1)) {
+    if (
+      dto.errorRatio !== undefined &&
+      (dto.errorRatio < 0 || dto.errorRatio > 1)
+    ) {
       throw new BadRequestException('errorRatio debe estar entre 0 y 1');
     }
     const tenantId = this.ctx.tenantId;
@@ -110,7 +124,9 @@ export class MockScenariosService {
     const tenantId = this.ctx.tenantId;
     const result = await this.repo.delete({ tenantId, system, operation });
     if (result.affected === 0) {
-      throw new NotFoundException(`Escenario para ${system}.${operation} no existe`);
+      throw new NotFoundException(
+        `Escenario para ${system}.${operation} no existe`,
+      );
     }
     this.cache.invalidate(tenantId, system, operation);
   }

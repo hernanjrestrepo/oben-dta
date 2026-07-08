@@ -14,7 +14,7 @@ export class ProductsService {
   ) {}
 
   private tenantWhere<T extends object>(where: T): T & { tenantId: string } {
-    return { ...where, tenantId: this.ctx.tenantId } as T & { tenantId: string };
+    return { ...where, tenantId: this.ctx.tenantId };
   }
 
   async create(dto: CreateProductDto): Promise<Product> {
@@ -41,7 +41,8 @@ export class ProductsService {
     const product = await this.productRepository.findOne({
       where: this.tenantWhere({ id }),
     });
-    if (!product) throw new NotFoundException(`Producto con ID ${id} no encontrado`);
+    if (!product)
+      throw new NotFoundException(`Producto con ID ${id} no encontrado`);
     return product;
   }
 
@@ -59,7 +60,9 @@ export class ProductsService {
   }
 
   async remove(id: string): Promise<void> {
-    const result = await this.productRepository.delete(this.tenantWhere({ id }));
+    const result = await this.productRepository.delete(
+      this.tenantWhere({ id }),
+    );
     if (result.affected === 0) {
       throw new NotFoundException(`Producto con ID ${id} no encontrado`);
     }

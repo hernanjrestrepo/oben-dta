@@ -12,6 +12,14 @@ export interface User {
   permissions?: string[];
 }
 
+export interface IntegrationStatus {
+  system: string;
+  mode: 'real' | 'mock';
+  state: 'operational' | 'pending_credentials' | 'unreachable' | 'error' | 'disabled';
+  message: string;
+  latencyMs: number | null;
+}
+
 export interface LicenseStatusView {
   valid: boolean;
   reason: string | null;

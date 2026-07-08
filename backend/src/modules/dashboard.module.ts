@@ -7,10 +7,19 @@ import { Order } from '../entities/order.entity';
 import { Product } from '../entities/product.entity';
 import { Client } from '../entities/client.entity';
 import { Invoice } from '../entities/invoice.entity';
+import { ProductionOrder } from '../entities/production-order.entity';
+import { Shipment } from '../entities/shipment.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, Product, Client, Invoice]),
+    TypeOrmModule.forFeature([
+      Order,
+      Product,
+      Client,
+      Invoice,
+      ProductionOrder,
+      Shipment,
+    ]),
     AuthModule,
   ],
   providers: [DashboardService],

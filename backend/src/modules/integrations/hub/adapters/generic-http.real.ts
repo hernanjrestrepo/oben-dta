@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { RealAdapterBase } from '../real-adapter-base';
-import { AdapterCapability, AdapterCallContext, BaseAdapterConfig } from '../adapter.types';
+import {
+  AdapterCapability,
+  AdapterCallContext,
+  BaseAdapterConfig,
+} from '../adapter.types';
 
 export type GenericHttpAuthScheme = 'api_key' | 'bearer' | 'basic' | 'none';
 
@@ -13,7 +17,10 @@ export interface GenericHttpAdapterConfig extends BaseAdapterConfig {
   bearerToken?: string;
   basicUser?: string;
   basicPass?: string;
-  routes?: Record<string, { path: string; method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' }>;
+  routes?: Record<
+    string,
+    { path: string; method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' }
+  >;
 }
 
 /**
@@ -57,7 +64,13 @@ export class GenericHttpRealAdapter extends RealAdapterBase {
 
   protected operationHandlers() {
     const routes = this.typedConfig.routes ?? {};
-    const handlers: Record<string, (args: Record<string, unknown>, ctx: AdapterCallContext) => Promise<unknown>> = {};
+    const handlers: Record<
+      string,
+      (
+        args: Record<string, unknown>,
+        ctx: AdapterCallContext,
+      ) => Promise<unknown>
+    > = {};
     for (const [operation, route] of Object.entries(routes)) {
       handlers[operation] = async (args) => this.callRoute(route, args);
     }
@@ -65,7 +78,10 @@ export class GenericHttpRealAdapter extends RealAdapterBase {
   }
 
   private async callRoute(
-    route: { path: string; method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' },
+    route: {
+      path: string;
+      method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+    },
     args: Record<string, unknown>,
   ): Promise<unknown> {
     this.assertConfigured();
@@ -93,7 +109,8 @@ export class GenericHttpRealAdapter extends RealAdapterBase {
       case 'basic':
         return {
           Authorization:
-            'Basic ' + Buffer.from(`${c.basicUser}:${c.basicPass}`).toString('base64'),
+            'Basic ' +
+            Buffer.from(`${c.basicUser}:${c.basicPass}`).toString('base64'),
         };
       default:
         return {};

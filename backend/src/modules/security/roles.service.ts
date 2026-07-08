@@ -17,8 +17,10 @@ import { TenantContext } from '../../common/tenant/tenant-context.service';
 export class RolesService {
   constructor(
     @InjectRepository(Role) private readonly roles: Repository<Role>,
-    @InjectRepository(Permission) private readonly permissions: Repository<Permission>,
-    @InjectRepository(UserRoleAssignment) private readonly userRoles: Repository<UserRoleAssignment>,
+    @InjectRepository(Permission)
+    private readonly permissions: Repository<Permission>,
+    @InjectRepository(UserRoleAssignment)
+    private readonly userRoles: Repository<UserRoleAssignment>,
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly ctx: TenantContext,
   ) {}
@@ -40,7 +42,8 @@ export class RolesService {
       where: { tenantId: this.tenantId(), key },
       relations: ['permissions'],
     });
-    if (!role) throw new NotFoundException(`Rol '${key}' no existe en el tenant`);
+    if (!role)
+      throw new NotFoundException(`Rol '${key}' no existe en el tenant`);
     return role;
   }
 
@@ -103,12 +106,18 @@ export class RolesService {
     });
   }
 
-  async assignRole(dto: { userId: string; roleKey: string }, actorUserId: string): Promise<UserRoleAssignment> {
+  async assignRole(
+    dto: { userId: string; roleKey: string },
+    actorUserId: string,
+  ): Promise<UserRoleAssignment> {
     const role = await this.getRoleByKey(dto.roleKey);
     const user = await this.users.findOne({
       where: { id: dto.userId, tenantId: this.tenantId() },
     });
-    if (!user) throw new NotFoundException(`Usuario ${dto.userId} no existe en el tenant`);
+    if (!user)
+      throw new NotFoundException(
+        `Usuario ${dto.userId} no existe en el tenant`,
+      );
     const existing = await this.userRoles.findOne({
       where: { userId: user.id, roleId: role.id },
     });
@@ -139,7 +148,9 @@ export class RolesService {
     return rows.map((r) => r.role);
   }
 
-  private async resolveTenantPermissions(keys: string[]): Promise<Permission[]> {
+  private async resolveTenantPermissions(
+    keys: string[],
+  ): Promise<Permission[]> {
     if (!Array.isArray(keys) || keys.length === 0) return [];
     const perms = await this.permissions.find({
       where: { key: In(keys), isPlatform: false },

@@ -9,11 +9,11 @@
 export type AdapterMode = 'real' | 'mock';
 
 export type AdapterState =
-  | 'operational'         // configurado, alcanzable, respondiendo
+  | 'operational' // configurado, alcanzable, respondiendo
   | 'pending_credentials' // faltan credenciales o base URL
-  | 'unreachable'         // configurado pero endpoint no responde
-  | 'error'               // configurado y responde con error
-  | 'disabled';           // desactivado por licencia o feature flag
+  | 'unreachable' // configurado pero endpoint no responde
+  | 'error' // configurado y responde con error
+  | 'disabled'; // desactivado por licencia o feature flag
 
 export interface AdapterHealth {
   state: AdapterState;
@@ -93,5 +93,8 @@ export const INTEGRATION_SYSTEMS = [
   'shipping',
   'email',
   'whatsapp',
+  'netsuite',
+  'veta',
+  'armstrong',
 ] as const;
 export type IntegrationSystem = (typeof INTEGRATION_SYSTEMS)[number];

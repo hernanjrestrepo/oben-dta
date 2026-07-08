@@ -1,4 +1,10 @@
-import { Controller, Get, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LicensingService } from './licensing.service';
 
@@ -16,7 +22,9 @@ export class LicenseController {
   @Get('status')
   async status(@Req() req: { user: { tenantId: string | null } }) {
     if (!req.user.tenantId) {
-      throw new UnauthorizedException('Este endpoint es exclusivo de usuarios de tenant');
+      throw new UnauthorizedException(
+        'Este endpoint es exclusivo de usuarios de tenant',
+      );
     }
     const result = await this.licensing.validate(req.user.tenantId);
     return {

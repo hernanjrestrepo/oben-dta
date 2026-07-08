@@ -1,5 +1,8 @@
 import { generateKeyPairSync } from 'crypto';
-import { LicenseSigningService, LicenseClaims } from './license-signing.service';
+import {
+  LicenseSigningService,
+  LicenseClaims,
+} from './license-signing.service';
 
 function makeService(env: Record<string, string | undefined> = {}) {
   const config = { get: jest.fn((key: string) => env[key]) };

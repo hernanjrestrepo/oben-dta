@@ -7,6 +7,9 @@ import { EFrancoMockAdapter } from './adapters/efranco.mock';
 import { ShippingMockAdapter } from './adapters/shipping.mock';
 import { EmailMockAdapter } from './adapters/email.mock';
 import { WhatsAppMockAdapter } from './adapters/whatsapp.mock';
+import { NetSuiteMockAdapter } from './adapters/netsuite.mock';
+import { VetaMockAdapter } from './adapters/veta.mock';
+import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
 import { AdapterCallContext, IntegrationAdapter } from './adapter.types';
 
 const CTX: AdapterCallContext = { tenantId: 't1', userId: 'u1' };
@@ -16,25 +19,96 @@ function scenarios() {
 }
 
 describe('Mock adapters — happy path', () => {
-  const cases: Array<[string, IntegrationAdapter, string, Record<string, unknown>]> = [
-    ['oracle.gl.getAccounts', new OracleMockAdapter(scenarios()), 'gl.getAccounts', {}],
-    ['oben.products.list', new ObenMockAdapter(scenarios()), 'products.list', {}],
-    ['cubeiq.plan.optimize', new CubeIQMockAdapter(scenarios()), 'plan.optimize', {
-      items: [{ sku: 'A', qty: 10, volumeCm3: 1000, weightGr: 100 }],
-    }],
-    ['dian.invoice.send', new DianMockAdapter(scenarios()), 'invoice.send', {
-      invoiceNumber: 'INV-1', totalAmount: 100000,
-    }],
-    ['efranco.quote.request', new EFrancoMockAdapter(scenarios()), 'quote.request', {
-      origin: 'CO', destination: 'US', grossWeightKg: 500,
-    }],
-    ['shipping.rate.get', new ShippingMockAdapter(scenarios()), 'rate.get', { weightKg: 10 }],
-    ['email.send', new EmailMockAdapter(scenarios()), 'send', {
-      to: 'x@y.com', subject: 's', body: 'b',
-    }],
-    ['whatsapp.send.text', new WhatsAppMockAdapter(scenarios()), 'send.text', {
-      to: '+57300', text: 'hola',
-    }],
+  const cases: Array<
+    [string, IntegrationAdapter, string, Record<string, unknown>]
+  > = [
+    [
+      'oracle.gl.getAccounts',
+      new OracleMockAdapter(scenarios()),
+      'gl.getAccounts',
+      {},
+    ],
+    [
+      'oben.products.list',
+      new ObenMockAdapter(scenarios()),
+      'products.list',
+      {},
+    ],
+    [
+      'cubeiq.plan.optimize',
+      new CubeIQMockAdapter(scenarios()),
+      'plan.optimize',
+      {
+        items: [{ sku: 'A', qty: 10, volumeCm3: 1000, weightGr: 100 }],
+      },
+    ],
+    [
+      'dian.invoice.send',
+      new DianMockAdapter(scenarios()),
+      'invoice.send',
+      {
+        invoiceNumber: 'INV-1',
+        totalAmount: 100000,
+      },
+    ],
+    [
+      'efranco.quote.request',
+      new EFrancoMockAdapter(scenarios()),
+      'quote.request',
+      {
+        origin: 'CO',
+        destination: 'US',
+        grossWeightKg: 500,
+      },
+    ],
+    [
+      'shipping.rate.get',
+      new ShippingMockAdapter(scenarios()),
+      'rate.get',
+      { weightKg: 10 },
+    ],
+    [
+      'email.send',
+      new EmailMockAdapter(scenarios()),
+      'send',
+      {
+        to: 'x@y.com',
+        subject: 's',
+        body: 'b',
+      },
+    ],
+    [
+      'whatsapp.send.text',
+      new WhatsAppMockAdapter(scenarios()),
+      'send.text',
+      {
+        to: '+57300',
+        text: 'hola',
+      },
+    ],
+    [
+      'netsuite.gl.getAccounts',
+      new NetSuiteMockAdapter(scenarios()),
+      'gl.getAccounts',
+      {},
+    ],
+    [
+      'veta.production.schedule',
+      new VetaMockAdapter(scenarios()),
+      'production.schedule',
+      {
+        sku: 'SKU-001',
+        quantity: 100,
+      },
+    ],
+    [
+      'armstrong.dispatch.create',
+      new ArmstrongMockAdapter(scenarios()),
+      'dispatch.create',
+      {
+        orderNumber: 'ORD-1',
+      },
+    ],
   ];
 
   it.each(cases)('%s → ok', async (_name, adapter, op, args) => {
@@ -52,7 +126,28 @@ describe('Mock adapter — errores de negocio', () => {
     const adapter = new OracleMockAdapter(scenarios());
     const res = await adapter.execute(
       'gl.postJournal',
-      { lines: [{ account: '1105', debit: 100 }, { account: '4135', credit: 50 }] },
+      {
+        lines: [
+          { account: '1105', debit: 100 },
+          { account: '4135', credit: 50 },
+        ],
+      },
+      CTX,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/no balanceado/);
+  });
+
+  it('netsuite.postJournal desbalanceado → error', async () => {
+    const adapter = new NetSuiteMockAdapter(scenarios());
+    const res = await adapter.execute(
+      'gl.postJournal',
+      {
+        lines: [
+          { account: '1100', debit: 100 },
+          { account: '4000', credit: 50 },
+        ],
+      },
       CTX,
     );
     expect(res.ok).toBe(false);
@@ -70,16 +165,32 @@ describe('Mock adapter — errores de negocio', () => {
     const adapter = new EmailMockAdapter(scenarios());
     await adapter.execute('send', { to: 'a@b', subject: 's', body: 'b' }, CTX);
     await adapter.execute('send', { to: 'c@d', subject: 's', body: 'b' }, CTX);
-    const list = await adapter.execute<{ messages: unknown[] }>('outbox.list', {}, CTX);
+    const list = await adapter.execute<{ messages: unknown[] }>(
+      'outbox.list',
+      {},
+      CTX,
+    );
     expect(list.data?.messages).toHaveLength(2);
-    const cleared = await adapter.execute<{ cleared: number }>('outbox.clear', {}, CTX);
+    const cleared = await adapter.execute<{ cleared: number }>(
+      'outbox.clear',
+      {},
+      CTX,
+    );
     expect(cleared.data?.cleared).toBe(2);
   });
 
   it('shipping.tracking.get es determinista por tracking id', async () => {
     const adapter = new ShippingMockAdapter(scenarios());
-    const r1 = await adapter.execute<{ status: string }>('tracking.get', { tracking: 'DHL55' }, CTX);
-    const r2 = await adapter.execute<{ status: string }>('tracking.get', { tracking: 'DHL55' }, CTX);
+    const r1 = await adapter.execute<{ status: string }>(
+      'tracking.get',
+      { tracking: 'DHL55' },
+      CTX,
+    );
+    const r2 = await adapter.execute<{ status: string }>(
+      'tracking.get',
+      { tracking: 'DHL55' },
+      CTX,
+    );
     expect(r1.data?.status).toBe(r2.data?.status);
   });
 });

@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsEnum, IsObject, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsObject,
+  MinLength,
+} from 'class-validator';
 import { TenantStatus } from '../../../entities/tenant.entity';
 
 export class CreateTenantDto {
@@ -10,56 +16,73 @@ export class CreateTenantDto {
   @MinLength(2)
   name: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   legalName?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   taxId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   countryCode?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   defaultCurrency?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   timezone?: string;
 
-  @IsOptional() @IsEnum(TenantStatus)
+  @IsOptional()
+  @IsEnum(TenantStatus)
   status?: TenantStatus;
 
-  @IsOptional() @IsObject()
+  @IsOptional()
+  @IsObject()
   settings?: Record<string, unknown>;
 
-  @IsOptional() @IsObject()
+  @IsOptional()
+  @IsObject()
   integrationConfig?: Record<string, unknown>;
 }
 
 export class UpdateTenantDto {
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   name?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   legalName?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   taxId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   countryCode?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   defaultCurrency?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   timezone?: string;
 
-  @IsOptional() @IsEnum(TenantStatus)
+  @IsOptional()
+  @IsEnum(TenantStatus)
   status?: TenantStatus;
 
-  @IsOptional() @IsObject()
+  @IsOptional()
+  @IsObject()
   settings?: Record<string, unknown>;
 
-  @IsOptional() @IsObject()
+  @IsOptional()
+  @IsObject()
   integrationConfig?: Record<string, unknown>;
 }

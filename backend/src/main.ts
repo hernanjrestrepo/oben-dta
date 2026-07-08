@@ -19,9 +19,10 @@ async function bootstrap() {
     helmet({
       contentSecurityPolicy: false,
       crossOriginResourcePolicy: { policy: 'cross-origin' },
-      hsts: process.env.NODE_ENV === 'production'
-        ? { maxAge: 31536000, includeSubDomains: true }
-        : false,
+      hsts:
+        process.env.NODE_ENV === 'production'
+          ? { maxAge: 31536000, includeSubDomains: true }
+          : false,
     }),
   );
 

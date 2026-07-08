@@ -65,7 +65,10 @@ export interface DatasetSummary {
   elapsedMs: number;
 }
 
-const PRESETS: Record<DatasetPreset, { clients: number; products: number; orders: number }> = {
+const PRESETS: Record<
+  DatasetPreset,
+  { clients: number; products: number; orders: number }
+> = {
   // 'small' es para demos/QA rápidos y para no tumbar un servidor pequeño por accidente.
   small: { clients: 20, products: 50, orders: 100 },
   // 'full' son los mínimos exactos pedidos en la misión original.
@@ -112,12 +115,25 @@ export class DatasetGeneratorService {
     const incotermIds = await this.ensureIncoterms();
 
     const counts = {
-      clients: 0, products: 0, orders: 0, orderItems: 0, invoices: 0,
-      creditValidations: 0, productionOrders: 0, exportOperations: 0,
-      shipments: 0, shipmentTracking: 0, packingLists: 0, quotes: 0, quoteItems: 0,
+      clients: 0,
+      products: 0,
+      orders: 0,
+      orderItems: 0,
+      invoices: 0,
+      creditValidations: 0,
+      productionOrders: 0,
+      exportOperations: 0,
+      shipments: 0,
+      shipmentTracking: 0,
+      packingLists: 0,
+      quotes: 0,
+      quoteItems: 0,
     };
 
-    const clientRows = buildClients(rng, volumes.clients, runTag).map((c) => ({ ...c, tenantId }));
+    const clientRows = buildClients(rng, volumes.clients, runTag).map((c) => ({
+      ...c,
+      tenantId,
+    }));
     const clientIds = await this.insertBatch(Client, clientRows);
     counts.clients = clientIds.length;
     const clientRefs: ClientRef[] = clientRows.map((c, i) => ({
@@ -126,12 +142,23 @@ export class DatasetGeneratorService {
       usedCredit: c.usedCredit,
     }));
 
-    const productRows = buildProducts(rng, volumes.products, runTag).map((p) => ({ ...p, tenantId }));
+    const productRows = buildProducts(rng, volumes.products, runTag).map(
+      (p) => ({ ...p, tenantId }),
+    );
     const productIds = await this.insertBatch(Product, productRows);
     counts.products = productIds.length;
-    const productRefs: ProductRef[] = productRows.map((p, i) => ({ id: productIds[i], price: p.price }));
+    const productRefs: ProductRef[] = productRows.map((p, i) => ({
+      id: productIds[i],
+      price: p.price,
+    }));
 
-    const orderPlans = buildOrders(rng, clientRefs, productRefs, volumes.orders, runTag);
+    const orderPlans = buildOrders(
+      rng,
+      clientRefs,
+      productRefs,
+      volumes.orders,
+      runTag,
+    );
 
     let invoiceSeq = 0;
     let cvSeq = 0;
@@ -165,7 +192,12 @@ export class DatasetGeneratorService {
             ...buildInvoice(
               rng,
               invoiceSeq++,
-              { id: orderId, totalAmount: plan.order.totalAmount, status: plan.order.status, createdAt: plan.order.createdAt },
+              {
+                id: orderId,
+                totalAmount: plan.order.totalAmount,
+                status: plan.order.status,
+                createdAt: plan.order.createdAt,
+              },
               runTag,
             ),
             tenantId,
@@ -174,7 +206,11 @@ export class DatasetGeneratorService {
         cvRows.push({
           ...buildCreditValidation(
             cvSeq++,
-            { id: orderId, totalAmount: plan.order.totalAmount, createdAt: plan.order.createdAt },
+            {
+              id: orderId,
+              totalAmount: plan.order.totalAmount,
+              createdAt: plan.order.createdAt,
+            },
             plan.clientSnapshot,
             runTag,
           ),
@@ -185,19 +221,31 @@ export class DatasetGeneratorService {
             ...buildProductionOrder(
               rng,
               poSeq++,
-              { id: orderId, status: plan.order.status, createdAt: plan.order.createdAt },
+              {
+                id: orderId,
+                status: plan.order.status,
+                createdAt: plan.order.createdAt,
+              },
               plan.items[0],
               runTag,
             ),
             tenantId,
           });
         }
-        if (plan.order.status === OrderStatus.DELIVERED && rng.bool(volumes.exportRatio)) {
+        if (
+          plan.order.status === OrderStatus.DELIVERED &&
+          rng.bool(volumes.exportRatio)
+        ) {
           exportCandidates.push({
             input: buildExportOperation(
               rng,
               expSeq++,
-              { id: orderId, clientId: plan.order.clientId, totalAmount: plan.order.totalAmount, createdAt: plan.order.createdAt },
+              {
+                id: orderId,
+                clientId: plan.order.clientId,
+                totalAmount: plan.order.totalAmount,
+                createdAt: plan.order.createdAt,
+              },
               incotermIds,
               runTag,
             ),
@@ -261,7 +309,13 @@ export class DatasetGeneratorService {
     }
 
     // Cotizaciones — flujo independiente de las órdenes, mismo pool de clientes/productos.
-    const quotePlans = buildQuotes(rng, clientRefs, productRefs, volumes.quotes, runTag);
+    const quotePlans = buildQuotes(
+      rng,
+      clientRefs,
+      productRefs,
+      volumes.quotes,
+      runTag,
+    );
     for (let i = 0; i < quotePlans.length; i += CHUNK_SIZE) {
       const chunk = quotePlans.slice(i, i + CHUNK_SIZE);
       const quoteRows = chunk.map((q) => ({ ...q.quote, tenantId }));
@@ -292,7 +346,10 @@ export class DatasetGeneratorService {
     return summary;
   }
 
-  private resolveVolumes(dto: GenerateDatasetDto, preset: DatasetPreset): Volumes {
+  private resolveVolumes(
+    dto: GenerateDatasetDto,
+    preset: DatasetPreset,
+  ): Volumes {
     const base = PRESETS[preset];
     const clients = dto.clients ?? base.clients;
     const products = dto.products ?? base.products;
@@ -334,14 +391,29 @@ export class DatasetGeneratorService {
    */
   private async resetTenantData(tenantId: string): Promise<void> {
     const tablesInDependencyOrder = [
-      'shipment_tracking', 'shipments', 'packing_lists', 'export_operations',
-      'production_orders', 'credit_validations', 'invoices', 'order_items',
-      'orders', 'quote_items', 'quotes', 'products', 'clients',
+      'shipment_tracking',
+      'shipments',
+      'packing_lists',
+      'export_operations',
+      'production_orders',
+      'credit_validations',
+      'invoices',
+      'order_items',
+      'orders',
+      'quote_items',
+      'quotes',
+      'products',
+      'clients',
     ];
     for (const table of tablesInDependencyOrder) {
-      await this.dataSource.query(`DELETE FROM "${table}" WHERE tenant_id = $1`, [tenantId]);
+      await this.dataSource.query(
+        `DELETE FROM "${table}" WHERE tenant_id = $1`,
+        [tenantId],
+      );
     }
-    this.logger.warn(`Datos reseteados para tenant=${tenantId} (tablas: ${tablesInDependencyOrder.join(', ')})`);
+    this.logger.warn(
+      `Datos reseteados para tenant=${tenantId} (tablas: ${tablesInDependencyOrder.join(', ')})`,
+    );
   }
 
   private async insertBatch<T extends ObjectLiteral>(
@@ -357,7 +429,7 @@ export class DatasetGeneratorService {
         .createQueryBuilder()
         .insert()
         .into(entity)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         .values(chunk as any)
         .execute();
       for (const identifier of result.identifiers) {

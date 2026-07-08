@@ -19,17 +19,38 @@ export class EFrancoMockAdapter extends MockAdapterBase {
 
   capabilities(): AdapterCapability[] {
     return [
-      { operation: 'quote.request', method: 'write', description: 'Solicitar cotización de exportación' },
-      { operation: 'liquidation.create', method: 'write', description: 'Crear liquidación aduanera' },
-      { operation: 'documents.list', method: 'read', description: 'Listar documentos generados por operación' },
+      {
+        operation: 'quote.request',
+        method: 'write',
+        description: 'Solicitar cotización de exportación',
+      },
+      {
+        operation: 'liquidation.create',
+        method: 'write',
+        description: 'Crear liquidación aduanera',
+      },
+      {
+        operation: 'documents.list',
+        method: 'read',
+        description: 'Listar documentos generados por operación',
+      },
     ];
   }
 
   protected operationHandlers() {
     return {
-      'quote.request': this.wrap((args) => this.quoteRequest(args), 'quote.request'),
-      'liquidation.create': this.wrap((args) => this.liquidationCreate(args), 'liquidation.create'),
-      'documents.list': this.wrap((args) => this.documentsList(args), 'documents.list'),
+      'quote.request': this.wrap(
+        (args) => this.quoteRequest(args),
+        'quote.request',
+      ),
+      'liquidation.create': this.wrap(
+        (args) => this.liquidationCreate(args),
+        'liquidation.create',
+      ),
+      'documents.list': this.wrap(
+        (args) => this.documentsList(args),
+        'documents.list',
+      ),
     };
   }
 
@@ -37,8 +58,10 @@ export class EFrancoMockAdapter extends MockAdapterBase {
     const origin = String(args.origin ?? '');
     const destination = String(args.destination ?? '');
     const grossWeightKg = Number(args.grossWeightKg ?? 0);
-    if (!origin || !destination) throw new Error('BUSINESS_ERROR: origin/destination requeridos');
-    if (grossWeightKg <= 0) throw new Error('BUSINESS_ERROR: grossWeightKg > 0');
+    if (!origin || !destination)
+      throw new Error('BUSINESS_ERROR: origin/destination requeridos');
+    if (grossWeightKg <= 0)
+      throw new Error('BUSINESS_ERROR: grossWeightKg > 0');
     const base = 3200; // USD flat
     const perKg = 0.85;
     const totalUsd = Math.round((base + grossWeightKg * perKg) * 100) / 100;
@@ -72,13 +95,26 @@ export class EFrancoMockAdapter extends MockAdapterBase {
 
   private documentsList(args: Record<string, unknown>) {
     const liquidationId = String(args.liquidationId ?? '');
-    if (!liquidationId) throw new Error('BUSINESS_ERROR: liquidationId requerido');
+    if (!liquidationId)
+      throw new Error('BUSINESS_ERROR: liquidationId requerido');
     return {
       liquidationId,
       documents: [
-        { type: 'BILL_OF_LADING', code: `BL-${liquidationId.slice(-6)}`, url: 'https://mock-efranco.local/bl' },
-        { type: 'PACKING_LIST', code: `PL-${liquidationId.slice(-6)}`, url: 'https://mock-efranco.local/pl' },
-        { type: 'INVOICE', code: `INV-${liquidationId.slice(-6)}`, url: 'https://mock-efranco.local/inv' },
+        {
+          type: 'BILL_OF_LADING',
+          code: `BL-${liquidationId.slice(-6)}`,
+          url: 'https://mock-efranco.local/bl',
+        },
+        {
+          type: 'PACKING_LIST',
+          code: `PL-${liquidationId.slice(-6)}`,
+          url: 'https://mock-efranco.local/pl',
+        },
+        {
+          type: 'INVOICE',
+          code: `INV-${liquidationId.slice(-6)}`,
+          url: 'https://mock-efranco.local/inv',
+        },
       ],
     };
   }

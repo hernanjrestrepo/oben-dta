@@ -23,12 +23,20 @@ export class IntegrationsService {
   constructor(private readonly hub: IntegrationHubService) {}
 
   async getVendors(_date: string) {
-    const r = await this.hub.call<{ suppliers: unknown[] }>('oracle', 'ap.getSuppliers', {});
+    const r = await this.hub.call<{ suppliers: unknown[] }>(
+      'oracle',
+      'ap.getSuppliers',
+      {},
+    );
     return { result: this.toLegacy(r), vendors: r.data?.suppliers ?? [] };
   }
 
   async getItems(_date: string) {
-    const r = await this.hub.call<{ items: unknown[] }>('oben', 'products.list', {});
+    const r = await this.hub.call<{ items: unknown[] }>(
+      'oben',
+      'products.list',
+      {},
+    );
     return { result: this.toLegacy(r), items: r.data?.items ?? [] };
   }
 
@@ -38,7 +46,9 @@ export class IntegrationsService {
   }
 
   async getReceipts(_by: { date?: string; poNumber?: string }) {
-    const r = await this.hub.call('oben', 'inventory.stock', { sku: 'SKU-1000' });
+    const r = await this.hub.call('oben', 'inventory.stock', {
+      sku: 'SKU-1000',
+    });
     return { result: this.toLegacy(r), receipts: [] };
   }
 

@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant } from '../../../entities/tenant.entity';
-import { IntegrationAdapter, IntegrationSystem, INTEGRATION_SYSTEMS } from './adapter.types';
+import {
+  IntegrationAdapter,
+  IntegrationSystem,
+  INTEGRATION_SYSTEMS,
+} from './adapter.types';
 import { ScenarioProvider } from './scenario.types';
 import { OracleMockAdapter } from './adapters/oracle.mock';
 import { ObenMockAdapter } from './adapters/oben.mock';
@@ -12,7 +16,13 @@ import { EFrancoMockAdapter } from './adapters/efranco.mock';
 import { ShippingMockAdapter } from './adapters/shipping.mock';
 import { EmailMockAdapter } from './adapters/email.mock';
 import { WhatsAppMockAdapter } from './adapters/whatsapp.mock';
-import { GenericHttpRealAdapter, GenericHttpAdapterConfig } from './adapters/generic-http.real';
+import { NetSuiteMockAdapter } from './adapters/netsuite.mock';
+import { VetaMockAdapter } from './adapters/veta.mock';
+import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
+import {
+  GenericHttpRealAdapter,
+  GenericHttpAdapterConfig,
+} from './adapters/generic-http.real';
 
 /**
  * Resuelve qué adapter devolver para (tenant, system) combinando:
@@ -39,6 +49,9 @@ export class AdapterRegistry {
     shipping: ShippingMockAdapter,
     email: EmailMockAdapter,
     whatsapp: WhatsAppMockAdapter,
+    netsuite: NetSuiteMockAdapter,
+    veta: VetaMockAdapter,
+    armstrong: ArmstrongMockAdapter,
     // Referencia al provider por si algún real futuro decide reutilizar escenarios
     // en modo hibrido (por ejemplo, degradación controlada).
     private readonly _scenarios?: ScenarioProvider,
@@ -52,6 +65,9 @@ export class AdapterRegistry {
       shipping,
       email,
       whatsapp,
+      netsuite,
+      veta,
+      armstrong,
     };
   }
 
@@ -59,9 +75,14 @@ export class AdapterRegistry {
     return INTEGRATION_SYSTEMS;
   }
 
-  async resolve(tenantId: string, system: IntegrationSystem): Promise<IntegrationAdapter> {
+  async resolve(
+    tenantId: string,
+    system: IntegrationSystem,
+  ): Promise<IntegrationAdapter> {
     const tenant = await this.tenants.findOne({ where: { id: tenantId } });
-    const cfg = ((tenant?.integrationConfig as Record<string, Record<string, unknown>> | undefined) ?? {})[system];
+    const cfg = ((tenant?.integrationConfig as
+      | Record<string, Record<string, unknown>>
+      | undefined) ?? {})[system];
     const mode = (cfg?.mode as string | undefined) ?? 'mock';
 
     if (mode === 'real') {
@@ -77,7 +98,8 @@ export class AdapterRegistry {
     const httpConfig: GenericHttpAdapterConfig = {
       system,
       baseUrl: (cfg.baseUrl as string) ?? undefined,
-      authScheme: ((cfg.authScheme as GenericHttpAdapterConfig['authScheme']) ?? 'none'),
+      authScheme:
+        (cfg.authScheme as GenericHttpAdapterConfig['authScheme']) ?? 'none',
       apiKey: (cfg.apiKey as string) ?? undefined,
       apiKeyHeader: (cfg.apiKeyHeader as string) ?? 'x-api-key',
       bearerToken: (cfg.bearerToken as string) ?? undefined,

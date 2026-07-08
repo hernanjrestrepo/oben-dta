@@ -20,33 +20,66 @@ export class CubeIQMockAdapter extends MockAdapterBase {
 
   capabilities(): AdapterCapability[] {
     return [
-      { operation: 'plan.optimize', method: 'read', description: 'Calcular plan óptimo de packing' },
-      { operation: 'plan.validate', method: 'read', description: 'Validar un plan de packing' },
+      {
+        operation: 'plan.optimize',
+        method: 'read',
+        description: 'Calcular plan óptimo de packing',
+      },
+      {
+        operation: 'plan.validate',
+        method: 'read',
+        description: 'Validar un plan de packing',
+      },
     ];
   }
 
   protected operationHandlers() {
     return {
-      'plan.optimize': this.wrap((args) => this.planOptimize(args), 'plan.optimize'),
-      'plan.validate': this.wrap((args) => this.planValidate(args), 'plan.validate'),
+      'plan.optimize': this.wrap(
+        (args) => this.planOptimize(args),
+        'plan.optimize',
+      ),
+      'plan.validate': this.wrap(
+        (args) => this.planValidate(args),
+        'plan.validate',
+      ),
     };
   }
 
   private planOptimize(args: Record<string, unknown>) {
-    const items = (args.items as Array<{ sku: string; qty: number; volumeCm3: number; weightGr: number }>) ?? [];
+    const items =
+      (args.items as Array<{
+        sku: string;
+        qty: number;
+        volumeCm3: number;
+        weightGr: number;
+      }>) ?? [];
     if (items.length === 0) {
       throw new Error('BUSINESS_ERROR: items[] vacío');
     }
-    const container = (args.container as { code?: string; volumeCm3?: number; maxWeightGr?: number }) ?? {
+    const container = (args.container as {
+      code?: string;
+      volumeCm3?: number;
+      maxWeightGr?: number;
+    }) ?? {
       code: '40HC',
       volumeCm3: 76_000_000,
       maxWeightGr: 26_500_000,
     };
-    const totalVolume = items.reduce((s, i) => s + Number(i.volumeCm3) * Number(i.qty), 0);
-    const totalWeight = items.reduce((s, i) => s + Number(i.weightGr) * Number(i.qty), 0);
+    const totalVolume = items.reduce(
+      (s, i) => s + Number(i.volumeCm3) * Number(i.qty),
+      0,
+    );
+    const totalWeight = items.reduce(
+      (s, i) => s + Number(i.weightGr) * Number(i.qty),
+      0,
+    );
     const utilizationVolume = totalVolume / Number(container.volumeCm3 ?? 1);
     const utilizationWeight = totalWeight / Number(container.maxWeightGr ?? 1);
-    const containers = Math.max(1, Math.ceil(Math.max(utilizationVolume, utilizationWeight)));
+    const containers = Math.max(
+      1,
+      Math.ceil(Math.max(utilizationVolume, utilizationWeight)),
+    );
 
     return {
       planId: `CUBE-${Date.now()}`,

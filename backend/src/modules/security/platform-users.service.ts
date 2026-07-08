@@ -1,11 +1,19 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User } from '../../entities/user.entity';
 import { PlatformUserRole } from '../../entities/platform-user-role.entity';
 import { PlatformRolesService } from './platform-roles.service';
-import { CreatePlatformUserDto, UpdatePlatformUserDto } from './dto/security.dto';
+import {
+  CreatePlatformUserDto,
+  UpdatePlatformUserDto,
+} from './dto/security.dto';
 
 export interface PlatformUserView {
   id: string;
@@ -28,49 +36,83 @@ export interface PlatformUserView {
 export class PlatformUsersService {
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
-    @InjectRepository(PlatformUserRole) private readonly assignments: Repository<PlatformUserRole>,
+    @InjectRepository(PlatformUserRole)
+    private readonly assignments: Repository<PlatformUserRole>,
     private readonly platformRoles: PlatformRolesService,
   ) {}
 
   async list(): Promise<PlatformUserView[]> {
-    const rows = await this.users.find({ where: { tenantId: IsNull() }, order: { createdAt: 'ASC' } });
+    const rows = await this.users.find({
+      where: { tenantId: IsNull() },
+      order: { createdAt: 'ASC' },
+    });
     const out: PlatformUserView[] = [];
     for (const u of rows) {
       const roles = await this.platformRoles.listUserRoles(u.id);
-      out.push(this.toView(u, roles.map((r) => r.key)));
+      out.push(
+        this.toView(
+          u,
+          roles.map((r) => r.key),
+        ),
+      );
     }
     return out;
   }
 
   async findById(id: string): Promise<PlatformUserView> {
-    const user = await this.users.findOne({ where: { id, tenantId: IsNull() } });
-    if (!user) throw new NotFoundException(`Usuario de plataforma ${id} no existe`);
+    const user = await this.users.findOne({
+      where: { id, tenantId: IsNull() },
+    });
+    if (!user)
+      throw new NotFoundException(`Usuario de plataforma ${id} no existe`);
     const roles = await this.platformRoles.listUserRoles(id);
-    return this.toView(user, roles.map((r) => r.key));
+    return this.toView(
+      user,
+      roles.map((r) => r.key),
+    );
   }
 
-  async create(dto: CreatePlatformUserDto, actorUserId: string): Promise<PlatformUserView> {
-    const existing = await this.users.findOne({ where: { email: dto.email, tenantId: IsNull() } });
-    if (existing) throw new ConflictException(`Ya existe un usuario de plataforma con el correo '${dto.email}'`);
+  async create(
+    dto: CreatePlatformUserDto,
+    actorUserId: string,
+  ): Promise<PlatformUserView> {
+    const existing = await this.users.findOne({
+      where: { email: dto.email, tenantId: IsNull() },
+    });
+    if (existing)
+      throw new ConflictException(
+        `Ya existe un usuario de plataforma con el correo '${dto.email}'`,
+      );
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = await this.users.save(this.users.create({
-      tenantId: null,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-      email: dto.email,
-      passwordHash,
-      isActive: true,
-      isSuperAdmin: false,
-    }));
+    const user = await this.users.save(
+      this.users.create({
+        tenantId: null,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        email: dto.email,
+        passwordHash,
+        isActive: true,
+        isSuperAdmin: false,
+      }),
+    );
     if (dto.platformRoleKey) {
-      await this.platformRoles.assign({ userId: user.id, platformRoleKey: dto.platformRoleKey }, actorUserId);
+      await this.platformRoles.assign(
+        { userId: user.id, platformRoleKey: dto.platformRoleKey },
+        actorUserId,
+      );
     }
     return this.findById(user.id);
   }
 
-  async update(id: string, dto: UpdatePlatformUserDto): Promise<PlatformUserView> {
-    const user = await this.users.findOne({ where: { id, tenantId: IsNull() } });
-    if (!user) throw new NotFoundException(`Usuario de plataforma ${id} no existe`);
+  async update(
+    id: string,
+    dto: UpdatePlatformUserDto,
+  ): Promise<PlatformUserView> {
+    const user = await this.users.findOne({
+      where: { id, tenantId: IsNull() },
+    });
+    if (!user)
+      throw new NotFoundException(`Usuario de plataforma ${id} no existe`);
     if (dto.firstName !== undefined) user.firstName = dto.firstName;
     if (dto.lastName !== undefined) user.lastName = dto.lastName;
     if (dto.isActive !== undefined) user.isActive = dto.isActive;
@@ -80,13 +122,18 @@ export class PlatformUsersService {
   }
 
   async remove(id: string): Promise<void> {
-    const user = await this.users.findOne({ where: { id, tenantId: IsNull() } });
-    if (!user) throw new NotFoundException(`Usuario de plataforma ${id} no existe`);
+    const user = await this.users.findOne({
+      where: { id, tenantId: IsNull() },
+    });
+    if (!user)
+      throw new NotFoundException(`Usuario de plataforma ${id} no existe`);
     const remainingSuperAdmins = await this.users.count({
       where: { tenantId: IsNull(), isSuperAdmin: true },
     });
     if (user.isSuperAdmin && remainingSuperAdmins <= 1) {
-      throw new BadRequestException('No se puede eliminar el último SuperAdmin de plataforma');
+      throw new BadRequestException(
+        'No se puede eliminar el último SuperAdmin de plataforma',
+      );
     }
     await this.assignments.delete({ userId: id });
     await this.users.remove(user);

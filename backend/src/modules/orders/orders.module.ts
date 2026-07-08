@@ -9,7 +9,10 @@ import { OrdersService } from './orders.service';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Order, OrderItem, Client, Product]), AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([Order, OrderItem, Client, Product]),
+    AuthModule,
+  ],
   controllers: [OrdersController],
   providers: [OrdersService],
   exports: [OrdersService],

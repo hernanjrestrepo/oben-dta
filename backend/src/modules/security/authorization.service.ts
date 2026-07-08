@@ -55,33 +55,56 @@ export class AuthorizationService {
     return decision;
   }
 
-  private async evaluate(request: AuthorizationRequest): Promise<AuthorizationDecision> {
+  private async evaluate(
+    request: AuthorizationRequest,
+  ): Promise<AuthorizationDecision> {
     const { subject, permission } = request;
 
     if (!subject?.userId) {
       return { effect: 'deny', reason: 'no_subject', matchedPolicy: 'sanity' };
     }
     if (!permission) {
-      return { effect: 'deny', reason: 'no_permission', matchedPolicy: 'sanity' };
+      return {
+        effect: 'deny',
+        reason: 'no_permission',
+        matchedPolicy: 'sanity',
+      };
     }
 
     // (1) Es permiso de plataforma → resolver por platform_user_roles.
-    const permissionRow = await this.ds.query(
+    const permissionRow = await this.ds.query<
+      Array<{ is_platform: boolean; module_key: string }>
+    >(
       `SELECT is_platform, module_key FROM permissions WHERE key = $1 LIMIT 1`,
       [permission],
     );
     if (permissionRow.length === 0) {
-      return { effect: 'deny', reason: 'permission_not_registered', matchedPolicy: 'rbac' };
+      return {
+        effect: 'deny',
+        reason: 'permission_not_registered',
+        matchedPolicy: 'rbac',
+      };
     }
-    const isPlatformPermission = permissionRow[0].is_platform as boolean;
-    const moduleKey = permissionRow[0].module_key as string;
+    const isPlatformPermission = permissionRow[0].is_platform;
+    const moduleKey = permissionRow[0].module_key;
 
     if (isPlatformPermission) {
-      const hasPlatform = await this.userHasPlatformPermission(subject.userId, permission);
+      const hasPlatform = await this.userHasPlatformPermission(
+        subject.userId,
+        permission,
+      );
       if (hasPlatform) {
-        return { effect: 'allow', reason: 'platform_role_grant', matchedPolicy: 'rbac.platform' };
+        return {
+          effect: 'allow',
+          reason: 'platform_role_grant',
+          matchedPolicy: 'rbac.platform',
+        };
       }
-      return { effect: 'deny', reason: 'missing_platform_role', matchedPolicy: 'rbac.platform' };
+      return {
+        effect: 'deny',
+        reason: 'missing_platform_role',
+        matchedPolicy: 'rbac.platform',
+      };
     }
 
     // (2) Policies pluggables — ABAC futuro. Deny gana; si nadie decide, sigue a RBAC.
@@ -95,7 +118,9 @@ export class AuthorizationService {
         }
         if (d.effect === 'allow') hadAllow = true;
       } catch (e) {
-        this.logger.warn(`policy ${policy.name} failed: ${(e as Error).message}`);
+        this.logger.warn(
+          `policy ${policy.name} failed: ${(e as Error).message}`,
+        );
       }
     }
 
@@ -104,7 +129,11 @@ export class AuthorizationService {
     if (!tenantId) {
       // Un usuario sin tenant no puede tener permisos de tenant salvo que sea superadmin
       // impersonando (en cuyo caso subject.tenantId ya vendría seteado por el interceptor).
-      return { effect: 'deny', reason: 'no_tenant_in_subject', matchedPolicy: 'rbac.tenant' };
+      return {
+        effect: 'deny',
+        reason: 'no_tenant_in_subject',
+        matchedPolicy: 'rbac.tenant',
+      };
     }
 
     const commercialLicense = await this.licensing.validate(tenantId);
@@ -117,7 +146,10 @@ export class AuthorizationService {
       };
     }
 
-    const moduleEnabled = await this.licenses.isModuleEnabled(tenantId, moduleKey);
+    const moduleEnabled = await this.licenses.isModuleEnabled(
+      tenantId,
+      moduleKey,
+    );
     if (!moduleEnabled) {
       return {
         effect: 'deny',
@@ -134,20 +166,32 @@ export class AuthorizationService {
     );
 
     if (hasRolePermission) {
-      return { effect: 'allow', reason: 'role_grant', matchedPolicy: 'rbac.tenant' };
+      return {
+        effect: 'allow',
+        reason: 'role_grant',
+        matchedPolicy: 'rbac.tenant',
+      };
     }
 
     if (hadAllow) {
       // Policy pluggable dio allow y no hay deny. Usamos ese resultado.
-      return { effect: 'allow', reason: 'policy_grant', matchedPolicy: 'policy' };
+      return {
+        effect: 'allow',
+        reason: 'policy_grant',
+        matchedPolicy: 'policy',
+      };
     }
 
-    return { effect: 'deny', reason: 'no_matching_role', matchedPolicy: 'rbac.tenant' };
+    return {
+      effect: 'deny',
+      reason: 'no_matching_role',
+      matchedPolicy: 'rbac.tenant',
+    };
   }
 
   async listPermissions(subject: AuthorizationSubject): Promise<string[]> {
     if (!subject.userId) return [];
-    const rows = await this.ds.query(
+    const rows = await this.ds.query<Array<{ key: string }>>(
       `
       SELECT DISTINCT p.key
       FROM permissions p
@@ -171,14 +215,14 @@ export class AuthorizationService {
       `,
       [subject.userId, subject.tenantId],
     );
-    return rows.map((r: { key: string }) => r.key);
+    return rows.map((r) => r.key);
   }
 
   private async userHasPlatformPermission(
     userId: string,
     permissionKey: string,
   ): Promise<boolean> {
-    const rows = await this.ds.query(
+    const rows = await this.ds.query<unknown[]>(
       `
       SELECT 1
       FROM platform_user_roles pur
@@ -197,7 +241,7 @@ export class AuthorizationService {
     tenantId: string,
     permissionKey: string,
   ): Promise<boolean> {
-    const rows = await this.ds.query(
+    const rows = await this.ds.query<unknown[]>(
       `
       SELECT 1
       FROM user_roles ur

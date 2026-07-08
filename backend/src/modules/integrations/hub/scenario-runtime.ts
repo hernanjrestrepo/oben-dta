@@ -23,7 +23,9 @@ export async function applyScenario(
   if (behavior === 'timeout') {
     const wait = Math.max(scenario.latencyMs ?? 30000, 5000);
     await sleep(wait);
-    throw new Error(scenario.errorMessage ?? 'timeout: sistema externo tardó demasiado');
+    throw new Error(
+      scenario.errorMessage ?? 'timeout: sistema externo tardó demasiado',
+    );
   }
 
   // Errores con ratio: solo dispara si rng() < errorRatio
@@ -34,15 +36,18 @@ export async function applyScenario(
   switch (behavior) {
     case 'network_error':
       throw new Error(
-        scenario.errorMessage ?? 'network_error: conexión rechazada por el sistema externo',
+        scenario.errorMessage ??
+          'network_error: conexión rechazada por el sistema externo',
       );
     case 'auth_error':
       throw new Error(
-        scenario.errorMessage ?? 'auth_error: credenciales inválidas o expiradas',
+        scenario.errorMessage ??
+          'auth_error: credenciales inválidas o expiradas',
       );
     case 'authz_error':
       throw new Error(
-        scenario.errorMessage ?? 'authz_error: sin permisos para esta operación',
+        scenario.errorMessage ??
+          'authz_error: sin permisos para esta operación',
       );
     case 'rate_limited':
       throw new Error(
@@ -58,7 +63,9 @@ export async function applyScenario(
       );
     case 'not_found':
       // No lanza — devuelve señal para que el handler responda vacío.
-      throw new NotFoundSignal(scenario.errorMessage ?? 'not_found: entidad no existe');
+      throw new NotFoundSignal(
+        scenario.errorMessage ?? 'not_found: entidad no existe',
+      );
     case 'latency':
       // Ya se aplicó la latencia arriba.
       return;

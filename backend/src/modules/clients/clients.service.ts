@@ -25,7 +25,7 @@ export class ClientsService {
   ) {}
 
   private tenantWhere<T extends object>(where: T): T & { tenantId: string } {
-    return { ...where, tenantId: this.ctx.tenantId } as T & { tenantId: string };
+    return { ...where, tenantId: this.ctx.tenantId };
   }
 
   async create(dto: CreateClientDto, userId?: string): Promise<Client> {
@@ -33,7 +33,9 @@ export class ClientsService {
       where: this.tenantWhere({ clientId: dto.clientId }),
     });
     if (existing) {
-      throw new ConflictException(`El cliente con ID ${dto.clientId} ya existe`);
+      throw new ConflictException(
+        `El cliente con ID ${dto.clientId} ya existe`,
+      );
     }
 
     const client = this.clientRepository.create({
@@ -56,7 +58,7 @@ export class ClientsService {
     const where = isAdmin
       ? { tenantId }
       : [
-          { tenantId, createdBy: requestingUser!.sub },
+          { tenantId, createdBy: requestingUser.sub },
           { tenantId, createdBy: IsNull() },
         ];
     return this.clientRepository.find({
@@ -114,7 +116,10 @@ export class ClientsService {
     );
   }
 
-  private assertOwnership(client: Client, requestingUser?: RequestingUser): void {
+  private assertOwnership(
+    client: Client,
+    requestingUser?: RequestingUser,
+  ): void {
     if (!requestingUser || requestingUser.role === UserRole.ADMIN) return;
     if (client.createdBy && client.createdBy !== requestingUser.sub) {
       throw new ForbiddenException(

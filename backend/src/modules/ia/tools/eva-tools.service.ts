@@ -260,27 +260,60 @@ export class EvaToolsService {
   // ---------- Tools de integración (SOLO LECTURA, Integration Hub) ----------
   async getVendors(date: string) {
     const { result, vendors } = await this.integrations.getVendors(date);
-    return { ok: result.ok, state: result.state, count: vendors.length, vendors, error: result.error };
+    return {
+      ok: result.ok,
+      state: result.state,
+      count: vendors.length,
+      vendors,
+      error: result.error,
+    };
   }
 
   async getItems(date: string) {
     const { result, items } = await this.integrations.getItems(date);
-    return { ok: result.ok, state: result.state, count: items.length, items, error: result.error };
+    return {
+      ok: result.ok,
+      state: result.state,
+      count: items.length,
+      items,
+      error: result.error,
+    };
   }
 
   async getPurchaseOrders(date: string) {
-    const { result, purchaseOrders } = await this.integrations.getPurchaseOrders(date);
-    return { ok: result.ok, state: result.state, count: purchaseOrders.length, purchaseOrders, error: result.error };
+    const { result, purchaseOrders } =
+      await this.integrations.getPurchaseOrders(date);
+    return {
+      ok: result.ok,
+      state: result.state,
+      count: purchaseOrders.length,
+      purchaseOrders,
+      error: result.error,
+    };
   }
 
   async getReceipts(date?: string, poNumber?: string) {
-    const { result, receipts } = await this.integrations.getReceipts({ date, poNumber });
-    return { ok: result.ok, state: result.state, count: receipts.length, receipts, error: result.error };
+    const { result, receipts } = await this.integrations.getReceipts({
+      date,
+      poNumber,
+    });
+    return {
+      ok: result.ok,
+      state: result.state,
+      count: receipts.length,
+      receipts,
+      error: result.error,
+    };
   }
 
   async runSuiteQL(query: string) {
     const result = await this.integrations.runSuiteQL(query);
-    return { ok: result.ok, state: result.state, data: result.data, error: result.error };
+    return {
+      ok: result.ok,
+      state: result.state,
+      data: result.data,
+      error: result.error,
+    };
   }
 
   // ---------- Despachador para el orquestador LLM (Fase 3) ----------

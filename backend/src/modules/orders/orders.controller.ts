@@ -42,7 +42,11 @@ export class OrdersController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ): Promise<Order[]> {
-    return this.ordersService.findAll(requestingUser, page ? +page : 1, limit ? +limit : 50);
+    return this.ordersService.findAll(
+      requestingUser,
+      page ? +page : 1,
+      limit ? +limit : 50,
+    );
   }
 
   @Get(':id')

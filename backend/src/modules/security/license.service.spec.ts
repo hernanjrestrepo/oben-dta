@@ -15,17 +15,16 @@ function makeService(overrides?: {
 }) {
   const subs = repo();
   const pm = repo(
-    (overrides?.planModules ?? []).map((moduleKey) => ({ moduleKey, planId: 'p1' })),
+    (overrides?.planModules ?? []).map((moduleKey) => ({
+      moduleKey,
+      planId: 'p1',
+    })),
   );
   const flags = repo(overrides?.flags ?? []);
 
   if (overrides?.sub) subs.findOne.mockResolvedValue(overrides.sub);
 
-  return new LicenseService(
-    subs as never,
-    pm as never,
-    flags as never,
-  );
+  return new LicenseService(subs as never, pm as never, flags as never);
 }
 
 describe('LicenseService', () => {

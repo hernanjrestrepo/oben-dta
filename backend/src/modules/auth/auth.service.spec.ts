@@ -32,7 +32,11 @@ function makeRepos(user: ReturnType<typeof makeUser> | null) {
     create: jest.fn((partial) => partial),
   };
   const tenants = {
-    findOne: jest.fn(async () => ({ id: 't1', slug: 'oben', status: TenantStatus.ACTIVE })),
+    findOne: jest.fn(async () => ({
+      id: 't1',
+      slug: 'oben',
+      status: TenantStatus.ACTIVE,
+    })),
   };
   return { users, tenants, store };
 }
@@ -57,26 +61,54 @@ function makeJwt() {
 describe('AuthService', () => {
   it('login exitoso resetea intentos fallidos previos', async () => {
     const { users, tenants } = makeRepos(makeUser({ failedLoginAttempts: 3 }));
-    const svc = new AuthService(users as never, tenants as never, makeJwt() as never);
-    const res = await svc.login({ email: 'test@oben.com', password: 'CorrectPass123!', tenantSlug: 'oben' });
+    const svc = new AuthService(
+      users as never,
+      tenants as never,
+      makeJwt() as never,
+    );
+    const res = await svc.login({
+      email: 'test@oben.com',
+      password: 'CorrectPass123!',
+      tenantSlug: 'oben',
+    });
     expect(res.access_token).toBeTruthy();
-    expect(users.save).toHaveBeenCalledWith(expect.objectContaining({ failedLoginAttempts: 0, lockedUntil: null }));
+    expect(users.save).toHaveBeenCalledWith(
+      expect.objectContaining({ failedLoginAttempts: 0, lockedUntil: null }),
+    );
   });
 
   it('password incorrecta incrementa failedLoginAttempts', async () => {
     const { users, tenants } = makeRepos(makeUser());
-    const svc = new AuthService(users as never, tenants as never, makeJwt() as never);
+    const svc = new AuthService(
+      users as never,
+      tenants as never,
+      makeJwt() as never,
+    );
     await expect(
-      svc.login({ email: 'test@oben.com', password: 'wrong', tenantSlug: 'oben' }),
+      svc.login({
+        email: 'test@oben.com',
+        password: 'wrong',
+        tenantSlug: 'oben',
+      }),
     ).rejects.toThrow(UnauthorizedException);
-    expect(users.save).toHaveBeenCalledWith(expect.objectContaining({ failedLoginAttempts: 1 }));
+    expect(users.save).toHaveBeenCalledWith(
+      expect.objectContaining({ failedLoginAttempts: 1 }),
+    );
   });
 
   it('el 5º intento fallido bloquea la cuenta temporalmente', async () => {
     const { users, tenants } = makeRepos(makeUser({ failedLoginAttempts: 4 }));
-    const svc = new AuthService(users as never, tenants as never, makeJwt() as never);
+    const svc = new AuthService(
+      users as never,
+      tenants as never,
+      makeJwt() as never,
+    );
     await expect(
-      svc.login({ email: 'test@oben.com', password: 'wrong', tenantSlug: 'oben' }),
+      svc.login({
+        email: 'test@oben.com',
+        password: 'wrong',
+        tenantSlug: 'oben',
+      }),
     ).rejects.toThrow(UnauthorizedException);
     const saved = users.save.mock.calls[0][0];
     expect(saved.failedLoginAttempts).toBe(0);
@@ -85,17 +117,37 @@ describe('AuthService', () => {
   });
 
   it('cuenta bloqueada rechaza incluso la contraseña correcta', async () => {
-    const { users, tenants } = makeRepos(makeUser({ lockedUntil: new Date(Date.now() + 60_000) }));
-    const svc = new AuthService(users as never, tenants as never, makeJwt() as never);
+    const { users, tenants } = makeRepos(
+      makeUser({ lockedUntil: new Date(Date.now() + 60_000) }),
+    );
+    const svc = new AuthService(
+      users as never,
+      tenants as never,
+      makeJwt() as never,
+    );
     await expect(
-      svc.login({ email: 'test@oben.com', password: 'CorrectPass123!', tenantSlug: 'oben' }),
+      svc.login({
+        email: 'test@oben.com',
+        password: 'CorrectPass123!',
+        tenantSlug: 'oben',
+      }),
     ).rejects.toThrow(/bloqueada temporalmente/);
   });
 
   it('bloqueo vencido permite login normalmente', async () => {
-    const { users, tenants } = makeRepos(makeUser({ lockedUntil: new Date(Date.now() - 1000) }));
-    const svc = new AuthService(users as never, tenants as never, makeJwt() as never);
-    const res = await svc.login({ email: 'test@oben.com', password: 'CorrectPass123!', tenantSlug: 'oben' });
+    const { users, tenants } = makeRepos(
+      makeUser({ lockedUntil: new Date(Date.now() - 1000) }),
+    );
+    const svc = new AuthService(
+      users as never,
+      tenants as never,
+      makeJwt() as never,
+    );
+    const res = await svc.login({
+      email: 'test@oben.com',
+      password: 'CorrectPass123!',
+      tenantSlug: 'oben',
+    });
     expect(res.access_token).toBeTruthy();
   });
 
@@ -103,18 +155,28 @@ describe('AuthService', () => {
     const { users, tenants } = makeRepos(makeUser());
     const jwt = makeJwt();
     const svc = new AuthService(users as never, tenants as never, jwt as never);
-    const login = await svc.login({ email: 'test@oben.com', password: 'CorrectPass123!', tenantSlug: 'oben' });
+    const login = await svc.login({
+      email: 'test@oben.com',
+      password: 'CorrectPass123!',
+      tenantSlug: 'oben',
+    });
 
     const refreshed = await svc.refresh(login.refresh_token);
     expect(refreshed.access_token).not.toBe(login.access_token);
-    expect(users.save).toHaveBeenCalledWith(expect.objectContaining({ tokenVersion: 1 }));
+    expect(users.save).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenVersion: 1 }),
+    );
   });
 
   it('refresh() rechaza un token ya rotado (reutilización = revocado)', async () => {
     const { users, tenants } = makeRepos(makeUser());
     const jwt = makeJwt();
     const svc = new AuthService(users as never, tenants as never, jwt as never);
-    const login = await svc.login({ email: 'test@oben.com', password: 'CorrectPass123!', tenantSlug: 'oben' });
+    const login = await svc.login({
+      email: 'test@oben.com',
+      password: 'CorrectPass123!',
+      tenantSlug: 'oben',
+    });
 
     await svc.refresh(login.refresh_token);
     // Reutilizar el MISMO refresh token original (ya rotado) debe fallar.
@@ -125,7 +187,11 @@ describe('AuthService', () => {
     const { users, tenants } = makeRepos(makeUser());
     const jwt = makeJwt();
     const svc = new AuthService(users as never, tenants as never, jwt as never);
-    const login = await svc.login({ email: 'test@oben.com', password: 'CorrectPass123!', tenantSlug: 'oben' });
+    const login = await svc.login({
+      email: 'test@oben.com',
+      password: 'CorrectPass123!',
+      tenantSlug: 'oben',
+    });
 
     await svc.logout('u1');
     await expect(svc.refresh(login.refresh_token)).rejects.toThrow(/revocado/);

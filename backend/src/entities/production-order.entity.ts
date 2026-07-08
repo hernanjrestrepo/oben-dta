@@ -33,7 +33,10 @@ export enum ProductionPriority {
 }
 
 @Entity('production_orders')
-@Unique('uq_production_orders_tenant_number', ['tenantId', 'productionOrderNumber'])
+@Unique('uq_production_orders_tenant_number', [
+  'tenantId',
+  'productionOrderNumber',
+])
 export class ProductionOrder extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

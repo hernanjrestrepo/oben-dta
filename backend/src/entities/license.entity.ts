@@ -70,7 +70,11 @@ export class License {
   @Column({ name: 'signing_key_id', length: 32 })
   signingKeyId: string;
 
-  @Column({ name: 'last_renewal_request_at', type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'last_renewal_request_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   lastRenewalRequestAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })

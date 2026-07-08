@@ -131,10 +131,13 @@ export const EVA_INTEGRATION_TOOLS = [
     type: 'function',
     function: {
       name: 'GetVendors',
-      description: 'Lista proveedores desde VETA por fecha de importación (solo lectura).',
+      description:
+        'Lista proveedores desde VETA por fecha de importación (solo lectura).',
       parameters: {
         type: 'object',
-        properties: { date: { type: 'string', description: 'Fecha YYYY-MM-DD' } },
+        properties: {
+          date: { type: 'string', description: 'Fecha YYYY-MM-DD' },
+        },
         required: ['date'],
       },
     },
@@ -143,10 +146,13 @@ export const EVA_INTEGRATION_TOOLS = [
     type: 'function',
     function: {
       name: 'GetItems',
-      description: 'Lista artículos desde VETA por fecha de importación (solo lectura).',
+      description:
+        'Lista artículos desde VETA por fecha de importación (solo lectura).',
       parameters: {
         type: 'object',
-        properties: { date: { type: 'string', description: 'Fecha YYYY-MM-DD' } },
+        properties: {
+          date: { type: 'string', description: 'Fecha YYYY-MM-DD' },
+        },
         required: ['date'],
       },
     },
@@ -155,10 +161,13 @@ export const EVA_INTEGRATION_TOOLS = [
     type: 'function',
     function: {
       name: 'GetPurchaseOrders',
-      description: 'Lista órdenes de compra desde VETA por fecha (solo lectura).',
+      description:
+        'Lista órdenes de compra desde VETA por fecha (solo lectura).',
       parameters: {
         type: 'object',
-        properties: { date: { type: 'string', description: 'Fecha YYYY-MM-DD' } },
+        properties: {
+          date: { type: 'string', description: 'Fecha YYYY-MM-DD' },
+        },
         required: ['date'],
       },
     },
@@ -167,12 +176,16 @@ export const EVA_INTEGRATION_TOOLS = [
     type: 'function',
     function: {
       name: 'GetReceipts',
-      description: 'Lista recepciones de mercancía desde VETA por fecha o por número de OC (solo lectura).',
+      description:
+        'Lista recepciones de mercancía desde VETA por fecha o por número de OC (solo lectura).',
       parameters: {
         type: 'object',
         properties: {
           date: { type: 'string', description: 'Fecha YYYY-MM-DD (opcional)' },
-          poNumber: { type: 'string', description: 'Número de orden de compra (opcional)' },
+          poNumber: {
+            type: 'string',
+            description: 'Número de orden de compra (opcional)',
+          },
         },
       },
     },
@@ -181,10 +194,13 @@ export const EVA_INTEGRATION_TOOLS = [
     type: 'function',
     function: {
       name: 'RunSuiteQL',
-      description: 'Ejecuta una consulta SuiteQL de SOLO LECTURA (SELECT) en NetSuite.',
+      description:
+        'Ejecuta una consulta SuiteQL de SOLO LECTURA (SELECT) en NetSuite.',
       parameters: {
         type: 'object',
-        properties: { query: { type: 'string', description: 'Consulta SuiteQL SELECT' } },
+        properties: {
+          query: { type: 'string', description: 'Consulta SuiteQL SELECT' },
+        },
         required: ['query'],
       },
     },

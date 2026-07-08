@@ -48,5 +48,7 @@ export interface AuthorizationDecision {
  */
 export interface AuthorizationPolicy {
   readonly name: string;
-  evaluate(request: AuthorizationRequest): Promise<AuthorizationDecision | null>;
+  evaluate(
+    request: AuthorizationRequest,
+  ): Promise<AuthorizationDecision | null>;
 }

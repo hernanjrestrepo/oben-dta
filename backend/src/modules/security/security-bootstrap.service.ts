@@ -30,11 +30,15 @@ export class SecurityBootstrapService implements OnModuleInit {
   private readonly logger = new Logger(SecurityBootstrapService.name);
 
   constructor(
-    @InjectRepository(ModuleCatalog) private readonly modules: Repository<ModuleCatalog>,
-    @InjectRepository(Permission) private readonly permissions: Repository<Permission>,
-    @InjectRepository(PlatformRole) private readonly platformRoles: Repository<PlatformRole>,
+    @InjectRepository(ModuleCatalog)
+    private readonly modules: Repository<ModuleCatalog>,
+    @InjectRepository(Permission)
+    private readonly permissions: Repository<Permission>,
+    @InjectRepository(PlatformRole)
+    private readonly platformRoles: Repository<PlatformRole>,
     @InjectRepository(Plan) private readonly plans: Repository<Plan>,
-    @InjectRepository(PlanModule) private readonly planModules: Repository<PlanModule>,
+    @InjectRepository(PlanModule)
+    private readonly planModules: Repository<PlanModule>,
     @InjectRepository(Role) private readonly tenantRoles: Repository<Role>,
   ) {}
 
@@ -56,20 +60,24 @@ export class SecurityBootstrapService implements OnModuleInit {
         existing.category = m.category;
         await this.modules.save(existing);
       } else {
-        await this.modules.save(this.modules.create({
-          key: m.key,
-          name: m.name,
-          description: m.description,
-          category: m.category,
-          isActive: true,
-        }));
+        await this.modules.save(
+          this.modules.create({
+            key: m.key,
+            name: m.name,
+            description: m.description,
+            category: m.category,
+            isActive: true,
+          }),
+        );
       }
     }
   }
 
   private async upsertPermissions(): Promise<void> {
     for (const p of SEED_PERMISSIONS) {
-      const existing = await this.permissions.findOne({ where: { key: p.key } });
+      const existing = await this.permissions.findOne({
+        where: { key: p.key },
+      });
       if (existing) {
         existing.name = p.name;
         existing.description = p.description ?? null;
@@ -78,14 +86,16 @@ export class SecurityBootstrapService implements OnModuleInit {
         existing.isPlatform = !!p.isPlatform;
         await this.permissions.save(existing);
       } else {
-        await this.permissions.save(this.permissions.create({
-          key: p.key,
-          moduleKey: p.moduleKey,
-          action: p.action,
-          name: p.name,
-          description: p.description ?? null,
-          isPlatform: !!p.isPlatform,
-        }));
+        await this.permissions.save(
+          this.permissions.create({
+            key: p.key,
+            moduleKey: p.moduleKey,
+            action: p.action,
+            name: p.name,
+            description: p.description ?? null,
+            isPlatform: !!p.isPlatform,
+          }),
+        );
       }
     }
   }
@@ -102,16 +112,18 @@ export class SecurityBootstrapService implements OnModuleInit {
         existing.maxStorageGb = p.maxStorageGb;
         await this.plans.save(existing);
       } else {
-        await this.plans.save(this.plans.create({
-          key: p.key,
-          name: p.name,
-          description: p.description,
-          priceMonthly: p.priceMonthly,
-          currency: p.currency,
-          maxUsers: p.maxUsers,
-          maxStorageGb: p.maxStorageGb,
-          isActive: true,
-        }));
+        await this.plans.save(
+          this.plans.create({
+            key: p.key,
+            name: p.name,
+            description: p.description,
+            priceMonthly: p.priceMonthly,
+            currency: p.currency,
+            maxUsers: p.maxUsers,
+            maxStorageGb: p.maxStorageGb,
+            isActive: true,
+          }),
+        );
       }
     }
   }
@@ -125,10 +137,12 @@ export class SecurityBootstrapService implements OnModuleInit {
           where: { planId: plan.id, moduleKey },
         });
         if (!exists) {
-          await this.planModules.save(this.planModules.create({
-            planId: plan.id,
-            moduleKey,
-          }));
+          await this.planModules.save(
+            this.planModules.create({
+              planId: plan.id,
+              moduleKey,
+            }),
+          );
         }
       }
     }
@@ -154,7 +168,9 @@ export class SecurityBootstrapService implements OnModuleInit {
       }
       const perms = await this.permissions
         .createQueryBuilder('p')
-        .where('p.key IN (:...keys)', { keys: r.permissions.length > 0 ? r.permissions : ['__none__'] })
+        .where('p.key IN (:...keys)', {
+          keys: r.permissions.length > 0 ? r.permissions : ['__none__'],
+        })
         .getMany();
       role.permissions = perms;
       await this.platformRoles.save(role);
@@ -174,7 +190,9 @@ export class SecurityBootstrapService implements OnModuleInit {
       const permKeys = r.permissions;
       const perms = await this.permissions
         .createQueryBuilder('p')
-        .where('p.key IN (:...keys)', { keys: permKeys.length > 0 ? permKeys : ['__none__'] })
+        .where('p.key IN (:...keys)', {
+          keys: permKeys.length > 0 ? permKeys : ['__none__'],
+        })
         .getMany();
       if (!role) {
         role = this.tenantRoles.create({

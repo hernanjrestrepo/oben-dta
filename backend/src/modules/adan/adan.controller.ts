@@ -76,7 +76,9 @@ export class AdanController {
     @CurrentUser('sub') userId: string,
   ) {
     if (!file) {
-      throw new BadRequestException('No se recibió ningún archivo (campo file)');
+      throw new BadRequestException(
+        'No se recibió ningún archivo (campo file)',
+      );
     }
     const fileType = (file.originalname.split('.').pop() || '').toLowerCase();
     return this.adan.ingest(file.originalname, fileType, file.buffer, userId);

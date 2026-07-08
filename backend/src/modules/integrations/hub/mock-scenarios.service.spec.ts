@@ -13,7 +13,9 @@ function makeService(setup: { existing?: unknown } = {}) {
   };
   const ctx = new TenantContext();
   ctx.setContext('t1', 'actor', false);
-  const cache = { invalidate: jest.fn() } as unknown as PersistentScenarioProvider;
+  const cache = {
+    invalidate: jest.fn(),
+  } as unknown as PersistentScenarioProvider;
   const svc = new MockScenariosService(repo as never, ctx, cache);
   return { svc, repo, cache };
 }
@@ -22,14 +24,22 @@ describe('MockScenariosService', () => {
   it('rechaza system inválido', async () => {
     const { svc } = makeService();
     await expect(
-      svc.upsert({ system: 'inexistente' as never, operation: 'x', behavior: 'happy_path' }),
+      svc.upsert({
+        system: 'inexistente' as never,
+        operation: 'x',
+        behavior: 'happy_path',
+      }),
     ).rejects.toThrow(BadRequestException);
   });
 
   it('rechaza behavior inválido', async () => {
     const { svc } = makeService();
     await expect(
-      svc.upsert({ system: 'oracle', operation: 'x', behavior: 'nope' as never }),
+      svc.upsert({
+        system: 'oracle',
+        operation: 'x',
+        behavior: 'nope' as never,
+      }),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -59,8 +69,12 @@ describe('MockScenariosService', () => {
 
   it('upsert actualiza escenario existente', async () => {
     const existing = {
-      id: 's1', tenantId: 't1', system: 'shipping', operation: 'tracking.get',
-      behavior: 'latency', latencyMs: 500,
+      id: 's1',
+      tenantId: 't1',
+      system: 'shipping',
+      operation: 'tracking.get',
+      behavior: 'latency',
+      latencyMs: 500,
     };
     const { svc } = makeService({ existing });
     const saved = await svc.upsert({
@@ -75,13 +89,13 @@ describe('MockScenariosService', () => {
 
   it('remove sin fila lanza NotFound', async () => {
     const { svc, repo } = makeService();
-    (repo.delete as jest.Mock).mockResolvedValueOnce({ affected: 0 });
+    repo.delete.mockResolvedValueOnce({ affected: 0 });
     await expect(svc.remove('oracle', 'x')).rejects.toThrow(NotFoundException);
   });
 
   it('resetAll invalida caché de tenant y devuelve deleted', async () => {
     const { svc, cache, repo } = makeService();
-    (repo.delete as jest.Mock).mockResolvedValueOnce({ affected: 3 });
+    repo.delete.mockResolvedValueOnce({ affected: 3 });
     const r = await svc.resetAll();
     expect(r).toEqual({ deleted: 3 });
     expect(cache.invalidate).toHaveBeenCalledWith('t1');

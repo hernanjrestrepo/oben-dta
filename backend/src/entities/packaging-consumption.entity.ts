@@ -30,7 +30,10 @@ export enum PackagingConsumptionStatus {
 }
 
 @Entity('packaging_consumptions')
-@Unique('uq_packaging_consumption_tenant_number', ['tenantId', 'consumptionNumber'])
+@Unique('uq_packaging_consumption_tenant_number', [
+  'tenantId',
+  'consumptionNumber',
+])
 export class PackagingConsumption extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -29,7 +29,10 @@ export enum RawMaterialConsumptionStatus {
 }
 
 @Entity('raw_material_consumptions')
-@Unique('uq_raw_material_consumption_tenant_number', ['tenantId', 'consumptionNumber'])
+@Unique('uq_raw_material_consumption_tenant_number', [
+  'tenantId',
+  'consumptionNumber',
+])
 export class RawMaterialConsumption extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

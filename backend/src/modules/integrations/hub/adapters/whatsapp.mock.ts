@@ -11,7 +11,17 @@ import { SCENARIO_PROVIDER, ScenarioProvider } from '../scenario.types';
 export class WhatsAppMockAdapter extends MockAdapterBase {
   readonly system = 'whatsapp';
 
-  private readonly log = new Map<string, Array<{ id: string; to: string; template?: string; text?: string; sentAt: string; deliveryStatus: string }>>();
+  private readonly log = new Map<
+    string,
+    Array<{
+      id: string;
+      to: string;
+      template?: string;
+      text?: string;
+      sentAt: string;
+      deliveryStatus: string;
+    }>
+  >();
 
   constructor(@Inject(SCENARIO_PROVIDER) scenarios: ScenarioProvider) {
     super({}, scenarios);
@@ -19,17 +29,35 @@ export class WhatsAppMockAdapter extends MockAdapterBase {
 
   capabilities(): AdapterCapability[] {
     return [
-      { operation: 'send.text', method: 'write', description: 'Enviar texto libre' },
-      { operation: 'send.template', method: 'write', description: 'Enviar plantilla aprobada' },
-      { operation: 'log.list', method: 'read', description: 'Log de mensajes por tenant' },
+      {
+        operation: 'send.text',
+        method: 'write',
+        description: 'Enviar texto libre',
+      },
+      {
+        operation: 'send.template',
+        method: 'write',
+        description: 'Enviar plantilla aprobada',
+      },
+      {
+        operation: 'log.list',
+        method: 'read',
+        description: 'Log de mensajes por tenant',
+      },
       { operation: 'log.clear', method: 'write', description: 'Vaciar log' },
     ];
   }
 
   protected operationHandlers() {
     return {
-      'send.text': this.wrap((args, ctx) => this.sendText(args, ctx.tenantId), 'send.text'),
-      'send.template': this.wrap((args, ctx) => this.sendTemplate(args, ctx.tenantId), 'send.template'),
+      'send.text': this.wrap(
+        (args, ctx) => this.sendText(args, ctx.tenantId),
+        'send.text',
+      ),
+      'send.template': this.wrap(
+        (args, ctx) => this.sendTemplate(args, ctx.tenantId),
+        'send.template',
+      ),
       'log.list': this.wrap((_, ctx) => this.list(ctx.tenantId), 'log.list'),
       'log.clear': this.wrap((_, ctx) => this.clear(ctx.tenantId), 'log.clear'),
     };

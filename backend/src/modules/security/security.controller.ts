@@ -100,7 +100,10 @@ export class SecurityController {
 
   @Post('users/roles')
   @RequirePermission('users.update')
-  assignRole(@Body() dto: AssignUserRoleDto, @Req() req: { user: { sub: string } }) {
+  assignRole(
+    @Body() dto: AssignUserRoleDto,
+    @Req() req: { user: { sub: string } },
+  ) {
     return this.roles.assignRole(dto, req.user.sub);
   }
 
@@ -111,7 +114,9 @@ export class SecurityController {
   }
 
   @Get('me/permissions')
-  async myPermissions(@Req() req: { user: { sub: string; isSuperAdmin: boolean } }) {
+  async myPermissions(
+    @Req() req: { user: { sub: string; isSuperAdmin: boolean } },
+  ) {
     const perms = await this.authz.listPermissions({
       userId: req.user.sub,
       tenantId: this.ctx.tenantIdOrNull,

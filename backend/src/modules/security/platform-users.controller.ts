@@ -1,9 +1,22 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './permissions.guard';
 import { RequirePermission } from './require-permission.decorator';
 import { PlatformUsersService } from './platform-users.service';
-import { CreatePlatformUserDto, UpdatePlatformUserDto } from './dto/security.dto';
+import {
+  CreatePlatformUserDto,
+  UpdatePlatformUserDto,
+} from './dto/security.dto';
 
 @Controller('platform/users')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -24,7 +37,10 @@ export class PlatformUsersController {
 
   @Post()
   @RequirePermission('platform.users.manage')
-  create(@Body() dto: CreatePlatformUserDto, @Req() req: { user: { sub: string } }) {
+  create(
+    @Body() dto: CreatePlatformUserDto,
+    @Req() req: { user: { sub: string } },
+  ) {
     return this.platformUsers.create(dto, req.user.sub);
   }
 

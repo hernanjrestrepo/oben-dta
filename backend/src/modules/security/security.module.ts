@@ -59,7 +59,9 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'default-jwt-secret-change-in-production',
+        secret:
+          config.get<string>('JWT_SECRET') ||
+          'default-jwt-secret-change-in-production',
         signOptions: { expiresIn: '15m' },
       }),
     }),

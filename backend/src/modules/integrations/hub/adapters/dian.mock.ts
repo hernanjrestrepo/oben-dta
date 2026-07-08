@@ -23,27 +23,51 @@ export class DianMockAdapter extends MockAdapterBase {
 
   capabilities(): AdapterCapability[] {
     return [
-      { operation: 'invoice.send', method: 'write', description: 'Enviar factura electrónica a DIAN' },
-      { operation: 'invoice.status', method: 'read', description: 'Consultar estado por CUFE' },
-      { operation: 'creditNote.send', method: 'write', description: 'Enviar nota crédito' },
+      {
+        operation: 'invoice.send',
+        method: 'write',
+        description: 'Enviar factura electrónica a DIAN',
+      },
+      {
+        operation: 'invoice.status',
+        method: 'read',
+        description: 'Consultar estado por CUFE',
+      },
+      {
+        operation: 'creditNote.send',
+        method: 'write',
+        description: 'Enviar nota crédito',
+      },
     ];
   }
 
   protected operationHandlers() {
     return {
-      'invoice.send': this.wrap((args) => this.invoiceSend(args), 'invoice.send'),
-      'invoice.status': this.wrap((args) => this.invoiceStatus(args), 'invoice.status'),
-      'creditNote.send': this.wrap((args) => this.creditNoteSend(args), 'creditNote.send'),
+      'invoice.send': this.wrap(
+        (args) => this.invoiceSend(args),
+        'invoice.send',
+      ),
+      'invoice.status': this.wrap(
+        (args) => this.invoiceStatus(args),
+        'invoice.status',
+      ),
+      'creditNote.send': this.wrap(
+        (args) => this.creditNoteSend(args),
+        'creditNote.send',
+      ),
     };
   }
 
   private invoiceSend(args: Record<string, unknown>) {
     const invoiceNumber = String(args.invoiceNumber ?? '');
     const totalAmount = Number(args.totalAmount ?? 0);
-    if (!invoiceNumber) throw new Error('BUSINESS_ERROR: invoiceNumber requerido');
+    if (!invoiceNumber)
+      throw new Error('BUSINESS_ERROR: invoiceNumber requerido');
     if (totalAmount <= 0) throw new Error('BUSINESS_ERROR: totalAmount > 0');
     const cufe = createHash('sha256')
-      .update(`${invoiceNumber}|${totalAmount}|${new Date().toISOString().slice(0, 10)}`)
+      .update(
+        `${invoiceNumber}|${totalAmount}|${new Date().toISOString().slice(0, 10)}`,
+      )
       .digest('hex');
     return {
       invoiceNumber,

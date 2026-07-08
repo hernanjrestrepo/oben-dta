@@ -34,7 +34,7 @@ export class OrdersService {
   ) {}
 
   private tenantWhere<T extends object>(where: T): T & { tenantId: string } {
-    return { ...where, tenantId: this.ctx.tenantId } as T & { tenantId: string };
+    return { ...where, tenantId: this.ctx.tenantId };
   }
 
   async create(dto: CreateOrderDto, userId?: string): Promise<Order> {
@@ -43,7 +43,8 @@ export class OrdersService {
     const client = await this.clientRepository.findOne({
       where: { id: dto.clientId, tenantId },
     });
-    if (!client) throw new NotFoundException(`Cliente ${dto.clientId} no encontrado`);
+    if (!client)
+      throw new NotFoundException(`Cliente ${dto.clientId} no encontrado`);
 
     const order = this.orderRepository.create({
       orderNumber: dto.orderNumber,
@@ -65,7 +66,9 @@ export class OrdersService {
         where: { id: itemDto.productId, tenantId },
       });
       if (!product) {
-        throw new NotFoundException(`Producto ${itemDto.productId} no encontrado`);
+        throw new NotFoundException(
+          `Producto ${itemDto.productId} no encontrado`,
+        );
       }
       const item = this.orderItemRepository.create({
         order: savedOrder,
@@ -90,7 +93,9 @@ export class OrdersService {
       relations: ['client', 'items', 'items.product'],
     });
     if (!result) {
-      throw new NotFoundException(`Orden ${savedOrder.id} no encontrada después de crear`);
+      throw new NotFoundException(
+        `Orden ${savedOrder.id} no encontrada después de crear`,
+      );
     }
     return result;
   }
@@ -105,7 +110,7 @@ export class OrdersService {
     const where = isAdmin
       ? { tenantId }
       : [
-          { tenantId, createdBy: requestingUser!.sub },
+          { tenantId, createdBy: requestingUser.sub },
           { tenantId, createdBy: IsNull() },
         ];
     return this.orderRepository.find({
@@ -150,7 +155,10 @@ export class OrdersService {
 
   private getValidTransitions(current: OrderStatus): OrderStatus[] {
     const transitions: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.DRAFT]: [OrderStatus.PENDING_VALIDATION, OrderStatus.CANCELLED],
+      [OrderStatus.DRAFT]: [
+        OrderStatus.PENDING_VALIDATION,
+        OrderStatus.CANCELLED,
+      ],
       [OrderStatus.PENDING_VALIDATION]: [
         OrderStatus.CONFIRMED,
         OrderStatus.BLOCKED,
@@ -168,7 +176,10 @@ export class OrdersService {
       [OrderStatus.IN_PRODUCTION]: [OrderStatus.READY_FOR_DELIVERY],
       [OrderStatus.READY_FOR_DELIVERY]: [OrderStatus.DELIVERED],
       [OrderStatus.DELIVERED]: [],
-      [OrderStatus.BLOCKED]: [OrderStatus.PENDING_VALIDATION, OrderStatus.CANCELLED],
+      [OrderStatus.BLOCKED]: [
+        OrderStatus.PENDING_VALIDATION,
+        OrderStatus.CANCELLED,
+      ],
       [OrderStatus.CANCELLED]: [],
     };
     return transitions[current] || [];
@@ -177,13 +188,16 @@ export class OrdersService {
   async remove(id: string, requestingUser?: RequestingUser): Promise<void> {
     await this.findOne(id, requestingUser);
     const result = await this.orderRepository.delete(this.tenantWhere({ id }));
-    if (result.affected === 0) throw new NotFoundException(`Orden ${id} no encontrada`);
+    if (result.affected === 0)
+      throw new NotFoundException(`Orden ${id} no encontrada`);
   }
 
   private assertOwnership(order: Order, requestingUser?: RequestingUser): void {
     if (!requestingUser || requestingUser.role === UserRole.ADMIN) return;
     if (order.createdBy && order.createdBy !== requestingUser.sub) {
-      throw new ForbiddenException('No tiene permisos para acceder a esta orden');
+      throw new ForbiddenException(
+        'No tiene permisos para acceder a esta orden',
+      );
     }
   }
 }

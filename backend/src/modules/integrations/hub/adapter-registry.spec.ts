@@ -7,6 +7,9 @@ import { EFrancoMockAdapter } from './adapters/efranco.mock';
 import { ShippingMockAdapter } from './adapters/shipping.mock';
 import { EmailMockAdapter } from './adapters/email.mock';
 import { WhatsAppMockAdapter } from './adapters/whatsapp.mock';
+import { NetSuiteMockAdapter } from './adapters/netsuite.mock';
+import { VetaMockAdapter } from './adapters/veta.mock';
+import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
 import { StaticScenarioProvider } from './static-scenario-provider';
 
 function makeRegistry(tenantConfig: Record<string, unknown> = {}) {
@@ -27,6 +30,9 @@ function makeRegistry(tenantConfig: Record<string, unknown> = {}) {
     new ShippingMockAdapter(scenarios),
     new EmailMockAdapter(scenarios),
     new WhatsAppMockAdapter(scenarios),
+    new NetSuiteMockAdapter(scenarios),
+    new VetaMockAdapter(scenarios),
+    new ArmstrongMockAdapter(scenarios),
     scenarios,
   );
 }
@@ -46,7 +52,9 @@ describe('AdapterRegistry', () => {
   });
 
   it('config.mode="real" → real adapter (con pending_credentials si falta baseUrl)', async () => {
-    const registry = makeRegistry({ oracle: { mode: 'real', authScheme: 'bearer' } });
+    const registry = makeRegistry({
+      oracle: { mode: 'real', authScheme: 'bearer' },
+    });
     const adapter = await registry.resolve('t1', 'oracle');
     expect(adapter.mode).toBe('real');
     const health = await adapter.health();
@@ -69,8 +77,8 @@ describe('AdapterRegistry', () => {
     expect(health.state).toBe('operational');
   });
 
-  it('listSystems retorna los 8 sistemas', () => {
+  it('listSystems retorna los 11 sistemas', () => {
     const registry = makeRegistry();
-    expect(registry.listSystems()).toHaveLength(8);
+    expect(registry.listSystems()).toHaveLength(11);
   });
 });

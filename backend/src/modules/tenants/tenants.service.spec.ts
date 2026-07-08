@@ -13,8 +13,8 @@ function makeRepo(): PartialRepo {
   return {
     find: jest.fn(),
     findOne: jest.fn(),
-    create: jest.fn((partial) => ({ ...partial }) as unknown as Tenant),
-    save: jest.fn(async (entity) => entity as Tenant),
+    create: jest.fn((partial: object) => ({ ...partial })),
+    save: jest.fn((entity: unknown) => Promise.resolve(entity as Tenant)),
   };
 }
 

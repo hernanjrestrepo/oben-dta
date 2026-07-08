@@ -1,5 +1,9 @@
 import { BaseAdapter } from './base-adapter';
-import { AdapterCallContext, AdapterMode, BaseAdapterConfig } from './adapter.types';
+import {
+  AdapterCallContext,
+  AdapterMode,
+  BaseAdapterConfig,
+} from './adapter.types';
 import { applyScenario, NotFoundSignal } from './scenario-runtime';
 import { DEFAULT_SCENARIO, ScenarioProvider } from './scenario.types';
 
@@ -35,7 +39,7 @@ export abstract class MockAdapterBase extends BaseAdapter {
     } catch (e) {
       if (e instanceof NotFoundSignal) {
         // El caller responde con datos vacíos/null en vez de error.
-        return (undefined as unknown) as T;
+        return undefined as unknown as T;
       }
       throw e;
     }
@@ -43,11 +47,16 @@ export abstract class MockAdapterBase extends BaseAdapter {
   }
 
   protected wrap(
-    handler: (args: Record<string, unknown>, ctx: AdapterCallContext) => Promise<unknown> | unknown,
+    handler: (
+      args: Record<string, unknown>,
+      ctx: AdapterCallContext,
+    ) => Promise<unknown> | unknown,
     operation: string,
   ) {
     return async (args: Record<string, unknown>, ctx: AdapterCallContext) => {
-      return this.withScenario(ctx.tenantId, operation, () => handler(args, ctx));
+      return this.withScenario(ctx.tenantId, operation, () =>
+        handler(args, ctx),
+      );
     };
   }
 }

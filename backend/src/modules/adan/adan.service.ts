@@ -84,7 +84,9 @@ export class AdanService {
       [documentId],
     );
 
-    this.logger.log(`[tenant ${tenantId}] Ingestado ${fileName}: ${stored} chunks`);
+    this.logger.log(
+      `[tenant ${tenantId}] Ingestado ${fileName}: ${stored} chunks`,
+    );
     return { documentId, chunks: stored, fileType };
   }
 
@@ -103,19 +105,21 @@ export class AdanService {
        LIMIT $2`,
       [vectorLiteral, topK, tenantId],
     );
-    return rows.map((r: {
-      document_id: string;
-      file_name: string;
-      chunk_index: number;
-      content: string;
-      similarity: number | string;
-    }) => ({
-      documentId: r.document_id,
-      fileName: r.file_name,
-      chunkIndex: r.chunk_index,
-      similarity: Number(Number(r.similarity).toFixed(4)),
-      excerpt: r.content,
-    }));
+    return rows.map(
+      (r: {
+        document_id: string;
+        file_name: string;
+        chunk_index: number;
+        content: string;
+        similarity: number | string;
+      }) => ({
+        documentId: r.document_id,
+        fileName: r.file_name,
+        chunkIndex: r.chunk_index,
+        similarity: Number(Number(r.similarity).toFixed(4)),
+        excerpt: r.content,
+      }),
+    );
   }
 
   async ask(question: string, topK = DEFAULT_TOPK): Promise<AdanAnswer> {
@@ -168,7 +172,11 @@ export class AdanService {
     );
   }
 
-  async stats(): Promise<{ documents: number; chunks: number; embeddings: number }> {
+  async stats(): Promise<{
+    documents: number;
+    chunks: number;
+    embeddings: number;
+  }> {
     const tenantId = this.ctx.tenantId;
     const r = await this.dataSource.query(
       `SELECT
@@ -190,7 +198,10 @@ export class AdanService {
   }
 
   private chunkText(text: string): string[] {
-    const clean = text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    const clean = text
+      .replace(/\r\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
     const chunks: string[] = [];
     let start = 0;
     while (start < clean.length) {

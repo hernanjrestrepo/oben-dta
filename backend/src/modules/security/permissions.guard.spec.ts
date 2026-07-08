@@ -2,7 +2,6 @@ import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PermissionsGuard } from './permissions.guard';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
-import { REQUIRE_PERMISSION_KEY } from './require-permission.decorator';
 import { AuthorizationDecision } from './authorization.types';
 
 function makeExecCtx(req: Record<string, unknown>): ExecutionContext {
@@ -23,7 +22,7 @@ describe('PermissionsGuard', () => {
     reflector = { getAllAndOverride: jest.fn() } as unknown as Reflector;
     ctx = new TenantContext();
     ctx.setContext('t1', 'u1', false);
-    can = jest.fn();
+    can = jest.fn<Promise<AuthorizationDecision>, unknown[]>();
     guard = new PermissionsGuard(reflector, { can } as never, ctx);
   });
 
@@ -39,7 +38,9 @@ describe('PermissionsGuard', () => {
       permissions: ['clients.read'],
       mode: 'all',
     });
-    await expect(guard.canActivate(makeExecCtx({}))).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(makeExecCtx({}))).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('modo all: todos los permisos deben ser allow', async () => {
@@ -50,7 +51,9 @@ describe('PermissionsGuard', () => {
     can.mockResolvedValueOnce({ effect: 'allow', reason: 'x' });
     can.mockResolvedValueOnce({ effect: 'deny', reason: 'no_matching_role' });
     const req = { user: { sub: 'u1', tenantId: 't1', isSuperAdmin: false } };
-    await expect(guard.canActivate(makeExecCtx(req))).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(makeExecCtx(req))).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('modo any: basta uno allow', async () => {
@@ -71,6 +74,8 @@ describe('PermissionsGuard', () => {
     });
     can.mockResolvedValue({ effect: 'deny', reason: 'nope' });
     const req = { user: { sub: 'u1', tenantId: 't1', isSuperAdmin: false } };
-    await expect(guard.canActivate(makeExecCtx(req))).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(makeExecCtx(req))).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 });

@@ -31,11 +31,15 @@ async function run() {
   const args = parseArgs(process.argv.slice(2));
 
   if (!args.tenant) {
-    logger.error('Falta --tenant=<slug>. Ejemplo: npm run dataset:generate -- --tenant=oben');
+    logger.error(
+      'Falta --tenant=<slug>. Ejemplo: npm run dataset:generate -- --tenant=oben',
+    );
     process.exit(1);
   }
 
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['log', 'warn', 'error'] });
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    logger: ['log', 'warn', 'error'],
+  });
   try {
     const tenants = app.get(TenantsService);
     const generator = app.get(DatasetGeneratorService);
@@ -58,7 +62,9 @@ async function run() {
       reset: args.reset === 'true',
     });
 
-    logger.log(`Dataset generado para '${args.tenant}': ${JSON.stringify(summary, null, 2)}`);
+    logger.log(
+      `Dataset generado para '${args.tenant}': ${JSON.stringify(summary, null, 2)}`,
+    );
     await app.close();
   } catch (error) {
     logger.error('Error generando dataset', (error as Error).stack);

@@ -1,8 +1,8 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import {
   AdanAnswer, AdanStats, ApiError, AuditPage, AuthResponse, Client, CommercialLicense,
-  CreateOrderDto, DashboardKPIs, EvaResult, Invoice, LicenseStatusView, Order, Plan,
-  PlatformRole, PlatformUser, Product, SystemStatus, Tenant, TenantFeatureFlag,
+  CreateOrderDto, DashboardKPIs, EvaResult, IntegrationStatus, Invoice, LicenseStatusView,
+  Order, Plan, PlatformRole, PlatformUser, Product, SystemStatus, Tenant, TenantFeatureFlag,
   TenantSubscription, UpdateOrderStatusDto, User,
 } from '@/types';
 
@@ -444,6 +444,13 @@ class ApiClient {
 
   async getLicenseStatus(): Promise<LicenseStatusView> {
     const { data } = await this.client.get<LicenseStatusView>('/license/status');
+    return data;
+  }
+
+  // --- Integration Hub -----------------------------------------------------
+
+  async getIntegrationsStatus(): Promise<IntegrationStatus[]> {
+    const { data } = await this.client.get<IntegrationStatus[]>('/integrations/status');
     return data;
   }
 }

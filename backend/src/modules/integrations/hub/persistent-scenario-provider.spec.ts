@@ -22,7 +22,7 @@ describe('PersistentScenarioProvider', () => {
       errorMessage: 'CUFE rechazado',
       latencyMs: 200,
       errorRatio: 0.5,
-    } as MockScenario);
+    });
     const s = await p.resolve('t1', 'dian', 'invoice.send');
     expect(s.behavior).toBe('business_error');
     expect(s.errorCode).toBe('CUFE_REJECTED');
@@ -32,7 +32,7 @@ describe('PersistentScenarioProvider', () => {
 
   it('cachea el resultado durante TTL', async () => {
     const repo = {
-      findOne: jest.fn().mockResolvedValue({ behavior: 'happy_path' } as MockScenario),
+      findOne: jest.fn().mockResolvedValue({ behavior: 'happy_path' }),
     };
     const p = new PersistentScenarioProvider(repo as never);
     await p.resolve('t1', 'oracle', 'x');

@@ -1,31 +1,49 @@
-import { IsArray, IsBoolean, IsEmail, IsEnum, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsEmail,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 import { SubscriptionStatus } from '../../../entities/tenant-subscription.entity';
 
 export class CreateRoleDto {
-  @IsString() @MinLength(2)
+  @IsString()
+  @MinLength(2)
   key: string;
 
-  @IsString() @MinLength(2)
+  @IsString()
+  @MinLength(2)
   name: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   description?: string;
 
-  @IsArray() @IsString({ each: true })
+  @IsArray()
+  @IsString({ each: true })
   permissions: string[];
 }
 
 export class UpdateRoleDto {
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   name?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   description?: string;
 
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   permissions?: string[];
 }
 
@@ -54,33 +72,42 @@ export class CreatePlatformUserRoleDto {
 }
 
 export class CreatePlanDto {
-  @IsString() @MinLength(2)
+  @IsString()
+  @MinLength(2)
   key: string;
 
-  @IsString() @MinLength(2)
+  @IsString()
+  @MinLength(2)
   name: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   description?: string;
 
-  @IsOptional() @IsNumber()
+  @IsOptional()
+  @IsNumber()
   priceMonthly?: number;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   currency?: string;
 
-  @IsOptional() @IsNumber()
+  @IsOptional()
+  @IsNumber()
   maxUsers?: number;
 
-  @IsOptional() @IsNumber()
+  @IsOptional()
+  @IsNumber()
   maxStorageGb?: number;
 
-  @IsArray() @IsString({ each: true })
+  @IsArray()
+  @IsString({ each: true })
   modules: string[];
 }
 
 export class UpdatePlanModulesDto {
-  @IsArray() @IsString({ each: true })
+  @IsArray()
+  @IsString({ each: true })
   modules: string[];
 }
 
@@ -88,10 +115,12 @@ export class AssignSubscriptionDto {
   @IsString()
   planKey: string;
 
-  @IsOptional() @IsEnum(SubscriptionStatus)
+  @IsOptional()
+  @IsEnum(SubscriptionStatus)
   status?: SubscriptionStatus;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   endsAt?: string;
 }
 
@@ -102,7 +131,8 @@ export class SetFeatureFlagDto {
   @IsBoolean()
   enabled: boolean;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   reason?: string;
 }
 
@@ -116,24 +146,31 @@ export class CreatePlatformUserDto {
   @IsEmail()
   email: string;
 
-  @IsString() @MinLength(8)
+  @IsString()
+  @MinLength(8)
   password: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   platformRoleKey?: string;
 }
 
 export class UpdatePlatformUserDto {
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   firstName?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   lastName?: string;
 
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
 
-  @IsOptional() @IsString() @MinLength(8)
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
   password?: string;
 }
 
@@ -141,52 +178,67 @@ export class IssueLicenseDto {
   @IsString()
   planKey: string;
 
-  @IsOptional() @IsNumber()
+  @IsOptional()
+  @IsNumber()
   durationDays?: number;
 
-  @IsOptional() @IsNumber()
+  @IsOptional()
+  @IsNumber()
   maxUsers?: number;
 
-  @IsOptional() @IsNumber()
+  @IsOptional()
+  @IsNumber()
   maxSites?: number;
 
-  @IsOptional() @IsNumber()
+  @IsOptional()
+  @IsNumber()
   gracePeriodDays?: number;
 
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   offline?: boolean;
 }
 
 export class RenewLicenseDto {
-  @IsOptional() @IsNumber()
+  @IsOptional()
+  @IsNumber()
   durationDays?: number;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   expiresAt?: string;
 }
 
 export class AuditQueryDto {
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   tenantId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   userId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   permissionKey?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   granted?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   from?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   to?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   page?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   pageSize?: string;
 }
