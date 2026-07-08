@@ -110,34 +110,56 @@ export interface ApiError {
   path: string;
 }
 
-// EVA — resultado del pipeline de orquestación IA (/flow/process)
-export interface FlowResult {
-  step: string;
-  parsed: {
-    clientId: string;
-    items: {
-      sku: string;
-      name: string;
-      qty: number;
-      unitPrice: number;
-      total: number;
-    }[];
-  };
-  creditCheck: {
-    creditLimit: number;
-    used: number;
-    available: number;
-    orderTotal: number;
-    passed: boolean;
-  };
-  inventoryCheck: {
-    sku: string;
-    requested: number;
-    available: number;
-    passed: boolean;
-  };
-  decision: string;
-  status: 'CONFIRMED' | 'PENDING_PRODUCTION' | 'BLOCKED';
-  order: { orderId: string; status: string } | null;
-  invoice: { invoiceId: string; status: string; dianStatus: string } | null;
+// EVA real — orquestación LLM + tool calling (/eva/process)
+export interface EvaToolTrace {
+  tool: string;
+  args: Record<string, unknown>;
+  result: unknown;
 }
+
+export interface EvaResult {
+  model: string;
+  reply: string;
+  trace: EvaToolTrace[];
+  orderId: string | null;
+  orderNumber: string | null;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  iterations: number;
+}
+
+// ADÁN — respuesta RAG con fuentes (/adan/ask)
+export interface AdanSource {
+  documentId: string;
+  fileName: string;
+  chunkIndex: number;
+  similarity: number;
+  excerpt: string;
+}
+
+export interface AdanAnswer {
+  question: string;
+  answer: string;
+  sources: AdanSource[];
+  model: string;
+  grounded: boolean;
+}
+
+export interface AdanStats {
+  documents: number;
+  chunks: number;
+  embeddings: number;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  orderId: string;
+  amount: number;
+  taxAmount: number;
+  totalAmount: number;
+  status: string;
+  dianStatus: string;
+  createdAt: string;
+}
+

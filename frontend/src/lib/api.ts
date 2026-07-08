@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
-import { ApiError, AuthResponse, Client, CreateOrderDto, DashboardKPIs, FlowResult, Order, Product, UpdateOrderStatusDto, User } from '@/types';
+import { AdanAnswer, AdanStats, ApiError, AuthResponse, Client, CreateOrderDto, DashboardKPIs, EvaResult, Invoice, Order, Product, UpdateOrderStatusDto, User } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
 
@@ -104,10 +104,25 @@ class ApiClient {
     return data;
   }
 
-  // EVA — AI flow orchestration (interpreta lenguaje natural y ejecuta el
-  // pipeline pedido->credito->inventario->decision->orden->factura DIAN)
-  async processFlow(text: string): Promise<FlowResult> {
-    const { data } = await this.client.post<FlowResult>('/flow/process', { text });
+  // EVA real — LLM local + tool calling + persistencia (/eva/process)
+  async processEva(text: string): Promise<EvaResult> {
+    const { data } = await this.client.post<EvaResult>('/eva/process', { text });
+    return data;
+  }
+
+  // ADÁN — RAG sobre documentos reales (/adan/ask)
+  async askAdan(question: string): Promise<AdanAnswer> {
+    const { data } = await this.client.post<AdanAnswer>('/adan/ask', { question });
+    return data;
+  }
+
+  async adanStats(): Promise<AdanStats> {
+    const { data } = await this.client.get<AdanStats>('/adan/stats');
+    return data;
+  }
+
+  async getInvoices(): Promise<Invoice[]> {
+    const { data } = await this.client.get<Invoice[]>('/invoices');
     return data;
   }
 

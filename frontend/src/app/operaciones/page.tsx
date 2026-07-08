@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { FlowResult } from '@/types';
+import { EvaResult, AdanAnswer, AdanStats } from '@/types';
 import {
   Bot,
   Sparkles,
@@ -11,120 +11,126 @@ import {
   CheckCircle2,
   XCircle,
   Brain,
-  CreditCard,
-  Package,
   Receipt,
   Workflow,
   Activity,
-  Boxes,
-  Ship,
-  Building2,
   Network,
-  Radio,
-  ShieldCheck,
+  Building2,
   Factory,
-  Truck,
-  Mail,
+  ShieldCheck,
+  Package,
+  Ship,
+  Radio,
+  BookOpen,
+  FileText,
   ArrowRight,
 } from 'lucide-react';
 
-// ---------------------------------------------------------------------------
-// Integraciones del ecosistema Oben (representación de arquitectura segun el
-// Blueprint DTA y el inventario de APIs de Oben Group). La telemetria en vivo
-// de cada sistema se habilita al cargar las credenciales de produccion; aqui
-// se muestran como puntos de integracion definidos, no como sondeo en vivo.
-// ---------------------------------------------------------------------------
+// Integraciones del ecosistema Oben — representación de arquitectura (Blueprint
+// DTA). NO es telemetría en vivo: son los puntos de integración definidos.
 type IntegrationState = 'conectado' | 'configurado' | 'planificado';
-
 interface Integration {
   name: string;
   role: string;
-  endpoints: number;
   icon: React.ElementType;
   state: IntegrationState;
 }
-
 const INTEGRATIONS: Integration[] = [
-  { name: 'NetSuite', role: 'ERP · Inventario, Ensamblaje, Orden de Venta', endpoints: 10, icon: Boxes, state: 'configurado' },
-  { name: 'VETA', role: 'Proveedores · Compras y Recepciones', endpoints: 7, icon: Building2, state: 'configurado' },
-  { name: 'Armstrong', role: 'Producción · Corte, Pallets, Etiquetado', endpoints: 4, icon: Factory, state: 'configurado' },
-  { name: 'Portal Proveedores', role: 'proveedores.obengroup.co', endpoints: 1, icon: Network, state: 'conectado' },
-  { name: 'Intranet', role: 'obengroup.co · Colaboradores', endpoints: 1, icon: Radio, state: 'conectado' },
-  { name: 'Oben+', role: 'Core comercial y operativo', endpoints: 0, icon: Activity, state: 'conectado' },
-  { name: 'DIAN · E-Franco', role: 'Facturación electrónica', endpoints: 0, icon: ShieldCheck, state: 'configurado' },
-  { name: 'Cube IQ', role: 'Cubicaje y balanceo de carga', endpoints: 0, icon: Package, state: 'planificado' },
-  { name: 'Navieras', role: 'Cotizador inteligente de flete', endpoints: 0, icon: Ship, state: 'planificado' },
+  { name: 'NetSuite', role: 'ERP · sistema de registro', icon: Building2, state: 'planificado' },
+  { name: 'VETA', role: 'Producción / producto', icon: Factory, state: 'planificado' },
+  { name: 'Armstrong', role: 'Logística / despacho', icon: Ship, state: 'planificado' },
+  { name: 'DIAN', role: 'Factura electrónica', icon: ShieldCheck, state: 'planificado' },
+  { name: 'Portal Proveedores', role: 'proveedores.obengroup.co', icon: Network, state: 'planificado' },
+  { name: 'Intranet', role: 'obengroup.co', icon: Radio, state: 'planificado' },
 ];
-
-// Flujos de automatización definidos en el Blueprint DTA (order-to-cash + export)
-const PIPELINE = [
-  { label: 'Recepción Omnicanal', system: 'Email · WhatsApp · Teléfono', icon: Mail },
-  { label: 'Interpretación IA', system: 'EVA', icon: Brain },
-  { label: 'Cotización & Cubicaje', system: 'Cube IQ · Balanceo', icon: Package },
-  { label: 'Aprobación', system: 'Cliente · Cartera', icon: CheckCircle2 },
-  { label: 'Facturación & Despacho', system: 'Oben+ · Lista de empaque', icon: Receipt },
-  { label: 'Exportación', system: 'Liquidación · Incoterm', icon: Ship },
-  { label: 'DIAN', system: 'Factura electrónica', icon: ShieldCheck },
-  { label: 'Tracking Logístico', system: 'Navieras', icon: Truck },
-];
-
-const EXAMPLES = ['quiero 10 SKU-001', 'quiero 80 SKU-002', 'necesito 5 SKU-001'];
-
 const stateStyles: Record<IntegrationState, { dot: string; text: string; label: string }> = {
   conectado: { dot: 'bg-emerald-400', text: 'text-emerald-300', label: 'Conectado' },
   configurado: { dot: 'bg-sky-400', text: 'text-sky-300', label: 'Configurado' },
   planificado: { dot: 'bg-slate-500', text: 'text-slate-400', label: 'En roadmap' },
 };
 
-function money(n: number) {
-  return `$${Number(n).toLocaleString('es-CO')}`;
+const EVA_EXAMPLES = ['Quiero 10 SKU-001 para ACME', 'Quiero 5 SKU-001 para ZETA'];
+const ADAN_EXAMPLES = ['¿Cuál es el procedimiento para exportar a Perú?', '¿Qué Incoterm se usa para Perú?'];
+
+function money(n: number | null | undefined) {
+  return `$${Number(n || 0).toLocaleString('es-CO')}`;
 }
 
 export default function OperacionesPage() {
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<FlowResult | null>(null);
-  const [error, setError] = useState('');
-  const [processed, setProcessed] = useState(0);
-  const [realOrders, setRealOrders] = useState<number | null>(null);
+  // KPIs reales
+  const [orders, setOrders] = useState<number | null>(null);
+  const [invoices, setInvoices] = useState<number | null>(null);
+  const [adanStats, setAdanStats] = useState<AdanStats | null>(null);
+
+  // EVA
+  const [evaInput, setEvaInput] = useState('');
+  const [evaLoading, setEvaLoading] = useState(false);
+  const [evaResult, setEvaResult] = useState<EvaResult | null>(null);
+  const [evaError, setEvaError] = useState('');
+
+  // ADÁN
+  const [adanInput, setAdanInput] = useState('');
+  const [adanLoading, setAdanLoading] = useState(false);
+  const [adanResult, setAdanResult] = useState<AdanAnswer | null>(null);
+  const [adanError, setAdanError] = useState('');
+
+  async function refreshKpis() {
+    try {
+      const [o, inv, st] = await Promise.allSettled([
+        api.getOrders(),
+        api.getInvoices(),
+        api.adanStats(),
+      ]);
+      if (o.status === 'fulfilled') setOrders(o.value.length);
+      if (inv.status === 'fulfilled') setInvoices(inv.value.length);
+      if (st.status === 'fulfilled') setAdanStats(st.value);
+    } catch {
+      /* noop */
+    }
+  }
 
   useEffect(() => {
-    api
-      .getOrders()
-      .then((o) => setRealOrders(o.length))
-      .catch(() => setRealOrders(null));
+    refreshKpis();
   }, []);
 
   async function runEva(text: string) {
     const cmd = text.trim();
     if (!cmd) return;
+    setEvaLoading(true);
+    setEvaError('');
+    setEvaResult(null);
     try {
-      setLoading(true);
-      setError('');
-      const data = await api.processFlow(cmd);
-      setResult(data);
-      if (data.order) setProcessed((p) => p + 1);
+      const data = await api.processEva(cmd);
+      setEvaResult(data);
+      refreshKpis();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || 'EVA no pudo procesar la instrucción.');
+      setEvaError(msg || 'EVA no pudo procesar la instrucción.');
     } finally {
-      setLoading(false);
+      setEvaLoading(false);
     }
   }
 
-  const statusBadge = useMemo(() => {
-    if (!result) return null;
-    const map = {
-      CONFIRMED: { text: 'Confirmado y facturado', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
-      PENDING_PRODUCTION: { text: 'Enviado a producción', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
-      BLOCKED: { text: 'Bloqueado', cls: 'bg-red-500/15 text-red-300 border-red-500/30' },
-    } as const;
-    return map[result.status];
-  }, [result]);
+  async function runAdan(text: string) {
+    const q = text.trim();
+    if (!q) return;
+    setAdanLoading(true);
+    setAdanError('');
+    setAdanResult(null);
+    try {
+      const data = await api.askAdan(q);
+      setAdanResult(data);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setAdanError(msg || 'ADÁN no pudo responder.');
+    } finally {
+      setAdanLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-8 text-slate-100">
-      {/* ---------------- Header ---------------- */}
+      {/* Header */}
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -135,211 +141,180 @@ export default function OperacionesPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Centro de Operaciones IA</h1>
-            <p className="text-slate-400 text-sm">
-              DTA Oben · Plataforma de automatización empresarial con IA
-            </p>
+            <p className="text-slate-400 text-sm">DTA Oben · EVA ejecuta · ADÁN gobierna · 100% local</p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-300">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            EVA en línea
+            IA local en línea
           </span>
         </div>
       </header>
 
-      {/* ---------------- KPIs operativos ---------------- */}
+      {/* KPIs reales */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={Workflow} label="Flujos automatizados" value="8" hint="Order-to-cash + export" />
-        <KpiCard icon={Network} label="Integraciones" value="9" hint="Ecosistema Oben" accent="sky" />
-        <KpiCard icon={Sparkles} label="Procesado por EVA" value={String(processed)} hint="En esta sesión" accent="emerald" />
-        <KpiCard
-          icon={Activity}
-          label="Órdenes en sistema"
-          value={realOrders === null ? '—' : String(realOrders)}
-          hint="Dato en vivo"
-          accent="violet"
-        />
+        <KpiCard icon={Receipt} label="Órdenes en sistema" value={orders === null ? '—' : String(orders)} hint="PostgreSQL · dato real" accent="emerald" />
+        <KpiCard icon={FileText} label="Facturas creadas" value={invoices === null ? '—' : String(invoices)} hint="PostgreSQL · dato real" accent="sky" />
+        <KpiCard icon={BookOpen} label="Documentos ADÁN" value={adanStats === null ? '—' : String(adanStats.documents)} hint={adanStats ? `${adanStats.chunks} chunks · ${adanStats.embeddings} embeddings` : 'memoria corporativa'} accent="violet" />
+        <KpiCard icon={Network} label="Integraciones" value={String(INTEGRATIONS.length)} hint="En roadmap" />
       </section>
 
-      {/* ================= EVA — consola en vivo ================= */}
+      {/* ===== EVA ===== */}
       <section className="rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-900/80 to-slate-900/40 overflow-hidden">
         <div className="flex items-center gap-3 border-b border-slate-700/60 px-6 py-4">
           <Brain className="w-5 h-5 text-emerald-400" />
           <div>
             <h2 className="font-semibold">EVA · Orquestación autónoma de pedidos</h2>
-            <p className="text-xs text-slate-400">
-              Escribe una instrucción en lenguaje natural. EVA interpreta, valida crédito e inventario,
-              decide y factura — en tiempo real.
-            </p>
+            <p className="text-xs text-slate-400">Lenguaje natural → LLM local → herramientas reales → orden y factura en PostgreSQL.</p>
           </div>
           <span className="ml-auto hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 text-xs text-emerald-300">
-            <Sparkles className="w-3.5 h-3.5" /> Motor en vivo
+            <Sparkles className="w-3.5 h-3.5" /> {evaResult?.model || 'qwen2.5:3b'}
           </span>
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Input */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-400/70" />
               <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && runEva(input)}
-                placeholder='Ej: "quiero 10 SKU-001"'
+                value={evaInput}
+                onChange={(e) => setEvaInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && runEva(evaInput)}
+                placeholder='Ej: "Quiero 10 SKU-001 para ACME"'
                 className="w-full rounded-xl bg-slate-950/70 border border-slate-700 pl-10 pr-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20 transition"
               />
             </div>
             <button
-              onClick={() => runEva(input)}
-              disabled={loading || !input.trim()}
+              onClick={() => runEva(evaInput)}
+              disabled={evaLoading || !evaInput.trim()}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-50"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {evaLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               Ejecutar
             </button>
           </div>
 
-          {/* Example chips */}
           <div className="flex flex-wrap gap-2">
             <span className="text-xs text-slate-500 py-1">Prueba:</span>
-            {EXAMPLES.map((ex) => (
-              <button
-                key={ex}
-                onClick={() => {
-                  setInput(ex);
-                  runEva(ex);
-                }}
-                className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-300 hover:border-emerald-500/50 hover:text-emerald-300 transition"
-              >
-                {ex}
-              </button>
+            {EVA_EXAMPLES.map((ex) => (
+              <button key={ex} onClick={() => { setEvaInput(ex); runEva(ex); }} className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-300 hover:border-emerald-500/50 hover:text-emerald-300 transition">{ex}</button>
             ))}
           </div>
 
-          {error && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              <XCircle className="w-4 h-4" /> {error}
-            </div>
+          {evaLoading && (
+            <p className="text-xs text-slate-400 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> EVA está razonando y ejecutando herramientas en el modelo local (CPU)…</p>
           )}
 
-          {/* Pipeline de resultado */}
-          {result && (
-            <div className="space-y-3 pt-2">
-              <Stage
-                icon={Brain}
-                title="1 · Interpretación IA"
-                ok={result.parsed.items.length > 0}
-              >
-                {result.parsed.items.length > 0 ? (
-                  <div className="space-y-1">
-                    <p className="text-slate-300">
-                      Cliente <span className="text-slate-100 font-medium">{result.parsed.clientId}</span>
-                    </p>
-                    {result.parsed.items.map((it) => (
-                      <p key={it.sku} className="text-slate-300">
-                        {it.qty} × <span className="text-slate-100 font-medium">{it.name}</span> ({it.sku}) ·{' '}
-                        {money(it.total)} COP
-                      </p>
-                    ))}
+          {evaError && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"><XCircle className="w-4 h-4" /> {evaError}</div>
+          )}
+
+          {evaResult && (
+            <div className="space-y-3 pt-1">
+              {/* Traza de herramientas reales */}
+              {evaResult.trace.map((t, i) => (
+                <ToolStage key={i} index={i + 1} tool={t.tool} result={t.result} />
+              ))}
+
+              {/* Resultado final */}
+              <div className="rounded-xl border border-slate-700/60 bg-slate-950/50 p-4">
+                <p className="text-sm text-slate-200">{evaResult.reply}</p>
+                {(evaResult.orderNumber || evaResult.invoiceNumber) && (
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    {evaResult.orderNumber && (
+                      <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 text-xs text-emerald-300">Orden <b>{evaResult.orderNumber}</b></span>
+                    )}
+                    {evaResult.invoiceNumber && (
+                      <span className="rounded-lg bg-sky-500/10 border border-sky-500/30 px-3 py-1.5 text-xs text-sky-300">Factura <b>{evaResult.invoiceNumber}</b></span>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-slate-400">No se pudo interpretar la instrucción.</p>
                 )}
-              </Stage>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
 
-              <Stage
-                icon={CreditCard}
-                title="2 · Validación de Crédito"
-                ok={result.creditCheck.passed}
-              >
-                <p className="text-slate-300">
-                  Cupo disponible {money(result.creditCheck.available)} · pedido{' '}
-                  {money(result.creditCheck.orderTotal)} COP
-                </p>
-              </Stage>
+      {/* ===== ADÁN ===== */}
+      <section className="rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-900/80 to-slate-900/40 overflow-hidden">
+        <div className="flex items-center gap-3 border-b border-slate-700/60 px-6 py-4">
+          <BookOpen className="w-5 h-5 text-violet-400" />
+          <div>
+            <h2 className="font-semibold">ADÁN · Memoria corporativa (RAG local)</h2>
+            <p className="text-xs text-slate-400">Pregunta sobre procesos y políticas. Responde citando documentos reales de Oben — sin inventar.</p>
+          </div>
+        </div>
+        <div className="p-6 space-y-5">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-violet-400/70" />
+              <input
+                value={adanInput}
+                onChange={(e) => setAdanInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && runAdan(adanInput)}
+                placeholder='Ej: "¿Cuál es el procedimiento para exportar a Perú?"'
+                className="w-full rounded-xl bg-slate-950/70 border border-slate-700 pl-10 pr-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20 transition"
+              />
+            </div>
+            <button
+              onClick={() => runAdan(adanInput)}
+              disabled={adanLoading || !adanInput.trim()}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-50"
+            >
+              {adanLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Preguntar
+            </button>
+          </div>
 
-              <Stage
-                icon={Package}
-                title="3 · Validación de Inventario"
-                ok={result.inventoryCheck.passed}
-              >
-                <p className="text-slate-300">
-                  Solicitado {result.inventoryCheck.requested} · disponible{' '}
-                  {result.inventoryCheck.available} unidades
-                </p>
-              </Stage>
+          <div className="flex flex-wrap gap-2">
+            <span className="text-xs text-slate-500 py-1">Prueba:</span>
+            {ADAN_EXAMPLES.map((ex) => (
+              <button key={ex} onClick={() => { setAdanInput(ex); runAdan(ex); }} className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-300 hover:border-violet-500/50 hover:text-violet-300 transition">{ex}</button>
+            ))}
+          </div>
 
-              <Stage icon={Workflow} title="4 · Decisión autónoma" ok={result.status !== 'BLOCKED'}>
-                <div className="space-y-2">
-                  <p className="text-slate-300">{result.decision}</p>
-                  {statusBadge && (
-                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${statusBadge.cls}`}>
-                      {statusBadge.text}
-                    </span>
+          {adanLoading && (
+            <p className="text-xs text-slate-400 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> ADÁN recupera contexto y redacta con el modelo local…</p>
+          )}
+
+          {adanError && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"><XCircle className="w-4 h-4" /> {adanError}</div>
+          )}
+
+          {adanResult && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-slate-700/60 bg-slate-950/50 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  {adanResult.grounded ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-500/10 border border-violet-500/30 px-2.5 py-1 text-xs text-violet-300"><CheckCircle2 className="w-3.5 h-3.5" /> Respuesta con fuentes</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 text-xs text-amber-300"><XCircle className="w-3.5 h-3.5" /> Sin documentos relevantes</span>
                   )}
                 </div>
-              </Stage>
+                <p className="text-sm text-slate-200 whitespace-pre-wrap">{adanResult.answer}</p>
+              </div>
 
-              {(result.order || result.invoice) && (
-                <Stage icon={Receipt} title="5 · Orden & Facturación DIAN" ok={!!result.order}>
-                  <div className="flex flex-wrap gap-3">
-                    {result.order && (
-                      <span className="rounded-lg bg-slate-800/70 border border-slate-700 px-3 py-1.5 text-xs">
-                        Orden <span className="text-emerald-300 font-medium">{result.order.orderId}</span>
-                      </span>
-                    )}
-                    {result.invoice && (
-                      <>
-                        <span className="rounded-lg bg-slate-800/70 border border-slate-700 px-3 py-1.5 text-xs">
-                          Factura <span className="text-emerald-300 font-medium">{result.invoice.invoiceId}</span>
-                        </span>
-                        <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 text-xs text-emerald-300">
-                          DIAN: {result.invoice.dianStatus}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </Stage>
+              {adanResult.sources.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-400">Fuentes ({adanResult.sources.length}):</p>
+                  {adanResult.sources.map((s, i) => (
+                    <div key={i} className="rounded-lg border border-slate-700/60 bg-slate-900/40 p-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-violet-300 font-medium flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> {s.fileName} · #{s.chunkIndex}</span>
+                        <span className="text-slate-500">similaridad {s.similarity}</span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">{s.excerpt}</p>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
         </div>
       </section>
 
-      {/* ================= Pipeline de automatización (Blueprint) ================= */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <Workflow className="w-5 h-5 text-sky-400" />
-          <h2 className="font-semibold">Flujos de automatización · Blueprint DTA</h2>
-        </div>
-        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-5">
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {PIPELINE.map((step, i) => {
-              const Icon = step.icon;
-              return (
-                <div key={step.label} className="flex items-center gap-3 shrink-0">
-                  <div className="w-44 rounded-xl border border-slate-700 bg-slate-950/60 p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-7 h-7 rounded-lg bg-sky-500/15 flex items-center justify-center">
-                        <Icon className="w-4 h-4 text-sky-300" />
-                      </div>
-                      <span className="text-xs font-semibold text-slate-200">{step.label}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 leading-tight">{step.system}</p>
-                  </div>
-                  {i < PIPELINE.length - 1 && (
-                    <ArrowRight className="w-4 h-4 text-slate-600 shrink-0" />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= Integraciones Oben ================= */}
+      {/* ===== Integraciones (roadmap honesto) ===== */}
       <section>
         <div className="flex items-center gap-2 mb-4">
           <Network className="w-5 h-5 text-emerald-400" />
@@ -350,37 +325,24 @@ export default function OperacionesPage() {
             const Icon = it.icon;
             const s = stateStyles[it.state];
             return (
-              <div
-                key={it.name}
-                className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-4 hover:border-slate-600 transition"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center">
-                      <Icon className="w-5 h-5 text-slate-200" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-100 text-sm">{it.name}</p>
-                      <p className="text-xs text-slate-400">{it.role}</p>
-                    </div>
+              <div key={it.name} className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center"><Icon className="w-5 h-5 text-slate-200" /></div>
+                  <div>
+                    <p className="font-semibold text-slate-100 text-sm">{it.name}</p>
+                    <p className="text-xs text-slate-400">{it.role}</p>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs">
-                  <span className={`inline-flex items-center gap-1.5 ${s.text}`}>
-                    <span className={`w-2 h-2 rounded-full ${s.dot}`} /> {s.label}
-                  </span>
-                  {it.endpoints > 0 && (
-                    <span className="text-slate-500">{it.endpoints} endpoints</span>
-                  )}
+                <div className="mt-3 flex items-center text-xs">
+                  <span className={`inline-flex items-center gap-1.5 ${s.text}`}><span className={`w-2 h-2 rounded-full ${s.dot}`} /> {s.label}</span>
                 </div>
               </div>
             );
           })}
         </div>
         <p className="mt-4 text-xs text-slate-500 leading-relaxed">
-          Arquitectura de integración según el Blueprint DTA y el inventario de APIs de Oben Group.
-          La telemetría en vivo de cada sistema se activa al cargar las credenciales de producción de
-          NetSuite, VETA y Armstrong.
+          La orquestación viva contra NetSuite, VETA y Armstrong es la siguiente frontera. Hoy EVA y ADÁN operan
+          sobre la base de datos real de DTA; las integraciones externas están en roadmap.
         </p>
       </section>
     </div>
@@ -388,19 +350,7 @@ export default function OperacionesPage() {
 }
 
 // ---------------------------------------------------------------------------
-function KpiCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  accent = 'slate',
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-  hint: string;
-  accent?: 'slate' | 'emerald' | 'sky' | 'violet';
-}) {
+function KpiCard({ icon: Icon, label, value, hint, accent = 'slate' }: { icon: React.ElementType; label: string; value: string; hint: string; accent?: 'slate' | 'emerald' | 'sky' | 'violet'; }) {
   const accents: Record<string, string> = {
     slate: 'text-slate-300 bg-slate-700/40',
     emerald: 'text-emerald-300 bg-emerald-500/15',
@@ -411,9 +361,7 @@ function KpiCard({
     <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-4">
       <div className="flex items-center justify-between">
         <span className="text-xs text-slate-400">{label}</span>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${accents[accent]}`}>
-          <Icon className="w-4 h-4" />
-        </div>
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${accents[accent]}`}><Icon className="w-4 h-4" /></div>
       </div>
       <p className="mt-2 text-2xl font-bold text-slate-50">{value}</p>
       <p className="text-[11px] text-slate-500 mt-0.5">{hint}</p>
@@ -421,36 +369,39 @@ function KpiCard({
   );
 }
 
-function Stage({
-  icon: Icon,
-  title,
-  ok,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  ok: boolean;
-  children: React.ReactNode;
-}) {
+function ToolStage({ index, tool, result }: { index: number; tool: string; result: unknown }) {
+  const r = (result || {}) as Record<string, unknown>;
+  const ok = r.ok === true || r.found === true || (tool === 'ValidateCredit' && r.ok === true);
+  const failed = r.ok === false || r.found === false;
+  const iconByTool: Record<string, React.ElementType> = {
+    GetClient: Building2,
+    GetProduct: Package,
+    ValidateCredit: ShieldCheck,
+    CreateOrder: Receipt,
+    CreateInvoice: FileText,
+  };
+  const Icon = iconByTool[tool] || Workflow;
+
+  let detail = '';
+  if (tool === 'GetClient' && r.found) detail = `${r.name} · cupo ${money(r.availableCredit as number)}`;
+  else if (tool === 'GetProduct' && r.found) detail = `${r.name} · ${money(r.price as number)} · stock ${r.stock}`;
+  else if (tool === 'ValidateCredit') detail = String(r.decisionReason || '');
+  else if (tool === 'CreateOrder' && r.ok) detail = `${r.orderNumber} · ${money(r.totalAmount as number)}`;
+  else if (tool === 'CreateInvoice' && r.ok) detail = `${r.invoiceNumber} · IVA ${money(r.taxAmount as number)} · total ${money(r.totalAmount as number)}`;
+  else if (failed) detail = String(r.error || 'No encontrado');
+
   return (
     <div className="flex gap-3 rounded-xl border border-slate-700/60 bg-slate-950/40 p-4">
-      <div
-        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-          ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'
-        }`}
-      >
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${failed ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
         <Icon className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-slate-200">{title}</h3>
-          {ok ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          ) : (
-            <XCircle className="w-4 h-4 text-red-400" />
-          )}
+          <h3 className="text-sm font-semibold text-slate-200">{index} · {tool}</h3>
+          {failed ? <XCircle className="w-4 h-4 text-red-400" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+          {ok && <ArrowRight className="w-3.5 h-3.5 text-slate-600" />}
         </div>
-        <div className="mt-1 text-xs leading-relaxed">{children}</div>
+        <p className="mt-1 text-xs text-slate-400 break-words">{detail}</p>
       </div>
     </div>
   );
