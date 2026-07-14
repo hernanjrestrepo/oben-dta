@@ -1,6 +1,6 @@
 import { Sidebar } from '@/components/layout/Sidebar';
 
-export default function OrdersLayout({
+export default function AppLayout({
   children,
 }: {
   children: React.ReactNode;
