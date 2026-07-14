@@ -55,6 +55,7 @@ import { RawMaterialConsumption } from './entities/raw-material-consumption.enti
 import { Shipment } from './entities/shipment.entity';
 import { ShipmentTracking } from './entities/shipment-tracking.entity';
 import { User } from './entities/user.entity';
+import { WorkflowEvent } from './entities/workflow-event.entity';
 
 @Module({
   imports: [
@@ -115,6 +116,7 @@ import { User } from './entities/user.entity';
           TenantFeatureFlag,
           License,
           MockScenario,
+          WorkflowEvent,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') === 'development',

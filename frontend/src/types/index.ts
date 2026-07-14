@@ -410,3 +410,22 @@ export interface UpdateRoleDto {
   permissions?: string[];
 }
 
+// --- Auditoría de negocio (workflow_events) ---------------------------------
+
+export interface WorkflowEvent {
+  id: string;
+  eventType: string;
+  status: string;
+  workflowName: string;
+  fromState: string;
+  toState: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  actorId: string | null;
+  inputData: Record<string, unknown> | null;
+  outputData: Record<string, unknown> | null;
+  reason: string | null;
+  createdAt: string;
+}
+

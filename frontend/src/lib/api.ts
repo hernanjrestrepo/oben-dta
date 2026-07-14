@@ -5,7 +5,7 @@ import {
   Invoice, LicenseStatusView, Order, Plan, PlatformRole, PlatformUser, Product, Quote,
   QuoteFlowResult, SecurityModuleCatalog, SecurityPermission, SecurityRole, SystemStatus, Tenant,
   TenantFeatureFlag, TenantSubscription, TenantUser, UpdateOrderStatusDto, UpdateRoleDto,
-  UpdateTenantUserDto, User,
+  UpdateTenantUserDto, User, WorkflowEvent,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
@@ -621,6 +621,18 @@ class ApiClient {
 
   async deleteRole(key: string): Promise<void> {
     await this.client.delete(`/security/roles/${key}`);
+  }
+
+  // --- Auditoría de negocio (workflow_events) ------------------------------
+
+  async getAuditLog(limit = 100): Promise<WorkflowEvent[]> {
+    const { data } = await this.client.get<WorkflowEvent[]>('/auditoria', { params: { limit } });
+    return data;
+  }
+
+  async getEntityAuditLog(entityType: string, entityId: string): Promise<WorkflowEvent[]> {
+    const { data } = await this.client.get<WorkflowEvent[]>(`/auditoria/${entityType}/${entityId}`);
+    return data;
   }
 }
 

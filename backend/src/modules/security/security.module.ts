@@ -15,7 +15,10 @@ import { TenantFeatureFlag } from '../../entities/tenant-feature-flag.entity';
 import { User } from '../../entities/user.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import { License } from '../../entities/license.entity';
+import { WorkflowEvent } from '../../entities/workflow-event.entity';
 import { AuthorizationService } from './authorization.service';
+import { WorkflowAuditService } from './workflow-audit.service';
+import { AuditController } from './audit.controller';
 import { LicenseService } from './license.service';
 import { LicenseSigningService } from './license-signing.service';
 import { LicensingService } from './licensing.service';
@@ -55,6 +58,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
       User,
       Tenant,
       License,
+      WorkflowEvent,
     ]),
     ConfigModule,
     JwtModule.registerAsync({
@@ -82,6 +86,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     PlatformUsersService,
     PlatformAuditService,
     PlatformSystemStatusService,
+    WorkflowAuditService,
     PermissionsGuard,
     JwtAuthGuard,
   ],
@@ -93,6 +98,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     PlatformAuditController,
     PlatformSystemController,
     LicenseController,
+    AuditController,
   ],
   exports: [
     AuthorizationService,
@@ -105,6 +111,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     PermissionsService,
     PlansService,
     PlatformRolesService,
+    WorkflowAuditService,
   ],
 })
 export class SecurityModule {}

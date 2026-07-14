@@ -433,6 +433,9 @@ export const SEED_PLANS: SeedPlan[] = [
       'dashboard',
       'users',
       'security',
+      'configuracion',
+      'auditoria',
+      'licencias',
     ],
   },
   {
@@ -456,6 +459,9 @@ export const SEED_PLANS: SeedPlan[] = [
       'reports',
       'integrations',
       'finance',
+      'configuracion',
+      'auditoria',
+      'licencias',
     ],
   },
   {
@@ -482,6 +488,9 @@ export const SEED_PLANS: SeedPlan[] = [
       'production',
       'exportations',
       'automations',
+      'configuracion',
+      'auditoria',
+      'licencias',
     ],
   },
 ];

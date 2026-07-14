@@ -15,6 +15,7 @@ import {
   FileText,
   Mail,
   ShieldCheck,
+  History,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -28,13 +29,19 @@ const navItems = [
 ];
 
 const adminNavItem = { href: '/admin/users', label: 'Administración', icon: ShieldCheck };
+const auditNavItem = { href: '/auditoria', label: 'Auditoría', icon: History };
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
   const canAdminister = user?.permissions?.includes('users.read');
-  const items = canAdminister ? [...navItems, adminNavItem] : navItems;
+  const canViewAudit = user?.permissions?.includes('auditoria.read');
+  const items = [
+    ...navItems,
+    ...(canViewAudit ? [auditNavItem] : []),
+    ...(canAdminister ? [adminNavItem] : []),
+  ];
 
   return (
     <>

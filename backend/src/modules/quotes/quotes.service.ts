@@ -8,7 +8,13 @@ import { Product } from '../../entities/product.entity';
 import { EmailService } from './email.service';
 import { QuotePdfService } from './quote-pdf.service';
 import { PaymentService } from './payment.service';
+import { renderQuoteResponseEmail } from './email-templates';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
+import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
+import { WorkflowAuditService } from '../security/workflow-audit.service';
+import { WorkflowEventType } from '../../entities/workflow-event.entity';
+
+const WORKFLOW_NAME = 'quote-to-cash';
 
 export interface ProcessEmailDto {
   from: string;
@@ -35,6 +41,8 @@ export class QuotesService {
     private pdfService: QuotePdfService,
     private paymentService: PaymentService,
     private readonly ctx: TenantContext,
+    private readonly hub: IntegrationHubService,
+    private readonly audit: WorkflowAuditService,
   ) {}
 
   async processIncomingEmail(dto: ProcessEmailDto): Promise<QuoteFlowResult> {
@@ -43,10 +51,19 @@ export class QuotesService {
 
     const email = await this.emailService.receiveEmail(dto);
     steps.push(`Email recibido de ${dto.from}: "${dto.subject}"`);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.WORKFLOW_STARTED,
+      action: 'email_received',
+      entityType: 'quote',
+      entityId: email.id,
+      inputData: { from: dto.from, subject: dto.subject },
+    });
 
     let client = await this.clientRepository.findOne({
       where: { email: dto.from, tenantId },
     });
+    let clientWasCreated = false;
     if (!client) {
       client = await this.clientRepository.save({
         clientId: `CLI-${Date.now()}`,
@@ -57,10 +74,18 @@ export class QuotesService {
         isActive: true,
         tenantId,
       });
+      clientWasCreated = true;
       steps.push(`Cliente nuevo creado: ${client.name}`);
     } else {
       steps.push(`Cliente identificado: ${client.name}`);
     }
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      action: clientWasCreated ? 'client_created' : 'client_matched',
+      entityType: 'client',
+      entityId: client.id,
+      outputData: { name: client.name, email: client.email, isNew: clientWasCreated },
+    });
 
     const items = this.parseItemsFromText(dto.body);
     steps.push(`Items detectados: ${items.length}`);
@@ -109,6 +134,15 @@ export class QuotesService {
     steps.push(
       `Cotización #${saved.quoteNumber} generada. Total: $${saved.total.toLocaleString('es-CO')}`,
     );
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      action: 'quote_generated',
+      entityType: 'quote',
+      entityId: saved.id,
+      fromState: QuoteStatus.RECEIVED,
+      toState: QuoteStatus.QUOTED,
+      outputData: { quoteNumber: saved.quoteNumber, total: saved.total, items: quoteItems.length },
+    });
 
     return { quote: saved, emailId: email.id, steps };
   }
@@ -118,6 +152,39 @@ export class QuotesService {
     const pdfBuffer = await this.pdfService.generateQuotePdf(quote);
     const pdfBase64 = pdfBuffer.toString('base64');
     quote.pdfUrl = `data:application/pdf;base64,${pdfBase64}`;
+
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      action: 'pdf_generated',
+      entityType: 'quote',
+      entityId: quote.id,
+      outputData: { sizeBytes: pdfBuffer.length },
+    });
+
+    // Envío real (vía simulador) de la respuesta al cliente — antes este paso
+    // solo cambiaba el estado sin enviar nada. El PDF va referenciado en el
+    // cuerpo (el adapter mock no modela adjuntos binarios) y queda disponible
+    // para descarga desde la propia cotización.
+    const { subject, html } = renderQuoteResponseEmail(quote);
+    const sendResult = await this.hub.call<{ id: string; sentAt: string }>(
+      'email',
+      'send',
+      { to: quote.client.email, subject, body: html },
+    );
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.NOTIFICATION_SENT,
+      action: 'email_sent',
+      entityType: 'quote',
+      entityId: quote.id,
+      outputData: {
+        to: quote.client.email,
+        ok: sendResult.ok,
+        messageId: sendResult.data?.id ?? null,
+      },
+      reason: sendResult.ok ? null : sendResult.error,
+    });
+
     quote.status = QuoteStatus.SENT;
     return this.quoteRepository.save(quote);
   }
@@ -133,7 +200,17 @@ export class QuotesService {
     if (!creditCheck.passed) {
       quote.status = QuoteStatus.REJECTED;
       quote.notes = `Cartera insuficiente. Disponible: $${creditCheck.available.toLocaleString('es-CO')}`;
-      return this.quoteRepository.save(quote);
+      const saved = await this.quoteRepository.save(quote);
+      await this.audit.log({
+        workflowName: WORKFLOW_NAME,
+        eventType: WorkflowEventType.APPROVAL_REJECTED,
+        action: 'quote_rejected_credit',
+        entityType: 'quote',
+        entityId: quote.id,
+        toState: QuoteStatus.REJECTED,
+        reason: quote.notes,
+      });
+      return saved;
     }
 
     quote.status = QuoteStatus.APPROVED;
@@ -142,7 +219,16 @@ export class QuotesService {
       ? 'Todo en inventario. Listo para producción.'
       : `Inventario parcial. ${inventoryChecks.missing.map((m) => `${m.sku} falta ${m.missing}`).join(', ')}`;
 
-    return this.quoteRepository.save(quote);
+    const saved = await this.quoteRepository.save(quote);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.APPROVAL_GRANTED,
+      action: 'quote_approved',
+      entityType: 'quote',
+      entityId: quote.id,
+      toState: QuoteStatus.APPROVED,
+    });
+    return saved;
   }
 
   async rejectQuote(emailId: string, quoteId: string): Promise<Quote> {
@@ -152,7 +238,16 @@ export class QuotesService {
     const quote = await this.findOne(quoteId);
     quote.status = QuoteStatus.REJECTED;
     quote.notes = 'Rechazada por el cliente.';
-    return this.quoteRepository.save(quote);
+    const saved = await this.quoteRepository.save(quote);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.APPROVAL_REJECTED,
+      action: 'quote_rejected_client',
+      entityType: 'quote',
+      entityId: quote.id,
+      toState: QuoteStatus.REJECTED,
+    });
+    return saved;
   }
 
   async createPaymentLink(quoteId: string): Promise<Quote> {
@@ -163,7 +258,15 @@ export class QuotesService {
     );
     quote.paymentLink = link.url;
     quote.status = QuoteStatus.PAYMENT_PENDING;
-    return this.quoteRepository.save(quote);
+    const saved = await this.quoteRepository.save(quote);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      action: 'payment_link_created',
+      entityType: 'quote',
+      entityId: quote.id,
+      toState: QuoteStatus.PAYMENT_PENDING,
+    });
+    return saved;
   }
 
   async simulatePayment(quoteId: string): Promise<Quote> {
@@ -188,26 +291,62 @@ export class QuotesService {
       Number(quote.client.usedCredit) + Number(quote.total);
     await this.clientRepository.save(quote.client);
 
-    return this.quoteRepository.save(quote);
+    const saved = await this.quoteRepository.save(quote);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      action: 'payment_confirmed',
+      entityType: 'quote',
+      entityId: quote.id,
+      toState: QuoteStatus.PAID,
+      outputData: { invoiceNumber: quote.invoiceNumber, total: quote.total },
+    });
+    return saved;
   }
 
   async moveToProduction(quoteId: string): Promise<Quote> {
     const quote = await this.findOne(quoteId);
     quote.status = QuoteStatus.IN_PRODUCTION;
-    return this.quoteRepository.save(quote);
+    const saved = await this.quoteRepository.save(quote);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.STATE_TRANSITION,
+      action: 'moved_to_production',
+      entityType: 'quote',
+      entityId: quote.id,
+      toState: QuoteStatus.IN_PRODUCTION,
+    });
+    return saved;
   }
 
   async markReady(quoteId: string): Promise<Quote> {
     const quote = await this.findOne(quoteId);
     quote.status = QuoteStatus.READY_FOR_DELIVERY;
-    return this.quoteRepository.save(quote);
+    const saved = await this.quoteRepository.save(quote);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.STATE_TRANSITION,
+      action: 'marked_ready',
+      entityType: 'quote',
+      entityId: quote.id,
+      toState: QuoteStatus.READY_FOR_DELIVERY,
+    });
+    return saved;
   }
 
   async markDelivered(quoteId: string): Promise<Quote> {
     const quote = await this.findOne(quoteId);
     quote.status = QuoteStatus.DELIVERED;
     quote.deliveredAt = new Date();
-    return this.quoteRepository.save(quote);
+    const saved = await this.quoteRepository.save(quote);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.WORKFLOW_COMPLETED,
+      action: 'marked_delivered',
+      entityType: 'quote',
+      entityId: quote.id,
+      toState: QuoteStatus.DELIVERED,
+    });
+    return saved;
   }
 
   async findAll(): Promise<Quote[]> {
