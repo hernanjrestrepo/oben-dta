@@ -337,3 +337,76 @@ export interface QuoteFlowResult {
   steps: string[];
 }
 
+// --- Administración Enterprise (usuarios / perfiles / permisos del tenant) --
+
+export interface TenantUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  isActive: boolean;
+  isLocked: boolean;
+  createdAt: string;
+  roles: string[];
+}
+
+export interface CreateTenantUserDto {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  roleKeys?: string[];
+}
+
+export interface UpdateTenantUserDto {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  isActive?: boolean;
+}
+
+export interface SecurityPermission {
+  id: string;
+  key: string;
+  moduleKey: string;
+  action: string;
+  name: string;
+  description: string | null;
+  isPlatform: boolean;
+}
+
+export interface SecurityModuleCatalog {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  category: string;
+  isActive: boolean;
+}
+
+export interface SecurityRole {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  isActive: boolean;
+  permissions: SecurityPermission[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRoleDto {
+  key: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+
+export interface UpdateRoleDto {
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+  permissions?: string[];
+}
+

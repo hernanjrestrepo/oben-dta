@@ -151,6 +151,24 @@ export const SEED_MODULES: SeedModule[] = [
     description: 'KPIs en vivo',
     category: 'core',
   },
+  {
+    key: 'configuracion',
+    name: 'Configuración',
+    description: 'Ajustes generales del tenant',
+    category: 'core',
+  },
+  {
+    key: 'auditoria',
+    name: 'Auditoría',
+    description: 'Trazabilidad de acciones del tenant',
+    category: 'core',
+  },
+  {
+    key: 'licencias',
+    name: 'Licencias',
+    description: 'Estado y gestión de la licencia del tenant',
+    category: 'core',
+  },
 ];
 
 // --- Permisos base --------------------------------------------------------
@@ -271,6 +289,30 @@ const EXTRA_PERMISSIONS: SeedPermission[] = [
     moduleKey: 'dashboard',
     action: 'view',
     name: 'ver dashboard',
+  },
+  {
+    key: 'configuracion.read',
+    moduleKey: 'configuracion',
+    action: 'read',
+    name: 'ver configuración',
+  },
+  {
+    key: 'configuracion.update',
+    moduleKey: 'configuracion',
+    action: 'update',
+    name: 'editar configuración',
+  },
+  {
+    key: 'auditoria.read',
+    moduleKey: 'auditoria',
+    action: 'read',
+    name: 'ver auditoría del tenant',
+  },
+  {
+    key: 'licencias.read',
+    moduleKey: 'licencias',
+    action: 'read',
+    name: 'ver licencia del tenant',
   },
   {
     key: 'automations.execute',

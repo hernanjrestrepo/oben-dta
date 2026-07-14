@@ -1,9 +1,11 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import {
   ApiError, AuditPage, AuthResponse, Client, CommercialLicense,
-  CreateOrderDto, DashboardKPIs, InboxEmail, IntegrationStatus, Invoice, LicenseStatusView,
-  Order, Plan, PlatformRole, PlatformUser, Product, Quote, QuoteFlowResult, SystemStatus, Tenant,
-  TenantFeatureFlag, TenantSubscription, UpdateOrderStatusDto, User,
+  CreateOrderDto, CreateRoleDto, CreateTenantUserDto, DashboardKPIs, InboxEmail, IntegrationStatus,
+  Invoice, LicenseStatusView, Order, Plan, PlatformRole, PlatformUser, Product, Quote,
+  QuoteFlowResult, SecurityModuleCatalog, SecurityPermission, SecurityRole, SystemStatus, Tenant,
+  TenantFeatureFlag, TenantSubscription, TenantUser, UpdateOrderStatusDto, UpdateRoleDto,
+  UpdateTenantUserDto, User,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
@@ -526,6 +528,99 @@ class ApiClient {
   async markQuoteDelivered(id: string): Promise<Quote> {
     const { data } = await this.client.post<Quote>(`/quotes/${id}/delivered`);
     return data;
+  }
+
+  // --- Administración Enterprise (usuarios / perfiles / permisos) ---------
+
+  async getTenantUsers(): Promise<TenantUser[]> {
+    const { data } = await this.client.get<TenantUser[]>('/users');
+    return data;
+  }
+
+  async getTenantUser(id: string): Promise<TenantUser> {
+    const { data } = await this.client.get<TenantUser>(`/users/${id}`);
+    return data;
+  }
+
+  async createTenantUser(dto: CreateTenantUserDto): Promise<TenantUser> {
+    const { data } = await this.client.post<TenantUser>('/users', dto);
+    return data;
+  }
+
+  async updateTenantUser(id: string, dto: UpdateTenantUserDto): Promise<TenantUser> {
+    const { data } = await this.client.put<TenantUser>(`/users/${id}`, dto);
+    return data;
+  }
+
+  async deleteTenantUser(id: string): Promise<void> {
+    await this.client.delete(`/users/${id}`);
+  }
+
+  async activateTenantUser(id: string): Promise<TenantUser> {
+    const { data } = await this.client.post<TenantUser>(`/users/${id}/activate`);
+    return data;
+  }
+
+  async deactivateTenantUser(id: string): Promise<TenantUser> {
+    const { data } = await this.client.post<TenantUser>(`/users/${id}/deactivate`);
+    return data;
+  }
+
+  async lockTenantUser(id: string): Promise<TenantUser> {
+    const { data } = await this.client.post<TenantUser>(`/users/${id}/lock`);
+    return data;
+  }
+
+  async unlockTenantUser(id: string): Promise<TenantUser> {
+    const { data } = await this.client.post<TenantUser>(`/users/${id}/unlock`);
+    return data;
+  }
+
+  async resetTenantUserPassword(id: string, password: string): Promise<TenantUser> {
+    const { data } = await this.client.post<TenantUser>(`/users/${id}/reset-password`, { password });
+    return data;
+  }
+
+  async assignUserRole(userId: string, roleKey: string): Promise<void> {
+    await this.client.post('/security/users/roles', { userId, roleKey });
+  }
+
+  async unassignUserRole(userId: string, roleKey: string): Promise<void> {
+    await this.client.delete('/security/users/roles', { data: { userId, roleKey } });
+  }
+
+  async getSecurityModules(): Promise<SecurityModuleCatalog[]> {
+    const { data } = await this.client.get<SecurityModuleCatalog[]>('/security/modules');
+    return data;
+  }
+
+  async getSecurityPermissions(): Promise<SecurityPermission[]> {
+    const { data } = await this.client.get<SecurityPermission[]>('/security/permissions');
+    return data;
+  }
+
+  async getRoles(): Promise<SecurityRole[]> {
+    const { data } = await this.client.get<SecurityRole[]>('/security/roles');
+    return data;
+  }
+
+  async getRole(key: string): Promise<SecurityRole> {
+    const { data } = await this.client.get<SecurityRole>(`/security/roles/${key}`);
+    return data;
+  }
+
+  async createRole(dto: CreateRoleDto): Promise<SecurityRole> {
+    const { data } = await this.client.post<SecurityRole>('/security/roles', dto);
+    return data;
+  }
+
+  async updateRole(key: string, dto: UpdateRoleDto): Promise<SecurityRole> {
+    const { data } = await this.client.put<SecurityRole>(`/security/roles/${key}`, dto);
+    return data;
+  }
+
+  async deleteRole(key: string): Promise<void> {
+    await this.client.delete(`/security/roles/${key}`);
   }
 }
 

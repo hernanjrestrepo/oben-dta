@@ -14,6 +14,7 @@ import {
   Activity,
   FileText,
   Mail,
+  ShieldCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,10 +27,14 @@ const navItems = [
   { href: '/clients', label: 'Clientes', icon: Users },
 ];
 
+const adminNavItem = { href: '/admin/users', label: 'Administración', icon: ShieldCheck };
+
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const canAdminister = user?.permissions?.includes('users.read');
+  const items = canAdminister ? [...navItems, adminNavItem] : navItems;
 
   return (
     <>
@@ -63,8 +68,10 @@ export function Sidebar() {
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+            {items.map((item) => {
+              const isActive = item.href === '/admin/users'
+                ? pathname?.startsWith('/admin')
+                : pathname === item.href || pathname?.startsWith(`${item.href}/`);
               const Icon = item.icon;
               return (
                 <Link

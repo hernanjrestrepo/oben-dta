@@ -21,6 +21,7 @@ import { LicenseSigningService } from './license-signing.service';
 import { LicensingService } from './licensing.service';
 import { SecurityBootstrapService } from './security-bootstrap.service';
 import { RolesService } from './roles.service';
+import { UsersService } from './users.service';
 import { PermissionsService } from './permissions.service';
 import { PlansService } from './plans.service';
 import { PlatformRolesService } from './platform-roles.service';
@@ -29,6 +30,7 @@ import { PlatformAuditService } from './platform-audit.service';
 import { PlatformSystemStatusService } from './platform-system-status.service';
 import { PermissionsGuard } from './permissions.guard';
 import { SecurityController } from './security.controller';
+import { UsersController } from './users.controller';
 import { PlatformSecurityController } from './platform-security.controller';
 import { PlatformUsersController } from './platform-users.controller';
 import { PlatformAuditController } from './platform-audit.controller';
@@ -73,6 +75,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     LicensingService,
     SecurityBootstrapService,
     RolesService,
+    UsersService,
     PermissionsService,
     PlansService,
     PlatformRolesService,
@@ -84,6 +87,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
   ],
   controllers: [
     SecurityController,
+    UsersController,
     PlatformSecurityController,
     PlatformUsersController,
     PlatformAuditController,
@@ -97,6 +101,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     SecurityBootstrapService,
     PermissionsGuard,
     RolesService,
+    UsersService,
     PermissionsService,
     PlansService,
     PlatformRolesService,

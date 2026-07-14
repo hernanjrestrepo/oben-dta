@@ -1883,3 +1883,8 @@ CMakeLists.txt.user
 *.userprefs
 *.resharper
 *.sln.docstates
+# Este .gitignore es un boilerplate genérico que incluye reglas de Chef/Ansible
+# ("roles/", "cookbooks/", etc.) irrelevantes para este proyecto. Esas reglas
+# coinciden por accidente con nuestra ruta real de la app
+# frontend/src/app/(app)/admin/roles/ y la excluían silenciosamente de git.
+!frontend/src/app/(app)/admin/roles/

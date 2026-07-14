@@ -174,6 +174,50 @@ export class UpdatePlatformUserDto {
   password?: string;
 }
 
+export class CreateTenantUserDto {
+  @IsString()
+  firstName: string;
+
+  @IsString()
+  lastName: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  roleKeys?: string[];
+}
+
+export class UpdateTenantUserDto {
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class ResetTenantUserPasswordDto {
+  @IsString()
+  @MinLength(8)
+  password: string;
+}
+
 export class IssueLicenseDto {
   @IsString()
   planKey: string;
