@@ -74,6 +74,15 @@ export class Quote extends TenantScopedEntity {
   @Column({ type: 'text', nullable: true })
   invoiceNumber: string;
 
+  @Column({ type: 'uuid', nullable: true })
+  orderId: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  orderNumber: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  invoiceId: string | null;
+
   @Column({ nullable: true })
   approvedAt: Date;
 

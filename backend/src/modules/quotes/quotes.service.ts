@@ -13,6 +13,9 @@ import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
+import { OrdersService } from '../orders/orders.service';
+import { InvoicesService } from '../invoices/invoices.service';
+import { OrderStatus } from '../../entities/order.entity';
 
 const WORKFLOW_NAME = 'quote-to-cash';
 
@@ -43,6 +46,8 @@ export class QuotesService {
     private readonly ctx: TenantContext,
     private readonly hub: IntegrationHubService,
     private readonly audit: WorkflowAuditService,
+    private readonly orders: OrdersService,
+    private readonly invoices: InvoicesService,
   ) {}
 
   async processIncomingEmail(dto: ProcessEmailDto): Promise<QuoteFlowResult> {
@@ -279,17 +284,50 @@ export class QuotesService {
 
     quote.status = QuoteStatus.PAID;
     quote.paidAt = new Date();
-    quote.invoiceNumber = `FAC-${Date.now()}`;
 
     for (const item of quote.items || []) {
       if (item.product) {
-        item.product.stock -= item.quantity;
-        await this.productRepository.save(item.product);
+        // decrement() emite un UPDATE ... SET stock = stock - N atómico en
+        // Postgres — leer product.stock en JS y restar antes de guardar
+        // pierde actualizaciones bajo pagos concurrentes sobre el mismo SKU
+        // (reproducido en pruebas: dos decrementos de 2 colapsaron en uno).
+        await this.productRepository.decrement(
+          { id: item.product.id, tenantId: this.ctx.tenantId },
+          'stock',
+          item.quantity,
+        );
       }
     }
     quote.client.usedCredit =
       Number(quote.client.usedCredit) + Number(quote.total);
     await this.clientRepository.save(quote.client);
+
+    // Orden y factura reales (antes solo se escribía un invoiceNumber inventado
+    // sin fila de Order/Invoice detrás). Se generan a partir de los mismos
+    // items ya validados de la cotización — no repite el descuento de stock,
+    // OrdersService no lo toca.
+    const order = await this.orders.create(
+      {
+        clientId: quote.client.id,
+        orderNumber: `OP-${Date.now()}`,
+        notes: `Generada automáticamente desde cotización ${quote.quoteNumber}`,
+        items: (quote.items || [])
+          .filter((item) => item.product)
+          .map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+      },
+      undefined,
+    );
+    const invoice = await this.invoices.createFromOrder({
+      orderId: order.id,
+    });
+
+    quote.orderId = order.id;
+    quote.orderNumber = order.orderNumber;
+    quote.invoiceId = invoice.id;
+    quote.invoiceNumber = invoice.invoiceNumber;
 
     const saved = await this.quoteRepository.save(quote);
     await this.audit.log({
@@ -298,7 +336,30 @@ export class QuotesService {
       entityType: 'quote',
       entityId: quote.id,
       toState: QuoteStatus.PAID,
-      outputData: { invoiceNumber: quote.invoiceNumber, total: quote.total },
+      outputData: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        total: quote.total,
+      },
+    });
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      action: 'order_created',
+      entityType: 'order',
+      entityId: order.id,
+      outputData: { orderNumber: order.orderNumber, total: order.totalAmount },
+    });
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      action: 'invoice_created',
+      entityType: 'invoice',
+      entityId: invoice.id,
+      outputData: {
+        invoiceNumber: invoice.invoiceNumber,
+        totalAmount: invoice.totalAmount,
+      },
     });
     return saved;
   }
@@ -306,6 +367,14 @@ export class QuotesService {
   async moveToProduction(quoteId: string): Promise<Quote> {
     const quote = await this.findOne(quoteId);
     quote.status = QuoteStatus.IN_PRODUCTION;
+    if (quote.orderId) {
+      await this.advanceOrder(quote.orderId, [
+        OrderStatus.PENDING_VALIDATION,
+        OrderStatus.CONFIRMED,
+        OrderStatus.PENDING_PRODUCTION,
+        OrderStatus.IN_PRODUCTION,
+      ]);
+    }
     const saved = await this.quoteRepository.save(quote);
     await this.audit.log({
       workflowName: WORKFLOW_NAME,
@@ -321,6 +390,9 @@ export class QuotesService {
   async markReady(quoteId: string): Promise<Quote> {
     const quote = await this.findOne(quoteId);
     quote.status = QuoteStatus.READY_FOR_DELIVERY;
+    if (quote.orderId) {
+      await this.advanceOrder(quote.orderId, [OrderStatus.READY_FOR_DELIVERY]);
+    }
     const saved = await this.quoteRepository.save(quote);
     await this.audit.log({
       workflowName: WORKFLOW_NAME,
@@ -337,6 +409,9 @@ export class QuotesService {
     const quote = await this.findOne(quoteId);
     quote.status = QuoteStatus.DELIVERED;
     quote.deliveredAt = new Date();
+    if (quote.orderId) {
+      await this.advanceOrder(quote.orderId, [OrderStatus.DELIVERED]);
+    }
     const saved = await this.quoteRepository.save(quote);
     await this.audit.log({
       workflowName: WORKFLOW_NAME,
@@ -347,6 +422,19 @@ export class QuotesService {
       toState: QuoteStatus.DELIVERED,
     });
     return saved;
+  }
+
+  // Mantiene sincronizado el estado de la orden real detrás de la cotización.
+  // OrdersService.updateStatus valida cada salto de la máquina de estados
+  // (ver getValidTransitions), así que hay que recorrer los intermedios en
+  // orden — no se puede saltar directo de DRAFT a IN_PRODUCTION.
+  private async advanceOrder(
+    orderId: string,
+    targets: OrderStatus[],
+  ): Promise<void> {
+    for (const status of targets) {
+      await this.orders.updateStatus(orderId, { status });
+    }
   }
 
   async findAll(): Promise<Quote[]> {

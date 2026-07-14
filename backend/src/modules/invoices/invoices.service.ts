@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import {
   Invoice,
   InvoiceStatus,
@@ -69,24 +69,69 @@ export class InvoicesService {
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + PAYMENT_TERM_DAYS);
 
-    const invoice = this.invoiceRepository.create({
-      invoiceNumber: await this.generateInvoiceNumber(tenantId),
-      order,
-      orderId: order.id,
-      amount,
-      taxAmount,
-      totalAmount,
-      status: InvoiceStatus.PENDING,
-      dianStatus: DianStatus.PENDING,
-      dueDate,
-      tenantId,
-    });
-    const saved = await this.invoiceRepository.save(invoice);
+    const saved = await this.saveWithUniqueRetry(async () => {
+      const invoice = this.invoiceRepository.create({
+        invoiceNumber: await this.generateInvoiceNumber(tenantId),
+        order,
+        orderId: order.id,
+        amount,
+        taxAmount,
+        totalAmount,
+        status: InvoiceStatus.PENDING,
+        dianStatus: DianStatus.PENDING,
+        dueDate,
+        tenantId,
+      });
+      return this.invoiceRepository.save(invoice);
+    }, order.orderNumber);
 
     order.invoiceNumber = saved.invoiceNumber;
     await this.orderRepository.save(order);
 
     return saved;
+  }
+
+  /**
+   * generateInvoiceNumber() cuenta filas y luego inserta — no es atómico.
+   * Bajo concurrencia real (dos pagos confirmándose casi al mismo tiempo,
+   * reproducido en pruebas con la demo automática) dos llamadas pueden
+   * calcular el mismo número; Postgres rechaza la segunda inserción por la
+   * restricción única (tenantId, invoiceNumber) y aquí se reintenta con un
+   * número recalculado. Si la colisión es por (tenantId, orderId) — la orden
+   * ya fue facturada por otra llamada concurrente — no se reintenta, es un
+   * conflicto de negocio real, no una colisión de numeración.
+   */
+  private async saveWithUniqueRetry(
+    attempt: () => Promise<Invoice>,
+    orderNumber: string,
+    maxAttempts = 5,
+  ): Promise<Invoice> {
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        return await attempt();
+      } catch (err) {
+        const constraint = this.uniqueViolationConstraint(err);
+        if (constraint === 'uq_invoices_tenant_order') {
+          throw new ConflictException(
+            `La orden ${orderNumber} ya tiene una factura generada por otra operación concurrente.`,
+          );
+        }
+        if (constraint === 'uq_invoices_tenant_number' && i < maxAttempts - 1) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new ConflictException(
+      `No fue posible generar un número de factura único para la orden ${orderNumber} tras varios intentos.`,
+    );
+  }
+
+  private uniqueViolationConstraint(err: unknown): string | null {
+    if (!(err instanceof QueryFailedError)) return null;
+    const driverErr = err as unknown as { code?: string; constraint?: string };
+    if (driverErr.code !== '23505') return null;
+    return driverErr.constraint ?? null;
   }
 
   async findAll(page: number = 1, limit: number = 50): Promise<Invoice[]> {

@@ -28,6 +28,7 @@ export enum DianStatus {
 
 @Entity('invoices')
 @Unique('uq_invoices_tenant_number', ['tenantId', 'invoiceNumber'])
+@Unique('uq_invoices_tenant_order', ['tenantId', 'orderId'])
 export class Invoice extends TenantScopedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

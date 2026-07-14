@@ -337,6 +337,26 @@ export interface QuoteFlowResult {
   steps: string[];
 }
 
+// --- Demo automático (WO-013 Sprint 6) ---
+export interface DemoStep {
+  step: string;
+  label: string;
+  at: string;
+  data?: Record<string, unknown>;
+}
+
+export interface DemoResult {
+  steps: DemoStep[];
+  quoteId: string;
+  quoteNumber: string;
+  orderId: string | null;
+  orderNumber: string | null;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  total: number;
+  durationMs: number;
+}
+
 // --- Administración Enterprise (usuarios / perfiles / permisos del tenant) --
 
 export interface TenantUser {

@@ -9,15 +9,27 @@ import { QuotesService } from './quotes.service';
 import { QuotePdfService } from './quote-pdf.service';
 import { EmailService } from './email.service';
 import { PaymentService } from './payment.service';
+import { DemoService } from './demo.service';
+import { DemoController } from './demo.controller';
 import { AuthModule } from '../auth/auth.module';
+import { OrdersModule } from '../orders/orders.module';
+import { InvoicesModule } from '../invoices/invoices.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Quote, QuoteItem, Client, Product]),
     AuthModule,
+    OrdersModule,
+    InvoicesModule,
   ],
-  controllers: [QuotesController],
-  providers: [QuotesService, QuotePdfService, EmailService, PaymentService],
+  controllers: [QuotesController, DemoController],
+  providers: [
+    QuotesService,
+    QuotePdfService,
+    EmailService,
+    PaymentService,
+    DemoService,
+  ],
   exports: [QuotesService],
 })
 export class QuotesModule {}
