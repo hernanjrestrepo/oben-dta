@@ -12,13 +12,15 @@ import {
   LicenseSigningService,
   LicenseClaims,
 } from './license-signing.service';
+import { InstallationFingerprintService } from './installation-fingerprint.service';
 
 export type LicenseValidationReason =
   | 'no_license'
   | 'tampered'
   | 'expired'
   | 'suspended'
-  | 'revoked';
+  | 'revoked'
+  | 'installation_mismatch';
 
 export interface LicenseValidation {
   valid: boolean;
@@ -45,6 +47,7 @@ export class LicensingService {
     @InjectRepository(License) private readonly licenses: Repository<License>,
     @InjectRepository(Tenant) private readonly tenants: Repository<Tenant>,
     private readonly signing: LicenseSigningService,
+    private readonly fingerprint: InstallationFingerprintService,
   ) {}
 
   async issue(
@@ -70,11 +73,13 @@ export class LicensingService {
     const expiresAt = new Date(
       now.getTime() + (dto.durationDays ?? 30) * 86_400_000,
     );
+    const installationFingerprint = await this.fingerprint.current();
 
     const claims: LicenseClaims = {
       licenseId: existing?.id ?? randomUUID(),
       tenantId,
       installationId: tenant.installationId,
+      installationFingerprint,
       planKey: dto.planKey,
       status: LicenseStatus.ACTIVE,
       maxUsers: dto.maxUsers ?? 0,
@@ -89,6 +94,7 @@ export class LicensingService {
     const license =
       existing ?? this.licenses.create({ id: claims.licenseId, tenantId });
     license.installationId = tenant.installationId;
+    license.installationFingerprint = installationFingerprint;
     license.planKey = claims.planKey;
     license.status = LicenseStatus.ACTIVE;
     license.maxUsers = claims.maxUsers;
@@ -119,11 +125,14 @@ export class LicensingService {
     const newExpiresAt = dto.expiresAt
       ? new Date(dto.expiresAt)
       : new Date(Date.now() + (dto.durationDays ?? 30) * 86_400_000);
+    const installationFingerprint =
+      license.installationFingerprint ?? (await this.fingerprint.current());
 
     const claims: LicenseClaims = {
       licenseId: license.id,
       tenantId: license.tenantId,
       installationId: license.installationId,
+      installationFingerprint,
       planKey: license.planKey,
       status: LicenseStatus.ACTIVE,
       maxUsers: license.maxUsers,
@@ -136,6 +145,7 @@ export class LicensingService {
     const { signature, keyId } = this.signing.sign(claims);
 
     license.status = LicenseStatus.ACTIVE;
+    license.installationFingerprint = installationFingerprint;
     license.expiresAt = newExpiresAt;
     license.signature = signature;
     license.signingKeyId = keyId;
@@ -171,6 +181,17 @@ export class LicensingService {
     const claims = this.toClaims(license);
     const signatureOk = this.signing.verify(claims, license.signature);
     if (!signatureOk) return { valid: false, reason: 'tampered', license };
+
+    // Solo se exige coincidencia si la licencia ya está vinculada a una
+    // instalación (ver toClaims). Copiar el código + la fila de licencia a
+    // otra base de datos produce un fingerprint distinto y la licencia deja
+    // de validar ahí, aunque la firma en sí siga siendo genuina.
+    if (license.installationFingerprint) {
+      const currentFingerprint = await this.fingerprint.current();
+      if (currentFingerprint !== license.installationFingerprint) {
+        return { valid: false, reason: 'installation_mismatch', license };
+      }
+    }
 
     if (license.status === LicenseStatus.REVOKED) {
       return { valid: false, reason: 'revoked', license };
@@ -215,7 +236,7 @@ export class LicensingService {
   }
 
   private toClaims(license: License): LicenseClaims {
-    return {
+    const claims: LicenseClaims = {
       licenseId: license.id,
       tenantId: license.tenantId,
       installationId: license.installationId,
@@ -228,5 +249,12 @@ export class LicensingService {
       gracePeriodDays: license.gracePeriodDays,
       offline: license.offline,
     };
+    // Ver el comentario en LicenseClaims: solo se incluye la clave si la
+    // licencia ya está vinculada a una instalación — de lo contrario cambiaría
+    // el JSON canónico de licencias legadas y su firma dejaría de verificar.
+    if (license.installationFingerprint) {
+      claims.installationFingerprint = license.installationFingerprint;
+    }
+    return claims;
   }
 }

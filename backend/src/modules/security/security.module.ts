@@ -22,6 +22,7 @@ import { AuditController } from './audit.controller';
 import { LicenseService } from './license.service';
 import { LicenseSigningService } from './license-signing.service';
 import { LicensingService } from './licensing.service';
+import { InstallationFingerprintService } from './installation-fingerprint.service';
 import { SecurityBootstrapService } from './security-bootstrap.service';
 import { RolesService } from './roles.service';
 import { UsersService } from './users.service';
@@ -77,6 +78,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     LicenseService,
     LicenseSigningService,
     LicensingService,
+    InstallationFingerprintService,
     SecurityBootstrapService,
     RolesService,
     UsersService,

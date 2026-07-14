@@ -1,5 +1,6 @@
 import { LicensingService } from './licensing.service';
 import { LicenseSigningService } from './license-signing.service';
+import { InstallationFingerprintService } from './installation-fingerprint.service';
 import { License, LicenseStatus } from '../../entities/license.entity';
 
 function makeSigning(): LicenseSigningService {
@@ -7,6 +8,10 @@ function makeSigning(): LicenseSigningService {
   const svc = new LicenseSigningService(config as never);
   svc.onModuleInit();
   return svc;
+}
+
+function makeFingerprint(value = 'fp-test-installation'): InstallationFingerprintService {
+  return { current: jest.fn(() => Promise.resolve(value)) } as never;
 }
 
 function makeRepos() {
@@ -50,6 +55,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       signing,
+      makeFingerprint(),
     );
 
     const license = await svc.issue('t1', {
@@ -71,6 +77,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       makeSigning(),
+      makeFingerprint(),
     );
     const result = await svc.validate('t1');
     expect(result.valid).toBe(false);
@@ -83,6 +90,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       makeSigning(),
+      makeFingerprint(),
     );
     await svc.issue('t1', { planKey: 'starter', durationDays: 1 });
 
@@ -100,6 +108,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       makeSigning(),
+      makeFingerprint(),
     );
     await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
 
@@ -120,6 +129,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       makeSigning(),
+      makeFingerprint(),
     );
     await svc.issue('t1', {
       planKey: 'starter',
@@ -143,6 +153,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       signing,
+      makeFingerprint(),
     );
     // durationDays negativo la deja vencida desde ya; gracePeriodDays=7 cubre la ventana.
     await svc.issue('t1', {
@@ -163,6 +174,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       makeSigning(),
+      makeFingerprint(),
     );
     await svc.issue('t1', {
       planKey: 'starter',
@@ -181,6 +193,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       makeSigning(),
+      makeFingerprint(),
     );
     await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
 
@@ -196,6 +209,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       makeSigning(),
+      makeFingerprint(),
     );
     await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
 
@@ -211,6 +225,7 @@ describe('LicensingService', () => {
       licenses as never,
       tenants as never,
       makeSigning(),
+      makeFingerprint(),
     );
     const first = await svc.issue('t1', {
       planKey: 'starter',
@@ -219,5 +234,73 @@ describe('LicensingService', () => {
     const second = await svc.issue('t1', { planKey: 'pro', durationDays: 60 });
     expect(second.id).toBe(first.id);
     expect(second.planKey).toBe('pro');
+  });
+
+  it('licencia emitida en una instalación no valida en otra (installation_mismatch)', async () => {
+    const { licenses, tenants } = makeRepos();
+    const signing = makeSigning();
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      signing,
+      makeFingerprint('installation-A'),
+    );
+    await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
+
+    // Mismo código y misma fila de licencia, pero corriendo contra una base
+    // de datos distinta (fingerprint distinto) — simula copiar el deploy.
+    const svcOtherInstall = new LicensingService(
+      licenses as never,
+      tenants as never,
+      signing,
+      makeFingerprint('installation-B'),
+    );
+    const result = await svcOtherInstall.validate('t1');
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('installation_mismatch');
+  });
+
+  it('licencia legada sin fingerprint vinculado sigue validando (compatibilidad retroactiva)', async () => {
+    const { licenses, tenants, licenseStore } = makeRepos();
+    const signing = makeSigning();
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      signing,
+      makeFingerprint('installation-A'),
+    );
+    await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
+
+    // Simula una licencia emitida ANTES de este control: sin fingerprint
+    // guardado. La firma se recalcula sin esa clave (toClaims la omite), así
+    // que sigue siendo válida — no rompe licencias ya emitidas.
+    const stored = licenseStore.get('t1')!;
+    const claimsWithoutFingerprint = {
+      licenseId: stored.id,
+      tenantId: stored.tenantId,
+      installationId: stored.installationId,
+      planKey: stored.planKey,
+      status: stored.status,
+      maxUsers: stored.maxUsers,
+      maxSites: stored.maxSites,
+      issuedAt: stored.issuedAt.toISOString(),
+      expiresAt: stored.expiresAt.toISOString(),
+      gracePeriodDays: stored.gracePeriodDays,
+      offline: stored.offline,
+    };
+    stored.installationFingerprint = null;
+    stored.signature = signing.sign(claimsWithoutFingerprint).signature;
+    licenseStore.set('t1', stored);
+
+    // Validar desde una instalación con un fingerprint totalmente distinto
+    // no debería importar, porque la licencia nunca quedó vinculada a ninguna.
+    const svcDifferentInstall = new LicensingService(
+      licenses as never,
+      tenants as never,
+      signing,
+      makeFingerprint('some-other-installation'),
+    );
+    const result = await svcDifferentInstall.validate('t1');
+    expect(result.valid).toBe(true);
   });
 });

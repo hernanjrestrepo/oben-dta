@@ -13,6 +13,12 @@ export interface LicenseClaims {
   licenseId: string;
   tenantId: string;
   installationId: string;
+  // Opcional (no `| null`): las licencias emitidas antes de este control se
+  // firmaron sin esta clave en el JSON canónico. Si se agregara siempre —
+  // aunque fuera null — la firma de TODAS las licencias ya emitidas dejaría
+  // de verificar el día del despliegue, sin que nadie las haya manipulado.
+  // Se omite del objeto por completo cuando no aplica (ver toClaims()).
+  installationFingerprint?: string;
   planKey: string;
   status: string;
   maxUsers: number;

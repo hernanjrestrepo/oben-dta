@@ -15,6 +15,7 @@ const REASON_LABELS: Record<string, string> = {
   expired: 'La licencia de esta empresa venció.',
   suspended: 'La licencia de esta empresa está suspendida.',
   revoked: 'La licencia de esta empresa fue revocada.',
+  installation_mismatch: 'Esta licencia pertenece a otra instalación y no es válida aquí.',
 };
 
 /**

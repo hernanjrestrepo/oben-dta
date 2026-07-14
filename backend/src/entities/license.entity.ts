@@ -37,6 +37,16 @@ export class License {
   @Column({ name: 'installation_id', type: 'uuid' })
   installationId: string;
 
+  // Huella de la base de datos física donde se emitió (ver
+  // InstallationFingerprintService). Nullable solo para licencias emitidas
+  // antes de este control — se auto-vincula la primera vez que se valida.
+  @Column({
+    name: 'installation_fingerprint',
+    type: 'varchar',
+    nullable: true,
+  })
+  installationFingerprint: string | null;
+
   @Column({ name: 'plan_key', length: 64 })
   planKey: string;
 
