@@ -9,10 +9,17 @@ import { randomUUID } from 'crypto';
 import { License, LicenseStatus } from '../../entities/license.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import {
+  WorkflowEvent,
+  WorkflowEventType,
+  WorkflowEventStatus,
+} from '../../entities/workflow-event.entity';
+import {
   LicenseSigningService,
   LicenseClaims,
 } from './license-signing.service';
 import { InstallationFingerprintService } from './installation-fingerprint.service';
+
+const LICENSE_WORKFLOW = 'license-lifecycle';
 
 export type LicenseValidationReason =
   | 'no_license'
@@ -46,9 +53,39 @@ export class LicensingService {
   constructor(
     @InjectRepository(License) private readonly licenses: Repository<License>,
     @InjectRepository(Tenant) private readonly tenants: Repository<Tenant>,
+    @InjectRepository(WorkflowEvent)
+    private readonly events: Repository<WorkflowEvent>,
     private readonly signing: LicenseSigningService,
     private readonly fingerprint: InstallationFingerprintService,
   ) {}
+
+  /**
+   * Bitácora de licencias. No usa WorkflowAuditService porque ese servicio
+   * está atado al TenantContext de la request (Scope.REQUEST) y estas
+   * acciones las dispara casi siempre un SuperAdmin de plataforma sin tenant
+   * propio — el evento debe quedar asociado al tenant DUEÑO de la licencia,
+   * no al del llamador.
+   */
+  private async logLicenseEvent(
+    tenantId: string,
+    action: string,
+    entityId: string,
+    outputData: Record<string, unknown>,
+  ): Promise<void> {
+    await this.events.save(
+      this.events.create({
+        tenantId,
+        eventType: WorkflowEventType.ACTION_EXECUTED,
+        status: WorkflowEventStatus.COMPLETED,
+        workflowName: LICENSE_WORKFLOW,
+        action,
+        entityType: 'license',
+        entityId,
+        outputData,
+        completedAt: new Date(),
+      }),
+    );
+  }
 
   async issue(
     tenantId: string,
@@ -106,7 +143,13 @@ export class LicensingService {
     license.offline = claims.offline;
     license.signature = signature;
     license.signingKeyId = keyId;
-    return this.licenses.save(license);
+    const saved = await this.licenses.save(license);
+    await this.logLicenseEvent(tenantId, 'issue', saved.id, {
+      planKey: saved.planKey,
+      expiresAt: saved.expiresAt,
+      maxUsers: saved.maxUsers,
+    });
+    return saved;
   }
 
   async renew(
@@ -150,7 +193,11 @@ export class LicensingService {
     license.signature = signature;
     license.signingKeyId = keyId;
     license.lastRenewalRequestAt = null;
-    return this.licenses.save(license);
+    const saved = await this.licenses.save(license);
+    await this.logLicenseEvent(tenantId, 'renew', saved.id, {
+      expiresAt: saved.expiresAt,
+    });
+    return saved;
   }
 
   async setStatus(tenantId: string, status: LicenseStatus): Promise<License> {
@@ -167,7 +214,9 @@ export class LicensingService {
     license.status = status;
     license.signature = signature;
     license.signingKeyId = keyId;
-    return this.licenses.save(license);
+    const saved = await this.licenses.save(license);
+    await this.logLicenseEvent(tenantId, 'set_status', saved.id, { status });
+    return saved;
   }
 
   async getCurrent(tenantId: string): Promise<License | null> {

@@ -44,16 +44,19 @@ function makeRepos() {
 
   tenantStore.set('t1', { id: 't1', installationId: null });
 
-  return { licenses, tenants, licenseStore, tenantStore };
+  const events = { create: jest.fn((p) => p), save: jest.fn((e) => Promise.resolve(e)) };
+
+  return { licenses, tenants, events, licenseStore, tenantStore };
 }
 
 describe('LicensingService', () => {
   it('issue() genera installationId, firma la licencia y queda válida', async () => {
-    const { licenses, tenants } = makeRepos();
+    const { licenses, tenants, events } = makeRepos();
     const signing = makeSigning();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       signing,
       makeFingerprint(),
     );
@@ -69,13 +72,43 @@ describe('LicensingService', () => {
     const result = await svc.validate('t1');
     expect(result.valid).toBe(true);
     expect(result.reason).toBeUndefined();
+
+    expect(events.save).toHaveBeenCalledTimes(1);
+    expect(events.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 't1',
+        workflowName: 'license-lifecycle',
+        action: 'issue',
+        entityType: 'license',
+      }),
+    );
   });
 
-  it('sin licencia emitida → no_license', async () => {
-    const { licenses, tenants } = makeRepos();
+  it('renew() y setStatus() también quedan registrados en la bitácora de licencias', async () => {
+    const { licenses, tenants, events } = makeRepos();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
+      makeSigning(),
+      makeFingerprint(),
+    );
+    await svc.issue('t1', { planKey: 'starter', durationDays: 30 });
+    await svc.renew('t1', { durationDays: 60 });
+    await svc.setStatus('t1', LicenseStatus.SUSPENDED);
+
+    const actions = (events.save as jest.Mock).mock.calls.map(
+      ([e]: [{ action: string }]) => e.action,
+    );
+    expect(actions).toEqual(['issue', 'renew', 'set_status']);
+  });
+
+  it('sin licencia emitida → no_license', async () => {
+    const { licenses, tenants, events } = makeRepos();
+    const svc = new LicensingService(
+      licenses as never,
+      tenants as never,
+      events as never,
       makeSigning(),
       makeFingerprint(),
     );
@@ -85,10 +118,11 @@ describe('LicensingService', () => {
   });
 
   it('renew() extiende expiresAt y re-firma manteniendo validez', async () => {
-    const { licenses, tenants } = makeRepos();
+    const { licenses, tenants, events } = makeRepos();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       makeSigning(),
       makeFingerprint(),
     );
@@ -103,10 +137,11 @@ describe('LicensingService', () => {
   });
 
   it('manipulación manual de expiresAt en BD invalida la firma (tampered)', async () => {
-    const { licenses, tenants, licenseStore } = makeRepos();
+    const { licenses, tenants, events, licenseStore } = makeRepos();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       makeSigning(),
       makeFingerprint(),
     );
@@ -124,10 +159,11 @@ describe('LicensingService', () => {
   });
 
   it('manipulación manual de maxUsers en BD invalida la firma (tampered)', async () => {
-    const { licenses, tenants, licenseStore } = makeRepos();
+    const { licenses, tenants, events, licenseStore } = makeRepos();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       makeSigning(),
       makeFingerprint(),
     );
@@ -147,11 +183,12 @@ describe('LicensingService', () => {
   });
 
   it('licencia vencida dentro del período de gracia → válida con graceActive', async () => {
-    const { licenses, tenants } = makeRepos();
+    const { licenses, tenants, events } = makeRepos();
     const signing = makeSigning();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       signing,
       makeFingerprint(),
     );
@@ -169,10 +206,11 @@ describe('LicensingService', () => {
   });
 
   it('licencia vencida más allá del período de gracia → inválida (expired)', async () => {
-    const { licenses, tenants } = makeRepos();
+    const { licenses, tenants, events } = makeRepos();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       makeSigning(),
       makeFingerprint(),
     );
@@ -188,10 +226,11 @@ describe('LicensingService', () => {
   });
 
   it('setStatus(SUSPENDED) re-firma y validate() deniega con reason=suspended', async () => {
-    const { licenses, tenants } = makeRepos();
+    const { licenses, tenants, events } = makeRepos();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       makeSigning(),
       makeFingerprint(),
     );
@@ -204,10 +243,11 @@ describe('LicensingService', () => {
   });
 
   it('setStatus(REVOKED) deniega con reason=revoked', async () => {
-    const { licenses, tenants } = makeRepos();
+    const { licenses, tenants, events } = makeRepos();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       makeSigning(),
       makeFingerprint(),
     );
@@ -220,10 +260,11 @@ describe('LicensingService', () => {
   });
 
   it('reissue sobre un tenant ya licenciado reutiliza el mismo licenseId', async () => {
-    const { licenses, tenants } = makeRepos();
+    const { licenses, tenants, events } = makeRepos();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       makeSigning(),
       makeFingerprint(),
     );
@@ -237,11 +278,12 @@ describe('LicensingService', () => {
   });
 
   it('licencia emitida en una instalación no valida en otra (installation_mismatch)', async () => {
-    const { licenses, tenants } = makeRepos();
+    const { licenses, tenants, events } = makeRepos();
     const signing = makeSigning();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       signing,
       makeFingerprint('installation-A'),
     );
@@ -252,6 +294,7 @@ describe('LicensingService', () => {
     const svcOtherInstall = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       signing,
       makeFingerprint('installation-B'),
     );
@@ -261,11 +304,12 @@ describe('LicensingService', () => {
   });
 
   it('licencia legada sin fingerprint vinculado sigue validando (compatibilidad retroactiva)', async () => {
-    const { licenses, tenants, licenseStore } = makeRepos();
+    const { licenses, tenants, events, licenseStore } = makeRepos();
     const signing = makeSigning();
     const svc = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       signing,
       makeFingerprint('installation-A'),
     );
@@ -297,6 +341,7 @@ describe('LicensingService', () => {
     const svcDifferentInstall = new LicensingService(
       licenses as never,
       tenants as never,
+      events as never,
       signing,
       makeFingerprint('some-other-installation'),
     );
