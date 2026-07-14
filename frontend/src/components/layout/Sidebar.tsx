@@ -11,14 +11,14 @@ import {
   ChevronRight,
   Menu,
   X,
-  Bot,
+  Activity,
   FileText,
   Mail,
 } from 'lucide-react';
 import { useState } from 'react';
 
 const navItems = [
-  { href: '/operaciones', label: 'Centro IA', icon: Bot },
+  { href: '/operaciones', label: 'Centro de Operaciones', icon: Activity },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/quotes', label: 'Cotizaciones', icon: Mail },
   { href: '/orders', label: 'Órdenes', icon: ShoppingCart },

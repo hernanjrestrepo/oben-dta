@@ -30,7 +30,7 @@ import {
  *   2. Si mode=real: lee credenciales + routes de tenant.integrationConfig.<system>
  *   3. Si mode=mock: devuelve la instancia mock ya inyectada
  *
- * De esta forma el resto del sistema (workflows, EVA, controllers) NUNCA
+ * De esta forma el resto del sistema (workflows, controllers) NUNCA
  * conoce el modo — solo pide un adapter por system y llama execute().
  */
 @Injectable()

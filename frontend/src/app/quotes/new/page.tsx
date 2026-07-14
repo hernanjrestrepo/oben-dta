@@ -119,7 +119,7 @@ export default function NewQuotePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Simular Correo Entrante</h1>
           <p className="text-gray-500 text-sm">
-            Simula la llegada de una solicitud de cotización por correo — EVA la procesa y genera la cotización automáticamente
+            Simula la llegada de una solicitud de cotización por correo — el sistema la procesa y genera la cotización automáticamente
           </p>
         </div>
       </div>

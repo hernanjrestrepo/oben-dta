@@ -26,7 +26,7 @@ import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
 
 /**
  * IntegrationHub: infraestructura común de todos los adapters + panel de escenarios.
- * Global porque EVA, workflows y demás consumen el hub sin importar el módulo.
+ * Global porque workflows y demás consumen el hub sin importar el módulo.
  *
  * SCENARIO_PROVIDER se registra con la implementación persistente (BD por tenant).
  * Los tests unitarios de adapters usan StaticScenarioProvider directamente.

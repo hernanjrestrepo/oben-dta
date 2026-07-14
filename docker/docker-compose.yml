@@ -56,11 +56,6 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://frontend:3000}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      # EVA / Ollama. En despliegue server-side esto será http://localhost:11434
-      # (backend y Ollama en el mismo host). En dev local apunta al Ollama del host.
-      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
-      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
       # Integration Hub (SOLO LECTURA). Vacías = 'pendiente_credenciales'.
       # Oben rellena estas en docker/.env para activar cada integración.
       VETA_BASE_URL: ${VETA_BASE_URL:-}

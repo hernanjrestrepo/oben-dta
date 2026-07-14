@@ -11,9 +11,6 @@ import { ClientsModule } from './modules/clients/clients.module';
 import { ProductsModule } from './modules/products/products.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
-import { EvaModule } from './modules/ia/eva.module';
-import { AdanModule } from './modules/adan/adan.module';
-import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
 import { DashboardModule } from './modules/dashboard.module';
 import { TenantModule } from './common/tenant/tenant.module';
@@ -134,9 +131,6 @@ import { User } from './entities/user.entity';
     ProductsModule,
     OrdersModule,
     InvoicesModule,
-    EvaModule,
-    AdanModule,
-    IntegrationsModule,
     QuotesModule,
     DashboardModule,
   ],

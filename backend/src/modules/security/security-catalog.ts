@@ -128,18 +128,6 @@ export const SEED_MODULES: SeedModule[] = [
     category: 'finance',
   },
   {
-    key: 'ia',
-    name: 'IA (EVA)',
-    description: 'Asistente conversacional order-to-cash',
-    category: 'ai',
-  },
-  {
-    key: 'adan',
-    name: 'ADÁN',
-    description: 'Memoria corporativa RAG',
-    category: 'ai',
-  },
-  {
     key: 'integrations',
     name: 'Integraciones',
     description: 'Integration Hub',
@@ -188,7 +176,6 @@ const CRUD_MODULES = [
   'automations',
   'users',
   'security',
-  'adan',
 ];
 
 function buildCrudPermissions(): SeedPermission[] {
@@ -279,15 +266,6 @@ const EXTRA_PERMISSIONS: SeedPermission[] = [
     action: 'liquidate',
     name: 'liquidar exportación',
   },
-  { key: 'ia.use', moduleKey: 'ia', action: 'use', name: 'usar asistente IA' },
-  { key: 'ia.admin', moduleKey: 'ia', action: 'admin', name: 'administrar IA' },
-  {
-    key: 'adan.ingest',
-    moduleKey: 'adan',
-    action: 'ingest',
-    name: 'cargar documentos ADÁN',
-  },
-  { key: 'adan.ask', moduleKey: 'adan', action: 'ask', name: 'consultar ADÁN' },
   {
     key: 'dashboard.view',
     moduleKey: 'dashboard',
@@ -441,7 +419,7 @@ export const SEED_PLANS: SeedPlan[] = [
   {
     key: 'enterprise',
     name: 'Enterprise',
-    description: 'Toda la plataforma incluyendo IA y automatización',
+    description: 'Toda la plataforma incluyendo automatización comercial',
     priceMonthly: 1499,
     currency: 'USD',
     maxUsers: 500,
@@ -461,8 +439,6 @@ export const SEED_PLANS: SeedPlan[] = [
       'finance',
       'production',
       'exportations',
-      'ia',
-      'adan',
       'automations',
     ],
   },

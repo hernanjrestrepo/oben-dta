@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import {
-  AdanAnswer, AdanStats, ApiError, AuditPage, AuthResponse, Client, CommercialLicense,
-  CreateOrderDto, DashboardKPIs, EvaResult, InboxEmail, IntegrationStatus, Invoice, LicenseStatusView,
+  ApiError, AuditPage, AuthResponse, Client, CommercialLicense,
+  CreateOrderDto, DashboardKPIs, InboxEmail, IntegrationStatus, Invoice, LicenseStatusView,
   Order, Plan, PlatformRole, PlatformUser, Product, Quote, QuoteFlowResult, SystemStatus, Tenant,
   TenantFeatureFlag, TenantSubscription, UpdateOrderStatusDto, User,
 } from '@/types';
@@ -154,23 +154,6 @@ class ApiClient {
   }): Promise<AuthResponse> {
     const { data } = await this.client.post<AuthResponse>('/auth/register', dto);
     this.setAuth(data);
-    return data;
-  }
-
-  // EVA real — LLM local + tool calling + persistencia (/eva/process)
-  async processEva(text: string): Promise<EvaResult> {
-    const { data } = await this.client.post<EvaResult>('/eva/process', { text });
-    return data;
-  }
-
-  // ADÁN — RAG sobre documentos reales (/adan/ask)
-  async askAdan(question: string): Promise<AdanAnswer> {
-    const { data } = await this.client.post<AdanAnswer>('/adan/ask', { question });
-    return data;
-  }
-
-  async adanStats(): Promise<AdanStats> {
-    const { data } = await this.client.get<AdanStats>('/adan/stats');
     return data;
   }
 

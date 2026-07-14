@@ -84,8 +84,8 @@ const CHUNK_SIZE = 500;
  * exportación/embarque/tracking/packing list reales, todas con FKs válidas).
  *
  * Es la ÚNICA fuente de datos sintéticos del sistema — nunca se genera desde
- * EVA, ADÁN ni el Integration Hub (esos siguen produciendo solo datos reales
- * o explícitamente 'pendiente_credenciales'). El dataset queda marcado con un
+ * el Integration Hub (que sigue produciendo solo datos reales o
+ * explícitamente 'pendiente_credenciales'). El dataset queda marcado con un
  * `runTag` en cada business-key (ej. `CLI-a3f9k2-00001`) para poder
  * distinguir siempre qué es dato sintético de QA vs dato transaccional real.
  */

@@ -252,46 +252,6 @@ export interface ApiError {
   path: string;
 }
 
-// EVA real — orquestación LLM + tool calling (/eva/process)
-export interface EvaToolTrace {
-  tool: string;
-  args: Record<string, unknown>;
-  result: unknown;
-}
-
-export interface EvaResult {
-  model: string;
-  reply: string;
-  trace: EvaToolTrace[];
-  orderId: string | null;
-  orderNumber: string | null;
-  invoiceId: string | null;
-  invoiceNumber: string | null;
-  iterations: number;
-}
-
-// ADÁN — respuesta RAG con fuentes (/adan/ask)
-export interface AdanSource {
-  documentId: string;
-  fileName: string;
-  chunkIndex: number;
-  similarity: number;
-  excerpt: string;
-}
-
-export interface AdanAnswer {
-  question: string;
-  answer: string;
-  sources: AdanSource[];
-  model: string;
-  grounded: boolean;
-}
-
-export interface AdanStats {
-  documents: number;
-  chunks: number;
-  embeddings: number;
-}
 
 export type InvoiceStatus = 'PENDING' | 'APPROVED' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
 export type DianStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
