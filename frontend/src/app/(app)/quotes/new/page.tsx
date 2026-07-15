@@ -88,8 +88,14 @@ export default function NewQuotePage() {
     try {
       setSubmitting(true);
       const result = await api.sendQuoteEmail({ from: from.trim(), subject: subject.trim(), body });
-      saveQuoteEmailId(result.quote.id, result.emailId);
-      router.push(`/quotes/${result.quote.id}`);
+      if (result.quote) {
+        saveQuoteEmailId(result.quote.id, result.emailId);
+        router.push(`/quotes/${result.quote.id}`);
+      } else {
+        // Cliente no registrado o información insuficiente: no se generó
+        // cotización. La plataforma ya respondió automáticamente al remitente.
+        setError(result.message ?? 'No se generó cotización para esta solicitud.');
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg || 'Error procesando el correo');
@@ -117,9 +123,9 @@ export default function NewQuotePage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Simular Correo Entrante</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Solicitud de Cotización por Correo</h1>
           <p className="text-gray-500 text-sm">
-            Simula la llegada de una solicitud de cotización por correo — el sistema la procesa y genera la cotización automáticamente
+            Registra una solicitud entrante de un cliente — la plataforma identifica al cliente, los productos y genera la cotización automáticamente
           </p>
         </div>
       </div>

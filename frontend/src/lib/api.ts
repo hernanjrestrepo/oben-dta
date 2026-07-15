@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import {
   ApiError, AuditPage, AuthResponse, Client, CommercialLicense,
-  CreateOrderDto, CreateRoleDto, CreateTenantUserDto, DashboardKPIs, DemoResult, InboxEmail, IntegrationStatus,
+  CreateOrderDto, CreateRoleDto, CreateTenantUserDto, DashboardKPIs, InboxEmail, IntegrationStatus,
   Invoice, LicenseStatusView, Order, Plan, PlatformRole, PlatformUser, Product, Quote,
   QuoteFlowResult, SecurityModuleCatalog, SecurityPermission, SecurityRole, SystemStatus, Tenant,
   TenantFeatureFlag, TenantSubscription, TenantUser, UpdateOrderStatusDto, UpdateRoleDto,
@@ -171,12 +171,6 @@ class ApiClient {
 
   async updateInvoiceStatus(id: string, dto: { status: string; paidAt?: string }): Promise<Invoice> {
     const { data } = await this.client.put<Invoice>(`/invoices/${id}/status`, dto);
-    return data;
-  }
-
-  // Demo automático (WO-013 Sprint 6)
-  async runDemo(): Promise<DemoResult> {
-    const { data } = await this.client.post<DemoResult>('/demo/run');
     return data;
   }
 

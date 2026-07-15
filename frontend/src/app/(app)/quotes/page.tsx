@@ -84,7 +84,7 @@ export default function QuotesPage() {
           className="inline-flex items-center gap-2 bg-[#003366] hover:bg-[#004080] text-white px-4 py-2.5 rounded-lg font-medium transition"
         >
           <Plus className="w-5 h-5" />
-          Simular Correo Entrante
+          Nueva Solicitud de Cotización
         </Link>
       </div>
 

@@ -8,7 +8,11 @@ import { Product } from '../../entities/product.entity';
 import { EmailService } from './email.service';
 import { QuotePdfService } from './quote-pdf.service';
 import { PaymentService } from './payment.service';
-import { renderQuoteResponseEmail } from './email-templates';
+import {
+  renderQuoteResponseEmail,
+  renderUnknownClientEmail,
+  renderInsufficientInfoEmail,
+} from './email-templates';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -25,10 +29,17 @@ export interface ProcessEmailDto {
   body: string;
 }
 
+export type QuoteFlowOutcome =
+  | 'quoted'
+  | 'rejected_unknown_client'
+  | 'insufficient_info';
+
 export interface QuoteFlowResult {
-  quote: Quote;
+  quote: Quote | null;
   emailId: string;
   steps: string[];
+  outcome: QuoteFlowOutcome;
+  message?: string;
 }
 
 @Injectable()
@@ -65,35 +76,106 @@ export class QuotesService {
       inputData: { from: dto.from, subject: dto.subject },
     });
 
-    let client = await this.clientRepository.findOne({
-      where: { email: dto.from, tenantId },
-    });
-    let clientWasCreated = false;
+    // Identificación del cliente por DOMINIO del remitente. Nunca se crea un
+    // cliente automáticamente: si el dominio no pertenece a un cliente activo
+    // registrado, se responde solicitando el registro y se abre un caso
+    // comercial, deteniendo el proceso (no se cotiza).
+    const senderDomain = (dto.from.split('@')[1] ?? '').toLowerCase().trim();
+    const client = senderDomain
+      ? await this.findActiveClientByDomain(senderDomain, tenantId)
+      : null;
+
     if (!client) {
-      client = await this.clientRepository.save({
-        clientId: `CLI-${Date.now()}`,
-        name: dto.from.split('@')[0].toUpperCase(),
-        email: dto.from,
-        creditLimit: 500000,
-        usedCredit: 0,
-        isActive: true,
-        tenantId,
+      steps.push(`Dominio no reconocido: ${senderDomain || dto.from}`);
+      const rejection = renderUnknownClientEmail(dto.from);
+      const sendResult = await this.hub.call<{ id: string }>('email', 'send', {
+        to: dto.from,
+        subject: rejection.subject,
+        body: rejection.html,
       });
-      clientWasCreated = true;
-      steps.push(`Cliente nuevo creado: ${client.name}`);
-    } else {
-      steps.push(`Cliente identificado: ${client.name}`);
+      await this.audit.log({
+        workflowName: WORKFLOW_NAME,
+        eventType: WorkflowEventType.NOTIFICATION_SENT,
+        action: 'unknown_client_rejected',
+        entityType: 'lead',
+        entityId: email.id,
+        outputData: {
+          from: dto.from,
+          domain: senderDomain,
+          emailSent: sendResult.ok,
+        },
+        reason: 'Dominio no corresponde a un cliente registrado y activo.',
+      });
+      await this.audit.log({
+        workflowName: WORKFLOW_NAME,
+        eventType: WorkflowEventType.TASK_ASSIGNED,
+        action: 'commercial_case_created',
+        entityType: 'lead',
+        entityId: email.id,
+        outputData: {
+          from: dto.from,
+          domain: senderDomain,
+          subject: dto.subject,
+          assignedTo: 'comercial',
+        },
+      });
+      steps.push(
+        'Cliente no registrado. Se respondió solicitando registro y se abrió caso comercial. Proceso detenido.',
+      );
+      return {
+        quote: null,
+        emailId: email.id,
+        steps,
+        outcome: 'rejected_unknown_client',
+        message:
+          'El remitente no pertenece a un cliente registrado y activo. Se envió respuesta automática y se generó un caso comercial.',
+      };
     }
+
+    steps.push(`Cliente identificado: ${client.name}`);
     await this.audit.log({
       workflowName: WORKFLOW_NAME,
-      action: clientWasCreated ? 'client_created' : 'client_matched',
+      action: 'client_matched',
       entityType: 'client',
       entityId: client.id,
-      outputData: { name: client.name, email: client.email, isNew: clientWasCreated },
+      outputData: { name: client.name, email: client.email, domain: senderDomain },
     });
 
-    const items = this.parseItemsFromText(dto.body);
+    const items = await this.parseItemsFromCatalog(dto.body, tenantId);
     steps.push(`Items detectados: ${items.length}`);
+
+    // Información insuficiente: no se detectó ningún producto del catálogo con
+    // cantidad. No se genera cotización; se responde pidiendo exactamente lo
+    // que hace falta y se deja el caso a la espera de la respuesta del cliente.
+    if (items.length === 0) {
+      const req = renderInsufficientInfoEmail(client.name);
+      const sendResult = await this.hub.call<{ id: string }>('email', 'send', {
+        to: dto.from,
+        subject: req.subject,
+        body: req.html,
+      });
+      await this.audit.log({
+        workflowName: WORKFLOW_NAME,
+        eventType: WorkflowEventType.NOTIFICATION_SENT,
+        action: 'insufficient_info_requested',
+        entityType: 'client',
+        entityId: client.id,
+        outputData: { from: dto.from, emailSent: sendResult.ok },
+        reason:
+          'No se identificaron productos y cantidades suficientes para cotizar.',
+      });
+      steps.push(
+        'Información insuficiente. Se respondió solicitando los datos faltantes. En espera de la respuesta del cliente.',
+      );
+      return {
+        quote: null,
+        emailId: email.id,
+        steps,
+        outcome: 'insufficient_info',
+        message:
+          'No se identificaron productos y cantidades suficientes. Se envió una solicitud automática de información.',
+      };
+    }
 
     const quote = this.quoteRepository.create({
       quoteNumber: `COT-${Date.now()}`,
@@ -112,21 +194,17 @@ export class QuotesService {
     const quoteItems: QuoteItem[] = [];
 
     for (const item of items) {
-      const product = await this.productRepository.findOne({
-        where: { sku: ILike(item.sku), tenantId },
-      });
-      if (product) {
-        const totalPrice = Number(product.price) * item.qty;
-        const qi = new QuoteItem();
-        qi.product = product;
-        qi.productId = product.id;
-        qi.quantity = item.qty;
-        qi.unitPrice = Number(product.price);
-        qi.totalPrice = totalPrice;
-        qi.tenantId = tenantId;
-        quoteItems.push(qi);
-        subtotal += totalPrice;
-      }
+      const product = item.product;
+      const totalPrice = Number(product.price) * item.qty;
+      const qi = new QuoteItem();
+      qi.product = product;
+      qi.productId = product.id;
+      qi.quantity = item.qty;
+      qi.unitPrice = Number(product.price);
+      qi.totalPrice = totalPrice;
+      qi.tenantId = tenantId;
+      quoteItems.push(qi);
+      subtotal += totalPrice;
     }
 
     quote.items = quoteItems;
@@ -149,7 +227,67 @@ export class QuotesService {
       outputData: { quoteNumber: saved.quoteNumber, total: saved.total, items: quoteItems.length },
     });
 
-    return { quote: saved, emailId: email.id, steps };
+    // Flujo 100% autónomo: se genera el PDF corporativo y se envía la
+    // respuesta al cliente sin intervención humana, dejando la cotización
+    // visible en estado SENT.
+    const sent = await this.generateAndSendPdf(saved.id);
+    steps.push('PDF corporativo generado y respuesta enviada al cliente.');
+
+    return { quote: sent, emailId: email.id, steps, outcome: 'quoted' };
+  }
+
+  /**
+   * Resuelve el cliente por el DOMINIO del remitente: cualquier correo de un
+   * dominio registrado pertenece a ese cliente. Solo clientes activos.
+   */
+  private async findActiveClientByDomain(
+    domain: string,
+    tenantId: string,
+  ): Promise<Client | null> {
+    return this.clientRepository.findOne({
+      where: { email: ILike(`%@${domain}`), isActive: true, tenantId },
+    });
+  }
+
+  /**
+   * Identifica productos del catálogo mencionados en el texto del correo y su
+   * cantidad. Reconoce tanto el código/SKU como el nombre del producto
+   * (coincidencia flexible), y busca la cantidad numérica más cercana antes
+   * de la mención. Solo considera productos activos del tenant.
+   */
+  private async parseItemsFromCatalog(
+    text: string,
+    tenantId: string,
+  ): Promise<Array<{ product: Product; qty: number }>> {
+    const catalog = await this.productRepository.find({
+      where: { isActive: true, tenantId },
+    });
+    const normalized = text.replace(/\s+/g, ' ');
+    const results: Array<{ product: Product; qty: number }> = [];
+    const seen = new Set<string>();
+
+    for (const product of catalog) {
+      const needles = [product.sku, product.name].filter(Boolean);
+      for (const needle of needles) {
+        const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Captura una cantidad opcional inmediatamente antes del término
+        // (ej. "500 BOPP Transparente", "10 kg de BOPET", "2 x ObenSeal").
+        const re = new RegExp(
+          `(\\d[\\d.,]*)\\s*(?:kg|ton|toneladas?|unidades?|und|rollos?|x)?\\s*(?:de\\s+)?${escaped}`,
+          'i',
+        );
+        const m = normalized.match(re);
+        if (m && !seen.has(product.id)) {
+          const qty = parseInt(m[1].replace(/[.,]/g, ''), 10);
+          if (qty > 0) {
+            results.push({ product, qty });
+            seen.add(product.id);
+          }
+          break;
+        }
+      }
+    }
+    return results;
   }
 
   async generateAndSendPdf(quoteId: string): Promise<Quote> {
@@ -456,22 +594,6 @@ export class QuotesService {
 
   async getInbox() {
     return this.emailService.getInbox();
-  }
-
-  private parseItemsFromText(
-    text: string,
-  ): Array<{ sku: string; qty: number }> {
-    // El SKU real (ver buildProducts en dataset-builders.ts) es
-    // "SKU-<tag-opcional>-<6 dígitos>", no "SKU-" + 3 dígitos fijos — el
-    // patrón debe capturar cualquier sufijo alfanumérico/guiones.
-    const matches = text.matchAll(/(\d+)\s+(SKU-[A-Za-z0-9-]+)/gi);
-    const items: Array<{ sku: string; qty: number }> = [];
-    for (const match of matches) {
-      // El run-tag del SKU puede incluir minúsculas (ver buildProducts) — no
-      // forzar mayúsculas aquí, la búsqueda contra BD ya es case-insensitive.
-      items.push({ qty: parseInt(match[1], 10), sku: match[2] });
-    }
-    return items;
   }
 
   private validateInventory(quote: Quote) {

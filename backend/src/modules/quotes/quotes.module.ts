@@ -9,8 +9,6 @@ import { QuotesService } from './quotes.service';
 import { QuotePdfService } from './quote-pdf.service';
 import { EmailService } from './email.service';
 import { PaymentService } from './payment.service';
-import { DemoService } from './demo.service';
-import { DemoController } from './demo.controller';
 import { AuthModule } from '../auth/auth.module';
 import { OrdersModule } from '../orders/orders.module';
 import { InvoicesModule } from '../invoices/invoices.module';
@@ -22,14 +20,8 @@ import { InvoicesModule } from '../invoices/invoices.module';
     OrdersModule,
     InvoicesModule,
   ],
-  controllers: [QuotesController, DemoController],
-  providers: [
-    QuotesService,
-    QuotePdfService,
-    EmailService,
-    PaymentService,
-    DemoService,
-  ],
+  controllers: [QuotesController],
+  providers: [QuotesService, QuotePdfService, EmailService, PaymentService],
   exports: [QuotesService],
 })
 export class QuotesModule {}

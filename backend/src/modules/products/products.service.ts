@@ -30,10 +30,10 @@ export class ProductsService {
 
   async findAll(page: number = 1, limit: number = 50): Promise<Product[]> {
     return this.productRepository.find({
-      where: { tenantId: this.ctx.tenantId },
+      where: { tenantId: this.ctx.tenantId, isActive: true },
       skip: (page - 1) * limit,
       take: limit,
-      order: { createdAt: 'DESC' },
+      order: { name: 'ASC' },
     });
   }
 

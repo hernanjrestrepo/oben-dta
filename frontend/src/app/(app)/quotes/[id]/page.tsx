@@ -206,7 +206,7 @@ export default function QuoteDetailPage() {
                 }}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition disabled:opacity-60"
               >
-                Simular Aprobación del Cliente
+                Registrar Aprobación del Cliente
               </button>
               <button
                 disabled={acting}
@@ -216,7 +216,7 @@ export default function QuoteDetailPage() {
                 }}
                 className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg font-medium transition disabled:opacity-60"
               >
-                Simular Rechazo del Cliente
+                Registrar Rechazo del Cliente
               </button>
             </>
           )}
@@ -237,7 +237,7 @@ export default function QuoteDetailPage() {
               onClick={() => runAction(() => api.simulateQuotePayment(quote.id))}
               className="px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
-              Simular Pago Confirmado
+              Confirmar Pago Recibido
             </button>
           )}
 

@@ -331,10 +331,17 @@ export interface InboxEmail {
   replyAt?: string;
 }
 
+export type QuoteFlowOutcome =
+  | 'quoted'
+  | 'rejected_unknown_client'
+  | 'insufficient_info';
+
 export interface QuoteFlowResult {
-  quote: Quote;
+  quote: Quote | null;
   emailId: string;
   steps: string[];
+  outcome: QuoteFlowOutcome;
+  message?: string;
 }
 
 // --- Demo automático (WO-013 Sprint 6) ---
