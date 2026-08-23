@@ -43,21 +43,20 @@ export function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#003366] to-[#004080] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#F47735] to-[#E5641F] flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <span className="text-[#003366] font-bold text-2xl">O</span>
-          </div>
-          <h1 className="text-2xl font-bold text-white">OBEN DTA</h1>
-          <p className="text-blue-200 text-sm mt-1">Digitalización Total Autónoma</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-oben.svg" alt="Oben" className="h-12 w-auto mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-white">OBEN PLUS</h1>
+          <p className="text-white/70 text-sm mt-1">Digitalización Total Autónoma</p>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-            <LogIn className="w-5 h-5 text-[#003366]" />
+            <LogIn className="w-5 h-5 text-[#F47735]" />
             Iniciar Sesión
           </h2>
 
@@ -77,7 +76,7 @@ export function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="usuario@oben.com"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition text-gray-900"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition text-gray-900"
                 disabled={isLoading}
               />
             </div>
@@ -90,7 +89,7 @@ export function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition text-gray-900 pr-12"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition text-gray-900 pr-12"
                   disabled={isLoading}
                 />
                 <button
@@ -106,7 +105,7 @@ export function LoginForm() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#003366] hover:bg-[#004080] text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-[#F47735] hover:bg-[#E5641F] text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <>

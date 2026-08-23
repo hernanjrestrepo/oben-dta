@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git check-ignore *)",
+      "Bash(awk -F'len:' '{print $1 \"len=\" length\\($2\\)}')"
+    ]
+  }
+}

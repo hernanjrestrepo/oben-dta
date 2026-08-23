@@ -48,14 +48,14 @@ export function Sidebar() {
       {/* Mobile toggle */}
       <button
         onClick={() => setMobileOpen(!mobileOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 bg-[#003366] text-white p-2 rounded-lg shadow-lg"
+        className="lg:hidden fixed top-4 left-4 z-50 bg-[#F47735] text-white p-2 rounded-lg shadow-lg"
       >
         {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button>
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#003366] text-white transform transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#F47735] text-white transform transition-transform duration-300 lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -63,12 +63,11 @@ export function Sidebar() {
           {/* Logo */}
           <div className="p-6 border-b border-white/10">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                <span className="text-[#003366] font-bold text-lg">O</span>
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-oben.svg" alt="Oben" className="h-8 w-auto shrink-0" />
               <div>
-                <h1 className="font-bold text-lg">OBEN DTA</h1>
-                <p className="text-xs text-blue-200">Digitalización Autónoma</p>
+                <h1 className="font-bold text-lg">OBEN PLUS</h1>
+                <p className="text-xs text-white/70">Digitalización Autónoma</p>
               </div>
             </div>
           </div>
@@ -88,7 +87,7 @@ export function Sidebar() {
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg transition group ${
                     isActive
                       ? 'bg-white/15 text-white font-semibold'
-                      : 'text-blue-200 hover:bg-white/10 hover:text-white'
+                      : 'text-white/70 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   <Icon className="w-5 h-5" />
@@ -104,12 +103,12 @@ export function Sidebar() {
             {user && (
               <div className="mb-3 px-2">
                 <p className="text-sm font-medium truncate">{user.firstName} {user.lastName}</p>
-                <p className="text-xs text-blue-200 truncate">{user.email}</p>
+                <p className="text-xs text-white/70 truncate">{user.email}</p>
               </div>
             )}
             <button
               onClick={logout}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-blue-200 hover:bg-white/10 hover:text-white transition"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition"
             >
               <LogOut className="w-5 h-5" />
               <span>Cerrar Sesión</span>

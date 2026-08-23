@@ -58,7 +58,7 @@ export default function AuditoriaPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-[#003366] flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 rounded-xl bg-[#F47735] flex items-center justify-center shrink-0">
           <History className="w-6 h-6 text-white" />
         </div>
         <div>
@@ -70,14 +70,14 @@ export default function AuditoriaPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+            <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-2" />
               <p className="text-red-600">{error}</p>
-              <button onClick={load} className="mt-3 text-[#003366] hover:underline">Reintentar</button>
+              <button onClick={load} className="mt-3 text-[#F47735] hover:underline">Reintentar</button>
             </div>
           </div>
         ) : (

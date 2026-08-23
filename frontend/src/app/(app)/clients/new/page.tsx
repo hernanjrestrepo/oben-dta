@@ -60,7 +60,7 @@ export default function NewClientPage() {
       <div className="flex items-center gap-3">
         <Link
           href="/clients"
-          className="p-2 text-gray-500 hover:text-[#003366] hover:bg-gray-100 rounded-lg transition"
+          className="p-2 text-gray-500 hover:text-[#F47735] hover:bg-gray-100 rounded-lg transition"
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
@@ -89,7 +89,7 @@ export default function NewClientPage() {
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
                 placeholder="CLI-0001"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
@@ -100,7 +100,7 @@ export default function NewClientPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Nombre de la empresa"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
@@ -111,7 +111,7 @@ export default function NewClientPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="contacto@empresa.com"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
@@ -122,7 +122,7 @@ export default function NewClientPage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+57 300 000 0000"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
@@ -134,7 +134,7 @@ export default function NewClientPage() {
                 value={creditLimit}
                 onChange={(e) => setCreditLimit(e.target.value)}
                 placeholder="5000000"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
           </div>
@@ -146,7 +146,7 @@ export default function NewClientPage() {
               onChange={(e) => setAddress(e.target.value)}
               placeholder="Calle 00 # 00-00, Ciudad, Colombia"
               rows={2}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition resize-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition resize-none"
             />
           </div>
         </div>
@@ -162,7 +162,7 @@ export default function NewClientPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="px-6 py-2.5 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition flex items-center gap-2 disabled:opacity-60"
+            className="px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition flex items-center gap-2 disabled:opacity-60"
           >
             {submitting ? (
               <>

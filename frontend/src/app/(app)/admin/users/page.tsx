@@ -183,7 +183,7 @@ export default function AdminUsersPage() {
           </Link>
           <button
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-2 bg-[#003366] hover:bg-[#004080] text-white px-4 py-2.5 rounded-lg font-medium transition"
+            className="inline-flex items-center gap-2 bg-[#F47735] hover:bg-[#E5641F] text-white px-4 py-2.5 rounded-lg font-medium transition"
           >
             <Plus className="w-5 h-5" />
             Nuevo Usuario
@@ -207,7 +207,7 @@ export default function AdminUsersPage() {
                 type="text"
                 value={form.firstName}
                 onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
             <div>
@@ -216,7 +216,7 @@ export default function AdminUsersPage() {
                 type="text"
                 value={form.lastName}
                 onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
             <div>
@@ -225,7 +225,7 @@ export default function AdminUsersPage() {
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
             <div>
@@ -235,7 +235,7 @@ export default function AdminUsersPage() {
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                 placeholder="Mínimo 8 caracteres"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
           </div>
@@ -275,7 +275,7 @@ export default function AdminUsersPage() {
             <button
               type="submit"
               disabled={creating}
-              className="px-6 py-2.5 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60 flex items-center gap-2"
+              className="px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60 flex items-center gap-2"
             >
               {creating && <Loader2 className="w-4 h-4 animate-spin" />}
               Crear Usuario
@@ -300,7 +300,7 @@ export default function AdminUsersPage() {
             value={resetPassword}
             onChange={(e) => setResetPassword(e.target.value)}
             placeholder="Nueva contraseña temporal (mínimo 8 caracteres)"
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
           />
           <div className="flex items-center justify-end gap-3">
             <button
@@ -312,7 +312,7 @@ export default function AdminUsersPage() {
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition"
+              className="px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition"
             >
               Reiniciar Contraseña
             </button>
@@ -323,14 +323,14 @@ export default function AdminUsersPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+            <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-2" />
               <p className="text-red-600">{error}</p>
-              <button onClick={load} className="mt-3 text-[#003366] hover:underline">Reintentar</button>
+              <button onClick={load} className="mt-3 text-[#F47735] hover:underline">Reintentar</button>
             </div>
           </div>
         ) : (
@@ -352,7 +352,7 @@ export default function AdminUsersPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-                            <UsersIcon className="w-4 h-4 text-[#003366]" />
+                            <UsersIcon className="w-4 h-4 text-[#F47735]" />
                           </div>
                           <span className="font-medium text-gray-900">{user.firstName} {user.lastName}</span>
                         </div>
@@ -369,7 +369,7 @@ export default function AdminUsersPage() {
                                 disabled={busyId === user.id}
                                 className={`px-2 py-0.5 rounded-full text-xs font-medium transition ${
                                   assigned
-                                    ? 'bg-blue-100 text-[#003366] border border-blue-200'
+                                    ? 'bg-blue-100 text-[#F47735] border border-blue-200'
                                     : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
                                 }`}
                                 title={assigned ? `Quitar perfil ${role.name}` : `Asignar perfil ${role.name}`}

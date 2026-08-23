@@ -5,6 +5,7 @@ import { Quote, QuoteStatus } from '../../entities/quote.entity';
 import { QuoteItem } from '../../entities/quote-item.entity';
 import { Client } from '../../entities/client.entity';
 import { Product } from '../../entities/product.entity';
+import { Tenant } from '../../entities/tenant.entity';
 import { EmailService } from './email.service';
 import { QuotePdfService } from './quote-pdf.service';
 import { PaymentService } from './payment.service';
@@ -20,6 +21,8 @@ import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { OrdersService } from '../orders/orders.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { OrderStatus } from '../../entities/order.entity';
+import { DocumentFlowEngine } from '../document-flow/document-flow.engine';
+import type { DocumentFlowContext } from '../document-flow/document-flow-context.types';
 
 const WORKFLOW_NAME = 'quote-to-cash';
 
@@ -27,6 +30,8 @@ export interface ProcessEmailDto {
   from: string;
   subject: string;
   body: string;
+  /** Message-ID real del correo, si el intake lo provee — usado por IdempotencyInterceptor. */
+  messageId?: string;
 }
 
 export type QuoteFlowOutcome =
@@ -51,6 +56,8 @@ export class QuotesService {
     private clientRepository: Repository<Client>,
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
+    @InjectRepository(Tenant)
+    private tenantRepository: Repository<Tenant>,
     private emailService: EmailService,
     private pdfService: QuotePdfService,
     private paymentService: PaymentService,
@@ -59,6 +66,7 @@ export class QuotesService {
     private readonly audit: WorkflowAuditService,
     private readonly orders: OrdersService,
     private readonly invoices: InvoicesService,
+    private readonly documentFlowEngine: DocumentFlowEngine,
   ) {}
 
   async processIncomingEmail(dto: ProcessEmailDto): Promise<QuoteFlowResult> {
@@ -292,6 +300,18 @@ export class QuotesService {
 
   async generateAndSendPdf(quoteId: string): Promise<Quote> {
     const quote = await this.findOne(quoteId);
+    if (await this.isDocumentFlowEngineEnabled('quotes')) {
+      return this.generateAndSendPdfViaEngine(quote);
+    }
+    return this.generateAndSendPdfLegacy(quote);
+  }
+
+  /**
+   * Camino histórico (pre motor de orquestación), intacto. Sigue siendo el
+   * default — solo se salta si el tenant activa expresamente
+   * `settings.documentFlowEngine.quotes` (ver `isDocumentFlowEngineEnabled`).
+   */
+  private async generateAndSendPdfLegacy(quote: Quote): Promise<Quote> {
     const pdfBuffer = await this.pdfService.generateQuotePdf(quote);
     const pdfBase64 = pdfBuffer.toString('base64');
     quote.pdfUrl = `data:application/pdf;base64,${pdfBase64}`;
@@ -330,6 +350,71 @@ export class QuotesService {
 
     quote.status = QuoteStatus.SENT;
     return this.quoteRepository.save(quote);
+  }
+
+  /**
+   * Camino nuevo: PDF + envío + auditoría quedan orquestados por
+   * `DocumentFlowEngine.handle('QUOTE_REQUESTED', ...)` en vez de llamarse
+   * en línea aquí. El PDF (mismo `QuotePdfService`) y el HTML del correo
+   * (mismo `renderQuoteResponseEmail`) son EXACTAMENTE los mismos — lo único
+   * que cambia es quién orquesta la secuencia generar→enviar→auditar.
+   */
+  private async generateAndSendPdfViaEngine(quote: Quote): Promise<Quote> {
+    const { subject, html } = renderQuoteResponseEmail(quote);
+    const context: DocumentFlowContext = {
+      tenantId: this.ctx.tenantId,
+      userId: this.ctx.userId,
+      client: {
+        id: quote.client.id,
+        email: quote.client.email,
+        name: quote.client.name,
+      },
+      quote: { id: quote.id, quoteNumber: quote.quoteNumber },
+      metadata: { emailSubject: subject, emailBody: html },
+    };
+
+    const result = await this.documentFlowEngine.handle(
+      'QUOTE_REQUESTED',
+      context,
+    );
+    const ruleResult = result.rules[0];
+    if (!ruleResult) {
+      throw new Error(
+        'DocumentFlowEngine: no hay DocumentFlowRule activa para QUOTE_REQUESTED en este tenant. ' +
+          'Crea una vía POST /document-flow/rules o desactiva settings.documentFlowEngine.quotes.',
+      );
+    }
+    if (ruleResult.status !== 'completed') {
+      throw new Error(
+        `DocumentFlowEngine: QUOTE_REQUESTED no se completó (status=${ruleResult.status}, ` +
+          `faltantes=${ruleResult.missingRequired.join(', ') || 'ninguno'}).`,
+      );
+    }
+
+    const pdfDoc = ruleResult.documents.find((d) => d.key === 'quote_pdf');
+    if (pdfDoc?.content) {
+      quote.pdfUrl = `data:application/pdf;base64,${pdfDoc.content.toString('base64')}`;
+    }
+    quote.status = QuoteStatus.SENT;
+    return this.quoteRepository.save(quote);
+  }
+
+  /**
+   * Bandera por tenant (no global): `tenant.settings.documentFlowEngine.<flow>`.
+   * Reutiliza el jsonb `settings` que ya existe en `Tenant` — mismo mecanismo
+   * que `integrationConfig` para adapters, sin entidad nueva. Default: false
+   * (camino legado) para cualquier tenant que no la haya activado.
+   */
+  private async isDocumentFlowEngineEnabled(
+    flow: 'quotes',
+  ): Promise<boolean> {
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: this.ctx.tenantId },
+    });
+    const settings = tenant?.settings as
+      | { documentFlowEngine?: Record<string, boolean> }
+      | undefined;
+    return settings?.documentFlowEngine?.[flow] === true;
   }
 
   async approveQuote(emailId: string, quoteId: string): Promise<Quote> {

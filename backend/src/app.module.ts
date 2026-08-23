@@ -18,6 +18,9 @@ import { TenantsModule } from './modules/tenants/tenants.module';
 import { SecurityModule } from './modules/security/security.module';
 import { IntegrationHubModule } from './modules/integrations/hub/integration-hub.module';
 import { DatasetModule } from './modules/dataset/dataset.module';
+import { DocumentFlowModule } from './modules/document-flow/document-flow.module';
+import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
+import { EmailIntakeModule } from './modules/email-intake/email-intake.module';
 
 // Import all entities
 import { Client } from './entities/client.entity';
@@ -35,11 +38,14 @@ import { TenantFeatureFlag } from './entities/tenant-feature-flag.entity';
 import { License } from './entities/license.entity';
 import { MockScenario } from './entities/mock-scenario.entity';
 import { CreditValidation } from './entities/credit-validation.entity';
+import { DocumentFlowRule } from './entities/document-flow-rule.entity';
+import { IdempotencyRecord } from './entities/idempotency-record.entity';
 import { ExportCostSheet } from './entities/export-cost-sheet.entity';
 import { ExportOperation } from './entities/export-operation.entity';
 import { FreightQuote } from './entities/freight-quote.entity';
 import { Incoterm } from './entities/incoterm.entity';
 import { InsuranceQuote } from './entities/insurance-quote.entity';
+import { IntegrationDeadLetter } from './entities/integration-dead-letter.entity';
 import { Invoice } from './entities/invoice.entity';
 import { MasterPackingList } from './entities/master-packing-list.entity';
 import { MaterialConsumption } from './entities/material-consumption.entity';
@@ -49,6 +55,7 @@ import { PackagingConsumption } from './entities/packaging-consumption.entity';
 import { PackingList } from './entities/packing-list.entity';
 import { ProductionOrder } from './entities/production-order.entity';
 import { Product } from './entities/product.entity';
+import { PurchaseOrderDocument } from './entities/purchase-order-document.entity';
 import { Quote } from './entities/quote.entity';
 import { QuoteItem } from './entities/quote-item.entity';
 import { RawMaterialConsumption } from './entities/raw-material-consumption.entity';
@@ -56,6 +63,7 @@ import { Shipment } from './entities/shipment.entity';
 import { ShipmentTracking } from './entities/shipment-tracking.entity';
 import { User } from './entities/user.entity';
 import { WorkflowEvent } from './entities/workflow-event.entity';
+import { EmailIntakeMessage } from './entities/email-intake-message.entity';
 
 @Module({
   imports: [
@@ -83,11 +91,14 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
           Tenant,
           Client,
           CreditValidation,
+          DocumentFlowRule,
+          IdempotencyRecord,
           ExportCostSheet,
           ExportOperation,
           FreightQuote,
           Incoterm,
           InsuranceQuote,
+          IntegrationDeadLetter,
           Invoice,
           MasterPackingList,
           MaterialConsumption,
@@ -97,6 +108,7 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
           PackingList,
           ProductionOrder,
           Product,
+          PurchaseOrderDocument,
           Quote,
           QuoteItem,
           RawMaterialConsumption,
@@ -117,6 +129,7 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
           License,
           MockScenario,
           WorkflowEvent,
+          EmailIntakeMessage,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') === 'development',
@@ -127,6 +140,7 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
     SecurityModule,
     IntegrationHubModule,
     DatasetModule,
+    DocumentFlowModule,
     TenantsModule,
     AuthModule,
     ClientsModule,
@@ -134,6 +148,8 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
     OrdersModule,
     InvoicesModule,
     QuotesModule,
+    PurchaseOrdersModule,
+    EmailIntakeModule,
     DashboardModule,
   ],
   controllers: [AppController, HealthController],

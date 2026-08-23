@@ -95,6 +95,12 @@ export class Quote extends TenantScopedEntity {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  // Nullable = sin vencimiento explícito (vigente indefinidamente). Se agrega
+  // para el validador "cotización vigente" de WO-017 (Flujo 2 - Órdenes de
+  // Compra) — antes no había ningún concepto de vencimiento de cotización.
+  @Column({ type: 'timestamptz', nullable: true })
+  validUntil: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

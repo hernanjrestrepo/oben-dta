@@ -86,7 +86,7 @@ export default function InvoiceDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
       </div>
     );
   }
@@ -100,7 +100,7 @@ export default function InvoiceDetailPage() {
           <div className="flex items-center justify-center gap-3 mt-4">
             <button
               onClick={loadInvoice}
-              className="text-[#003366] hover:underline"
+              className="text-[#F47735] hover:underline"
             >
               Reintentar
             </button>
@@ -131,7 +131,7 @@ export default function InvoiceDetailPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/invoices"
-            className="p-2 text-gray-500 hover:text-[#003366] hover:bg-gray-100 rounded-lg transition"
+            className="p-2 text-gray-500 hover:text-[#F47735] hover:bg-gray-100 rounded-lg transition"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -164,7 +164,7 @@ export default function InvoiceDetailPage() {
               <button
                 onClick={() => setShowStatusMenu(!showStatusMenu)}
                 disabled={updating}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
               >
                 Cambiar Estado
                 <ChevronDown className="w-4 h-4" />
@@ -199,7 +199,7 @@ export default function InvoiceDetailPage() {
         {/* Order/Client Info */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-[#003366]" />
+            <FileText className="w-5 h-5 text-[#F47735]" />
             Orden y Cliente
           </h2>
           <div className="space-y-3">
@@ -208,7 +208,7 @@ export default function InvoiceDetailPage() {
               {invoice.order ? (
                 <Link
                   href={`/orders/${invoice.order.id}`}
-                  className="font-medium text-[#003366] hover:underline"
+                  className="font-medium text-[#F47735] hover:underline"
                 >
                   {invoice.order.orderNumber}
                 </Link>
@@ -230,7 +230,7 @@ export default function InvoiceDetailPage() {
         {/* Invoice Info */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Tag className="w-5 h-5 text-[#003366]" />
+            <Tag className="w-5 h-5 text-[#F47735]" />
             Información
           </h2>
           <div className="space-y-3">
@@ -284,7 +284,7 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="flex justify-between px-6 py-4 bg-gray-50">
             <span className="font-semibold text-gray-700">Total</span>
-            <span className="font-bold text-[#003366] text-lg">
+            <span className="font-bold text-[#F47735] text-lg">
               ${Number(invoice.totalAmount).toLocaleString('es-CO')} COP
             </span>
           </div>

@@ -75,7 +75,7 @@ export default function OperacionesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-[#003366] flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-[#F47735] flex items-center justify-center shrink-0">
             <Activity className="w-6 h-6 text-white" />
           </div>
           <div>
@@ -99,7 +99,7 @@ export default function OperacionesPage() {
       {/* ===== Integraciones (estado real del Integration Hub) ===== */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <Network className="w-5 h-5 text-[#003366]" />
+          <Network className="w-5 h-5 text-[#F47735]" />
           <h2 className="font-semibold text-gray-900">Integraciones del ecosistema Oben</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -110,7 +110,7 @@ export default function OperacionesPage() {
             return (
               <div key={it.system} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><Icon className="w-5 h-5 text-[#003366]" /></div>
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><Icon className="w-5 h-5 text-[#F47735]" /></div>
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">{meta.label}</p>
                     <p className="text-xs text-gray-500">{meta.role}</p>
@@ -140,7 +140,7 @@ function KpiCard({ icon: Icon, label, value, hint }: { icon: React.ElementType; 
     <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <span className="text-xs text-gray-500">{label}</span>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 text-[#003366]"><Icon className="w-4 h-4" /></div>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 text-[#F47735]"><Icon className="w-4 h-4" /></div>
       </div>
       <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
       <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>

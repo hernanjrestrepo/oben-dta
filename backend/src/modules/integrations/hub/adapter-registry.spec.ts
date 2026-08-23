@@ -10,6 +10,7 @@ import { WhatsAppMockAdapter } from './adapters/whatsapp.mock';
 import { NetSuiteMockAdapter } from './adapters/netsuite.mock';
 import { VetaMockAdapter } from './adapters/veta.mock';
 import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
+import { ObenCostOrderMockAdapter } from './adapters/oben-cost-order.mock';
 import { StaticScenarioProvider } from './static-scenario-provider';
 
 function makeRegistry(tenantConfig: Record<string, unknown> = {}) {
@@ -33,6 +34,7 @@ function makeRegistry(tenantConfig: Record<string, unknown> = {}) {
     new NetSuiteMockAdapter(scenarios),
     new VetaMockAdapter(scenarios),
     new ArmstrongMockAdapter(scenarios),
+    new ObenCostOrderMockAdapter(scenarios),
     scenarios,
   );
 }
@@ -77,8 +79,8 @@ describe('AdapterRegistry', () => {
     expect(health.state).toBe('operational');
   });
 
-  it('listSystems retorna los 11 sistemas', () => {
+  it('listSystems retorna los 12 sistemas', () => {
     const registry = makeRegistry();
-    expect(registry.listSystems()).toHaveLength(11);
+    expect(registry.listSystems()).toHaveLength(12);
   });
 });

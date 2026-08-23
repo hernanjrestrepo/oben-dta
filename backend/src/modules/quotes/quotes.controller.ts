@@ -8,6 +8,7 @@ import {
   ValidationPipe,
   UsePipes,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { QuotesService } from './quotes.service';
@@ -15,6 +16,8 @@ import type { ProcessEmailDto } from './quotes.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
+import { IdempotencyInterceptor } from '../idempotency/idempotency.interceptor';
+import { Idempotent } from '../idempotency/idempotent.decorator';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('quotes')
@@ -24,6 +27,8 @@ export class QuotesController {
   @Post('email')
   @RequirePermission('quotes.create')
   @UsePipes(new ValidationPipe({ whitelist: true }))
+  @UseInterceptors(IdempotencyInterceptor)
+  @Idempotent('quote_email')
   async receiveEmail(@Body() dto: ProcessEmailDto) {
     return this.quotesService.processIncomingEmail(dto);
   }

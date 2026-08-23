@@ -96,5 +96,6 @@ export const INTEGRATION_SYSTEMS = [
   'netsuite',
   'veta',
   'armstrong',
+  'obenCostOrder',
 ] as const;
 export type IntegrationSystem = (typeof INTEGRATION_SYSTEMS)[number];

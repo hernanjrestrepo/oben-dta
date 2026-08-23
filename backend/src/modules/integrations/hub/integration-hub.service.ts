@@ -7,6 +7,7 @@ import {
   INTEGRATION_SYSTEMS,
 } from './adapter.types';
 import { TenantContext } from '../../../common/tenant/tenant-context.service';
+import { ResilienceOptions, ResilientAdapterExecutor } from './resilient-adapter-executor';
 
 export interface HubStatusEntry {
   system: IntegrationSystem;
@@ -27,19 +28,30 @@ export class IntegrationHubService {
   constructor(
     private readonly registry: AdapterRegistry,
     private readonly ctx: TenantContext,
+    private readonly resilientExecutor: ResilientAdapterExecutor,
   ) {}
 
+  /**
+   * `options` permite ajustar retry/timeout/circuit breaker por llamada
+   * (WO-018 Sprint 3) — sin eso, aplican los defaults de
+   * `ResilientAdapterExecutor` (3 intentos, backoff 200ms, timeout 10s,
+   * circuito a los 5 fallos consecutivos).
+   */
   async call<T = unknown>(
     system: IntegrationSystem,
     operation: string,
     args: Record<string, unknown> = {},
+    options?: ResilienceOptions,
   ): Promise<AdapterCallResult<T>> {
     const tenantId = this.ctx.tenantId;
     const adapter = await this.registry.resolve(tenantId, system);
-    return adapter.execute<T>(operation, args, {
-      tenantId,
-      userId: this.ctx.userId,
-    });
+    return this.resilientExecutor.execute<T>(
+      adapter,
+      operation,
+      args,
+      { tenantId, userId: this.ctx.userId },
+      options,
+    );
   }
 
   async status(): Promise<HubStatusEntry[]> {

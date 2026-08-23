@@ -87,7 +87,7 @@ export default function OrderDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
       </div>
     );
   }
@@ -101,7 +101,7 @@ export default function OrderDetailPage() {
           <div className="flex items-center justify-center gap-3 mt-4">
             <button
               onClick={loadOrder}
-              className="text-[#003366] hover:underline"
+              className="text-[#F47735] hover:underline"
             >
               Reintentar
             </button>
@@ -135,7 +135,7 @@ export default function OrderDetailPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/orders"
-            className="p-2 text-gray-500 hover:text-[#003366] hover:bg-gray-100 rounded-lg transition"
+            className="p-2 text-gray-500 hover:text-[#F47735] hover:bg-gray-100 rounded-lg transition"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -168,7 +168,7 @@ export default function OrderDetailPage() {
               <button
                 onClick={() => setShowStatusMenu(!showStatusMenu)}
                 disabled={updating}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
               >
                 Cambiar Estado
                 <ChevronDown className="w-4 h-4" />
@@ -203,7 +203,7 @@ export default function OrderDetailPage() {
         {/* Client Info */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <User className="w-5 h-5 text-[#003366]" />
+            <User className="w-5 h-5 text-[#F47735]" />
             Cliente
           </h2>
           <div className="space-y-3">
@@ -225,7 +225,7 @@ export default function OrderDetailPage() {
         {/* Order Info */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Tag className="w-5 h-5 text-[#003366]" />
+            <Tag className="w-5 h-5 text-[#F47735]" />
             Información
           </h2>
           <div className="space-y-3">
@@ -263,7 +263,7 @@ export default function OrderDetailPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Package className="w-5 h-5 text-[#003366]" />
+            <Package className="w-5 h-5 text-[#F47735]" />
             Productos
           </h2>
         </div>
@@ -304,7 +304,7 @@ export default function OrderDetailPage() {
                 <td colSpan={4} className="px-6 py-4 text-right font-semibold text-gray-700">
                   Total:
                 </td>
-                <td className="px-6 py-4 text-right font-bold text-[#003366] text-lg">
+                <td className="px-6 py-4 text-right font-bold text-[#F47735] text-lg">
                   ${Number(order.totalAmount).toLocaleString('es-CO')} COP
                 </td>
               </tr>

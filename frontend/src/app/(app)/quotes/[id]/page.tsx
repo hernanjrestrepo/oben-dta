@@ -120,7 +120,7 @@ export default function QuoteDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
       </div>
     );
   }
@@ -132,7 +132,7 @@ export default function QuoteDetailPage() {
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
           <p className="text-red-600 font-medium">{error || 'Cotización no encontrada'}</p>
           <div className="flex items-center justify-center gap-3 mt-4">
-            <button onClick={loadQuote} className="text-[#003366] hover:underline">
+            <button onClick={loadQuote} className="text-[#F47735] hover:underline">
               Reintentar
             </button>
             <Link href="/quotes" className="text-gray-500 hover:underline">
@@ -151,7 +151,7 @@ export default function QuoteDetailPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/quotes"
-            className="p-2 text-gray-500 hover:text-[#003366] hover:bg-gray-100 rounded-lg transition"
+            className="p-2 text-gray-500 hover:text-[#F47735] hover:bg-gray-100 rounded-lg transition"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -190,7 +190,7 @@ export default function QuoteDetailPage() {
             <button
               disabled={acting}
               onClick={() => runAction(() => api.generateQuotePdf(quote.id))}
-              className="px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60"
+              className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
               Generar y Enviar PDF
             </button>
@@ -225,7 +225,7 @@ export default function QuoteDetailPage() {
             <button
               disabled={acting}
               onClick={() => runAction(() => api.createQuotePaymentLink(quote.id))}
-              className="px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60"
+              className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
               Generar Link de Pago
             </button>
@@ -235,7 +235,7 @@ export default function QuoteDetailPage() {
             <button
               disabled={acting}
               onClick={() => runAction(() => api.simulateQuotePayment(quote.id))}
-              className="px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60"
+              className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
               Confirmar Pago Recibido
             </button>
@@ -245,7 +245,7 @@ export default function QuoteDetailPage() {
             <button
               disabled={acting}
               onClick={() => runAction(() => api.moveQuoteToProduction(quote.id))}
-              className="px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60"
+              className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
               Mover a Producción
             </button>
@@ -255,7 +255,7 @@ export default function QuoteDetailPage() {
             <button
               disabled={acting}
               onClick={() => runAction(() => api.markQuoteReady(quote.id))}
-              className="px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60"
+              className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
               Marcar Lista para Entrega
             </button>
@@ -265,7 +265,7 @@ export default function QuoteDetailPage() {
             <button
               disabled={acting}
               onClick={() => runAction(() => api.markQuoteDelivered(quote.id))}
-              className="px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60"
+              className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
               Marcar Entregada
             </button>
@@ -306,7 +306,7 @@ export default function QuoteDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <User className="w-5 h-5 text-[#003366]" />
+            <User className="w-5 h-5 text-[#F47735]" />
             Cliente
           </h2>
           <div className="space-y-3">
@@ -323,7 +323,7 @@ export default function QuoteDetailPage() {
 
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Tag className="w-5 h-5 text-[#003366]" />
+            <Tag className="w-5 h-5 text-[#F47735]" />
             Información
           </h2>
           <div className="space-y-3">
@@ -369,7 +369,7 @@ export default function QuoteDetailPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Package className="w-5 h-5 text-[#003366]" />
+            <Package className="w-5 h-5 text-[#F47735]" />
             Productos
           </h2>
         </div>
@@ -424,7 +424,7 @@ export default function QuoteDetailPage() {
                 <td colSpan={4} className="px-6 py-4 text-right font-semibold text-gray-700">
                   Total:
                 </td>
-                <td className="px-6 py-4 text-right font-bold text-[#003366] text-lg">
+                <td className="px-6 py-4 text-right font-bold text-[#F47735] text-lg">
                   ${Number(quote.total).toLocaleString('es-CO')} COP
                 </td>
               </tr>

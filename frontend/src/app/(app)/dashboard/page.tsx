@@ -65,7 +65,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
       </div>
     );
   }
@@ -78,7 +78,7 @@ export default function DashboardPage() {
           <p className="text-red-600 font-medium">{error}</p>
           <button
             onClick={loadDashboard}
-            className="mt-4 text-[#003366] hover:underline"
+            className="mt-4 text-[#F47735] hover:underline"
           >
             Reintentar
           </button>
@@ -102,7 +102,7 @@ export default function DashboardPage() {
             title="Total Órdenes"
             value={kpis?.totalOrders ?? 0}
             icon={ShoppingCart}
-            color="bg-[#003366]"
+            color="bg-[#F47735]"
           />
           <KPICard
             title="Órdenes Activas"
@@ -120,14 +120,14 @@ export default function DashboardPage() {
             title="Ingresos Totales"
             value={`$${(kpis?.totalRevenue ?? 0).toLocaleString('es-CO')} COP`}
             icon={DollarSign}
-            color="bg-[#004080]"
+            color="bg-[#E5641F]"
           />
         </div>
 
         {/* Status Breakdown */}
         <>
           <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-[#003366]" />
+            <TrendingUp className="w-5 h-5 text-[#F47735]" />
             Órdenes por Estado
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -137,7 +137,7 @@ export default function DashboardPage() {
                 className="bg-white rounded-xl p-4 shadow-sm border border-gray-200"
               >
                 <p className="text-xs text-gray-500 uppercase">{statusLabels[status] || status}</p>
-                <p className="text-2xl font-bold text-[#003366] mt-1">{count}</p>
+                <p className="text-2xl font-bold text-[#F47735] mt-1">{count}</p>
               </div>
             ))}
           </div>
@@ -149,7 +149,7 @@ export default function DashboardPage() {
             <h2 className="text-lg font-semibold text-gray-900">Órdenes Recientes</h2>
             <Link
               href="/orders"
-              className="text-sm text-[#003366] hover:underline flex items-center gap-1"
+              className="text-sm text-[#F47735] hover:underline flex items-center gap-1"
             >
               Ver todas
               <ArrowRight className="w-4 h-4" />
@@ -223,7 +223,7 @@ function OrderRow({ order }: { order: Order }) {
       <td className="px-6 py-4">
         <Link
           href={`/orders/${order.id}`}
-          className="font-medium text-[#003366] hover:underline"
+          className="font-medium text-[#F47735] hover:underline"
         >
           {order.orderNumber}
         </Link>

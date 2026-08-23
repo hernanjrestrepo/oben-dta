@@ -97,7 +97,7 @@ export default function ClientDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
       </div>
     );
   }
@@ -111,7 +111,7 @@ export default function ClientDetailPage() {
           <div className="flex items-center justify-center gap-3 mt-4">
             <button
               onClick={loadClient}
-              className="text-[#003366] hover:underline"
+              className="text-[#F47735] hover:underline"
             >
               Reintentar
             </button>
@@ -133,7 +133,7 @@ export default function ClientDetailPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/clients"
-            className="p-2 text-gray-500 hover:text-[#003366] hover:bg-gray-100 rounded-lg transition"
+            className="p-2 text-gray-500 hover:text-[#F47735] hover:bg-gray-100 rounded-lg transition"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -152,7 +152,7 @@ export default function ClientDetailPage() {
           </button>
           <button
             onClick={startEditing}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition"
           >
             <Pencil className="w-4 h-4" />
             Editar
@@ -181,7 +181,7 @@ export default function ClientDetailPage() {
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
             <div>
@@ -190,7 +190,7 @@ export default function ClientDetailPage() {
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
             <div>
@@ -199,7 +199,7 @@ export default function ClientDetailPage() {
                 type="text"
                 value={form.phone}
                 onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
             <div>
@@ -209,7 +209,7 @@ export default function ClientDetailPage() {
                 min={0}
                 value={form.creditLimit}
                 onChange={(e) => setForm((f) => ({ ...f, creditLimit: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function ClientDetailPage() {
               value={form.address}
               onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
               rows={2}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition resize-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition resize-none"
             />
           </div>
 
@@ -234,7 +234,7 @@ export default function ClientDetailPage() {
             <button
               type="submit"
               disabled={saving}
-              className="px-6 py-2.5 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition flex items-center gap-2 disabled:opacity-60"
+              className="px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition flex items-center gap-2 disabled:opacity-60"
             >
               {saving ? (
                 <>
@@ -255,7 +255,7 @@ export default function ClientDetailPage() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Información de Contacto</h2>
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <Mail className="w-5 h-5 text-[#003366] mt-0.5" />
+              <Mail className="w-5 h-5 text-[#F47735] mt-0.5" />
               <div>
                 <p className="text-xs text-gray-500">Correo electrónico</p>
                 <p className="text-gray-900">{client.email}</p>
@@ -263,7 +263,7 @@ export default function ClientDetailPage() {
             </div>
             {client.phone && (
               <div className="flex items-start gap-3">
-                <Phone className="w-5 h-5 text-[#003366] mt-0.5" />
+                <Phone className="w-5 h-5 text-[#F47735] mt-0.5" />
                 <div>
                   <p className="text-xs text-gray-500">Teléfono</p>
                   <p className="text-gray-900">{client.phone}</p>
@@ -272,7 +272,7 @@ export default function ClientDetailPage() {
             )}
             {client.address && (
               <div className="flex items-start gap-3">
-                <MapPin className="w-5 h-5 text-[#003366] mt-0.5" />
+                <MapPin className="w-5 h-5 text-[#F47735] mt-0.5" />
                 <div>
                   <p className="text-xs text-gray-500">Dirección</p>
                   <p className="text-gray-900">{client.address}</p>
@@ -280,7 +280,7 @@ export default function ClientDetailPage() {
               </div>
             )}
             <div className="flex items-start gap-3">
-              <Calendar className="w-5 h-5 text-[#003366] mt-0.5" />
+              <Calendar className="w-5 h-5 text-[#F47735] mt-0.5" />
               <div>
                 <p className="text-xs text-gray-500">Registrado</p>
                 <p className="text-gray-900">
@@ -293,13 +293,13 @@ export default function ClientDetailPage() {
 
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-[#003366]" />
+            <CreditCard className="w-5 h-5 text-[#F47735]" />
             Información de Crédito
           </h2>
           <div className="space-y-4">
             <div>
               <p className="text-xs text-gray-500">Límite de Crédito</p>
-              <p className="text-xl font-bold text-[#003366]">
+              <p className="text-xl font-bold text-[#F47735]">
                 ${Number(client.creditLimit).toLocaleString('es-CO')} COP
               </p>
             </div>
@@ -342,7 +342,7 @@ export default function ClientDetailPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-[#003366]" />
+              <ShoppingCart className="w-5 h-5 text-[#F47735]" />
               Órdenes del Cliente
             </h2>
           </div>
@@ -362,7 +362,7 @@ export default function ClientDetailPage() {
                     <td className="px-6 py-4">
                       <Link
                         href={`/orders/${order.id}`}
-                        className="font-medium text-[#003366] hover:underline"
+                        className="font-medium text-[#F47735] hover:underline"
                       >
                         {order.orderNumber}
                       </Link>

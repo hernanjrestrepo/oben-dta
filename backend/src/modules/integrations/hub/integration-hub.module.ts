@@ -4,8 +4,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Tenant } from '../../../entities/tenant.entity';
 import { MockScenario } from '../../../entities/mock-scenario.entity';
+import { IntegrationDeadLetter } from '../../../entities/integration-dead-letter.entity';
 import { AdapterRegistry } from './adapter-registry';
 import { IntegrationHubService } from './integration-hub.service';
+import { ResilientAdapterExecutor } from './resilient-adapter-executor';
 import { IntegrationHubController } from './integration-hub.controller';
 import { PersistentScenarioProvider } from './persistent-scenario-provider';
 import { MockScenariosService } from './mock-scenarios.service';
@@ -23,6 +25,7 @@ import { WhatsAppMockAdapter } from './adapters/whatsapp.mock';
 import { NetSuiteMockAdapter } from './adapters/netsuite.mock';
 import { VetaMockAdapter } from './adapters/veta.mock';
 import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
+import { ObenCostOrderMockAdapter } from './adapters/oben-cost-order.mock';
 
 /**
  * IntegrationHub: infraestructura común de todos los adapters + panel de escenarios.
@@ -34,7 +37,7 @@ import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Tenant, MockScenario]),
+    TypeOrmModule.forFeature([Tenant, MockScenario, IntegrationDeadLetter]),
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -69,7 +72,9 @@ import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
     NetSuiteMockAdapter,
     VetaMockAdapter,
     ArmstrongMockAdapter,
+    ObenCostOrderMockAdapter,
     AdapterRegistry,
+    ResilientAdapterExecutor,
     IntegrationHubService,
     MockScenariosService,
     JwtAuthGuard,
@@ -77,6 +82,7 @@ import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
   exports: [
     IntegrationHubService,
     AdapterRegistry,
+    ResilientAdapterExecutor,
     MockScenariosService,
     SCENARIO_PROVIDER,
   ],

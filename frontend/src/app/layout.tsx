@@ -37,7 +37,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <title>Oben DTA — Digitalización Total Autónoma</title>
+        <title>Oben Plus — Digitalización Total Autónoma</title>
         <meta name="description" content="Automatización de pedidos, inventario, cartera y facturación" />
       </head>
       <body className="min-h-full flex flex-col">

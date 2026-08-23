@@ -1,5 +1,28 @@
 import { Quote } from '../../entities/quote.entity';
 
+/**
+ * Escapa HTML antes de interpolar cualquier valor no confiable en una
+ * plantilla (RC1 Sprint 5 — XSS confirmado y corregido: `from` viene 100%
+ * controlado por quien envía el correo, y se insertaba sin escapar en
+ * `renderUnknownClientEmail`; confirmado explotable end-to-end contra
+ * `GET /quotes/inbox/emails`). Se aplica a TODO valor interpolado en estas
+ * plantillas, no solo a los que hoy son claramente atacables — el nombre de
+ * un cliente o un SKU son datos internos hoy, pero no vale la pena razonar
+ * caso por caso cuál es "seguro": escapar siempre es la regla correcta.
+ */
+function escapeHtml(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case '&': return '&amp;';
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '"': return '&quot;';
+      case "'": return '&#39;';
+      default: return ch;
+    }
+  });
+}
+
 /** Envoltura corporativa Oben reutilizable para correos automáticos. */
 function obenShell(bodyInner: string): string {
   return `<!doctype html>
@@ -50,7 +73,7 @@ export function renderUnknownClientEmail(from: string): {
   const html = obenShell(`
     <p style="margin:0 0 8px;color:#111827;font-size:16px;">Estimado solicitante,</p>
     <p style="margin:0 0 16px;color:#374151;font-size:14px;line-height:1.6;">
-      Hemos recibido su solicitud enviada desde <b>${from}</b>. Sin embargo, su
+      Hemos recibido su solicitud enviada desde <b>${escapeHtml(from)}</b>. Sin embargo, su
       correo no corresponde a un cliente registrado y activo en nuestro sistema,
       por lo que no es posible generar una cotización en este momento.
     </p>
@@ -77,7 +100,7 @@ export function renderInsufficientInfoEmail(clientName: string): {
 } {
   const subject = 'Necesitamos más información para su cotización · Oben Group';
   const html = obenShell(`
-    <p style="margin:0 0 8px;color:#111827;font-size:16px;">Estimado(a) ${clientName},</p>
+    <p style="margin:0 0 8px;color:#111827;font-size:16px;">Estimado(a) ${escapeHtml(clientName)},</p>
     <p style="margin:0 0 16px;color:#374151;font-size:14px;line-height:1.6;">
       Gracias por su solicitud. Para poder generar su cotización necesitamos que
       nos confirme la siguiente información:
@@ -108,9 +131,9 @@ export function renderQuoteResponseEmail(quote: Quote): {
     .map(
       (item) => `
       <tr>
-        <td style="padding:10px 12px;border-bottom:1px solid #E5E7EB;">${item.product?.name ?? 'Producto'}</td>
-        <td style="padding:10px 12px;border-bottom:1px solid #E5E7EB;color:#6B7280;font-family:monospace;font-size:12px;">${item.product?.sku ?? ''}</td>
-        <td style="padding:10px 12px;border-bottom:1px solid #E5E7EB;text-align:right;">${item.quantity}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #E5E7EB;">${escapeHtml(item.product?.name ?? 'Producto')}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #E5E7EB;color:#6B7280;font-family:monospace;font-size:12px;">${escapeHtml(item.product?.sku ?? '')}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #E5E7EB;text-align:right;">${escapeHtml(item.quantity)}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #E5E7EB;text-align:right;">$${Number(item.unitPrice).toLocaleString('es-CO')}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #E5E7EB;text-align:right;font-weight:600;">$${Number(item.totalPrice).toLocaleString('es-CO')}</td>
       </tr>`,
@@ -141,9 +164,9 @@ export function renderQuoteResponseEmail(quote: Quote): {
             </tr>
             <tr>
               <td style="padding:32px;">
-                <p style="margin:0 0 8px;color:#111827;font-size:16px;">Estimado(a) ${quote.client?.name ?? 'cliente'},</p>
+                <p style="margin:0 0 8px;color:#111827;font-size:16px;">Estimado(a) ${escapeHtml(quote.client?.name ?? 'cliente')},</p>
                 <p style="margin:0 0 24px;color:#374151;font-size:14px;line-height:1.6;">
-                  Gracias por su solicitud. Adjuntamos la cotización <b>${quote.quoteNumber}</b> con el detalle
+                  Gracias por su solicitud. Adjuntamos la cotización <b>${escapeHtml(quote.quoteNumber)}</b> con el detalle
                   de los productos solicitados. El documento PDF con validez de 30 días calendario se encuentra adjunto a este correo.
                 </p>
                 <table role="presentation" width="100%" style="border-collapse:collapse;margin-bottom:16px;">

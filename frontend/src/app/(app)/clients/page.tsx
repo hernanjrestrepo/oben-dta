@@ -77,7 +77,7 @@ export default function ClientsPage() {
         </div>
         <Link
           href="/clients/new"
-          className="inline-flex items-center gap-2 bg-[#003366] hover:bg-[#004080] text-white px-4 py-2.5 rounded-lg font-medium transition"
+          className="inline-flex items-center gap-2 bg-[#F47735] hover:bg-[#E5641F] text-white px-4 py-2.5 rounded-lg font-medium transition"
         >
           <Plus className="w-5 h-5" />
           Nuevo Cliente
@@ -91,14 +91,14 @@ export default function ClientsPage() {
           placeholder="Buscar por nombre, ID o correo..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
         />
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+            <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-20">
@@ -107,7 +107,7 @@ export default function ClientsPage() {
               <p className="text-red-600">{error}</p>
               <button
                 onClick={loadClients}
-                className="mt-3 text-[#003366] hover:underline"
+                className="mt-3 text-[#F47735] hover:underline"
               >
                 Reintentar
               </button>
@@ -159,13 +159,13 @@ function ClientCard({
     <div className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#003366] rounded-full flex items-center justify-center">
+          <div className="w-10 h-10 bg-[#F47735] rounded-full flex items-center justify-center">
             <Users className="w-5 h-5 text-white" />
           </div>
           <div>
             <Link
               href={`/clients/${client.id}`}
-              className="font-semibold text-[#003366] hover:underline"
+              className="font-semibold text-[#F47735] hover:underline"
             >
               {client.name}
             </Link>
@@ -175,7 +175,7 @@ function ClientCard({
         <div className="flex items-center gap-1">
           <Link
             href={`/clients/${client.id}`}
-            className="p-2 text-[#003366] hover:bg-blue-50 rounded-lg transition"
+            className="p-2 text-[#F47735] hover:bg-blue-50 rounded-lg transition"
             title="Ver detalle"
           >
             <ArrowRight className="w-4 h-4" />

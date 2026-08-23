@@ -107,7 +107,7 @@ export default function NewQuotePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
       </div>
     );
   }
@@ -118,7 +118,7 @@ export default function NewQuotePage() {
       <div className="flex items-center gap-3">
         <Link
           href="/quotes"
-          className="p-2 text-gray-500 hover:text-[#003366] hover:bg-gray-100 rounded-lg transition"
+          className="p-2 text-gray-500 hover:text-[#F47735] hover:bg-gray-100 rounded-lg transition"
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
@@ -140,7 +140,7 @@ export default function NewQuotePage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Mail className="w-5 h-5 text-[#003366]" />
+            <Mail className="w-5 h-5 text-[#F47735]" />
             Correo Entrante
           </h2>
 
@@ -152,7 +152,7 @@ export default function NewQuotePage() {
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
                 placeholder="cliente@empresa.com"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
@@ -162,7 +162,7 @@ export default function NewQuotePage() {
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
           </div>
@@ -172,13 +172,13 @@ export default function NewQuotePage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Package className="w-5 h-5 text-[#003366]" />
+              <Package className="w-5 h-5 text-[#F47735]" />
               Productos Solicitados
             </h2>
             <button
               type="button"
               onClick={addItem}
-              className="inline-flex items-center gap-1 text-sm text-[#003366] hover:underline"
+              className="inline-flex items-center gap-1 text-sm text-[#F47735] hover:underline"
             >
               <Plus className="w-4 h-4" />
               Agregar
@@ -194,7 +194,7 @@ export default function NewQuotePage() {
                     <select
                       value={item.productId}
                       onChange={(e) => updateItem(index, 'productId', e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition appearance-none bg-white"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition appearance-none bg-white"
                     >
                       <option value="">Seleccionar producto...</option>
                       {products.map((p) => (
@@ -212,7 +212,7 @@ export default function NewQuotePage() {
                     min={1}
                     value={item.quantity}
                     onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
                   />
                 </div>
                 <div className="w-32 text-right py-2.5 text-sm font-medium text-gray-700">
@@ -244,7 +244,7 @@ export default function NewQuotePage() {
           <button
             type="submit"
             disabled={submitting}
-            className="px-6 py-2.5 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition flex items-center gap-2 disabled:opacity-60"
+            className="px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition flex items-center gap-2 disabled:opacity-60"
           >
             {submitting ? (
               <>

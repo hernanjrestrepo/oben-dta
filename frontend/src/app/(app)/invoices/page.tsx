@@ -78,7 +78,7 @@ export default function InvoicesPage() {
           placeholder="Buscar por número de factura, orden, cliente o estado..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
         />
       </div>
 
@@ -86,7 +86,7 @@ export default function InvoicesPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+            <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-20">
@@ -95,7 +95,7 @@ export default function InvoicesPage() {
               <p className="text-red-600">{error}</p>
               <button
                 onClick={loadInvoices}
-                className="mt-3 text-[#003366] hover:underline"
+                className="mt-3 text-[#F47735] hover:underline"
               >
                 Reintentar
               </button>
@@ -122,7 +122,7 @@ export default function InvoicesPage() {
                       <td className="px-6 py-4">
                         <Link
                           href={`/invoices/${inv.id}`}
-                          className="font-medium text-[#003366] hover:underline"
+                          className="font-medium text-[#F47735] hover:underline"
                         >
                           {inv.invoiceNumber}
                         </Link>
@@ -151,7 +151,7 @@ export default function InvoicesPage() {
                       <td className="px-6 py-4 text-right">
                         <Link
                           href={`/invoices/${inv.id}`}
-                          className="inline-flex p-2 text-[#003366] hover:bg-blue-50 rounded-lg transition"
+                          className="inline-flex p-2 text-[#F47735] hover:bg-blue-50 rounded-lg transition"
                           title="Ver detalle"
                         >
                           <ArrowRight className="w-4 h-4" />

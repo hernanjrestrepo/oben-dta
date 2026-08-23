@@ -23,6 +23,15 @@ import {
   GenericHttpRealAdapter,
   GenericHttpAdapterConfig,
 } from './adapters/generic-http.real';
+import {
+  EmailSmtpRealAdapter,
+  EmailSmtpAdapterConfig,
+} from './adapters/email-smtp.real';
+import { ObenCostOrderMockAdapter } from './adapters/oben-cost-order.mock';
+import {
+  ObenCostOrderRealAdapter,
+  ObenCostOrderAdapterConfig,
+} from './adapters/oben-cost-order.real';
 
 /**
  * Resuelve qué adapter devolver para (tenant, system) combinando:
@@ -52,6 +61,7 @@ export class AdapterRegistry {
     netsuite: NetSuiteMockAdapter,
     veta: VetaMockAdapter,
     armstrong: ArmstrongMockAdapter,
+    obenCostOrder: ObenCostOrderMockAdapter,
     // Referencia al provider por si algún real futuro decide reutilizar escenarios
     // en modo hibrido (por ejemplo, degradación controlada).
     private readonly _scenarios?: ScenarioProvider,
@@ -68,6 +78,7 @@ export class AdapterRegistry {
       netsuite,
       veta,
       armstrong,
+      obenCostOrder,
     };
   }
 
@@ -95,6 +106,33 @@ export class AdapterRegistry {
     system: IntegrationSystem,
     cfg: Record<string, unknown>,
   ): IntegrationAdapter {
+    // 'email' es el único sistema del hub que no habla HTTP/REST — usa SMTP,
+    // así que se resuelve a un adapter dedicado en vez del genérico HTTP
+    // (WO-018 Sprint 6). `cfg.smtp` viene de tenant.integrationConfig.email.smtp.
+    if (system === 'email') {
+      const smtp = (cfg.smtp as Record<string, unknown>) ?? {};
+      const smtpConfig: EmailSmtpAdapterConfig = {
+        host: smtp.host as string | undefined,
+        port: (smtp.port as number | undefined) ?? 587,
+        secure: (smtp.secure as boolean | undefined) ?? false,
+        user: smtp.user as string | undefined,
+        pass: smtp.pass as string | undefined,
+        fromAddress: smtp.fromAddress as string | undefined,
+      };
+      return new EmailSmtpRealAdapter(smtpConfig);
+    }
+
+    // 'obenCostOrder' tampoco encaja en el genérico: autenticación por header
+    // propio (`Authtoken`) y parámetros de negocio también como headers, no
+    // query/body. Confirmado en vivo contra api.obengroup.co (2026-08-18).
+    if (system === 'obenCostOrder') {
+      const costOrderConfig: ObenCostOrderAdapterConfig = {
+        baseUrl: cfg.baseUrl as string | undefined,
+        authToken: cfg.authToken as string | undefined,
+      };
+      return new ObenCostOrderRealAdapter(costOrderConfig);
+    }
+
     const httpConfig: GenericHttpAdapterConfig = {
       system,
       baseUrl: (cfg.baseUrl as string) ?? undefined,

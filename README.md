@@ -1,10 +1,10 @@
-# DTA - Digitalización Total Autónoma (Oben)
+# Oben Plus - Digitalización Total Autónoma
 
 Plataforma SaaS empresarial para automatizar procesos comerciales y operativos de una empresa manufacturera, con enfoque específico en las necesidades de Oben.
 
 ## 📋 Descripción
 
-DTA Oben es una plataforma empresarial avanzada diseñada para gestionar los procesos de negocio críticos de una empresa de manufactura y comercio exterior. El sistema proporciona automatización completa de workflows, métricas ejecutivas en tiempo real, y preparación para inteligencia artificial.
+Oben Plus es una plataforma empresarial avanzada diseñada para gestionar los procesos de negocio críticos de una empresa de manufactura y comercio exterior. El sistema proporciona automatización completa de workflows, métricas ejecutivas en tiempo real, y preparación para inteligencia artificial.
 
 ## 🏗️ Arquitectura Actualizada
 
@@ -194,4 +194,4 @@ npm run dev
 5. Abrir Pull Request
 
 ---
-*DTA Oben - Transformando la gestión empresarial mediante tecnología avanzada*
+*Oben Plus - Transformando la gestión empresarial mediante tecnología avanzada*

@@ -168,7 +168,7 @@ export default function AdminRolesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/admin/users" className="p-2 text-gray-500 hover:text-[#003366] hover:bg-gray-100 rounded-lg transition">
+        <Link href="/admin/users" className="p-2 text-gray-500 hover:text-[#F47735] hover:bg-gray-100 rounded-lg transition">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
@@ -179,14 +179,14 @@ export default function AdminRolesPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 text-[#003366] animate-spin" />
+          <Loader2 className="w-8 h-8 text-[#F47735] animate-spin" />
         </div>
       ) : error ? (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-2" />
             <p className="text-red-600">{error}</p>
-            <button onClick={load} className="mt-3 text-[#003366] hover:underline">Reintentar</button>
+            <button onClick={load} className="mt-3 text-[#F47735] hover:underline">Reintentar</button>
           </div>
         </div>
       ) : (
@@ -197,7 +197,7 @@ export default function AdminRolesPage() {
               <h2 className="font-semibold text-gray-900 text-sm">Perfiles</h2>
               <button
                 onClick={startNew}
-                className="inline-flex items-center gap-1 text-xs text-[#003366] hover:underline font-medium"
+                className="inline-flex items-center gap-1 text-xs text-[#F47735] hover:underline font-medium"
               >
                 <Plus className="w-3.5 h-3.5" /> Nuevo
               </button>
@@ -250,7 +250,7 @@ export default function AdminRolesPage() {
                         value={editForm.key}
                         onChange={(e) => setEditForm((f) => ({ ...f, key: e.target.value.trim().toLowerCase() }))}
                         placeholder="tenant.supervisor"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition font-mono text-sm"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition font-mono text-sm"
                       />
                     </div>
                   )}
@@ -260,7 +260,7 @@ export default function AdminRolesPage() {
                       type="text"
                       value={editForm.name}
                       onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -269,7 +269,7 @@ export default function AdminRolesPage() {
                       type="text"
                       value={editForm.description}
                       onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#003366] focus:border-[#003366] outline-none transition"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
                     />
                   </div>
                   {!isNew && (
@@ -356,7 +356,7 @@ export default function AdminRolesPage() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="px-6 py-2.5 bg-[#003366] hover:bg-[#004080] text-white rounded-lg font-medium transition disabled:opacity-60 flex items-center gap-2"
+                      className="px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60 flex items-center gap-2"
                     >
                       {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                       Guardar Perfil
