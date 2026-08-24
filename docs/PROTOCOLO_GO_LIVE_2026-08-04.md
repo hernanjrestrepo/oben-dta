@@ -31,13 +31,13 @@ Necesito estos 6 valores confirmados, sin ambigüedad (el mensaje anterior lleg�
 | Dato | Valor que tengo | Confirmar |
 |---|---|---|
 | IMAP host | `outlook.office365.com` (estándar M365) | ☐ |
-| IMAP puerto | ¿993 real, o el `9993` que mandaste era un proxy/typo? | ☐ |
+| IMAP puerto | ✅ Confirmado: 993 (el `9993` era un typo — probado en vivo el 2026-08-24) | ☑ |
 | SMTP host | `smtp.office365.com` (estándar M365) | ☐ |
 | SMTP puerto | `587` (STARTTLS) | ☐ |
 | Usuario | `pedidosdeventa.co@obengroup.com` | ☐ |
 | Contraseña / app password | la que ya tengo registrada — confirmar que sigue vigente | ☐ |
 
-Si el puerto `9993` resulta ser un proxy interno de Oben (no Microsoft directo), dímelo explícitamente — cambia la configuración (host distinto, posiblemente sin TLS directo a Microsoft).
+**Actualización 2026-08-24:** probado en vivo con la contraseña real. `outlook.office365.com:993` conecta perfecto (TCP+TLS), pero rechaza el login con **"Login is disabled"** — confirma exactamente el bloqueo de autenticación básica de M365 anticipado en la Fase 0. `smtp.office365.com:587` también rechaza la autenticación (mismo tipo de bloqueo). El puerto/host ya NO son el problema — el problema es 100% la política de autenticación básica en Microsoft 365, que solo el admin de Oben puede habilitar.
 
 ---
 

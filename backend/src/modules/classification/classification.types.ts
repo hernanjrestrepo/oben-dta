@@ -4,6 +4,7 @@ export const CLASSIFICATION_CATEGORIES = [
   'quote_request',
   'carrier',
   'comex',
+  'freight_rates',
   'unknown',
 ] as const;
 

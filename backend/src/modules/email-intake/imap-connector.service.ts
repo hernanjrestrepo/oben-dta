@@ -22,6 +22,7 @@ import { ClassifierRegistry } from '../classification/classifier.registry';
 import { ClassificationAttachment } from '../classification/classification.types';
 import { QuotesService } from '../quotes/quotes.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
+import { FreightRateImportService } from '../freight-rates/freight-rate-import.service';
 
 export interface ImapIntakeConfig {
   enabled?: boolean;
@@ -75,6 +76,7 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     private readonly intake: Repository<EmailIntakeMessage>,
     private readonly classifiers: ClassifierRegistry,
     private readonly moduleRef: ModuleRef,
+    private readonly freightRates: FreightRateImportService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -281,6 +283,31 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
               }),
           );
           resultRef = result.poDocument?.id ?? null;
+          break;
+        }
+        case 'freight_rates': {
+          // Maestro de tarifas de flete (WO-018) — NO es una solicitud de
+          // cotización de cliente, es una actualización periódica que envía
+          // el forwarder de Oben. Reemplaza el maestro completo del tenant.
+          const rateAttachment = (parsed.attachments ?? []).find((a) =>
+            /\.xlsx?$/i.test(a.filename ?? ''),
+          );
+          if (!rateAttachment) {
+            status = 'skipped';
+            errorMessage =
+              'Clasificado como freight_rates pero sin adjunto .xlsx/.xls reconocible';
+            break;
+          }
+          const sourceFile = rateAttachment.filename ?? 'archivo-tarifas.xlsx';
+          const workbook = this.freightRates.parseWorkbook(
+            rateAttachment.content as Buffer,
+          );
+          const importResult = await this.freightRates.replaceAll(
+            tenantId,
+            sourceFile,
+            workbook,
+          );
+          resultRef = `inland:${importResult.inlandCount} transload:${importResult.transloadCount} recargos:${importResult.surchargeCount}`;
           break;
         }
         default: {

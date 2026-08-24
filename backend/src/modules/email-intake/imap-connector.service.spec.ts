@@ -5,6 +5,7 @@ import { QuotesService } from '../quotes/quotes.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
+import { FreightRateImportService } from '../freight-rates/freight-rate-import.service';
 
 jest.mock('mailparser');
 jest.mock('imapflow');
@@ -29,6 +30,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
   let poService: any;
   let auditService: any;
   let tenantCtx: any;
+  let freightRatesService: any;
   let service: ImapConnectorService;
 
   beforeEach(() => {
@@ -53,6 +55,16 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
     poService = { processIncomingEmail: jest.fn().mockResolvedValue({ poDocument: { id: 'PO-1' } }) };
     auditService = { log: jest.fn().mockResolvedValue(undefined) };
     tenantCtx = { setContext: jest.fn() };
+    freightRatesService = {
+      parseWorkbook: jest.fn().mockReturnValue({ inland: [{}], transload: [], surcharges: [] }),
+      replaceAll: jest.fn().mockResolvedValue({
+        sourceFile: 'rates.xlsx',
+        inlandCount: 1,
+        transloadCount: 0,
+        surchargeCount: 0,
+        importedAt: new Date(),
+      }),
+    };
 
     moduleRef = {
       resolve: jest.fn((type: unknown) => {
@@ -70,6 +82,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
       intakeRepo,
       classifiers,
       moduleRef,
+      freightRatesService,
     );
 
     (simpleParser as unknown as jest.Mock).mockResolvedValue({
@@ -114,6 +127,58 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
 
     expect(poService.processIncomingEmail).toHaveBeenCalled();
     expect(quotesService.processIncomingEmail).not.toHaveBeenCalled();
+  });
+
+  it('enruta a FreightRateImportService cuando el clasificador dice freight_rates (maestro de fletes, NO es cotización)', async () => {
+    classifiers.resolve.mockResolvedValue({
+      classify: jest.fn().mockResolvedValue({ category: 'freight_rates', confidence: 0.9, provider: 'rules' }),
+    });
+    (simpleParser as unknown as jest.Mock).mockResolvedValue({
+      messageId: '<msg-rates@corp.com>',
+      from: { value: [{ address: 'rates@shapiro.com' }] },
+      subject: 'Oben - Leg 3 USA Inland Rates - August 2026',
+      text: 'Please find attached the updated inland trucking rates.',
+      attachments: [
+        { filename: 'Oben - Leg 3_USA Rates August 2026.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', content: Buffer.from('xlsx-bytes') },
+      ],
+    });
+    const c = client();
+
+    await (service as any).handleMessage(TENANT_ID, c, cfg, makeMsg());
+
+    expect(freightRatesService.parseWorkbook).toHaveBeenCalledWith(Buffer.from('xlsx-bytes'));
+    expect(freightRatesService.replaceAll).toHaveBeenCalledWith(
+      TENANT_ID,
+      'Oben - Leg 3_USA Rates August 2026.xlsx',
+      { inland: [{}], transload: [], surcharges: [] },
+    );
+    expect(quotesService.processIncomingEmail).not.toHaveBeenCalled();
+    expect(poService.processIncomingEmail).not.toHaveBeenCalled();
+    const qb = intakeRepo.createQueryBuilder();
+    expect(qb.values).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'processed', resultRef: 'inland:1 transload:0 recargos:0' }),
+    );
+  });
+
+  it('freight_rates sin adjunto .xlsx reconocible queda skipped, no revienta', async () => {
+    classifiers.resolve.mockResolvedValue({
+      classify: jest.fn().mockResolvedValue({ category: 'freight_rates', confidence: 0.7, provider: 'rules' }),
+    });
+    (simpleParser as unknown as jest.Mock).mockResolvedValue({
+      messageId: '<msg-rates-2@corp.com>',
+      from: { value: [{ address: 'rates@shapiro.com' }] },
+      subject: 'Trucking rates',
+      text: 'texto sin adjunto',
+      attachments: [],
+    });
+
+    await (service as any).handleMessage(TENANT_ID, client(), cfg, makeMsg());
+
+    expect(freightRatesService.parseWorkbook).not.toHaveBeenCalled();
+    const qb = intakeRepo.createQueryBuilder();
+    expect(qb.values).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'skipped' }),
+    );
   });
 
   it.each(['carrier', 'comex', 'unknown'] as const)(

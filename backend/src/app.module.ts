@@ -21,6 +21,7 @@ import { DatasetModule } from './modules/dataset/dataset.module';
 import { DocumentFlowModule } from './modules/document-flow/document-flow.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 import { EmailIntakeModule } from './modules/email-intake/email-intake.module';
+import { FreightRatesModule } from './modules/freight-rates/freight-rates.module';
 
 // Import all entities
 import { Client } from './entities/client.entity';
@@ -64,6 +65,9 @@ import { ShipmentTracking } from './entities/shipment-tracking.entity';
 import { User } from './entities/user.entity';
 import { WorkflowEvent } from './entities/workflow-event.entity';
 import { EmailIntakeMessage } from './entities/email-intake-message.entity';
+import { FreightInlandRate } from './entities/freight-inland-rate.entity';
+import { FreightTransloadRate } from './entities/freight-transload-rate.entity';
+import { FreightDestinationSurcharge } from './entities/freight-destination-surcharge.entity';
 
 @Module({
   imports: [
@@ -130,6 +134,9 @@ import { EmailIntakeMessage } from './entities/email-intake-message.entity';
           MockScenario,
           WorkflowEvent,
           EmailIntakeMessage,
+          FreightInlandRate,
+          FreightTransloadRate,
+          FreightDestinationSurcharge,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') === 'development',
@@ -150,6 +157,7 @@ import { EmailIntakeMessage } from './entities/email-intake-message.entity';
     QuotesModule,
     PurchaseOrdersModule,
     EmailIntakeModule,
+    FreightRatesModule,
     DashboardModule,
   ],
   controllers: [AppController, HealthController],

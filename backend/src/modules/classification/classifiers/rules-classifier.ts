@@ -45,6 +45,16 @@ const TEXT_PATTERNS: Array<{
   { category: 'comex', weight: 3, pattern: /liquidaci[oó]n\s+de\s+exportaci[oó]n/i, reason: 'liquidación de exportación' },
   { category: 'comex', weight: 2, pattern: /consumo\s+(?:me|mp)\b/i, reason: 'documento de consumo ME/MP' },
   { category: 'comex', weight: 1, pattern: /\bdian\b|aduana/i, reason: 'referencia DIAN/aduana' },
+
+  // Maestro de tarifas de flete (actualización periódica del forwarder,
+  // NO es una solicitud de cotización de cliente — WO-018, ver
+  // FreightRateImportService). El asunto real que envía el forwarder suele
+  // ser poco descriptivo (a veces solo el nombre del archivo reenviado),
+  // así que el adjunto (ver ATTACHMENT_PATTERNS) pesa más que el texto aquí.
+  { category: 'freight_rates', weight: 3, pattern: /inland\s+(?:trucking\s+)?rates?/i, reason: 'tarifas de flete terrestre (inland rates)' },
+  { category: 'freight_rates', weight: 2, pattern: /trucking\s+rates?/i, reason: 'tarifas de trucking' },
+  { category: 'freight_rates', weight: 2, pattern: /\bleg\s*\d+\b.*rates?/i, reason: 'tarifas por tramo (Leg N)' },
+  { category: 'freight_rates', weight: 1, pattern: /\bshapiro\b/i, reason: 'menciona forwarder Shapiro' },
 ];
 
 const ATTACHMENT_PATTERNS: Array<{
@@ -56,6 +66,8 @@ const ATTACHMENT_PATTERNS: Array<{
   { category: 'purchase_order', weight: 2, pattern: /\b(po|oc|orden)[-_]?\d/i, reason: 'adjunto con nombre de PO' },
   { category: 'comex', weight: 2, pattern: /lista.?empaque|consumo.?(me|mp)|costos/i, reason: 'adjunto de documento COMEX' },
   { category: 'carrier', weight: 2, pattern: /booking|b[-_]?l\b|manifest/i, reason: 'adjunto de naviera' },
+  { category: 'freight_rates', weight: 3, pattern: /rates?.*20\d{2}.*\.xlsx?$/i, reason: 'adjunto de tarifas con año (xlsx)' },
+  { category: 'freight_rates', weight: 2, pattern: /\brates?\b.*\.xlsx?$/i, reason: 'adjunto de tarifas (xlsx)' },
 ];
 
 /**

@@ -23,6 +23,11 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
         method: 'read',
         description: 'Costo de una orden de venta por línea (mock)',
       },
+      {
+        operation: 'query.run',
+        method: 'read',
+        description: 'Ejecuta un stored procedure de consulta de Oben por nombre (mock)',
+      },
     ];
   }
 
@@ -32,6 +37,27 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
         (args) => this.getCostOrder(args),
         'costOrder.get',
       ),
+      'query.run': this.wrap((args) => this.runQuery(args), 'query.run'),
+    };
+  }
+
+  private runQuery(args: Record<string, unknown>) {
+    const procedure = args.procedure;
+    const numberOrderSales = args.numberOrderSales;
+    if (!procedure || typeof procedure !== 'string') {
+      throw new Error('BUSINESS_ERROR: procedure requerido (nombre del stored procedure)');
+    }
+    if (numberOrderSales === undefined || numberOrderSales === null) {
+      throw new Error('BUSINESS_ERROR: numberOrderSales requerido');
+    }
+    return {
+      Fecha: new Date().toISOString().slice(0, 10),
+      Cliente: 'Cliente Demo Oben',
+      OrdenVenta: String(numberOrderSales),
+      Procedure: procedure,
+      Detalle: [
+        { Campo: 'demo', Valor: `${procedure}-mock` },
+      ],
     };
   }
 

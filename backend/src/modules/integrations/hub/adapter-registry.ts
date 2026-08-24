@@ -128,6 +128,7 @@ export class AdapterRegistry {
     if (system === 'obenCostOrder') {
       const costOrderConfig: ObenCostOrderAdapterConfig = {
         baseUrl: cfg.baseUrl as string | undefined,
+        consultaUrl: cfg.consultaUrl as string | undefined,
         authToken: cfg.authToken as string | undefined,
       };
       return new ObenCostOrderRealAdapter(costOrderConfig);
