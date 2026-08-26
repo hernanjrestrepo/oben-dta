@@ -1,10 +1,23 @@
 # Protocolo Go-Live — Piloto Oben (actualizado 2026-08-26, cierre del día)
 
-**Este documento reemplaza el estado descrito el 4 de agosto.** Todo lo de esa fecha sigue siendo cierto (nada de lo marcado ✅ resultó falso — ver el histórico al final), pero hoy se hizo por fin la prueba real de punta a punta que el documento original pedía hacer antes del demo, y esa prueba encontró y corrigió 13 bugs reales (9 de la tarde + 4 más en la sesión de pruebas conjuntas de la noche). Este es el estado vigente para el demo, sin ambigüedad.
+**Este documento reemplaza el estado descrito el 4 de agosto.** Todo lo de esa fecha sigue siendo cierto (nada de lo marcado ✅ resultó falso — ver el histórico al final), pero hoy se hizo por fin la prueba real de punta a punta que el documento original pedía hacer antes del demo, y esa prueba encontró y corrigió 13 bugs reales (9 de la tarde + 4 más en la sesión de pruebas conjuntas de la noche). Este es el estado vigente para el demo.
 
-## 🛡️ Red de seguridad para el demo de mañana — LEER ANTES DE EMPEZAR
+## Respuesta directa: ¿está listo para mañana?
 
-El conector de correo tiene un bug de fondo aún no resuelto del todo: en ciertas condiciones, el ciclo de sondeo deja de avanzar sin ningún error visible (se investigó a fondo, se mitigó parcialmente, pero no se descarta que vuelva a pasar). Como red de seguridad real, **el servidor remoto tiene un cron que reinicia el backend automáticamente cada 8 minutos** (`crontab -l` en `10.50.30.10`, usuario `paradixexyz`) — esto garantiza que ninguna demora silenciosa dure más de 8 minutos, sin depender de que el propio proceso se autorepare. Antes del demo: confirmar que el cron sigue activo y hacer un reinicio manual (`docker restart dta-backend`) justo antes de empezar, como medida extra.
+**Sí, con una sola salvedad honesta — no hay nada más escondido.** Todo el negocio (cotizaciones, órdenes de compra, rechazos, lista de empaque, ciclo de orden a factura, la plataforma visual) está probado en vivo hoy, con evidencia real, en el servidor que se va a usar mañana. La única pieza que no llegué a cerrar al 100% es la siguiente — leerla antes de empezar:
+
+## 🛡️ Único riesgo conocido — y su mitigación
+
+El conector de correo tiene un bug de fondo que **no logré identificar la causa raíz exacta** pese a instrumentarlo a fondo: en ciertas condiciones, el ciclo de sondeo deja de avanzar sin ningún error visible. Cada vez que pasó hoy, un reinicio del backend lo resolvió al instante.
+
+**Mitigación real, activa ahora mismo:** el servidor remoto tiene un cron que reinicia el backend automáticamente **cada 2 minutos** (`crontab -l` en `10.50.30.10`, usuario `paradixexyz` — reducido de 8 a 2 esta noche para achicar al máximo la ventana de riesgo). Esto es una medida externa al proceso de Node, no depende de que el código se autorepare.
+
+**Lo que esto significa en la práctica:** en el peor de los casos, un correo que llega justo después de un reinicio podría tardar hasta ~2 minutos en procesarse, en vez de segundos. No es invisible, pero tampoco es un demo caído — es una demora corta y acotada, no un fallo total.
+
+**Recomendación concreta para mañana:**
+1. Antes de empezar, confirmar que el cron sigue activo (`crontab -l`) y hacer un reinicio manual (`docker restart dta-backend`) para arrancar con el reloj en cero.
+2. Si un correo de prueba tarda más de un minuto o dos en el demo, no es necesario alarmarse ni parar — es exactamente el escenario ya conocido, se resuelve solo en el peor caso en unos minutos.
+3. Tener el Plan B (disparar el flujo directo contra la plataforma, sin depender del correo) listo como respaldo si en algún momento se necesita mostrar el resultado sin esperar.
 
 ---
 
@@ -18,6 +31,9 @@ El conector de correo tiene un bug de fondo aún no resuelto del todo: en cierta
 | Lista de empaque real de Oben (`spPackingListUSA_Paradixe`) para una orden ya existente en su ERP | Orden real N°10794 — 37 líneas con peso/lote/código de barra reales |
 | Correo de dominio NO registrado → rechazo automático + caso comercial abierto | Correo real desde `hernanpeluo@hotmail.com`, dominio no reconocido, respuesta y caso comercial confirmados en auditoría |
 | Correo de cliente registrado sin producto/cantidad reconocible → se pide la info faltante, no se inventa una cotización | Correo real "necesito una cotización para mi próximo pedido" → `insufficient_info`, respuesta automática enviada |
+| Correo de naviera/booking → clasifica `carrier`, no se confunde con cotización | Casos reales (Maersk, B/L, tarifa naviera) — sin falsos positivos |
+| Ciclo de Orden completo → Factura | Orden real: DRAFT → validación → confirmada → lista → entregada → factura `INV-20260826-0001` generada |
+| Plataforma visual (login, dashboard, órdenes, clientes) | Verificado con datos reales en pantalla — orden y factura de hoy visibles correctamente |
 
 ## 🐛 Los 13 bugs reales que encontró la prueba de hoy — todos corregidos y re-verificados
 
