@@ -197,10 +197,16 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         !this.connections.get(tenantId)?.stopped &&
         Date.now() - connectedAt < MAX_CONNECTION_AGE_MS
       ) {
+        // Encontrado en vivo el 2026-08-26 vía los logs de diagnóstico: el
+        // ciclo se quedó colgado justo aquí, en el sleep — la ÚNICA espera
+        // del loop que no pasaba por withWatchdog. Se envuelve también, por
+        // si acaso, aunque si el problema real es que los timers de Node
+        // dejan de dispararse del todo, esto no bastaría por sí solo (ver
+        // la reconexión forzada externa vía cron, fuera del proceso).
         if (cfg.pollIntervalMs) {
-          await this.sleep(cfg.pollIntervalMs);
+          await this.withWatchdog(this.sleep(cfg.pollIntervalMs), 'sleep');
         } else {
-          await client.idle();
+          await this.withWatchdog(client.idle(), 'idle');
         }
         // Encontrado en vivo el 2026-08-26: tras ~40min corriendo, el ciclo
         // de sondeo se quedó colgado sin ningún log ni evento 'error' — un
