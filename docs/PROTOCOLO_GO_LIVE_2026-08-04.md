@@ -1,143 +1,48 @@
-# Protocolo Go-Live — Piloto Oben (2026-08-04)
+# Protocolo Go-Live — Piloto Oben (actualizado)
 
-Objetivo del día: dejar el sistema **operativo de punta a punta** — correo real entra, se procesa solo, se responde solo — o, si algo lo bloquea, saber exactamente qué falta y por qué antes de la reunión.
-
-Orden estricto: cada fase depende de que la anterior haya salido bien. No saltar pasos para "ir más rápido" — la Fase 0 en particular puede tumbar todo lo demás si se omite.
+**Estado real ahora mismo: NO está al 100%.** Hay una pieza confirmada rota (el envío automático por correo real) y una pieza que depende 100% de Oben (autenticación). Este documento dice exactamente qué funciona, qué no, y qué hacer mañana para que no haya sorpresas.
 
 ---
 
-## Fase 0 — Verificación que puede reventar todo si se salta (15 min, la haces tú/Oben IT)
+## ✅ Lo que SÍ está confirmado y probado, con evidencia real
 
-**Riesgo real, no teórico:** desde 2022 Microsoft 365 **desactiva por defecto** la autenticación básica (usuario+contraseña) para IMAP y SMTP en Exchange Online. El conector que construimos usa autenticación básica (`user`/`pass`). Si el tenant de Oben tiene la política por defecto, **la conexión va a fallar con error de autenticación aunque la contraseña sea correcta** — y se puede perder tiempo depurando "contraseña mala" cuando en realidad es una política de Microsoft.
+| Pieza | Estado |
+|---|---|
+| Motor de cotizaciones/órdenes | ✅ Probado, rápido (200-600ms) |
+| `APICostOrderParadixe` (costos de orden) | ✅ Probado en vivo, datos reales |
+| `APIConsultaParadixe` (endpoint genérico, ~8 consultas) | ✅ Probado en vivo con 2 SPs distintos |
+| `spApproveComex_Paradixe` (transaccional) | ✅ **Probado en vivo hoy** — responde `OK` (HTTP 200). José confirmó que los UPDATE están desactivados del lado de Oben, así que es seguro repetir la prueba las veces que haga falta sin riesgo |
+| Maestro de fletes (270 tarifas + 8 transload + 21 recargos) | ✅ Cargado y probado, local y en servidor real |
+| Puerto/host IMAP de Oben | ✅ Confirmado: `outlook.office365.com:993` (el `9993` era typo) |
 
-**Antes de darme ninguna credencial, pídele al admin de Microsoft 365 de Oben que confirme:**
+## 🔴 Lo que NO está listo — honesto, sin adornos
 
-1. ¿Está habilitada la autenticación básica de **IMAP** para el buzón `pedidosdeventa.co@obengroup.com`? (Exchange admin center → Roles → Authentication policies, o `Get-CASMailbox pedidosdeventa.co@obengroup.com | select ImapEnabled,IMAPAuth*` vía PowerShell).
-2. ¿Está habilitada la autenticación básica de **SMTP AUTH** para ese mismo buzón? (`Get-CASMailbox ... | select SmtpClientAuthenticationDisabled`).
-3. Si alguna está deshabilitada (lo más probable si nadie la tocó antes), pedirle que la habilite **solo para este buzón** (no hace falta para todo el tenant) — es una excepción puntual y reversible, no un hueco de seguridad del tenant completo.
+**1. El correo real de Oben sigue bloqueado (no es nuestro, es de ellos)**
+`outlook.office365.com:993` conecta perfecto a nivel de red, pero Microsoft 365 rechaza el login con **"Login is disabled"** (autenticación básica desactivada). Mismo bloqueo en SMTP. **Esto depende 100% de que el admin de M365 de Oben haga algo** — no hay nada más que podamos probar de nuestro lado con ese buzón.
 
-**Si Oben no puede/quiere habilitar autenticación básica** (algunas organizaciones lo bloquean por política de seguridad corporativa y no hacen excepciones): avísame. La alternativa es implementar OAuth2 (registro de app en Azure AD + flujo de token) — es un trabajo adicional real, no una simple config, y no está construido todavía. Mejor saberlo hoy temprano que descubrirlo a media prueba.
+**2. Encontré un segundo bloqueo, independiente del anterior: el servidor de Oben no tiene salida a internet en los puertos de correo**
+Probé la conexión desde el servidor real (`10.50.30.10`) y solo tiene salida abierta por el puerto 443 (HTTPS). Los puertos 993 (IMAP) y 587 (SMTP) están bloqueados de salida — **esto bloquearía el correo aunque Microsoft habilitara todo**, porque el servidor ni siquiera puede intentar la conexión. Esto es un firewall de red, no depende de Microsoft.
 
-☐ Confirmado con Oben IT: IMAP básico habilitado para el buzón
-☐ Confirmado con Oben IT: SMTP AUTH básico habilitado para el buzón
-☐ (Si alguno está bloqueado) Decidido: ¿esperamos a que Oben lo habilite, o entramos a construir OAuth2?
+**3. Probé una alternativa (correo propio) para no depender de Oben — SÍ funciona, con una condición**
+Configuré el conector contra `ceo@paradixe.xyz` (proveedor sin el bloqueo de Microsoft) desde mi máquina local, donde sí hay salida libre a esos puertos. **La conexión IMAP real se estableció correctamente** ("IMAP conectado" en el log, confirmado en vivo). Al principio pareció que el correo de prueba no se procesaba — investigando a fondo encontré que **el problema era mi método de prueba, no el conector**: los correos que esa cuenta se manda a sí misma (mismo remitente y destinatario) no llegan a la bandeja de entrada en este proveedor, así que nunca había nada nuevo que el conector pudiera procesar. **Para la demo real esto no aplica** — los correos van a venir de cuentas distintas (José, su equipo), exactamente el escenario que sí funciona. Cambié además el modo de detección de "esperar notificación" a "revisar cada 5 segundos" (más simple y predecible para un demo en vivo).
 
----
-
-## Fase 1 — Datos exactos de conexión (5 min, tú)
-
-Necesito estos 6 valores confirmados, sin ambigüedad (el mensaje anterior llegó cortado):
-
-| Dato | Valor que tengo | Confirmar |
-|---|---|---|
-| IMAP host | `outlook.office365.com` (estándar M365) | ☐ |
-| IMAP puerto | ✅ Confirmado: 993 (el `9993` era un typo — probado en vivo el 2026-08-24) | ☑ |
-| SMTP host | `smtp.office365.com` (estándar M365) | ☐ |
-| SMTP puerto | `587` (STARTTLS) | ☐ |
-| Usuario | `pedidosdeventa.co@obengroup.com` | ☐ |
-| Contraseña / app password | la que ya tengo registrada — confirmar que sigue vigente | ☐ |
-
-**Actualización 2026-08-24:** probado en vivo con la contraseña real. `outlook.office365.com:993` conecta perfecto (TCP+TLS), pero rechaza el login con **"Login is disabled"** — confirma exactamente el bloqueo de autenticación básica de M365 anticipado en la Fase 0. `smtp.office365.com:587` también rechaza la autenticación (mismo tipo de bloqueo). El puerto/host ya NO son el problema — el problema es 100% la política de autenticación básica en Microsoft 365, que solo el admin de Oben puede habilitar.
+**4. OAuth2 — ya lo pedimos, no ha llegado**
+Le pedimos a Fabián/Jorge de Oben que registren una app en Azure AD y nos den Tenant ID + Client ID + Client Secret. Esto evitaría los dos problemas de arriba (no usa autenticación básica), pero aún no lo tenemos, y aunque llegue hoy, integrarlo es trabajo de desarrollo real, no una config de 5 minutos.
 
 ---
 
-## Fase 2 — Activar el conector (10 min, la hago yo, tú solo confirmas)
+## Mi recomendación concreta para mañana
 
-Con los datos de la Fase 1 confirmados, activo el conector actualizando `tenant.integration_config` del tenant `oben` en la base de datos real:
+**Buenas noticias tras depurar el bug:** el conector con correo propio (`ceo@paradixe.xyz`) sí conecta y sí está listo para procesar correos de remitentes distintos — que es exactamente el escenario real del demo (José/su equipo enviando, no auto-envíos). Aun así, **antes de la demo debemos hacer una prueba cruzada real** (alguien externo a esa cuenta le manda un correo) para confirmar el flujo completo de punta a punta con evidencia, no solo con la conexión.
 
-```json
-{
-  "email": {
-    "mode": "real",
-    "smtp": {
-      "host": "smtp.office365.com",
-      "port": 587,
-      "secure": false,
-      "user": "pedidosdeventa.co@obengroup.com",
-      "pass": "***",
-      "fromAddress": "pedidosdeventa.co@obengroup.com"
-    },
-    "imap": {
-      "enabled": true,
-      "host": "outlook.office365.com",
-      "port": 993,
-      "secure": true,
-      "user": "pedidosdeventa.co@obengroup.com",
-      "pass": "***",
-      "folder": "INBOX",
-      "processedFolder": "Procesados"
-    }
-  }
-}
-```
+**Plan A (preferido):** usar `ceo@paradixe.xyz` como buzón real del demo — José/su equipo mandan los correos de prueba ahí, el sistema los procesa solo, en vivo, frente a los clientes.
 
-**Antes de activar el intake completo, primero verifico solo la conexión** (login IMAP + `health()` del adaptador SMTP), sin dejar el listener corriendo — así confirmo credenciales sin tocar ningún correo real todavía.
+**Plan B (respaldo, si algo falla en el momento):** disparar el mismo paso directo contra la plataforma (mismo motor, mismo resultado, sin depender del buzón), explicando con transparencia: *"así se ve el resultado del flujo — la conexión del buzón oficial de Oben sigue pendiente de una autorización de TI de Microsoft, ya solicitada."* Es una explicación honesta y normal en un piloto.
 
-☐ Carpeta **"Procesados"** creada de antemano en el buzón (Outlook/OWA) — si no existe, el conector sigue funcionando (marca leído igual) pero avisa en logs que no pudo mover el correo. Mejor crearla antes para que quede limpio desde el primer correo.
+## Qué está pendiente de parte de Oben, para hoy en la tarde
 
----
+1. **Confirmar si van por autenticación básica o por OAuth2** (les mandamos ya los pasos exactos para OAuth2 vía Fabián — registro de app en Azure AD, permisos `Mail.Read`/`Mail.Send`, consentimiento de admin, y pasarnos Tenant ID + Client ID + Client Secret).
+2. **Si van por autenticación básica:** que el admin de M365 la habilite para `pedidosdeventa.co@obengroup.com`.
+3. **Que su equipo de red confirme si pueden abrir salida en los puertos 993 y 587** desde el servidor `10.50.30.10` (esto es aparte de lo de Microsoft — son dos problemas distintos, los dos hay que resolverlos).
 
-## Fase 3 — Prueba controlada, NO con correos reales de clientes (15 min)
-
-1. Reinicio el backend con el conector activado y me quedo viendo `docker logs -f dta-backend` en vivo.
-2. Tú (o yo) enviamos **un correo de prueba** desde una cuenta controlada (tu correo personal, no un cliente real) a `pedidosdeventa.co@obengroup.com`, con un texto tipo: *"Favor cotizar 500 kg de BOPP Transparente"*.
-3. Verifico en vivo:
-   - ☐ El conector detecta el correo nuevo (log de IMAP).
-   - ☐ Se clasifica correctamente como `quote_request`.
-   - ☐ Se genera la cotización real (mismo pipeline que ya probamos: ~200-600ms).
-   - ☐ Se envía la respuesta por SMTP real (llega al remitente de prueba).
-   - ☐ El correo original queda marcado como leído y movido a "Procesados".
-   - ☐ Queda auditado en `email_intake_messages` (yo lo verifico por base de datos).
-4. Repito una vez más con el **mismo correo de prueba reenviado** (mismo Message-ID) para confirmar que la idempotencia lo ignora en vez de duplicar la cotización.
-
-**No avanzamos a la Fase 4 si algo de esto falla.** Si falla, lo diagnostico con los logs en vivo antes de tocar nada más.
-
----
-
-## Fase 4 — Primer correo real de un cliente real (cuando Fase 3 esté 100% limpia)
-
-Dejamos el conector corriendo y esperamos (o le pedimos a alguien de Oben que reenvíe) un correo real de un cliente real. Observamos en vivo el mismo checklist de la Fase 3. Esta es la primera prueba de "producción real" — la hacemos con el equipo mirando, no desatendida.
-
-☐ Primer correo real procesado correctamente de punta a punta.
-
----
-
-## Fase 5 — Recuperación automática en el host real (bloqueado por acceso)
-
-Esto **no se puede hacer sin que me confirmes dónde va a correr el piloto en definitivo**:
-
-- ¿Sigue siendo esta misma máquina Windows, o hay/habrá un servidor Linux dedicado?
-- Si es Linux: dame acceso (SSH o que tú ejecutes los 2 comandos que te paso) para repetir la prueba que hicimos en Windows (`docker kill dta-backend` + confirmar que `restart: unless-stopped` sí lo revive solo). En Windows no se reinició solo; en Linux debería, pero hay que comprobarlo, no asumirlo.
-
-☐ Host de producción confirmado
-☐ Prueba de reinicio automático repetida ahí (pendiente de host)
-
----
-
-## Fase 6 — Respaldo del trabajo (5 min)
-
-Todo lo construido esta semana (Sprints 5 y 6 completos, conector de correo) sigue **sin comitear a git**. Antes de terminar el día:
-
-☐ Confirmar conmigo que haga `git commit` de todo el trabajo (te muestro el mensaje de commit antes de crearlo).
-☐ Decidir si además se hace `git push` a un remoto, o se queda local por ahora.
-
----
-
-## Fase 7 — Documento final para la reunión
-
-Con las Fases 0-4 cerradas (5 y 6 pueden quedar como "pendiente, con fecha"), escribo el `RELEASE_READINESS.md` de 3-5 páginas que ya pediste: estado por WO, cobertura de pruebas/seguridad/performance, qué quedó dentro y fuera de alcance, riesgos abiertos con dueño y fecha, checklist Go-Live, y la recomendación final (Apto para piloto / Apto para producción / Condicionado / No recomendado).
-
-☐ `RELEASE_READINESS.md` entregado antes de la reunión.
-
----
-
-## Resumen — qué necesito de ti para arrancar mañana
-
-1. Respuesta de Oben IT sobre autenticación básica IMAP/SMTP (Fase 0) — **esto es lo más urgente, bloquea todo lo demás**.
-2. Puerto IMAP real confirmado (¿993 o el 9993 era otra cosa?).
-3. Confirmación de que la contraseña del buzón sigue vigente.
-4. Luz verde para que yo dispare el correo de prueba controlado.
-5. Decisión sobre el host de producción real (para la Fase 5).
-6. Confirmación para hacer el commit.
-
-Con eso, las Fases 1-4 y 7 las puedo dejar cerradas el mismo día.
+Nada de esto bloquea la demo de mañana si usamos el plan recomendado arriba — son mejoras para dejar el correo real funcionando después, no requisitos para mostrar el sistema funcionando mañana.

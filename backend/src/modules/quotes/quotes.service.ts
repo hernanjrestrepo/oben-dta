@@ -96,11 +96,12 @@ export class QuotesService {
     if (!client) {
       steps.push(`Dominio no reconocido: ${senderDomain || dto.from}`);
       const rejection = renderUnknownClientEmail(dto.from);
-      const sendResult = await this.hub.call<{ id: string }>('email', 'send', {
-        to: dto.from,
-        subject: rejection.subject,
-        body: rejection.html,
-      });
+      const sendResult = await this.hub.call<{ id: string }>(
+        'email',
+        'send',
+        { to: dto.from, subject: rejection.subject, body: rejection.html },
+        { maxAttempts: 1, timeoutMs: 30_000 }, // ver nota en generateAndSendPdfLegacy: no reintentar envíos de correo
+      );
       await this.audit.log({
         workflowName: WORKFLOW_NAME,
         eventType: WorkflowEventType.NOTIFICATION_SENT,
@@ -157,11 +158,12 @@ export class QuotesService {
     // que hace falta y se deja el caso a la espera de la respuesta del cliente.
     if (items.length === 0) {
       const req = renderInsufficientInfoEmail(client.name);
-      const sendResult = await this.hub.call<{ id: string }>('email', 'send', {
-        to: dto.from,
-        subject: req.subject,
-        body: req.html,
-      });
+      const sendResult = await this.hub.call<{ id: string }>(
+        'email',
+        'send',
+        { to: dto.from, subject: req.subject, body: req.html },
+        { maxAttempts: 1, timeoutMs: 30_000 }, // ver nota en generateAndSendPdfLegacy: no reintentar envíos de correo
+      );
       await this.audit.log({
         workflowName: WORKFLOW_NAME,
         eventType: WorkflowEventType.NOTIFICATION_SENT,
@@ -324,15 +326,37 @@ export class QuotesService {
       outputData: { sizeBytes: pdfBuffer.length },
     });
 
-    // Envío real (vía simulador) de la respuesta al cliente — antes este paso
-    // solo cambiaba el estado sin enviar nada. El PDF va referenciado en el
-    // cuerpo (el adapter mock no modela adjuntos binarios) y queda disponible
-    // para descarga desde la propia cotización.
+    // Envío real de la respuesta al cliente, con el PDF adjunto de verdad
+    // (antes solo iba referenciado en el cuerpo — quedó así de cuando solo
+    // existía el adapter mock, que no modela adjuntos binarios; el adapter
+    // SMTP real sí los soporta).
+    //
+    // maxAttempts:1 es deliberado, no un descuido: encontrado en vivo el
+    // 2026-08-26 — el envío real puede tardar más que el timeout por defecto
+    // (10s) del reintento automático, y como el reintento NO cancela el envío
+    // original en curso, ambos intentos terminan completándose de verdad →
+    // el cliente recibe la cotización duplicada. Reintentar un envío de
+    // correo (efecto secundario no idempotente) es más peligroso que no
+    // reintentarlo — si falla de verdad, queda auditado (`reason` abajo) para
+    // seguimiento manual, no se reintenta a ciegas.
     const { subject, html } = renderQuoteResponseEmail(quote);
     const sendResult = await this.hub.call<{ id: string; sentAt: string }>(
       'email',
       'send',
-      { to: quote.client.email, subject, body: html },
+      {
+        to: quote.client.email,
+        subject,
+        body: html,
+        attachments: [
+          {
+            filename: `Cotizacion-${quote.quoteNumber}.pdf`,
+            content: quote.pdfUrl.split(',')[1] ?? '',
+            encoding: 'base64',
+            contentType: 'application/pdf',
+          },
+        ],
+      },
+      { maxAttempts: 1, timeoutMs: 30_000 },
     );
     await this.audit.log({
       workflowName: WORKFLOW_NAME,

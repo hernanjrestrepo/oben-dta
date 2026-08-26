@@ -1,4 +1,5 @@
 import { simpleParser } from 'mailparser';
+import { ImapFlow } from 'imapflow';
 import { ImapConnectorService } from './imap-connector.service';
 import { Tenant } from '../../entities/tenant.entity';
 import { QuotesService } from '../quotes/quotes.service';
@@ -44,6 +45,11 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
         values: jest.fn().mockReturnThis(),
         orIgnore: jest.fn().mockReturnThis(),
         execute: jest.fn().mockResolvedValue(undefined),
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(0),
+        getRawOne: jest.fn().mockResolvedValue({ max: null }),
       }),
     };
     clientsRepo = { findOne: jest.fn().mockResolvedValue(null) };
@@ -224,6 +230,28 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
       expect.objectContaining({ status: 'failed', errorMessage: 'boom' }),
     );
     expect(c.messageFlagsAdd).toHaveBeenCalled();
+  });
+
+  describe('connectAndWatch — estabilidad del proceso ante errores de socket', () => {
+    it('registra un listener de \'error\' en el cliente IMAP — sin esto, un hipo de red tumba TODO el proceso (bug real encontrado en vivo el 2026-08-26)', async () => {
+      const fakeClient = {
+        on: jest.fn(),
+        connect: jest.fn().mockResolvedValue(undefined),
+        getMailboxLock: jest.fn().mockResolvedValue({ release: jest.fn() }),
+        idle: jest.fn().mockImplementation(() => new Promise(() => {})), // nunca resuelve — solo probamos el setup
+        search: jest.fn().mockResolvedValue([]),
+        status: jest.fn().mockResolvedValue({ uidNext: undefined }),
+        logout: jest.fn().mockResolvedValue(undefined),
+      };
+      (ImapFlow as unknown as jest.Mock).mockImplementation(() => fakeClient);
+
+      (service as any).connections.set(TENANT_ID, { client: null, stopped: false });
+      void (service as any).connectAndWatch(TENANT_ID, cfg);
+
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(fakeClient.on).toHaveBeenCalledWith('error', expect.any(Function));
+    });
   });
 
   describe('readConfig — no debe autoconectar salvo configuración explícita real+enabled', () => {

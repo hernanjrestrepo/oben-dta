@@ -100,6 +100,7 @@ describe('QuotesService.generateAndSendPdf — migración a DocumentFlowEngine',
       'email',
       'send',
       expect.objectContaining({ to: 'cliente@test.com' }),
+      { maxAttempts: 1, timeoutMs: 30_000 },
     );
     expect(documentFlowEngine.handle).not.toHaveBeenCalled();
     expect(audit.log).toHaveBeenCalledWith(

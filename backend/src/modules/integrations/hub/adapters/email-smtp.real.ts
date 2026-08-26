@@ -74,6 +74,32 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
     return this.transporter;
   }
 
+  private parseAttachments(args: Record<string, unknown>): nodemailer.SendMailOptions['attachments'] {
+    const raw = args.attachments;
+    if (!Array.isArray(raw)) return undefined;
+    return raw
+      .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
+      .map((a) => {
+        // El contenido llega en dos formas según el origen: base64 string
+        // (envío legado, con `encoding:'base64'` explícito) o Buffer real
+        // (documentos resueltos por el DocumentFlowEngine). Forzar
+        // `String(buffer)` aquí decodificaría los bytes binarios como UTF-8
+        // y corrompería el PDF — hay que pasar el Buffer tal cual.
+        const content = Buffer.isBuffer(a.content) ? a.content : String(a.content ?? '');
+        return {
+          filename: String(a.filename ?? 'adjunto'),
+          content,
+          encoding: a.encoding ? (String(a.encoding) as 'base64') : undefined,
+          contentType: a.contentType
+            ? String(a.contentType)
+            : a.mimeType
+              ? String(a.mimeType)
+              : undefined,
+        };
+      })
+      .filter((a) => a.content.length > 0);
+  }
+
   private async send(args: Record<string, unknown>): Promise<{ id: string; delivered: boolean }> {
     if (!this.isConfigured()) {
       throw new Error(
@@ -91,6 +117,7 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
       to,
       subject,
       html: body,
+      attachments: this.parseAttachments(args),
     });
     return { id: info.messageId, delivered: true };
   }

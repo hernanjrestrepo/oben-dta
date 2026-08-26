@@ -153,6 +153,21 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
       logger: false,
     });
 
+    // CRÍTICO: 'error' es un evento especial en EventEmitter — sin un
+    // listener, Node lo relanza como excepción no capturada y TUMBA TODO
+    // EL PROCESO (no solo esta conexión). imapflow emite 'error' en el
+    // socket ante cualquier hipo de red (timeout, reset, desconexión por
+    // inactividad) — algo esperable en una conexión de horas, no una
+    // condición excepcional. Encontrado en vivo el 2026-08-26: el backend
+    // completo se reiniciaba cada pocos minutos por esto, perdiendo el
+    // estado del conector a mitad de procesar un correo (que quedaba
+    // marcado \Seen por el fetch pero nunca escrito en la base de datos).
+    client.on('error', (err: Error) => {
+      this.logger.error(
+        `[tenant ${tenantId}] error de socket IMAP (no fatal, reconecta solo): ${err.message}`,
+      );
+    });
+
     const entry = this.connections.get(tenantId);
     if (entry) entry.client = client;
 
@@ -162,8 +177,15 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     const mailbox = cfg.folder ?? 'INBOX';
     const lock = await client.getMailboxLock(mailbox);
     try {
-      // Reconciliación: procesa TODO lo no leído antes de esperar mensajes
-      // nuevos — cubre correos llegados mientras el proceso estaba caído.
+      // Primera activación de este tenant+carpeta: NO se procesa el
+      // historial completo del buzón (podrían ser miles de correos reales
+      // ya existentes, como en una cuenta personal/empresarial en uso) —
+      // se marca como "línea base" todo lo anterior a este momento y solo
+      // se procesa lo que llegue de aquí en adelante.
+      await this.seedWatermarkIfFirstRun(tenantId, mailbox, client);
+
+      // Reconciliación: procesa lo pendiente desde el último UID conocido
+      // — cubre correos llegados mientras el proceso estaba caído.
       await this.processUnseen(tenantId, client, cfg);
 
       while (!this.connections.get(tenantId)?.stopped) {
@@ -184,22 +206,109 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Descubrimiento por UID, NO por la bandera \Seen. Encontrado en vivo el
+   * 2026-08-26: cualquier OTRO cliente con acceso al mismo buzón (webmail,
+   * móvil, un script de diagnóstico) puede marcar un correo como leído antes
+   * de que este conector lo vea — con `search({seen:false})` ese correo
+   * quedaría perdido para siempre, sin ningún error. El "watermark" (UID más
+   * alto ya registrado en `email_intake_messages` para este tenant+carpeta)
+   * es la fuente de verdad real, independiente de qué more toque la bandeja.
+   * La deduplicación por Message-ID en `handleMessage` sigue siendo la
+   * barrera principal; esto solo corrige el paso de *descubrimiento*.
+   *
+   * `client.mailbox.uidNext` NO sirve para esto fuera del momento del SELECT
+   * inicial: encontrado en vivo el mismo día — imapflow solo actualiza ese
+   * campo cacheado durante el SELECT/mailboxOpen; ni NOOP ni las respuestas
+   * recibidas en IDLE lo refrescan (solo `.exists`), así que con sondeo por
+   * `pollIntervalMs` (sleep, sin IDLE) quedaba congelado en el valor de la
+   * conexión y ningún correo llegado después se detectaba jamás. Se pide un
+   * STATUS real en cada ciclo para tener el valor vigente del servidor.
+   */
   private async processUnseen(
     tenantId: string,
     client: ImapFlow,
     cfg: ImapIntakeConfig,
   ): Promise<void> {
-    const uids = await client.search({ seen: false }, { uid: true });
-    if (!uids || uids.length === 0) return;
-    for (const uid of uids) {
-      const msg = await client.fetchOne(
-        String(uid),
-        { source: true, uid: true },
-        { uid: true },
-      );
-      if (!msg) continue;
+    const folder = cfg.folder ?? 'INBOX';
+    const status = await client.status(folder, { uidNext: true });
+    const uidNext = status.uidNext;
+    if (!uidNext) return;
+
+    const watermark = await this.getWatermarkUid(tenantId, folder);
+    if (uidNext - 1 <= watermark) return; // nada nuevo desde el último procesado
+
+    const range = `${watermark + 1}:${uidNext - 1}`;
+    for await (const msg of client.fetch(
+      range,
+      { source: true, uid: true },
+      { uid: true },
+    )) {
       await this.handleMessage(tenantId, client, cfg, msg);
     }
+  }
+
+  /**
+   * Si nunca se ha procesado nada para este tenant+carpeta, deja una fila
+   * "línea base" marcando el UID más alto que YA existía en el buzón al
+   * momento de activar el conector, para que la primera reconciliación no
+   * intente procesar años de correo histórico real como si fuera nuevo.
+   */
+  private async seedWatermarkIfFirstRun(
+    tenantId: string,
+    folder: string,
+    client: ImapFlow,
+  ): Promise<void> {
+    const existing = await this.intake
+      .createQueryBuilder('e')
+      .where('e.tenant_id = :tenantId', { tenantId })
+      .andWhere('e.folder = :folder', { folder })
+      .getCount();
+    if (existing > 0) return;
+
+    const uidNext = client.mailbox ? client.mailbox.uidNext : undefined;
+    const baselineUid = uidNext && uidNext > 1 ? uidNext - 1 : 0;
+    if (baselineUid <= 0) return; // buzón vacío — nada que proteger
+
+    await this.intake
+      .createQueryBuilder()
+      .insert()
+      .into(EmailIntakeMessage)
+      .values({
+        tenantId,
+        messageId: `__baseline__${folder}`,
+        imapUid: String(baselineUid),
+        folder,
+        from: 'sistema@oben-plus.local',
+        subject: 'Línea base — inicio del conector de correo real',
+        attachmentCount: 0,
+        classificationCategory: null,
+        classificationConfidence: null,
+        classificationProvider: null,
+        status: 'skipped',
+        resultRef: null,
+        errorMessage: null,
+        movedToFolder: null,
+      })
+      .orIgnore()
+      .execute();
+
+    this.logger.log(
+      `[tenant ${tenantId}] primera activación del conector en "${folder}" — se ignora el historial previo (hasta UID ${baselineUid}), solo se procesa correo nuevo desde ahora.`,
+    );
+  }
+
+  private async getWatermarkUid(
+    tenantId: string,
+    folder: string,
+  ): Promise<number> {
+    const row = await this.intake
+      .createQueryBuilder('e')
+      .select('MAX(CAST(e.imap_uid AS BIGINT))', 'max')
+      .where('e.tenant_id = :tenantId', { tenantId })
+      .andWhere('e.folder = :folder', { folder })
+      .getRawOne<{ max: string | null }>();
+    return row?.max ? Number(row.max) : 0;
   }
 
   private async handleMessage(

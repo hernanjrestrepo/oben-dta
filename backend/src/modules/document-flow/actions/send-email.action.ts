@@ -98,6 +98,11 @@ export class SendEmailAction implements ActionExecutor {
       'send',
       { to: to.join(','), cc: cc.join(','), subject, body, attachments },
       { tenantId, userId: request.context.userId ?? null },
+      // maxAttempts:1 deliberado — mismo motivo que en QuotesService: un
+      // envío de correo es un efecto secundario no idempotente y no
+      // cancelable, así que reintentarlo tras un timeout puede duplicar el
+      // correo real en vez de arreglar el fallo (ver nota en quotes.service.ts).
+      { maxAttempts: 1, timeoutMs: 30_000 },
     );
 
     if (!result.ok) {
