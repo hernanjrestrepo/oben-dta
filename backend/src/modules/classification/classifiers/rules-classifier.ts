@@ -57,6 +57,66 @@ const TEXT_PATTERNS: Array<{
   { category: 'freight_rates', weight: 1, pattern: /\bshapiro\b/i, reason: 'menciona forwarder Shapiro' },
 ];
 
+// Frases clave por categoría para el segundo pase tolerante a errores de
+// tipeo (ver `fuzzyCategoryScore` más abajo). Solo cubre las frases núcleo
+// que ya identifican cada categoría en TEXT_PATTERNS — no duplica todo el
+// catálogo de patrones, solo lo mínimo para recuperar un correo real con
+// errores de tipeo (encontrado en vivo el 2026-08-26: "Soliictud de
+// Cotizacxion" no calzaba con ningún patrón exacto).
+const FUZZY_PHRASES: Array<{
+  category: ClassificationCategory;
+  weight: number;
+  words: string[];
+  reason: string;
+}> = [
+  { category: 'quote_request', weight: 3, words: ['solicitud', 'cotizacion'], reason: 'solicitud de cotización (aproximado, con errores de tipeo)' },
+  { category: 'purchase_order', weight: 3, words: ['orden', 'compra'], reason: '"orden de compra" (aproximado, con errores de tipeo)' },
+  { category: 'purchase_order', weight: 3, words: ['purchase', 'order'], reason: '"purchase order" (aproximado, con errores de tipeo)' },
+  { category: 'comex', weight: 3, words: ['lista', 'empaque'], reason: '"lista de empaque" (aproximado, con errores de tipeo)' },
+];
+
+function normalizeWord(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = temp;
+    }
+  }
+  return dp[n];
+}
+
+/** Tolerancia proporcional al largo de la palabra — evita falsos positivos en palabras cortas. */
+function fuzzyWordMatches(haystackWord: string, targetWord: string): boolean {
+  if (haystackWord === targetWord) return true;
+  if (targetWord.length < 4) return false;
+  const maxDistance = targetWord.length <= 6 ? 1 : 2;
+  return levenshtein(haystackWord, targetWord) <= maxDistance;
+}
+
+function fuzzyCategoryScore(haystack: string): CategorySignal[] {
+  const words = normalizeWord(haystack).split(/[^a-z0-9]+/).filter(Boolean);
+  const signals: CategorySignal[] = [];
+  for (const phrase of FUZZY_PHRASES) {
+    const allWordsPresent = phrase.words.every((target) =>
+      words.some((w) => fuzzyWordMatches(w, target)),
+    );
+    if (allWordsPresent) {
+      signals.push({ category: phrase.category, weight: phrase.weight, reason: phrase.reason });
+    }
+  }
+  return signals;
+}
+
 const ATTACHMENT_PATTERNS: Array<{
   category: ClassificationCategory;
   weight: number;
@@ -99,6 +159,17 @@ export class RulesClassifier implements DocumentClassifier {
         addSignal({ category: p.category, weight: p.weight, reason: p.reason });
       }
     }
+
+    // Segundo pase, tolerante a errores de tipeo: solo aporta a categorías
+    // que los patrones exactos no encontraron — no infla la confianza de un
+    // correo ya bien escrito, solo recupera uno mal escrito que de otra
+    // forma caería en "unknown" sin ningún flujo automático.
+    for (const signal of fuzzyCategoryScore(haystack)) {
+      if ((scores.get(signal.category) ?? 0) === 0) {
+        addSignal(signal);
+      }
+    }
+
     for (const attachment of input.attachments ?? []) {
       for (const p of ATTACHMENT_PATTERNS) {
         if (p.pattern.test(attachment.filename)) {
