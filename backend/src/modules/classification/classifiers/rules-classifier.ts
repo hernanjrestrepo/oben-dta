@@ -32,6 +32,11 @@ const TEXT_PATTERNS: Array<{
   { category: 'quote_request', weight: 3, pattern: /solicit(?:ud|amos|o)\s+.*cotizaci[oó]n/i, reason: 'solicitud de cotización' },
   { category: 'quote_request', weight: 3, pattern: /\brfq\b/i, reason: 'RFQ (request for quotation)' },
   { category: 'quote_request', weight: 2, pattern: /favor\s+cotizar|podr[ií]an\s+cotizar/i, reason: 'pide cotizar' },
+  // Encontrado en vivo el 2026-08-26: "necesito una cotización" es una
+  // forma real y natural de pedir cotizar, distinta de "solicito/solicitud"
+  // — no calzaba con ningún patrón y caía en "unknown" sin ningún flujo.
+  { category: 'quote_request', weight: 3, pattern: /necesit(?:o|amos)\s+.*cotiza(?:r|ci[oó]n)/i, reason: 'necesita cotización/cotizar' },
+  { category: 'quote_request', weight: 3, pattern: /quisiera\s+.*cotiza(?:r|ci[oó]n)/i, reason: 'quisiera cotización/cotizar' },
   { category: 'quote_request', weight: 1, pattern: /precio\s+de|lista\s+de\s+precios/i, reason: 'pregunta por precio' },
 
   // Naviera
