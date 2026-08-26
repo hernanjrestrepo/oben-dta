@@ -92,17 +92,28 @@ export class PurchaseOrdersService {
     });
     const extracted = this.extractor.extract(dto.body, catalog);
 
+    const quote = await this.locateRelatedQuote(client?.id ?? null, extracted.reference, tenantId);
+
+    // Si la PO no repite producto/cantidad (ej. una simple respuesta
+    // "acepto la cotización" en vez de un documento de PO formal), se toman
+    // los items de la cotización relacionada en vez de rechazar la orden por
+    // "sin productos identificados" — encontrado en vivo el 2026-08-26: el
+    // extractor busca el mismo patrón SKU+cantidad que QuotesService, y una
+    // aceptación real casi nunca repite esa info.
+    const effectiveItems: Array<{ productId: string | null; quantity: number }> =
+      extracted.items.length > 0
+        ? extracted.items
+        : (quote?.items ?? []).map((qi) => ({ productId: qi.productId, quantity: qi.quantity }));
+
     let estimatedTotal = 0;
     const orderItems: Array<{ productId: string; quantity: number }> = [];
-    for (const item of extracted.items) {
+    for (const item of effectiveItems) {
       if (!item.productId) continue;
       const product = catalog.find((p) => p.id === item.productId);
       if (!product) continue;
       estimatedTotal += Number(product.price) * item.quantity;
       orderItems.push({ productId: item.productId, quantity: item.quantity });
     }
-
-    const quote = await this.locateRelatedQuote(client?.id ?? null, extracted.reference, tenantId);
 
     const poDocument = await this.poRepository.save(
       this.poRepository.create({
@@ -215,12 +226,14 @@ export class PurchaseOrdersService {
     if (reference) {
       const byReference = await this.quoteRepository.findOne({
         where: { quoteNumber: reference, tenantId },
+        relations: ['items'],
       });
       if (byReference) return byReference;
     }
     if (!clientId) return null;
     return this.quoteRepository.findOne({
       where: { clientId, tenantId },
+      relations: ['items'],
       order: { createdAt: 'DESC' },
     });
   }

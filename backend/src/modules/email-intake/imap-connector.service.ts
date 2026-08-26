@@ -39,6 +39,8 @@ export interface ImapIntakeConfig {
 
 const RECONNECT_BASE_DELAY_MS = 5_000;
 const RECONNECT_MAX_DELAY_MS = 5 * 60_000;
+/** Ver nota en `withWatchdog` — un STATUS real tarda ~150-200ms; 20s da margen de sobra sin dejar un socket muerto colgado por mucho tiempo. */
+const WATCHDOG_MS = 20_000;
 
 /**
  * Adaptador de ENTRADA de correo real (WO-018 Sprint 6, requisito explícito
@@ -186,7 +188,7 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
 
       // Reconciliación: procesa lo pendiente desde el último UID conocido
       // — cubre correos llegados mientras el proceso estaba caído.
-      await this.processUnseen(tenantId, client, cfg);
+      await this.withWatchdog(this.processUnseen(tenantId, client, cfg), 'processUnseen (inicial)');
 
       while (!this.connections.get(tenantId)?.stopped) {
         if (cfg.pollIntervalMs) {
@@ -194,15 +196,46 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         } else {
           await client.idle();
         }
-        await this.processUnseen(tenantId, client, cfg);
+        // Encontrado en vivo el 2026-08-26: tras ~40min corriendo, el ciclo
+        // de sondeo se quedó colgado sin ningún log ni evento 'error' — un
+        // socket "medio muerto" (NAT/firewall cortando una conexión larga
+        // sin avisar) hace que el próximo comando IMAP nunca reciba
+        // respuesta ni error, solo se queda esperando para siempre. El
+        // listener de 'error' (arriba) no ayuda aquí porque no es un error,
+        // es silencio total. Un watchdog con timeout es la única forma de
+        // detectar esto y forzar una reconexión real.
+        await this.withWatchdog(this.processUnseen(tenantId, client, cfg), 'processUnseen');
       }
     } finally {
       lock.release();
       try {
-        await client.logout();
+        await this.withWatchdog(client.logout(), 'logout');
       } catch {
-        // conexión ya pudo haberse caído; no hay nada más que limpiar.
+        // conexión ya pudo haberse caído (o el watchdog la dio por muerta);
+        // no hay nada más que limpiar.
       }
+    }
+  }
+
+  /** Si `promise` no resuelve en `PROCESS_WATCHDOG_MS`, la deja colgada y sigue —
+   *  lanza para que `runForTenant` reconecte desde cero (ver nota arriba). */
+  private async withWatchdog<T>(promise: Promise<T>, label: string): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () =>
+          reject(
+            new Error(
+              `watchdog: "${label}" sin respuesta tras ${WATCHDOG_MS}ms — conexión probablemente muerta, forzando reconexión`,
+            ),
+          ),
+        WATCHDOG_MS,
+      );
+    });
+    try {
+      return await Promise.race([promise, timeout]);
+    } finally {
+      clearTimeout(timer!);
     }
   }
 
