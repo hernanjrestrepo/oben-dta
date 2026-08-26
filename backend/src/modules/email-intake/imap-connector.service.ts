@@ -41,6 +41,8 @@ const RECONNECT_BASE_DELAY_MS = 5_000;
 const RECONNECT_MAX_DELAY_MS = 5 * 60_000;
 /** Ver nota en `withWatchdog` — un STATUS real tarda ~150-200ms; 20s da margen de sobra sin dejar un socket muerto colgado por mucho tiempo. */
 const WATCHDOG_MS = 20_000;
+/** Ver nota en `connectAndWatch` — mitigación mientras se identifica la causa raíz exacta del sondeo que deja de detectar correo sin error ni cuelgue. */
+const MAX_CONNECTION_AGE_MS = 10 * 60_000;
 
 /**
  * Adaptador de ENTRADA de correo real (WO-018 Sprint 6, requisito explícito
@@ -190,7 +192,11 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
       // — cubre correos llegados mientras el proceso estaba caído.
       await this.withWatchdog(this.processUnseen(tenantId, client, cfg), 'processUnseen (inicial)');
 
-      while (!this.connections.get(tenantId)?.stopped) {
+      const connectedAt = Date.now();
+      while (
+        !this.connections.get(tenantId)?.stopped &&
+        Date.now() - connectedAt < MAX_CONNECTION_AGE_MS
+      ) {
         if (cfg.pollIntervalMs) {
           await this.sleep(cfg.pollIntervalMs);
         } else {
@@ -206,6 +212,15 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         // detectar esto y forzar una reconexión real.
         await this.withWatchdog(this.processUnseen(tenantId, client, cfg), 'processUnseen');
       }
+      // Segunda variante del mismo problema, encontrada en vivo horas
+      // después: la conexión NO se cuelga (el watchdog de arriba no
+      // dispara), pero deja de detectar correo nuevo de todas formas —
+      // sospecha: el proveedor empieza a limitar/cachear respuestas de
+      // STATUS ante sondeo tan frecuente (cada 5s, cientos de veces en una
+      // hora) sin pasar nunca por IDLE. No se identificó la causa exacta
+      // todavía; como mitigación mientras tanto, se fuerza una reconexión
+      // completa cada MAX_CONNECTION_AGE_MS pase lo que pase — una conexión
+      // nueva siempre reporta el estado correcto (confirmado en vivo).
     } finally {
       lock.release();
       try {
