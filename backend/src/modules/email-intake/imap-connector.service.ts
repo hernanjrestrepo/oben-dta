@@ -279,21 +279,32 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     cfg: ImapIntakeConfig,
   ): Promise<void> {
     const folder = cfg.folder ?? 'INBOX';
+    // Diagnóstico temporal (2026-08-26): el watchdog de 20s en connectAndWatch
+    // no ha disparado ni una vez pese a ciclos que llevan 30+ min sin avanzar
+    // — hay que ver en qué línea exacta se queda colgado la próxima vez, en
+    // vez de seguir adivinando. Quitar una vez identificada la causa raíz.
+    this.logger.debug(`[tenant ${tenantId}] processUnseen: pidiendo status()...`);
     const status = await client.status(folder, { uidNext: true });
+    this.logger.debug(`[tenant ${tenantId}] processUnseen: status() OK, uidNext=${status.uidNext}`);
     const uidNext = status.uidNext;
     if (!uidNext) return;
 
     const watermark = await this.getWatermarkUid(tenantId, folder);
+    this.logger.debug(`[tenant ${tenantId}] processUnseen: watermark=${watermark}`);
     if (uidNext - 1 <= watermark) return; // nada nuevo desde el último procesado
 
     const range = `${watermark + 1}:${uidNext - 1}`;
+    this.logger.debug(`[tenant ${tenantId}] processUnseen: fetch range=${range}...`);
     for await (const msg of client.fetch(
       range,
       { source: true, uid: true },
       { uid: true },
     )) {
+      this.logger.debug(`[tenant ${tenantId}] processUnseen: msg uid=${msg.uid} recibido, procesando...`);
       await this.handleMessage(tenantId, client, cfg, msg);
+      this.logger.debug(`[tenant ${tenantId}] processUnseen: msg uid=${msg.uid} manejado.`);
     }
+    this.logger.debug(`[tenant ${tenantId}] processUnseen: fetch range=${range} terminado.`);
   }
 
   /**
