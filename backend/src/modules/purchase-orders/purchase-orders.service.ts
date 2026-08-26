@@ -188,6 +188,23 @@ export class PurchaseOrdersService {
     if (ruleResult.status === 'validation_failed') {
       poDocument.status = PurchaseOrderDocumentStatus.VALIDATION_FAILED;
       await this.poRepository.save(poDocument);
+
+      // Antes esto quedaba validado en silencio: no había regla activa para
+      // este evento, así que el cliente nunca se enteraba de por qué su PO
+      // no generó una orden. Se reusa el mismo `context` pero con un
+      // mensaje propio de rechazo (el de éxito ya quedó fijado arriba y no
+      // aplica aquí), listando en español los motivos reales — mismos
+      // mensajes que ya construyen los 7 validadores.
+      const reasons = ruleResult.validations
+        .filter((v) => !v.passed)
+        .map((v) => `<li>${v.message ?? v.type}</li>`)
+        .join('');
+      context.metadata = {
+        ...context.metadata,
+        emailSubject: `No pudimos procesar tu orden de compra${extracted.poNumber ? ` ${extracted.poNumber}` : ''}`,
+        emailBody: `<p>Recibimos tu orden de compra, pero no pudimos generar la Orden porque:</p><ul>${reasons}</ul><p>Por favor contáctanos para resolverlo.</p>`,
+      };
+
       await this.engine.handle('PURCHASE_ORDER_VALIDATION_FAILED', context);
       return { category: 'purchase_order', classification, poDocument, ruleResult };
     }
