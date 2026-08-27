@@ -4,6 +4,10 @@ import { Repository } from 'typeorm';
 import { Product } from '../../entities/product.entity';
 import { QuotesService } from '../quotes/quotes.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
+import { WorkflowAuditService } from '../security/workflow-audit.service';
+import { WorkflowEventType } from '../../entities/workflow-event.entity';
+
+const WORKFLOW_NAME = 'eva-assistant';
 
 interface KimiMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -70,6 +74,7 @@ export class EvaService {
     @InjectRepository(Product) private readonly products: Repository<Product>,
     private readonly quotesService: QuotesService,
     private readonly ctx: TenantContext,
+    private readonly audit: WorkflowAuditService,
   ) {}
 
   async chat(message: string): Promise<EvaChatResult> {
@@ -80,6 +85,24 @@ export class EvaService {
           'EVA no está configurada todavía en este ambiente (falta KIMI_API_KEY). Avisa al equipo técnico.',
       };
     }
+
+    const result = await this.processChat(message, apiKey);
+    // Auditoría de TODA interacción con EVA — qué se le pidió, qué decidió
+    // hacer (o no) y el resultado real, no lo que "dijo" que hizo.
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: result.action?.type ?? 'eva_reply',
+      entityType: 'eva_interaction',
+      entityId: this.ctx.userId ?? 'unknown',
+      actorId: this.ctx.userId,
+      inputData: { message },
+      outputData: { reply: result.reply, action: result.action ?? null },
+    });
+    return result;
+  }
+
+  private async processChat(message: string, apiKey: string): Promise<EvaChatResult> {
 
     const catalog = await this.products.find({
       where: { isActive: true, tenantId: this.ctx.tenantId },
