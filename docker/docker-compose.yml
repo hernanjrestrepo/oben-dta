@@ -68,6 +68,7 @@ services:
       NETSUITE_TOKEN_SECRET: ${NETSUITE_TOKEN_SECRET:-}
       ARMSTRONG_BASE_URL: ${ARMSTRONG_BASE_URL:-}
       ARMSTRONG_TOKEN: ${ARMSTRONG_TOKEN:-}
+      KIMI_API_KEY: ${KIMI_API_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
