@@ -164,6 +164,11 @@ class ApiClient {
     return data;
   }
 
+  async createInvoice(orderId: string): Promise<Invoice> {
+    const { data } = await this.client.post<Invoice>('/invoices', { orderId });
+    return data;
+  }
+
   async getInvoice(id: string): Promise<Invoice> {
     const { data } = await this.client.get<Invoice>(`/invoices/${id}`);
     return data;

@@ -14,6 +14,7 @@ import {
   Tag,
   ChevronDown,
   RefreshCw,
+  FileText,
 } from 'lucide-react';
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -49,6 +50,7 @@ export default function OrderDetailPage() {
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [generatingInvoice, setGeneratingInvoice] = useState(false);
 
   useEffect(() => {
     if (id) loadOrder();
@@ -81,6 +83,20 @@ export default function OrderDetailPage() {
       alert(msg || 'Error actualizando estado');
     } finally {
       setUpdating(false);
+    }
+  }
+
+  async function handleGenerateInvoice() {
+    if (!order) return;
+    try {
+      setGeneratingInvoice(true);
+      const invoice = await api.createInvoice(order.id);
+      setOrder({ ...order, invoiceNumber: invoice.invoiceNumber });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      alert(msg || 'Error generando la factura');
+    } finally {
+      setGeneratingInvoice(false);
     }
   }
 
@@ -162,6 +178,30 @@ export default function OrderDetailPage() {
             <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
             Actualizar
           </button>
+
+          {order.invoiceNumber ? (
+            <Link
+              href={`/invoices`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition"
+              title={`Factura ${order.invoiceNumber}`}
+            >
+              <FileText className="w-4 h-4" />
+              Factura {order.invoiceNumber}
+            </Link>
+          ) : order.status === 'DELIVERED' ? (
+            <button
+              onClick={handleGenerateInvoice}
+              disabled={generatingInvoice}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition disabled:opacity-60"
+            >
+              {generatingInvoice ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4" />
+              )}
+              Generar Factura
+            </button>
+          ) : null}
 
           {nextStatuses.length > 0 && (
             <div className="relative">
