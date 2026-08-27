@@ -456,3 +456,41 @@ export interface WorkflowEvent {
   createdAt: string;
 }
 
+// Fletes — maestro de tarifas real del forwarder de Oben
+export interface FreightInlandRate {
+  id: string;
+  country: 'USA' | 'CA';
+  forwarder: string;
+  destinationPort: string;
+  state: string;
+  destinationAddress: string;
+  weightLbs: number | null;
+  rate40hc: number;
+  transitTimeDays: number | null;
+  validUntil: string | null;
+  sourceFile: string;
+  importedAt: string;
+}
+
+export interface FreightTransloadRate {
+  id: string;
+  destinationPort: string | null;
+  deliveryAddress: string;
+  unitWeightLbs: number | null;
+  transloadingRate: number;
+  transportationRate: number;
+  validityNote: string | null;
+  sourceFile: string;
+  importedAt: string;
+}
+
+export interface FreightDestinationSurcharge {
+  id: string;
+  country: string;
+  surchargeName: string;
+  rateAmount: number | null;
+  rateFormula: string | null;
+  sourceFile: string;
+  importedAt: string;
+}
+

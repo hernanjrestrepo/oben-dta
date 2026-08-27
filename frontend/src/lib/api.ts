@@ -6,6 +6,7 @@ import {
   QuoteFlowResult, SecurityModuleCatalog, SecurityPermission, SecurityRole, SystemStatus, Tenant,
   TenantFeatureFlag, TenantSubscription, TenantUser, UpdateOrderStatusDto, UpdateRoleDto,
   UpdateTenantUserDto, User, WorkflowEvent,
+  FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
@@ -172,6 +173,22 @@ class ApiClient {
   // EVA
   async evaChat(message: string): Promise<{ reply: string; action?: { type: string; data: unknown } }> {
     const { data } = await this.client.post('/eva/chat', { message });
+    return data;
+  }
+
+  // Fletes
+  async getFreightInland(country?: string): Promise<FreightInlandRate[]> {
+    const { data } = await this.client.get<FreightInlandRate[]>('/freight-rates/inland', { params: country ? { country } : undefined });
+    return data;
+  }
+
+  async getFreightTransload(): Promise<FreightTransloadRate[]> {
+    const { data } = await this.client.get<FreightTransloadRate[]>('/freight-rates/transload');
+    return data;
+  }
+
+  async getFreightSurcharges(country?: string): Promise<FreightDestinationSurcharge[]> {
+    const { data } = await this.client.get<FreightDestinationSurcharge[]>('/freight-rates/destination-surcharges', { params: country ? { country } : undefined });
     return data;
   }
 
