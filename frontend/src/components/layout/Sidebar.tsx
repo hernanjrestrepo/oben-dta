@@ -66,7 +66,7 @@ export function Sidebar() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo-oben.svg" alt="Oben" className="h-8 w-auto shrink-0" />
               <div>
-                <h1 className="font-bold text-lg">OBEN PLUS</h1>
+                <h1 className="font-bold text-lg">OBEN XMART</h1>
                 <p className="text-xs text-white/70">Digitalización Autónoma</p>
               </div>
             </div>
@@ -113,6 +113,9 @@ export function Sidebar() {
               <LogOut className="w-5 h-5" />
               <span>Cerrar Sesión</span>
             </button>
+            <p className="mt-3 px-2 text-[10px] text-white/40 text-center">
+              Oben Xmart by Paradixe
+            </p>
           </div>
         </div>
       </aside>

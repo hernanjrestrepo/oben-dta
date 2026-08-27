@@ -49,7 +49,7 @@ export function LoginForm() {
         <div className="text-center mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-oben.svg" alt="Oben" className="h-12 w-auto mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-white">OBEN PLUS</h1>
+          <h1 className="text-2xl font-bold text-white">OBEN XMART</h1>
           <p className="text-white/70 text-sm mt-1">Digitalización Total Autónoma</p>
         </div>
 
@@ -121,9 +121,12 @@ export function LoginForm() {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-0.5">
             <p className="text-xs text-gray-400">
               Oben Group — Exportaciones e Industria
+            </p>
+            <p className="text-[11px] text-gray-300">
+              Oben Xmart by Paradixe
             </p>
           </div>
         </div>
