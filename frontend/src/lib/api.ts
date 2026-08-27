@@ -192,6 +192,12 @@ class ApiClient {
     return data;
   }
 
+  // Lista de empaque (real, vía API de Oben)
+  async getPackingList(numberOrderSales: string): Promise<Record<string, unknown>> {
+    const { data } = await this.client.get(`/packing-list/${numberOrderSales}`);
+    return data;
+  }
+
   async getInvoice(id: string): Promise<Invoice> {
     const { data } = await this.client.get<Invoice>(`/invoices/${id}`);
     return data;

@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   History,
   Truck,
+  Package,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/orders', label: 'Órdenes', icon: ShoppingCart },
   { href: '/invoices', label: 'Facturas', icon: FileText },
   { href: '/fletes', label: 'Fletes', icon: Truck },
+  { href: '/lista-empaque', label: 'Lista de Empaque', icon: Package },
   { href: '/clients', label: 'Clientes', icon: Users },
 ];
 

@@ -13,6 +13,7 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
 import { EvaModule } from './modules/eva/eva.module';
+import { PackingListModule } from './modules/packing-list/packing-list.module';
 import { DashboardModule } from './modules/dashboard.module';
 import { TenantModule } from './common/tenant/tenant.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -161,6 +162,7 @@ import { FreightDestinationSurcharge } from './entities/freight-destination-surc
     FreightRatesModule,
     DashboardModule,
     EvaModule,
+    PackingListModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
