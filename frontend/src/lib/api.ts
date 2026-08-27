@@ -169,6 +169,12 @@ class ApiClient {
     return data;
   }
 
+  // EVA
+  async evaChat(message: string): Promise<{ reply: string; action?: { type: string; data: unknown } }> {
+    const { data } = await this.client.post('/eva/chat', { message });
+    return data;
+  }
+
   async getInvoice(id: string): Promise<Invoice> {
     const { data } = await this.client.get<Invoice>(`/invoices/${id}`);
     return data;
