@@ -197,7 +197,9 @@ Reglas:
           messages,
           tools: TOOLS,
           tool_choice: 'auto',
-          temperature: 0.3,
+          // kimi-k2.6 solo acepta temperature=1 (default) - encontrado en
+          // vivo el 2026-08-28: "invalid temperature: only 1 is allowed for
+          // this model". No se envía el parámetro, se deja el default real.
         }),
         signal: controller.signal,
       });
