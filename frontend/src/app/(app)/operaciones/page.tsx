@@ -32,16 +32,36 @@ const INTEGRATION_META: Record<string, { label: string; role: string; icon: Reac
   cubeiq: { label: 'CubeIQ', role: 'Optimización de carga', icon: Workflow },
   efranco: { label: 'EFranco', role: 'Agente aduanero', icon: Ship },
   shipping: { label: 'Transporte', role: 'Naviera / courier', icon: Ship },
-  email: { label: 'Email', role: 'Notificaciones', icon: Network },
+  email: { label: 'Correo (M365)', role: 'Cotizaciones / notificaciones', icon: Network },
   whatsapp: { label: 'WhatsApp', role: 'Mensajería cliente', icon: Radio },
+  obenCostOrder: { label: 'Oben Mas (API)', role: 'Costos, empaque y liquidación', icon: Building2 },
 };
-const stateStyles: Record<IntegrationStatus['state'], { dot: string; text: string; label: string }> = {
-  operational: { dot: 'bg-green-500', text: 'text-green-700', label: 'Simulador activo' },
-  pending_credentials: { dot: 'bg-amber-500', text: 'text-amber-700', label: 'Pendiente de integración externa' },
-  unreachable: { dot: 'bg-red-500', text: 'text-red-700', label: 'No alcanzable' },
-  error: { dot: 'bg-red-500', text: 'text-red-700', label: 'Error' },
-  disabled: { dot: 'bg-gray-400', text: 'text-gray-500', label: 'Deshabilitado' },
+// El label ya NO se hardcodea a "Simulador activo": cada sistema puede estar
+// en modo mock o real (AdapterRegistry lo resuelve por tenant), y desde que
+// obenCostOrder y el correo (M365) pasaron a real (agosto 2026) mostrar
+// "Simulador activo" para ellos era directamente falso — ver getStateLabel().
+const stateStyles: Record<IntegrationStatus['state'], { dot: string; text: string }> = {
+  operational: { dot: 'bg-green-500', text: 'text-green-700' },
+  pending_credentials: { dot: 'bg-amber-500', text: 'text-amber-700' },
+  unreachable: { dot: 'bg-red-500', text: 'text-red-700' },
+  error: { dot: 'bg-red-500', text: 'text-red-700' },
+  disabled: { dot: 'bg-gray-400', text: 'text-gray-500' },
 };
+
+function getStateLabel(it: IntegrationStatus): string {
+  switch (it.state) {
+    case 'operational':
+      return it.mode === 'real' ? 'Conectado (real)' : 'Simulador activo';
+    case 'pending_credentials':
+      return 'Pendiente de integración externa';
+    case 'unreachable':
+      return 'No alcanzable';
+    case 'error':
+      return 'Error';
+    case 'disabled':
+      return 'Deshabilitado';
+  }
+}
 
 export default function OperacionesPage() {
   const [orders, setOrders] = useState<number | null>(null);
@@ -93,7 +113,7 @@ export default function OperacionesPage() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <KpiCard icon={Receipt} label="Órdenes en sistema" value={orders === null ? '—' : String(orders)} hint="PostgreSQL · dato real" />
         <KpiCard icon={FileText} label="Facturas creadas" value={invoices === null ? '—' : String(invoices)} hint="PostgreSQL · dato real" />
-        <KpiCard icon={Network} label="Integraciones" value={String(integrations.length || 11)} hint={integrations.length ? `${integrations.filter((i) => i.state === 'operational').length} simuladores activos` : 'cargando…'} />
+        <KpiCard icon={Network} label="Integraciones" value={String(integrations.length || 11)} hint={integrations.length ? `${integrations.filter((i) => i.state === 'operational' && i.mode === 'real').length} reales · ${integrations.filter((i) => i.state === 'operational' && i.mode === 'mock').length} simuladas` : 'cargando…'} />
       </div>
 
       {/* ===== Integraciones (estado real del Integration Hub) ===== */}
@@ -117,16 +137,16 @@ export default function OperacionesPage() {
                   </div>
                 </div>
                 <div className="mt-3 flex items-center text-xs">
-                  <span className={`inline-flex items-center gap-1.5 ${s.text}`}><span className={`w-2 h-2 rounded-full ${s.dot}`} /> {s.label}</span>
+                  <span className={`inline-flex items-center gap-1.5 ${s.text}`}><span className={`w-2 h-2 rounded-full ${s.dot}`} /> {getStateLabel(it)}</span>
                 </div>
               </div>
             );
           })}
         </div>
         <p className="mt-4 text-xs text-gray-500 leading-relaxed">
-          Cada sistema corre hoy sobre un simulador funcional: mismas operaciones, mismas validaciones de negocio,
-          mismos errores que tendría la API real. Conectar NetSuite, VETA o Armstrong reales solo requiere las
-          credenciales de Oben — el resto del sistema no cambia.
+          Oben Mas (API) y el correo (M365) ya corren en modo real. El resto corre sobre un simulador funcional:
+          mismas operaciones, mismas validaciones de negocio, mismos errores que tendría la API real. Conectar
+          NetSuite, VETA o Armstrong reales solo requiere las credenciales de Oben — el resto del sistema no cambia.
         </p>
       </div>
     </div>
