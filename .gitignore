@@ -1888,3 +1888,8 @@ CMakeLists.txt.user
 # coinciden por accidente con nuestra ruta real de la app
 # frontend/src/app/(app)/admin/roles/ y la excluían silenciosamente de git.
 !frontend/src/app/(app)/admin/roles/
+
+# Capturas/exports de Postman de las APIs reales de Oben: traen el Authtoken
+# real en texto plano (ej. Business/API Oben/*.jpeg, 2026-08-30). No deben
+# quedar commiteados nunca — el token va solo por variable de entorno.
+Business/API Oben/

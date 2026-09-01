@@ -129,6 +129,9 @@ export class AdapterRegistry {
       const costOrderConfig: ObenCostOrderAdapterConfig = {
         baseUrl: cfg.baseUrl as string | undefined,
         consultaUrl: cfg.consultaUrl as string | undefined,
+        crearEncLiqUrl: cfg.crearEncLiqUrl as string | undefined,
+        crearDetLiqUrl: cfg.crearDetLiqUrl as string | undefined,
+        liquidacionUrl: cfg.liquidacionUrl as string | undefined,
         authToken: cfg.authToken as string | undefined,
       };
       return new ObenCostOrderRealAdapter(costOrderConfig);
