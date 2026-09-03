@@ -112,13 +112,29 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
     if (!to) throw new Error('BUSINESS_ERROR: to requerido');
     if (!subject) throw new Error('BUSINESS_ERROR: subject requerido');
 
+    const cc = this.parseAddressList(args.cc);
+    const bcc = this.parseAddressList(args.bcc);
+
     const info = await this.getTransporter().sendMail({
       from: this.smtpConfig.fromAddress,
       to,
+      ...(cc ? { cc } : {}),
+      ...(bcc ? { bcc } : {}),
       subject,
       html: body,
       attachments: this.parseAttachments(args),
     });
     return { id: info.messageId, delivered: true };
+  }
+
+  /** Acepta string único, string separado por comas, o array de strings. */
+  private parseAddressList(value: unknown): string | undefined {
+    if (!value) return undefined;
+    if (Array.isArray(value)) {
+      const joined = value.map((v) => String(v).trim()).filter(Boolean).join(',');
+      return joined || undefined;
+    }
+    const str = String(value).trim();
+    return str || undefined;
   }
 }

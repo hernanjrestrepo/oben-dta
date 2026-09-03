@@ -18,6 +18,8 @@ import {
   History,
   Truck,
   Package,
+  Users2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -29,7 +31,9 @@ const navItems = [
   { href: '/invoices', label: 'Facturas', icon: FileText },
   { href: '/fletes', label: 'Fletes', icon: Truck },
   { href: '/lista-empaque', label: 'Lista de Empaque', icon: Package },
+  { href: '/reportes', label: 'Reportes Oben', icon: FileSpreadsheet },
   { href: '/clients', label: 'Clientes', icon: Users },
+  { href: '/distribucion', label: 'Listas de Distribución', icon: Users2 },
 ];
 
 const adminNavItem = { href: '/admin/users', label: 'Administración', icon: ShieldCheck };

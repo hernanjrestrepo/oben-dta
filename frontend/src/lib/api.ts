@@ -7,6 +7,7 @@ import {
   TenantFeatureFlag, TenantSubscription, TenantUser, UpdateOrderStatusDto, UpdateRoleDto,
   UpdateTenantUserDto, User, WorkflowEvent,
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
+  DistributionList, DistributionListInput,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
@@ -195,6 +196,55 @@ class ApiClient {
   // Lista de empaque (real, vía API de Oben)
   async getPackingList(numberOrderSales: string): Promise<Record<string, unknown>> {
     const { data } = await this.client.get(`/packing-list/${numberOrderSales}`);
+    return data;
+  }
+
+  async sendPackingListEmail(numberOrderSales: string, to?: string): Promise<{ sent: boolean; to: string; cc: string[] }> {
+    const { data } = await this.client.post(`/packing-list/${numberOrderSales}/send`, to ? { to } : {});
+    return data;
+  }
+
+  // Listas de distribución
+  async getDistributionLists(): Promise<DistributionList[]> {
+    const { data } = await this.client.get<DistributionList[]>('/distribution-lists');
+    return data;
+  }
+
+  async createDistributionList(dto: DistributionListInput): Promise<DistributionList> {
+    const { data } = await this.client.post<DistributionList>('/distribution-lists', dto);
+    return data;
+  }
+
+  async updateDistributionList(id: string, dto: Partial<DistributionListInput>): Promise<DistributionList> {
+    const { data } = await this.client.patch<DistributionList>(`/distribution-lists/${id}`, dto);
+    return data;
+  }
+
+  async deleteDistributionList(id: string): Promise<void> {
+    await this.client.delete(`/distribution-lists/${id}`);
+  }
+
+  async associateDistributionList(id: string, entityType: string, entityKey: string): Promise<void> {
+    await this.client.post(`/distribution-lists/${id}/associations`, { entityType, entityKey });
+  }
+
+  async dissociateDistributionList(id: string, associationId: string): Promise<void> {
+    await this.client.delete(`/distribution-lists/${id}/associations/${associationId}`);
+  }
+
+  // Reportes reales de Oben (Consumo ME/MP, Empaque Unificada/Detallada, Check Línea, etc.)
+  async getObenReportTypes(): Promise<{ key: string; label: string }[]> {
+    const { data } = await this.client.get('/oben-reports');
+    return data;
+  }
+
+  async getObenReport(key: string, numberOrderSales: string): Promise<Record<string, unknown>> {
+    const { data } = await this.client.get(`/oben-reports/${key}/${numberOrderSales}`);
+    return data;
+  }
+
+  async sendObenReportEmail(key: string, numberOrderSales: string, to?: string): Promise<{ sent: boolean; to: string; cc: string[] }> {
+    const { data } = await this.client.post(`/oben-reports/${key}/${numberOrderSales}/send`, to ? { to } : {});
     return data;
   }
 

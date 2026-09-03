@@ -14,6 +14,7 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
 import { EvaModule } from './modules/eva/eva.module';
 import { PackingListModule } from './modules/packing-list/packing-list.module';
+import { ObenReportsModule } from './modules/oben-reports/oben-reports.module';
 import { DashboardModule } from './modules/dashboard.module';
 import { TenantModule } from './common/tenant/tenant.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -24,6 +25,7 @@ import { DocumentFlowModule } from './modules/document-flow/document-flow.module
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 import { EmailIntakeModule } from './modules/email-intake/email-intake.module';
 import { FreightRatesModule } from './modules/freight-rates/freight-rates.module';
+import { DistributionListsModule } from './modules/distribution-lists/distribution-lists.module';
 
 // Import all entities
 import { Client } from './entities/client.entity';
@@ -70,6 +72,9 @@ import { EmailIntakeMessage } from './entities/email-intake-message.entity';
 import { FreightInlandRate } from './entities/freight-inland-rate.entity';
 import { FreightTransloadRate } from './entities/freight-transload-rate.entity';
 import { FreightDestinationSurcharge } from './entities/freight-destination-surcharge.entity';
+import { DistributionList } from './entities/distribution-list.entity';
+import { DistributionListRecipient } from './entities/distribution-list-recipient.entity';
+import { DistributionListAssociation } from './entities/distribution-list-association.entity';
 
 @Module({
   imports: [
@@ -139,6 +144,9 @@ import { FreightDestinationSurcharge } from './entities/freight-destination-surc
           FreightInlandRate,
           FreightTransloadRate,
           FreightDestinationSurcharge,
+          DistributionList,
+          DistributionListRecipient,
+          DistributionListAssociation,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') === 'development',
@@ -163,6 +171,8 @@ import { FreightDestinationSurcharge } from './entities/freight-destination-surc
     DashboardModule,
     EvaModule,
     PackingListModule,
+    DistributionListsModule,
+    ObenReportsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

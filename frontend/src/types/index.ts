@@ -494,3 +494,36 @@ export interface FreightDestinationSurcharge {
   importedAt: string;
 }
 
+export type DistributionRecipientRole = 'to' | 'cc' | 'bcc';
+
+export interface DistributionListRecipientView {
+  id: string;
+  email: string;
+  name: string | null;
+  role: DistributionRecipientRole;
+}
+
+export type DistributionEntityType = 'document' | 'transaction' | 'report';
+
+export interface DistributionListAssociationView {
+  id: string;
+  entityType: DistributionEntityType;
+  entityKey: string;
+}
+
+export interface DistributionList {
+  id: string;
+  name: string;
+  description: string | null;
+  recipients: DistributionListRecipientView[];
+  associations: DistributionListAssociationView[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DistributionListInput {
+  name: string;
+  description?: string;
+  recipients: { email: string; name?: string; role: DistributionRecipientRole }[];
+}
+
