@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
-import { Package, Loader2, AlertCircle, Search, ShieldCheck, Mail, Send, CheckCircle2 } from 'lucide-react';
+import { Package, Loader2, AlertCircle, Search, ShieldCheck, Mail, Send, CheckCircle2, Download } from 'lucide-react';
 
 interface PackingLine {
   [key: string]: unknown;
@@ -18,6 +18,9 @@ export default function ListaEmpaquePage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [sentOk, setSentOk] = useState(false);
+
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
 
   async function handleSearch() {
     if (!orderNumber.trim()) return;
@@ -54,6 +57,28 @@ export default function ListaEmpaquePage() {
       setSendError(msg || 'No se pudo enviar el correo.');
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleDownload() {
+    if (!orderNumber.trim()) return;
+    try {
+      setDownloading(true);
+      setDownloadError('');
+      const blob = await api.downloadPackingListExcel(orderNumber.trim());
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Lista_de_Empaque-OV${orderNumber.trim()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setDownloadError(msg || 'No se pudo descargar el Excel.');
+    } finally {
+      setDownloading(false);
     }
   }
 
@@ -119,10 +144,25 @@ export default function ListaEmpaquePage() {
       {data && (
         <>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4 text-green-700">
-              <ShieldCheck className="w-5 h-5" />
-              <p className="text-sm font-semibold">Datos reales de Oben — {lines.length} línea{lines.length !== 1 ? 's' : ''}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-green-700">
+                <ShieldCheck className="w-5 h-5" />
+                <p className="text-sm font-semibold">Datos reales de Oben — {lines.length} línea{lines.length !== 1 ? 's' : ''}</p>
+              </div>
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition disabled:opacity-50 text-sm"
+              >
+                {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Descargar Excel
+              </button>
             </div>
+            {downloadError && (
+              <p className="mb-4 text-sm text-red-700 flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4" /> {downloadError}
+              </p>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {summaryFields.map(([key, label]) => (
                 <div key={key}>

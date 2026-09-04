@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { BaseAdapter } from '../base-adapter';
 import {
@@ -8,6 +8,10 @@ import {
   AdapterState,
   BaseAdapterConfig,
 } from '../adapter.types';
+import {
+  MicrosoftAppTokenService,
+  readMicrosoftAppCredentialsFromEnv,
+} from '../../../../common/microsoft-oauth/microsoft-app-token.service';
 
 export interface EmailSmtpAdapterConfig extends BaseAdapterConfig {
   host?: string;
@@ -17,6 +21,13 @@ export interface EmailSmtpAdapterConfig extends BaseAdapterConfig {
   user?: string;
   pass?: string;
   fromAddress?: string;
+  /**
+   * 'oauth2': usa MS_MAIL_OAUTH_CLIENT_ID/SECRET/TENANT_ID (variables de
+   * entorno, nunca en la config del tenant) para autenticar vía Microsoft
+   * identity platform en vez de usuario/contraseña — Microsoft viene
+   * deprecando basic auth en Exchange Online. `pass` no se usa en este modo.
+   */
+  authType?: 'basic' | 'oauth2';
 }
 
 /**
@@ -33,7 +44,10 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
 
   private transporter: nodemailer.Transporter | null = null;
 
-  constructor(private readonly smtpConfig: EmailSmtpAdapterConfig) {
+  constructor(
+    private readonly smtpConfig: EmailSmtpAdapterConfig,
+    @Optional() private readonly msToken?: MicrosoftAppTokenService,
+  ) {
     super(smtpConfig);
   }
 
@@ -43,13 +57,17 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
 
   private isConfigured(): boolean {
     const c = this.smtpConfig;
+    if (c.authType === 'oauth2') {
+      return !!(c.host && c.port && c.user && c.fromAddress);
+    }
     return !!(c.host && c.port && c.user && c.pass && c.fromAddress);
   }
 
   protected async checkHealth(): Promise<AdapterState> {
     if (!this.isConfigured()) return 'pending_credentials';
     try {
-      await this.getTransporter().verify();
+      const transporter = await this.getTransporter();
+      await transporter.verify();
       return 'operational';
     } catch {
       return 'unreachable';
@@ -62,9 +80,21 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
     };
   }
 
-  private getTransporter(): nodemailer.Transporter {
-    if (this.transporter) return this.transporter;
+  private async getTransporter(): Promise<nodemailer.Transporter> {
     const c = this.smtpConfig;
+    if (c.authType === 'oauth2') {
+      // No se cachea: el access token expira (~1h) y el volumen de correo es
+      // bajo (piloto: hasta ~100/día) — pedir uno fresco por conexión es más
+      // simple y correcto que gestionar la expiración de un transporter cacheado.
+      const accessToken = await this.getOAuth2AccessToken();
+      return nodemailer.createTransport({
+        host: c.host,
+        port: c.port,
+        secure: c.secure ?? false,
+        auth: { type: 'OAuth2', user: c.user, accessToken },
+      });
+    }
+    if (this.transporter) return this.transporter;
     this.transporter = nodemailer.createTransport({
       host: c.host,
       port: c.port,
@@ -72,6 +102,19 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
       auth: { user: c.user, pass: c.pass },
     });
     return this.transporter;
+  }
+
+  private async getOAuth2AccessToken(): Promise<string> {
+    const creds = readMicrosoftAppCredentialsFromEnv();
+    if (!creds) {
+      throw new Error(
+        'pending_credentials: authType=oauth2 pero faltan MS_MAIL_OAUTH_CLIENT_ID/SECRET/TENANT_ID en el entorno',
+      );
+    }
+    if (!this.msToken) {
+      throw new Error('pending_credentials: MicrosoftAppTokenService no disponible para OAuth2');
+    }
+    return this.msToken.getAccessToken(creds);
   }
 
   private parseAttachments(args: Record<string, unknown>): nodemailer.SendMailOptions['attachments'] {
@@ -102,9 +145,8 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
 
   private async send(args: Record<string, unknown>): Promise<{ id: string; delivered: boolean }> {
     if (!this.isConfigured()) {
-      throw new Error(
-        'pending_credentials: faltan host/port/user/pass/fromAddress en la configuración SMTP del tenant',
-      );
+      const missing = this.smtpConfig.authType === 'oauth2' ? 'host/port/user/fromAddress' : 'host/port/user/pass/fromAddress';
+      throw new Error(`pending_credentials: faltan ${missing} en la configuración SMTP del tenant`);
     }
     const to = String(args.to ?? '');
     const subject = String(args.subject ?? '');
@@ -115,7 +157,8 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
     const cc = this.parseAddressList(args.cc);
     const bcc = this.parseAddressList(args.bcc);
 
-    const info = await this.getTransporter().sendMail({
+    const transporter = await this.getTransporter();
+    const info = await transporter.sendMail({
       from: this.smtpConfig.fromAddress,
       to,
       ...(cc ? { cc } : {}),

@@ -204,6 +204,11 @@ class ApiClient {
     return data;
   }
 
+  async downloadPackingListExcel(numberOrderSales: string): Promise<Blob> {
+    const { data } = await this.client.get(`/packing-list/${numberOrderSales}/excel`, { responseType: 'blob' });
+    return data;
+  }
+
   // Listas de distribución
   async getDistributionLists(): Promise<DistributionList[]> {
     const { data } = await this.client.get<DistributionList[]>('/distribution-lists');
@@ -245,6 +250,22 @@ class ApiClient {
 
   async sendObenReportEmail(key: string, numberOrderSales: string, to?: string): Promise<{ sent: boolean; to: string; cc: string[] }> {
     const { data } = await this.client.post(`/oben-reports/${key}/${numberOrderSales}/send`, to ? { to } : {});
+    return data;
+  }
+
+  async downloadObenReportExcel(key: string, numberOrderSales: string): Promise<Blob> {
+    const { data } = await this.client.get(`/oben-reports/${key}/${numberOrderSales}/excel`, { responseType: 'blob' });
+    return data;
+  }
+
+  async sendObenReportPackage(numberOrderSales: string, to?: string): Promise<{
+    sent: boolean;
+    to: string;
+    cc: string[];
+    included: string[];
+    failed: { key: string; error: string }[];
+  }> {
+    const { data } = await this.client.post(`/oben-reports/package/${numberOrderSales}/send`, to ? { to } : {});
     return data;
   }
 

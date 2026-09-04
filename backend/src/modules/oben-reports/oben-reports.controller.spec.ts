@@ -80,4 +80,55 @@ describe('ObenReportsController', () => {
       expect(resolveRecipients).toHaveBeenCalledWith('document', 'empaque_unificada');
     });
   });
+
+  describe('GET :key/:numberOrderSales/excel', () => {
+    it('construye el .xlsx y lo devuelve como descarga', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: SAMPLE });
+      const { controller } = makeController(hubCall);
+      const res = { setHeader: jest.fn(), send: jest.fn() } as any;
+
+      await controller.downloadExcel('consumo_me', '10794', res);
+
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        expect.stringContaining('OV10794.xlsx'),
+      );
+      expect(res.send).toHaveBeenCalledWith(expect.any(Buffer));
+    });
+  });
+
+  describe('POST package/:numberOrderSales/send', () => {
+    it('adjunta un .xlsx por cada reporte que sí respondió, e informa los que fallaron', async () => {
+      // spCheckSettlement_Paradixe falla, los otros 6 responden bien.
+      const hubCall = jest.fn().mockImplementation((system: string, _op: string, args: any) => {
+        if (system === 'email') return Promise.resolve({ ok: true, data: { id: 'msg-pkg' } });
+        if (args.procedure === 'spCheckSettlement_Paradixe') {
+          return Promise.resolve({ ok: false, error: 'falta parametro' });
+        }
+        return Promise.resolve({ ok: true, data: SAMPLE });
+      });
+      const { controller, audit } = makeController(hubCall);
+
+      const result = await controller.sendPackage('10794', { to: 'x@oben.com' });
+
+      expect(result.sent).toBe(true);
+      expect(result.included).not.toContain('check_settlement');
+      expect(result.included.length).toBe(6);
+      expect(result.failed).toEqual([{ key: 'check_settlement', error: 'falta parametro' }]);
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'document_package_sent' }),
+      );
+    });
+
+    it('si ningún reporte se pudo consultar, rechaza sin llamar a enviar correo', async () => {
+      const hub = { call: jest.fn().mockResolvedValue({ ok: false, error: 'unreachable' }) } as any;
+      const ctx = { userId: 'u1', tenantId: 't1' } as any;
+      const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
+      const distributionLists = { resolveRecipients: jest.fn() } as any;
+      const controller = new ObenReportsController(hub, ctx, audit, distributionLists, new ObenReportExcelService());
+
+      await expect(controller.sendPackage('10794', { to: 'x@oben.com' })).rejects.toThrow(BadRequestException);
+      expect(hub.call).not.toHaveBeenCalledWith('email', 'send', expect.anything());
+    });
+  });
 });

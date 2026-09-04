@@ -69,6 +69,9 @@ services:
       ARMSTRONG_BASE_URL: ${ARMSTRONG_BASE_URL:-}
       ARMSTRONG_TOKEN: ${ARMSTRONG_TOKEN:-}
       KIMI_API_KEY: ${KIMI_API_KEY:-}
+      MS_MAIL_OAUTH_CLIENT_ID: ${MS_MAIL_OAUTH_CLIENT_ID:-}
+      MS_MAIL_OAUTH_CLIENT_SECRET: ${MS_MAIL_OAUTH_CLIENT_SECRET:-}
+      MS_MAIL_OAUTH_TENANT_ID: ${MS_MAIL_OAUTH_TENANT_ID:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

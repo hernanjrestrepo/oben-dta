@@ -89,6 +89,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
       classifiers,
       moduleRef,
       freightRatesService,
+      { getAccessToken: jest.fn() } as never,
     );
 
     (simpleParser as unknown as jest.Mock).mockResolvedValue({

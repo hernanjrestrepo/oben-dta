@@ -32,6 +32,7 @@ import {
   ObenCostOrderRealAdapter,
   ObenCostOrderAdapterConfig,
 } from './adapters/oben-cost-order.real';
+import { MicrosoftAppTokenService } from '../../../common/microsoft-oauth/microsoft-app-token.service';
 
 /**
  * Resuelve qué adapter devolver para (tenant, system) combinando:
@@ -62,6 +63,7 @@ export class AdapterRegistry {
     veta: VetaMockAdapter,
     armstrong: ArmstrongMockAdapter,
     obenCostOrder: ObenCostOrderMockAdapter,
+    private readonly msToken: MicrosoftAppTokenService,
     // Referencia al provider por si algún real futuro decide reutilizar escenarios
     // en modo hibrido (por ejemplo, degradación controlada).
     private readonly _scenarios?: ScenarioProvider,
@@ -118,8 +120,9 @@ export class AdapterRegistry {
         user: smtp.user as string | undefined,
         pass: smtp.pass as string | undefined,
         fromAddress: smtp.fromAddress as string | undefined,
+        authType: (smtp.authType as 'basic' | 'oauth2' | undefined) ?? 'basic',
       };
-      return new EmailSmtpRealAdapter(smtpConfig);
+      return new EmailSmtpRealAdapter(smtpConfig, this.msToken);
     }
 
     // 'obenCostOrder' tampoco encaja en el genérico: autenticación por header

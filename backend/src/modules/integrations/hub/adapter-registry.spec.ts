@@ -35,6 +35,7 @@ function makeRegistry(tenantConfig: Record<string, unknown> = {}) {
     new VetaMockAdapter(scenarios),
     new ArmstrongMockAdapter(scenarios),
     new ObenCostOrderMockAdapter(scenarios),
+    { getAccessToken: jest.fn() } as never,
     scenarios,
   );
 }

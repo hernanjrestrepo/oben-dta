@@ -9,5 +9,6 @@ import { DistributionListsModule } from '../distribution-lists/distribution-list
   imports: [IntegrationHubModule, AuthModule, DistributionListsModule],
   controllers: [ObenReportsController],
   providers: [ObenReportExcelService],
+  exports: [ObenReportExcelService],
 })
 export class ObenReportsModule {}

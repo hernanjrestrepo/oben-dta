@@ -8,10 +8,12 @@ function makeController(hubCall: jest.Mock, resolveRecipients?: jest.Mock) {
   const distributionLists = {
     resolveRecipients: resolveRecipients ?? jest.fn().mockResolvedValue({ to: [], cc: [], bcc: [] }),
   } as any;
+  const excel = { build: jest.fn().mockReturnValue(Buffer.from('fake-xlsx')) } as any;
   return {
-    controller: new PackingListController(hub, ctx, audit, distributionLists),
+    controller: new PackingListController(hub, ctx, audit, distributionLists, excel),
     audit,
     distributionLists,
+    excel,
   };
 }
 
@@ -55,26 +57,46 @@ describe('PackingListController', () => {
     });
   });
 
+  describe('GET :numberOrderSales/excel', () => {
+    it('consulta en vivo, construye el .xlsx y lo devuelve como descarga', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: SAMPLE_DATA });
+      const { controller, excel } = makeController(hubCall);
+      const res = { setHeader: jest.fn(), send: jest.fn() } as any;
+
+      await controller.downloadExcel('10794', res);
+
+      expect(excel.build).toHaveBeenCalledWith('Lista de Empaque', 10794, SAMPLE_DATA, 'packing_list');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        expect.stringContaining('Lista_de_Empaque-OV10794.xlsx'),
+      );
+      expect(res.send).toHaveBeenCalledWith(Buffer.from('fake-xlsx'));
+    });
+  });
+
   describe('POST :numberOrderSales/send', () => {
-    it('reconsulta en vivo, envía el correo real y audita el envío', async () => {
+    it('reconsulta en vivo, adjunta el .xlsx real y audita el envío', async () => {
       const hubCall = jest.fn()
         .mockResolvedValueOnce({ ok: true, data: SAMPLE_DATA }) // query.run
         .mockResolvedValueOnce({ ok: true, data: { id: 'msg-1' } }); // email.send
-      const { controller, audit } = makeController(hubCall);
+      const { controller, audit, excel } = makeController(hubCall);
 
       const result = await controller.sendByEmail('10794', { to: 'cliente@ejemplo.com' });
 
       expect(result).toEqual({ sent: true, to: 'cliente@ejemplo.com', cc: [] });
-      expect(hubCall).toHaveBeenNthCalledWith(1, 'obenCostOrder', 'query.run', {
-        procedure: 'spPackingListUSA_Paradixe',
-        numberOrderSales: 10794,
-      });
+      expect(excel.build).toHaveBeenCalledWith('Lista de Empaque', 10794, SAMPLE_DATA, 'packing_list');
       const emailCallArgs = hubCall.mock.calls[1];
       expect(emailCallArgs[0]).toBe('email');
       expect(emailCallArgs[1]).toBe('send');
       expect(emailCallArgs[2].to).toBe('cliente@ejemplo.com');
       expect(emailCallArgs[2].subject).toContain('10794');
-      expect(emailCallArgs[2].body).toContain('ETIQUETAS Y CAPSULAS');
+      expect(emailCallArgs[2].attachments).toEqual([
+        expect.objectContaining({
+          filename: 'Lista_de_Empaque-OV10794.xlsx',
+          content: Buffer.from('fake-xlsx').toString('base64'),
+          encoding: 'base64',
+        }),
+      ]);
       expect(audit.log).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'email_sent', outputData: expect.objectContaining({ ok: true }) }),
       );

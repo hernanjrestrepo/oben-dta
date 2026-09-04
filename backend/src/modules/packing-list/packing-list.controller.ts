@@ -1,12 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { IsEmail, IsOptional } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
-import { renderPackingListEmail } from './packing-list-email.template';
 import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
+import { ObenReportExcelService } from '../oben-reports/oben-report-excel.service';
 
 class SendPackingListDto {
   // Opcional: si no viene, se resuelve con la lista de distribución asociada
@@ -35,13 +36,27 @@ export class PackingListController {
     private readonly ctx: TenantContext,
     private readonly audit: WorkflowAuditService,
     private readonly distributionLists: DistributionListsService,
+    private readonly excel: ObenReportExcelService,
   ) {}
 
   @Get(':numberOrderSales')
   async getByOrderNumber(@Param('numberOrderSales') numberOrderSales: string) {
     const n = this.parseOrderNumber(numberOrderSales);
-    const result = await this.fetchPackingList(n);
-    return result;
+    return this.fetchPackingList(n);
+  }
+
+  /** Descarga directa del .xlsx — mismos datos que se ven en pantalla, sin pasar por correo. */
+  @Get(':numberOrderSales/excel')
+  async downloadExcel(@Param('numberOrderSales') numberOrderSales: string, @Res() res: Response) {
+    const n = this.parseOrderNumber(numberOrderSales);
+    const data = await this.fetchPackingList(n);
+    const buffer = await this.excel.build('Lista de Empaque', n, data, 'packing_list');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="Lista_de_Empaque-OV${n}.xlsx"`);
+    res.send(buffer);
   }
 
   @Post(':numberOrderSales/send')
@@ -54,7 +69,7 @@ export class PackingListController {
     // cliente pudiera mandar en el body — el correo siempre sale con lo que
     // hoy dice el ERP real de Oben, nunca con algo cacheado o manipulable.
     const data = await this.fetchPackingList(n);
-    const { subject, html } = renderPackingListEmail(n, data as Record<string, unknown>);
+    const buffer = await this.excel.build('Lista de Empaque', n, data, 'packing_list');
 
     // Si no se manda un destinatario explícito, se resuelve con la lista de
     // distribución asociada a 'document'+'packing_list'. Sin destinatario
@@ -69,17 +84,29 @@ export class PackingListController {
           'No se indicó destinatario y no hay ninguna lista de distribución asociada a "packing_list". Configúrala en Listas de Distribución o escribe el correo manualmente.',
         );
       }
-      // El primer "to" de la lista es el destinatario principal; el resto
-      // (si hay más de uno marcado "to") entra como copia junto con los "cc".
       const [primaryTo, ...restTo] = resolved.to;
       to = primaryTo;
       cc = [...restTo, ...resolved.cc];
     }
 
+    const filename = `Lista_de_Empaque-OV${n}.xlsx`;
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
       'send',
-      { to, ...(cc.length ? { cc: cc.join(',') } : {}), subject, body: html },
+      {
+        to,
+        ...(cc.length ? { cc: cc.join(',') } : {}),
+        subject: `Lista de Empaque — Orden ${n}`,
+        body: `<p>Adjunto la lista de empaque de la orden ${n}, consultada en vivo al sistema real de Oben.</p>`,
+        attachments: [
+          {
+            filename,
+            content: buffer.toString('base64'),
+            encoding: 'base64',
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          },
+        ],
+      },
       { maxAttempts: 1, timeoutMs: 30_000 },
     );
 

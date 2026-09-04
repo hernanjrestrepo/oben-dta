@@ -17,6 +17,7 @@ import { PackingListModule } from './modules/packing-list/packing-list.module';
 import { ObenReportsModule } from './modules/oben-reports/oben-reports.module';
 import { DashboardModule } from './modules/dashboard.module';
 import { TenantModule } from './common/tenant/tenant.module';
+import { MicrosoftOAuthModule } from './common/microsoft-oauth/microsoft-oauth.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { SecurityModule } from './modules/security/security.module';
 import { IntegrationHubModule } from './modules/integrations/hub/integration-hub.module';
@@ -154,6 +155,7 @@ import { DistributionListAssociation } from './entities/distribution-list-associ
       inject: [ConfigService],
     }),
     TenantModule,
+    MicrosoftOAuthModule,
     SecurityModule,
     IntegrationHubModule,
     DatasetModule,

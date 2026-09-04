@@ -23,6 +23,10 @@ import { ClassificationAttachment } from '../classification/classification.types
 import { QuotesService } from '../quotes/quotes.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
 import { FreightRateImportService } from '../freight-rates/freight-rate-import.service';
+import {
+  MicrosoftAppTokenService,
+  readMicrosoftAppCredentialsFromEnv,
+} from '../../common/microsoft-oauth/microsoft-app-token.service';
 
 export interface ImapIntakeConfig {
   enabled?: boolean;
@@ -30,11 +34,19 @@ export interface ImapIntakeConfig {
   port?: number;
   secure?: boolean; // true = TLS implícito (993). false = STARTTLS.
   user: string;
-  pass: string;
+  pass?: string;
   folder?: string; // default 'INBOX'
   processedFolder?: string; // default 'Procesados'
   /** Si se define, se usa polling en vez de IDLE. */
   pollIntervalMs?: number;
+  /**
+   * 'oauth2': usa MS_MAIL_OAUTH_CLIENT_ID/SECRET/TENANT_ID (variables de
+   * entorno) en vez de `pass` — Microsoft viene deprecando basic auth en
+   * Exchange Online. El token se pide de nuevo en cada (re)conexión, que
+   * ya ocurre al menos cada MAX_CONNECTION_AGE_MS, así que no hace falta
+   * refrescarlo a mitad de una conexión.
+   */
+  authType?: 'basic' | 'oauth2';
 }
 
 const RECONNECT_BASE_DELAY_MS = 5_000;
@@ -81,6 +93,7 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     private readonly classifiers: ClassifierRegistry,
     private readonly moduleRef: ModuleRef,
     private readonly freightRates: FreightRateImportService,
+    private readonly msToken: MicrosoftAppTokenService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -118,8 +131,23 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     )?.email as Record<string, unknown> | undefined;
     if (emailCfg?.mode !== 'real') return null;
     const imap = emailCfg.imap as ImapIntakeConfig | undefined;
-    if (!imap?.enabled || !imap.host || !imap.user || !imap.pass) return null;
+    if (!imap?.enabled || !imap.host || !imap.user) return null;
+    if (imap.authType !== 'oauth2' && !imap.pass) return null;
     return imap;
+  }
+
+  private async resolveAuth(cfg: ImapIntakeConfig): Promise<{ user: string; pass: string } | { user: string; accessToken: string }> {
+    if (cfg.authType === 'oauth2') {
+      const creds = readMicrosoftAppCredentialsFromEnv();
+      if (!creds) {
+        throw new Error(
+          'pending_credentials: authType=oauth2 pero faltan MS_MAIL_OAUTH_CLIENT_ID/SECRET/TENANT_ID en el entorno',
+        );
+      }
+      const accessToken = await this.msToken.getAccessToken(creds);
+      return { user: cfg.user, accessToken };
+    }
+    return { user: cfg.user, pass: cfg.pass! };
   }
 
   private async runForTenant(
@@ -149,11 +177,12 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     tenantId: string,
     cfg: ImapIntakeConfig,
   ): Promise<void> {
+    const auth = await this.resolveAuth(cfg);
     const client = new ImapFlow({
       host: cfg.host,
       port: cfg.port ?? 993,
       secure: cfg.secure ?? true,
-      auth: { user: cfg.user, pass: cfg.pass },
+      auth,
       logger: false,
     });
 
