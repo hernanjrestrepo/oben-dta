@@ -23,6 +23,16 @@ import { ClassificationAttachment } from '../classification/classification.types
 import { QuotesService } from '../quotes/quotes.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
 import { FreightRateImportService } from '../freight-rates/freight-rate-import.service';
+import { PackingListAutomationService } from '../packing-list/packing-list-automation.service';
+
+/**
+ * Asunto exacto y estable del correo automático que envía Oben al aprobar el
+ * corte de una OV — confirmado por José el 2026-09-07 ("El asunto no cambia,
+ * siempre va a ser como lo específicas"). Se detecta ANTES del clasificador
+ * de IA/reglas (que existe para cotizaciones/PO, no para esto): es un patrón
+ * determinístico y el clasificador general no lo conoce.
+ */
+const OV_APROBADA_EN_CORTE_RE = /\bOV\s+(\d+)\s+Aprobada\s+En\s+Corte\b/i;
 import {
   MicrosoftAppTokenService,
   readMicrosoftAppCredentialsFromEnv,
@@ -440,7 +450,46 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     let resultRef: string | null = null;
     let errorMessage: string | null = null;
 
+    const ovMatch = subject.match(OV_APROBADA_EN_CORTE_RE);
+
     try {
+      if (ovMatch) {
+        category = 'packing_list_trigger';
+        confidence = 1;
+        provider = 'rules';
+        const numberOrderSales = Number(ovMatch[1]);
+        const result = await this.callRequestScoped(
+          tenantId,
+          PackingListAutomationService,
+          (svc) => svc.handleOvApproved(numberOrderSales),
+        );
+        resultRef = `${numberOrderSales}:${result.format}`;
+        await this.intake
+          .createQueryBuilder()
+          .insert()
+          .into(EmailIntakeMessage)
+          .values({
+            tenantId,
+            messageId,
+            imapUid: String(msg.uid),
+            folder: cfg.folder ?? 'INBOX',
+            from,
+            subject,
+            attachmentCount: attachments.length,
+            classificationCategory: category,
+            classificationConfidence: confidence,
+            classificationProvider: provider,
+            status,
+            resultRef,
+            errorMessage,
+            movedToFolder: cfg.processedFolder ?? 'Procesados',
+          })
+          .orIgnore()
+          .execute();
+        await this.markSeenAndMove(client, msg.uid, cfg, cfg.processedFolder ?? 'Procesados');
+        return;
+      }
+
       const senderDomain = (from.split('@')[1] ?? '').toLowerCase().trim();
       const knownClient = senderDomain
         ? await this.clients.findOne({

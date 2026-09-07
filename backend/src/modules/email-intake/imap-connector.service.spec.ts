@@ -7,6 +7,7 @@ import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.servic
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { FreightRateImportService } from '../freight-rates/freight-rate-import.service';
+import { PackingListAutomationService } from '../packing-list/packing-list-automation.service';
 
 jest.mock('mailparser');
 jest.mock('imapflow');
@@ -32,6 +33,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
   let auditService: any;
   let tenantCtx: any;
   let freightRatesService: any;
+  let packingListAutomation: any;
   let service: ImapConnectorService;
 
   beforeEach(() => {
@@ -72,12 +74,15 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
       }),
     };
 
+    packingListAutomation = { handleOvApproved: jest.fn().mockResolvedValue({ sent: true, client: 'ACME', format: 'excel' }) };
+
     moduleRef = {
       resolve: jest.fn((type: unknown) => {
         if (type === TenantContext) return Promise.resolve(tenantCtx);
         if (type === QuotesService) return Promise.resolve(quotesService);
         if (type === PurchaseOrdersService) return Promise.resolve(poService);
         if (type === WorkflowAuditService) return Promise.resolve(auditService);
+        if (type === PackingListAutomationService) return Promise.resolve(packingListAutomation);
         throw new Error(`tipo inesperado en test: ${String(type)}`);
       }),
     };
@@ -164,6 +169,54 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
     const qb = intakeRepo.createQueryBuilder();
     expect(qb.values).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'processed', resultRef: 'inland:1 transload:0 recargos:0' }),
+    );
+  });
+
+  it('"OV [n] Aprobada En Corte" dispara PackingListAutomationService SIN pasar por el clasificador de IA/reglas', async () => {
+    (simpleParser as unknown as jest.Mock).mockResolvedValue({
+      messageId: '<msg-ov@obengroup.com>',
+      from: { value: [{ address: 'notif.app.co@obengroup.com' }] },
+      subject: 'OV 10824 Aprobada En Corte',
+      text: '',
+      attachments: [],
+    });
+    const c = client();
+
+    await (service as any).handleMessage(TENANT_ID, c, cfg, makeMsg());
+
+    expect(packingListAutomation.handleOvApproved).toHaveBeenCalledWith(10824);
+    expect(classifiers.resolve).not.toHaveBeenCalled();
+    expect(quotesService.processIncomingEmail).not.toHaveBeenCalled();
+    const qb = intakeRepo.createQueryBuilder();
+    expect(qb.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classificationCategory: 'packing_list_trigger',
+        classificationConfidence: 1,
+        status: 'processed',
+        resultRef: '10824:excel',
+      }),
+    );
+    expect(c.messageFlagsAdd).toHaveBeenCalledWith(String(42), ['\\Seen'], { uid: true });
+    expect(c.messageMove).toHaveBeenCalledWith(String(42), 'Procesados', { uid: true });
+  });
+
+  it('si PackingListAutomationService falla, queda auditado como failed sin tumbar el conector', async () => {
+    (simpleParser as unknown as jest.Mock).mockResolvedValue({
+      messageId: '<msg-ov-2@obengroup.com>',
+      from: { value: [{ address: 'notif.app.co@obengroup.com' }] },
+      subject: 'OV 99999 Aprobada En Corte',
+      text: '',
+      attachments: [],
+    });
+    packingListAutomation.handleOvApproved.mockRejectedValue(new Error('no se pudo consultar la lista de empaque'));
+
+    await expect(
+      (service as any).handleMessage(TENANT_ID, client(), cfg, makeMsg()),
+    ).resolves.toBeUndefined();
+
+    const qb = intakeRepo.createQueryBuilder();
+    expect(qb.values).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed', errorMessage: 'no se pudo consultar la lista de empaque' }),
     );
   });
 
