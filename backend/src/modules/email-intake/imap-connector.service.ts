@@ -61,8 +61,24 @@ export interface ImapIntakeConfig {
 
 const RECONNECT_BASE_DELAY_MS = 5_000;
 const RECONNECT_MAX_DELAY_MS = 5 * 60_000;
-/** Ver nota en `withWatchdog` — un STATUS real tarda ~150-200ms; 20s da margen de sobra sin dejar un socket muerto colgado por mucho tiempo. */
+/** Ver nota en `withWatchdog` — un STATUS real tarda ~150-200ms; 20s da margen de sobra sin dejar un socket muerto colgado por mucho tiempo. Usado para operaciones puramente IMAP (idle/sleep/status/logout). */
 const WATCHDOG_MS = 20_000;
+/**
+ * `processUnseen` ya no es solo IMAP: incluye handleOvApproved, que arma el
+ * conjunto de documentos completo de una orden (Lista Especial, 4 reportes
+ * más, Hoja de Costos con una llamada POR LÍNEA) contra una API de Oben que
+ * no soporta concurrencia — encontrado en vivo el 2026-09-11 que esto puede
+ * tardar más de 20s y disparaba el watchdog de arriba en plena mitad de un
+ * envío real. El watchdog NO cancela la promesa original (JS no puede) —
+ * solo deja de esperarla y reconecta — así que si de verdad se pasaba de
+ * 20s, la llamada original seguía corriendo de fondo y terminaba enviando
+ * el correo IGUAL, mientras el nuevo ciclo re-escaneaba el mismo UID (el
+ * watermark no había avanzado todavía) y lo procesaba y enviaba OTRA VEZ:
+ * la OV 10981 se envió 3 veces en 2 minutos. Un timeout mucho más largo
+ * aquí, más el guardado por UID en vuelo (ver `uidsInFlight`), cierran esto
+ * por los dos lados.
+ */
+const PROCESS_WATCHDOG_MS = 5 * 60_000;
 /** Ver nota en `connectAndWatch` — mitigación mientras se identifica la causa raíz exacta del sondeo que deja de detectar correo sin error ni cuelgue. */
 const MAX_CONNECTION_AGE_MS = 10 * 60_000;
 
@@ -94,6 +110,16 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     string,
     { client: ImapFlow | null; stopped: boolean }
   >();
+  /**
+   * UIDs que YA están dentro de `handleMessage` en este proceso, por tenant —
+   * segunda barrera contra el reprocesamiento simultáneo (ver
+   * PROCESS_WATCHDOG_MS): si el watchdog fuerza una reconexión mientras el
+   * ciclo anterior sigue corriendo de fondo (una promesa de JS no se puede
+   * cancelar), el NUEVO ciclo re-escanea el mismo rango de UID porque el
+   * watermark todavía no avanzó — sin este guardado, procesaría (y
+   * reenviaría) el mismo correo por segunda vez en paralelo.
+   */
+  private readonly uidsInFlight = new Map<string, Set<number>>();
 
   constructor(
     @InjectRepository(Tenant) private readonly tenants: Repository<Tenant>,
@@ -229,7 +255,7 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
 
       // Reconciliación: procesa lo pendiente desde el último UID conocido
       // — cubre correos llegados mientras el proceso estaba caído.
-      await this.withWatchdog(this.processUnseen(tenantId, client, cfg), 'processUnseen (inicial)');
+      await this.withWatchdog(this.processUnseen(tenantId, client, cfg), 'processUnseen (inicial)', PROCESS_WATCHDOG_MS);
 
       const connectedAt = Date.now();
       while (
@@ -255,7 +281,7 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         // listener de 'error' (arriba) no ayuda aquí porque no es un error,
         // es silencio total. Un watchdog con timeout es la única forma de
         // detectar esto y forzar una reconexión real.
-        await this.withWatchdog(this.processUnseen(tenantId, client, cfg), 'processUnseen');
+        await this.withWatchdog(this.processUnseen(tenantId, client, cfg), 'processUnseen', PROCESS_WATCHDOG_MS);
       }
       // Segunda variante del mismo problema, encontrada en vivo horas
       // después: la conexión NO se cuelga (el watchdog de arriba no
@@ -277,19 +303,21 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** Si `promise` no resuelve en `PROCESS_WATCHDOG_MS`, la deja colgada y sigue —
-   *  lanza para que `runForTenant` reconecte desde cero (ver nota arriba). */
-  private async withWatchdog<T>(promise: Promise<T>, label: string): Promise<T> {
+  /** Si `promise` no resuelve en `timeoutMs` (por defecto `WATCHDOG_MS`), la deja
+   *  colgada y sigue — lanza para que `runForTenant` reconecte desde cero (ver
+   *  nota arriba). `timeoutMs` explícito para `processUnseen`, que ya no es
+   *  una operación puramente IMAP (ver `PROCESS_WATCHDOG_MS`). */
+  private async withWatchdog<T>(promise: Promise<T>, label: string, timeoutMs: number = WATCHDOG_MS): Promise<T> {
     let timer: ReturnType<typeof setTimeout>;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(
         () =>
           reject(
             new Error(
-              `watchdog: "${label}" sin respuesta tras ${WATCHDOG_MS}ms — conexión probablemente muerta, forzando reconexión`,
+              `watchdog: "${label}" sin respuesta tras ${timeoutMs}ms — conexión probablemente muerta, forzando reconexión`,
             ),
           ),
-        WATCHDOG_MS,
+        timeoutMs,
       );
     });
     try {
@@ -340,16 +368,37 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
 
     const range = `${watermark + 1}:${uidNext - 1}`;
     this.logger.debug(`[tenant ${tenantId}] processUnseen: fetch range=${range}...`);
+    const inFlight = this.getUidsInFlight(tenantId);
     for await (const msg of client.fetch(
       range,
       { source: true, uid: true },
       { uid: true },
     )) {
-      this.logger.debug(`[tenant ${tenantId}] processUnseen: msg uid=${msg.uid} recibido, procesando...`);
-      await this.handleMessage(tenantId, client, cfg, msg);
-      this.logger.debug(`[tenant ${tenantId}] processUnseen: msg uid=${msg.uid} manejado.`);
+      if (inFlight.has(msg.uid)) {
+        this.logger.warn(
+          `[tenant ${tenantId}] uid=${msg.uid} ya se está procesando en otro ciclo (probable reconexión por watchdog) — se omite para no duplicar el envío.`,
+        );
+        continue;
+      }
+      inFlight.add(msg.uid);
+      try {
+        this.logger.debug(`[tenant ${tenantId}] processUnseen: msg uid=${msg.uid} recibido, procesando...`);
+        await this.handleMessage(tenantId, client, cfg, msg);
+        this.logger.debug(`[tenant ${tenantId}] processUnseen: msg uid=${msg.uid} manejado.`);
+      } finally {
+        inFlight.delete(msg.uid);
+      }
     }
     this.logger.debug(`[tenant ${tenantId}] processUnseen: fetch range=${range} terminado.`);
+  }
+
+  private getUidsInFlight(tenantId: string): Set<number> {
+    let set = this.uidsInFlight.get(tenantId);
+    if (!set) {
+      set = new Set();
+      this.uidsInFlight.set(tenantId, set);
+    }
+    return set;
   }
 
   /**
@@ -429,6 +478,23 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
       where: { tenantId, messageId },
     });
     if (already) {
+      if (already.status === 'processing') {
+        // Encontrado en vivo el 2026-09-12: si el proceso se reinicia (p.ej.
+        // un redeploy) a mitad de un envío real, el checkpoint final nunca se
+        // escribe (se escribe DESPUÉS de enviar, ver `claimMessage`/
+        // `finalizeMessage`) — sin esto, el próximo arranque vería este
+        // messageId como "nuevo" y reenviaría un correo que puede que ya
+        // haya salido de verdad. No se reintenta a ciegas: se marca 'failed'
+        // para revisión manual explícita en vez de arriesgar un duplicado.
+        this.logger.warn(
+          `[tenant ${tenantId}] correo ${messageId} quedó en estado "processing" (probable reinicio del proceso a mitad de envío) — NO se reintenta automáticamente para evitar un posible duplicado; se marca para revisión manual.`,
+        );
+        await this.finalizeMessage(tenantId, messageId, {
+          status: 'failed',
+          errorMessage:
+            'Proceso interrumpido a mitad de este correo (reinicio/redeploy) antes de confirmar el resultado — revisar manualmente si el envío real llegó a completarse.',
+        });
+      }
       await this.markSeenAndMove(client, msg.uid, cfg, already.movedToFolder);
       return;
     }
@@ -442,6 +508,21 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
       filename: a.filename ?? 'archivo',
       mimeType: a.contentType,
     }));
+
+    // "Claim" del messageId ANTES de disparar cualquier lógica de negocio
+    // (incluido el envío real de correo) — deja un checkpoint en BD desde el
+    // arranque, no solo al final. Si el proceso muere a mitad de camino (ver
+    // nota en el bloque `already.status === 'processing'` de arriba), el
+    // reinicio encuentra esta fila en 'processing' en vez de nada, y por lo
+    // tanto NO reprocesa el correo desde cero.
+    const claimed = await this.claimMessage(tenantId, messageId, msg, cfg, from, subject, attachments.length);
+    if (!claimed) {
+      // Carrera real entre el `findOne` de arriba y este insert — con un solo
+      // proceso por tenant es muy improbable, pero de darse, alguien más ya
+      // reclamó este messageId; no reprocesar.
+      await this.markSeenAndMove(client, msg.uid, cfg, cfg.processedFolder ?? 'Procesados');
+      return;
+    }
 
     let category: EmailIntakeRoute = 'unknown';
     let confidence = 0;
@@ -463,29 +544,16 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
           PackingListAutomationService,
           (svc) => svc.handleOvApproved(numberOrderSales),
         );
-        resultRef = `${numberOrderSales}:${result.format}`;
-        await this.intake
-          .createQueryBuilder()
-          .insert()
-          .into(EmailIntakeMessage)
-          .values({
-            tenantId,
-            messageId,
-            imapUid: String(msg.uid),
-            folder: cfg.folder ?? 'INBOX',
-            from,
-            subject,
-            attachmentCount: attachments.length,
-            classificationCategory: category,
-            classificationConfidence: confidence,
-            classificationProvider: provider,
-            status,
-            resultRef,
-            errorMessage,
-            movedToFolder: cfg.processedFolder ?? 'Procesados',
-          })
-          .orIgnore()
-          .execute();
+        resultRef = `${numberOrderSales}:${result.included.join('+')}`;
+        await this.finalizeMessage(tenantId, messageId, {
+          classificationCategory: category,
+          classificationConfidence: confidence,
+          classificationProvider: provider,
+          status,
+          resultRef,
+          errorMessage,
+          movedToFolder: cfg.processedFolder ?? 'Procesados',
+        });
         await this.markSeenAndMove(client, msg.uid, cfg, cfg.processedFolder ?? 'Procesados');
         return;
       }
@@ -588,7 +656,40 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    await this.intake
+    await this.finalizeMessage(tenantId, messageId, {
+      classificationCategory: category,
+      classificationConfidence: confidence,
+      classificationProvider: provider,
+      status,
+      resultRef,
+      errorMessage,
+      movedToFolder: cfg.processedFolder ?? 'Procesados',
+    });
+
+    await this.markSeenAndMove(
+      client,
+      msg.uid,
+      cfg,
+      cfg.processedFolder ?? 'Procesados',
+    );
+  }
+
+  /**
+   * Deja el checkpoint en 'processing' ANTES de correr cualquier lógica de
+   * negocio — ver nota en `handleMessage`. `false` significa que otro
+   * proceso/ciclo ya reclamó este messageId (ON CONFLICT DO NOTHING no
+   * insertó nada).
+   */
+  private async claimMessage(
+    tenantId: string,
+    messageId: string,
+    msg: FetchMessageObject,
+    cfg: ImapIntakeConfig,
+    from: string,
+    subject: string,
+    attachmentCount: number,
+  ): Promise<boolean> {
+    const result = await this.intake
       .createQueryBuilder()
       .insert()
       .into(EmailIntakeMessage)
@@ -599,24 +700,43 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         folder: cfg.folder ?? 'INBOX',
         from,
         subject,
-        attachmentCount: attachments.length,
-        classificationCategory: category,
-        classificationConfidence: confidence,
-        classificationProvider: provider,
-        status,
-        resultRef,
-        errorMessage,
-        movedToFolder: cfg.processedFolder ?? 'Procesados',
+        attachmentCount,
+        classificationCategory: null,
+        classificationConfidence: null,
+        classificationProvider: null,
+        status: 'processing',
+        resultRef: null,
+        errorMessage: null,
+        movedToFolder: null,
       })
       .orIgnore()
+      .returning(['id'])
       .execute();
+    return result.raw.length > 0;
+  }
 
-    await this.markSeenAndMove(
-      client,
-      msg.uid,
-      cfg,
-      cfg.processedFolder ?? 'Procesados',
-    );
+  private async finalizeMessage(
+    tenantId: string,
+    messageId: string,
+    fields: Partial<
+      Pick<
+        EmailIntakeMessage,
+        | 'classificationCategory'
+        | 'classificationConfidence'
+        | 'classificationProvider'
+        | 'status'
+        | 'resultRef'
+        | 'errorMessage'
+        | 'movedToFolder'
+      >
+    >,
+  ): Promise<void> {
+    await this.intake
+      .createQueryBuilder()
+      .update(EmailIntakeMessage)
+      .set(fields)
+      .where('tenant_id = :tenantId AND message_id = :messageId', { tenantId, messageId })
+      .execute();
   }
 
   private async markSeenAndMove(

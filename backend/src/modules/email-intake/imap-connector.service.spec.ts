@@ -46,7 +46,10 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
         into: jest.fn().mockReturnThis(),
         values: jest.fn().mockReturnThis(),
         orIgnore: jest.fn().mockReturnThis(),
-        execute: jest.fn().mockResolvedValue(undefined),
+        returning: jest.fn().mockReturnThis(),
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ raw: [{ id: 'row-1' }] }),
         select: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
@@ -74,7 +77,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
       }),
     };
 
-    packingListAutomation = { handleOvApproved: jest.fn().mockResolvedValue({ sent: true, client: 'ACME', format: 'excel' }) };
+    packingListAutomation = { handleOvApproved: jest.fn().mockResolvedValue({ sent: true, client: 'ACME', included: ['packing_list'], failed: [] }) };
 
     moduleRef = {
       resolve: jest.fn((type: unknown) => {
@@ -167,7 +170,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
     expect(quotesService.processIncomingEmail).not.toHaveBeenCalled();
     expect(poService.processIncomingEmail).not.toHaveBeenCalled();
     const qb = intakeRepo.createQueryBuilder();
-    expect(qb.values).toHaveBeenCalledWith(
+    expect(qb.set).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'processed', resultRef: 'inland:1 transload:0 recargos:0' }),
     );
   });
@@ -188,12 +191,12 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
     expect(classifiers.resolve).not.toHaveBeenCalled();
     expect(quotesService.processIncomingEmail).not.toHaveBeenCalled();
     const qb = intakeRepo.createQueryBuilder();
-    expect(qb.values).toHaveBeenCalledWith(
+    expect(qb.set).toHaveBeenCalledWith(
       expect.objectContaining({
         classificationCategory: 'packing_list_trigger',
         classificationConfidence: 1,
         status: 'processed',
-        resultRef: '10824:excel',
+        resultRef: '10824:packing_list',
       }),
     );
     expect(c.messageFlagsAdd).toHaveBeenCalledWith(String(42), ['\\Seen'], { uid: true });
@@ -215,7 +218,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
     ).resolves.toBeUndefined();
 
     const qb = intakeRepo.createQueryBuilder();
-    expect(qb.values).toHaveBeenCalledWith(
+    expect(qb.set).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'failed', errorMessage: 'no se pudo consultar la lista de empaque' }),
     );
   });
@@ -236,7 +239,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
 
     expect(freightRatesService.parseWorkbook).not.toHaveBeenCalled();
     const qb = intakeRepo.createQueryBuilder();
-    expect(qb.values).toHaveBeenCalledWith(
+    expect(qb.set).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'skipped' }),
     );
   });
@@ -259,13 +262,57 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
   );
 
   it('correo ya procesado (mismo messageId) NO se reprocesa — solo se marca \\Seen y se mueve', async () => {
-    intakeRepo.findOne.mockResolvedValue({ movedToFolder: 'Procesados' });
+    intakeRepo.findOne.mockResolvedValue({ movedToFolder: 'Procesados', status: 'processed' });
     classifiers.resolve.mockResolvedValue({ classify: jest.fn() });
     const c = client();
 
     await (service as any).handleMessage(TENANT_ID, c, cfg, makeMsg());
 
     expect(classifiers.resolve).not.toHaveBeenCalled();
+    expect(quotesService.processIncomingEmail).not.toHaveBeenCalled();
+    expect(c.messageFlagsAdd).toHaveBeenCalled();
+  });
+
+  it('deja el checkpoint en "processing" ANTES de disparar la lógica de negocio (claim previo al envío)', async () => {
+    classifiers.resolve.mockResolvedValue({
+      classify: jest.fn().mockResolvedValue({ category: 'quote_request', confidence: 0.7, provider: 'rules' }),
+    });
+    const qb = intakeRepo.createQueryBuilder();
+
+    await (service as any).handleMessage(TENANT_ID, client(), cfg, makeMsg());
+
+    expect(qb.values).toHaveBeenCalledWith(expect.objectContaining({ status: 'processing' }));
+  });
+
+  it('un messageId que quedó en "processing" (proceso interrumpido a mitad de envío, ej. un redeploy) NO se reenvía — se marca failed para revisión manual', async () => {
+    (simpleParser as unknown as jest.Mock).mockResolvedValue({
+      messageId: '<msg-ov-crash@obengroup.com>',
+      from: { value: [{ address: 'notif.app.co@obengroup.com' }] },
+      subject: 'OV 10981 Aprobada En Corte',
+      text: '',
+      attachments: [],
+    });
+    intakeRepo.findOne.mockResolvedValue({ status: 'processing', movedToFolder: null });
+    const c = client();
+    const qb = intakeRepo.createQueryBuilder();
+
+    await (service as any).handleMessage(TENANT_ID, c, cfg, makeMsg());
+
+    expect(packingListAutomation.handleOvApproved).not.toHaveBeenCalled();
+    expect(qb.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed', errorMessage: expect.stringContaining('interrumpido') }),
+    );
+    expect(c.messageFlagsAdd).toHaveBeenCalled();
+  });
+
+  it('si otro ciclo ya reclamó el messageId entre el findOne y el insert (ON CONFLICT DO NOTHING), no reprocesa', async () => {
+    classifiers.resolve.mockResolvedValue({ classify: jest.fn() });
+    const qb = intakeRepo.createQueryBuilder();
+    qb.execute.mockResolvedValueOnce({ raw: [] }); // el claim (primer execute) no insertó nada
+    const c = client();
+
+    await (service as any).handleMessage(TENANT_ID, c, cfg, makeMsg());
+
     expect(quotesService.processIncomingEmail).not.toHaveBeenCalled();
     expect(c.messageFlagsAdd).toHaveBeenCalled();
   });
@@ -280,10 +327,54 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
 
     await (service as any).handleMessage(TENANT_ID, c, cfg, makeMsg());
 
-    expect(qb.values).toHaveBeenCalledWith(
+    expect(qb.set).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'failed', errorMessage: 'boom' }),
     );
     expect(c.messageFlagsAdd).toHaveBeenCalled();
+  });
+
+  describe('processUnseen — guardado contra reprocesamiento simultáneo del mismo UID', () => {
+    it('si dos ciclos corren en paralelo (reconexión por watchdog a mitad de un envío lento), el mismo UID no se procesa ni se envía dos veces (bug real 2026-09-11: la OV 10981 se envió 3 veces)', async () => {
+      (simpleParser as unknown as jest.Mock).mockResolvedValue({
+        messageId: '<msg-ov-10981@obengroup.com>',
+        from: { value: [{ address: 'notif.app.co@obengroup.com' }] },
+        subject: 'OV 10981 Aprobada En Corte',
+        text: '',
+        attachments: [],
+      });
+      let resolveSlow!: () => void;
+      const slow = new Promise<void>((resolve) => {
+        resolveSlow = resolve;
+      });
+      packingListAutomation.handleOvApproved.mockImplementation(async () => {
+        await slow; // simula el paquete completo de documentos, ahora lento (Lista Especial + Hoja de Costos)
+        return { sent: true, client: 'ACME', included: ['lista_especial'], failed: [] };
+      });
+
+      const fakeClient = {
+        status: jest.fn().mockResolvedValue({ uidNext: 43 }),
+        fetch: jest.fn().mockImplementation(function fetchRange() {
+          return (async function* () {
+            yield makeMsg();
+          })();
+        }),
+        messageFlagsAdd: jest.fn().mockResolvedValue(true),
+        messageMove: jest.fn().mockResolvedValue(true),
+      };
+
+      // Dos ciclos de processUnseen corriendo a la vez sobre el mismo rango sin
+      // procesar — exactamente lo que pasa cuando el watchdog fuerza una
+      // reconexión mientras el ciclo anterior sigue enviando de fondo.
+      const cycle1 = (service as any).processUnseen(TENANT_ID, fakeClient, cfg);
+      await new Promise((r) => setImmediate(r)); // deja que cycle1 entre a handleMessage y quede esperando `slow`
+      const cycle2 = (service as any).processUnseen(TENANT_ID, fakeClient, cfg);
+      await new Promise((r) => setImmediate(r));
+
+      resolveSlow();
+      await Promise.all([cycle1, cycle2]);
+
+      expect(packingListAutomation.handleOvApproved).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('connectAndWatch — estabilidad del proceso ante errores de socket', () => {

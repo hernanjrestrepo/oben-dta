@@ -16,7 +16,7 @@ export type EmailIntakeRoute =
   | 'packing_list_trigger'
   | 'unknown';
 
-export type EmailIntakeStatus = 'processed' | 'failed' | 'skipped';
+export type EmailIntakeStatus = 'processing' | 'processed' | 'failed' | 'skipped';
 
 /**
  * Checkpoint permanente de cada correo real leído por el conector IMAP
