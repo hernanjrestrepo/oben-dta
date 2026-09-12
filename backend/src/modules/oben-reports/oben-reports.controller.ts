@@ -10,6 +10,7 @@ import { DistributionListsService } from '../distribution-lists/distribution-lis
 import { ObenReportExcelService } from './oben-report-excel.service';
 import { ObenReportsService, OBEN_QUERY_OPTIONS } from './oben-reports.service';
 import { OBEN_REPORTS, findObenReport } from './oben-report-registry';
+import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.service';
 
 class SendReportDto {
   @IsOptional()
@@ -35,11 +36,41 @@ export class ObenReportsController {
     private readonly distributionLists: DistributionListsService,
     private readonly excel: ObenReportExcelService,
     private readonly reports: ObenReportsService,
+    private readonly liquidacionRates: LiquidacionRatesService,
   ) {}
 
   @Get()
   list() {
     return OBEN_REPORTS.map(({ key, label }) => ({ key, label }));
+  }
+
+  /**
+   * Adelanto de Liquidación mientras esperamos las 13 respuestas de José
+   * (Preguntas_y_Requerimientos_Liquidacion_Oben.pdf, 2026-09-10): resuelve
+   * los parámetros de dinero de spSettlement_Head (@EntryFee,
+   * @ImporterSecurityFiling, @HarborMaintenanceFee, @DestinationCharges)
+   * contra el maestro real de tarifas que ya importamos de Oben, usando el
+   * país real de la orden (campo "Pais" de spEmpaqueUnificada_Paradixe). NO
+   * dispara ninguna transacción de Liquidación — es solo una consulta, para
+   * ver qué ya podemos resolver solos y qué sigue 100% dependiendo de José.
+   */
+  @Get('liquidacion-preview/:numberOrderSales')
+  async liquidacionPreview(@Param('numberOrderSales') numberOrderSales: string) {
+    const n = this.parseOrderNumber(numberOrderSales);
+    const unificadaResult = await this.hub.call('obenCostOrder', 'query.run', {
+      procedure: 'spEmpaqueUnificada_Paradixe',
+      numberOrderSales: n,
+    }, OBEN_QUERY_OPTIONS);
+    if (!unificadaResult.ok) {
+      throw new BadRequestException(unificadaResult.error ?? 'No se pudo consultar la orden en Oben');
+    }
+    const record = unificadaResult.data as Record<string, unknown>;
+    const pais = String(record.Pais ?? '').trim();
+    if (!pais) {
+      throw new BadRequestException('La orden no trae país de destino (campo "Pais") todavía — no se puede resolver nada.');
+    }
+    const surcharges = await this.liquidacionRates.resolveSurcharges(this.ctx.tenantId, pais);
+    return { numberOrderSales: n, pais, ...surcharges };
   }
 
   /**

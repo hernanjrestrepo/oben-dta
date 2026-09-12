@@ -5,7 +5,12 @@ import { ObenReportExcelService } from './oben-report-excel.service';
 const SAMPLE = { Cliente: 'ETIQUETAS Y CAPSULAS DE COLOMBIA', OrdenVenta: '10794', Detalle: [{ Material: 'X', Cantidad: 5 }] };
 const EMPTY_PACKAGE = { client: '', included: [], failed: [] };
 
-function makeController(hubCall: jest.Mock, resolveRecipients?: jest.Mock, buildDocumentPackage?: jest.Mock) {
+function makeController(
+  hubCall: jest.Mock,
+  resolveRecipients?: jest.Mock,
+  buildDocumentPackage?: jest.Mock,
+  resolveSurcharges?: jest.Mock,
+) {
   const hub = { call: hubCall } as any;
   const ctx = { userId: 'u1', tenantId: 't1' } as any;
   const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
@@ -17,10 +22,21 @@ function makeController(hubCall: jest.Mock, resolveRecipients?: jest.Mock, build
     buildDocumentPackage: buildDocumentPackage ?? jest.fn().mockResolvedValue(EMPTY_PACKAGE),
     confirmApproveComex: jest.fn().mockResolvedValue({ ok: true }),
   } as any;
+  const liquidacionRates = {
+    resolveSurcharges: resolveSurcharges ?? jest.fn().mockResolvedValue({
+      entryFee: null,
+      importerSecurityFiling: null,
+      harborMaintenanceFee: null,
+      harborMaintenanceFeeFormula: null,
+      destinationCharges: null,
+      missing: [],
+    }),
+  } as any;
   return {
-    controller: new ObenReportsController(hub, ctx, audit, distributionLists, excel, reports),
+    controller: new ObenReportsController(hub, ctx, audit, distributionLists, excel, reports, liquidacionRates),
     audit,
     reports,
+    liquidacionRates,
   };
 }
 
@@ -166,6 +182,50 @@ describe('ObenReportsController', () => {
 
       await expect(controller.sendPackage('10794', { to: 'x@oben.com' })).rejects.toThrow(BadRequestException);
       expect(hubCall).not.toHaveBeenCalledWith('email', 'send', expect.anything());
+    });
+  });
+
+  describe('GET liquidacion-preview/:numberOrderSales', () => {
+    it('resuelve el país real de la orden y delega en LiquidacionRatesService', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { Pais: 'PERU' } });
+      const resolveSurcharges = jest.fn().mockResolvedValue({
+        entryFee: 110,
+        importerSecurityFiling: 20,
+        harborMaintenanceFee: null,
+        harborMaintenanceFeeFormula: '0.125% del FOB',
+        destinationCharges: null,
+        missing: ['Destination Charges: sin fuente conocida...'],
+      });
+      const { controller } = makeController(hubCall, undefined, undefined, resolveSurcharges);
+
+      const result = await controller.liquidacionPreview('10794');
+
+      expect(hubCall).toHaveBeenCalledWith(
+        'obenCostOrder',
+        'query.run',
+        { procedure: 'spEmpaqueUnificada_Paradixe', numberOrderSales: 10794 },
+        expect.any(Object),
+      );
+      expect(resolveSurcharges).toHaveBeenCalledWith('t1', 'PERU');
+      expect(result).toMatchObject({ numberOrderSales: 10794, pais: 'PERU', entryFee: 110 });
+    });
+
+    it('si Oben no responde bien, rechaza sin intentar resolver nada', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: false, error: 'no data' });
+      const resolveSurcharges = jest.fn();
+      const { controller } = makeController(hubCall, undefined, undefined, resolveSurcharges);
+
+      await expect(controller.liquidacionPreview('10794')).rejects.toThrow(BadRequestException);
+      expect(resolveSurcharges).not.toHaveBeenCalled();
+    });
+
+    it('si la orden no trae país todavía, rechaza en vez de adivinar', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: {} });
+      const resolveSurcharges = jest.fn();
+      const { controller } = makeController(hubCall, undefined, undefined, resolveSurcharges);
+
+      await expect(controller.liquidacionPreview('10794')).rejects.toThrow(BadRequestException);
+      expect(resolveSurcharges).not.toHaveBeenCalled();
     });
   });
 });
