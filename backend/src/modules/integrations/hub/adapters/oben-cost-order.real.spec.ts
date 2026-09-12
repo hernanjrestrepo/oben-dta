@@ -130,6 +130,24 @@ describe('ObenCostOrderRealAdapter (API real de costos de orden de Oben)', () =>
       );
     });
 
+    it('spApproveComex_Paradixe responde texto plano ("OK"), no JSON — se devuelve tal cual en vez de fallar (encontrado en vivo el 2026-09-11)', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => 'OK',
+      });
+      const adapter = makeAdapter();
+
+      const result = await adapter.execute(
+        'query.run',
+        { procedure: 'spApproveComex_Paradixe', numberOrderSales: 10794 },
+        CTX,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.data).toBe('OK');
+    });
+
     it('rechaza sin llamar a fetch si falta procedure o numberOrderSales', async () => {
       global.fetch = jest.fn();
       const adapter = makeAdapter();

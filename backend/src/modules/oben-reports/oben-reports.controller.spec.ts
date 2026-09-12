@@ -2,7 +2,10 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ObenReportsController } from './oben-reports.controller';
 import { ObenReportExcelService } from './oben-report-excel.service';
 
-function makeController(hubCall: jest.Mock, resolveRecipients?: jest.Mock) {
+const SAMPLE = { Cliente: 'ETIQUETAS Y CAPSULAS DE COLOMBIA', OrdenVenta: '10794', Detalle: [{ Material: 'X', Cantidad: 5 }] };
+const EMPTY_PACKAGE = { client: '', included: [], failed: [] };
+
+function makeController(hubCall: jest.Mock, resolveRecipients?: jest.Mock, buildDocumentPackage?: jest.Mock) {
   const hub = { call: hubCall } as any;
   const ctx = { userId: 'u1', tenantId: 't1' } as any;
   const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
@@ -10,13 +13,16 @@ function makeController(hubCall: jest.Mock, resolveRecipients?: jest.Mock) {
     resolveRecipients: resolveRecipients ?? jest.fn().mockResolvedValue({ to: [], cc: [], bcc: [] }),
   } as any;
   const excel = new ObenReportExcelService();
+  const reports = {
+    buildDocumentPackage: buildDocumentPackage ?? jest.fn().mockResolvedValue(EMPTY_PACKAGE),
+    confirmApproveComex: jest.fn().mockResolvedValue({ ok: true }),
+  } as any;
   return {
-    controller: new ObenReportsController(hub, ctx, audit, distributionLists, excel),
+    controller: new ObenReportsController(hub, ctx, audit, distributionLists, excel, reports),
     audit,
+    reports,
   };
 }
-
-const SAMPLE = { Cliente: 'ETIQUETAS Y CAPSULAS DE COLOMBIA', OrdenVenta: '10794', Detalle: [{ Material: 'X', Cantidad: 5 }] };
 
 describe('ObenReportsController', () => {
   it('list() devuelve los 7 reportes con key/label, sin llamar al hub', () => {
@@ -35,7 +41,7 @@ describe('ObenReportsController', () => {
       expect(hubCall).toHaveBeenCalledWith('obenCostOrder', 'query.run', {
         procedure: 'spConsumoME_Paradixe',
         numberOrderSales: 10794,
-      });
+      }, expect.any(Object));
     });
 
     it('rechaza un key de reporte inexistente', async () => {
@@ -97,38 +103,69 @@ describe('ObenReportsController', () => {
     });
   });
 
+  // El armado del "conjunto de documentos" (qué reportes incluye, cómo
+  // maneja Empaque Solefilmes, etc.) vive en ObenReportsService y tiene sus
+  // propios tests (oben-reports.service.spec.ts) — aquí solo se prueba lo
+  // que hace el controller con el resultado: resolver destinatario, mandar
+  // el correo, auditar.
   describe('POST package/:numberOrderSales/send', () => {
-    it('adjunta un .xlsx por cada reporte que sí respondió, e informa los que fallaron', async () => {
-      // spCheckSettlement_Paradixe falla, los otros 6 responden bien.
-      const hubCall = jest.fn().mockImplementation((system: string, _op: string, args: any) => {
-        if (system === 'email') return Promise.resolve({ ok: true, data: { id: 'msg-pkg' } });
-        if (args.procedure === 'spCheckSettlement_Paradixe') {
-          return Promise.resolve({ ok: false, error: 'falta parametro' });
-        }
-        return Promise.resolve({ ok: true, data: SAMPLE });
-      });
-      const { controller, audit } = makeController(hubCall);
+    const PACKAGE_RESULT = {
+      client: 'ETIQUETAS Y CAPSULAS DE COLOMBIA',
+      included: [
+        { key: 'consumo_me', label: 'Consumo de Material de Empaque', filename: 'ConsumoME-OV10794.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('a') },
+        { key: 'empaque_solefilmes', label: 'Empaque Solefilmes', filename: 'EmpaqueSolefilmes-OV10794.pdf', contentType: 'application/pdf', buffer: Buffer.from('b') },
+      ],
+      failed: [{ key: 'consumo_mp', label: 'Consumo de Materia Prima', error: 'no data' }],
+    };
+
+    it('manda un correo con todos los adjuntos incluidos y menciona los que fallaron', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-pkg' } });
+      const buildDocumentPackage = jest.fn().mockResolvedValue(PACKAGE_RESULT);
+      const { controller, audit } = makeController(hubCall, undefined, buildDocumentPackage);
 
       const result = await controller.sendPackage('10794', { to: 'x@oben.com' });
 
+      expect(buildDocumentPackage).toHaveBeenCalledWith(10794);
       expect(result.sent).toBe(true);
-      expect(result.included).not.toContain('check_settlement');
-      expect(result.included.length).toBe(6);
-      expect(result.failed).toEqual([{ key: 'check_settlement', error: 'falta parametro' }]);
-      expect(audit.log).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'document_package_sent' }),
-      );
+      expect(result.included).toEqual(['consumo_me', 'empaque_solefilmes']);
+      expect(result.failed).toEqual([{ key: 'consumo_mp', error: 'no data' }]);
+      const emailArgs = hubCall.mock.calls[0][2];
+      expect(emailArgs.to).toBe('x@oben.com');
+      expect(emailArgs.attachments).toHaveLength(2);
+      expect(emailArgs.attachments[1].contentType).toBe('application/pdf');
+      expect(emailArgs.body).toContain('Consumo de Materia Prima');
+      expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'document_package_sent' }));
+    });
+
+    it('sin destinatario, resuelve la lista de distribución asociada a document_package', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-pkg' } });
+      const buildDocumentPackage = jest.fn().mockResolvedValue(PACKAGE_RESULT);
+      const resolveRecipients = jest.fn().mockResolvedValue({ to: ['a@oben.com', 'b@oben.com'], cc: ['c@oben.com'], bcc: [] });
+      const { controller } = makeController(hubCall, resolveRecipients, buildDocumentPackage);
+
+      const result = await controller.sendPackage('10794', {});
+
+      expect(resolveRecipients).toHaveBeenCalledWith('document', 'document_package');
+      expect(result.to).toBe('a@oben.com');
+      expect(result.cc).toEqual(['b@oben.com', 'c@oben.com']);
+    });
+
+    it('sin destinatario y sin lista de distribución asociada, rechaza sin enviar', async () => {
+      const hubCall = jest.fn();
+      const buildDocumentPackage = jest.fn().mockResolvedValue(PACKAGE_RESULT);
+      const { controller } = makeController(hubCall, undefined, buildDocumentPackage);
+
+      await expect(controller.sendPackage('10794', {})).rejects.toThrow(BadRequestException);
+      expect(hubCall).not.toHaveBeenCalled();
     });
 
     it('si ningún reporte se pudo consultar, rechaza sin llamar a enviar correo', async () => {
-      const hub = { call: jest.fn().mockResolvedValue({ ok: false, error: 'unreachable' }) } as any;
-      const ctx = { userId: 'u1', tenantId: 't1' } as any;
-      const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
-      const distributionLists = { resolveRecipients: jest.fn() } as any;
-      const controller = new ObenReportsController(hub, ctx, audit, distributionLists, new ObenReportExcelService());
+      const hubCall = jest.fn();
+      const buildDocumentPackage = jest.fn().mockResolvedValue(EMPTY_PACKAGE);
+      const { controller } = makeController(hubCall, undefined, buildDocumentPackage);
 
       await expect(controller.sendPackage('10794', { to: 'x@oben.com' })).rejects.toThrow(BadRequestException);
-      expect(hub.call).not.toHaveBeenCalledWith('email', 'send', expect.anything());
+      expect(hubCall).not.toHaveBeenCalledWith('email', 'send', expect.anything());
     });
   });
 });

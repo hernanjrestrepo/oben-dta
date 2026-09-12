@@ -24,9 +24,9 @@ export interface ObenReportDefinition {
  */
 export const OBEN_REPORTS: ObenReportDefinition[] = [
   { key: 'consumo_me', procedure: 'spConsumoME_Paradixe', label: 'Consumo de Material de Empaque', format: 'consumo_me' },
-  { key: 'consumo_mp', procedure: 'spConsumoMP_Paradixe', label: 'Consumo de Materia Prima', format: 'generic' },
-  { key: 'empaque_unificada', procedure: 'spEmpaqueUnificada_Paradixe', label: 'Lista de Empaque Unificada', format: 'generic' },
-  { key: 'empaque_detallada', procedure: 'spEmpaqueDetallada_Paradixe', label: 'Lista de Empaque Detallada', format: 'generic' },
+  { key: 'consumo_mp', procedure: 'spConsumoMP_Paradixe', label: 'Consumo de Materia Prima', format: 'consumo_mp' },
+  { key: 'empaque_unificada', procedure: 'spEmpaqueUnificada_Paradixe', label: 'Lista de Empaque Unificada', format: 'empaque_unificada' },
+  { key: 'empaque_detallada', procedure: 'spEmpaqueDetallada_Paradixe', label: 'Lista de Empaque Detallada', format: 'empaque_detallada' },
   { key: 'chec_linea', procedure: 'spChecLinea_Paradixe', label: 'Check Línea', format: 'generic' },
   { key: 'empaque_solefilmes', procedure: 'spEmpaqueSolefilmes_Paradixe', label: 'Empaque Solefilmes', format: 'generic' },
   { key: 'check_settlement', procedure: 'spCheckSettlement_Paradixe', label: 'Check Settlement', format: 'generic' },

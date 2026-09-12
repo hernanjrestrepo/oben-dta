@@ -110,7 +110,17 @@ export abstract class RealAdapterBase extends BaseAdapter {
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${text.slice(0, 240)}`);
       }
-      return text ? (JSON.parse(text) as T) : (undefined as unknown as T);
+      if (!text) return undefined as unknown as T;
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        // Algunas transacciones reales de Oben (ej. spApproveComex_Paradixe,
+        // spSettlement_Head/Detail — "Return: Varchar" en su documentación,
+        // a diferencia de los "Check" que sí devuelven JSON) responden con
+        // texto plano ("OK") en vez de JSON — encontrado en vivo el
+        // 2026-09-11. No es un error: se devuelve el texto tal cual.
+        return text as unknown as T;
+      }
     } finally {
       clearTimeout(timeout);
     }

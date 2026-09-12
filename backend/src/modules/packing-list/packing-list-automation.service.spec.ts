@@ -1,103 +1,110 @@
 import { BadRequestException } from '@nestjs/common';
 import { PackingListAutomationService } from './packing-list-automation.service';
 
-const PACKING_DATA_GENERIC = {
-  Cliente: 'ETIQUETAS Y CAPSULAS DE COLOMBIA ETICAP SA',
-  Documento: 'Guia_Venta',
-  Numero: '10982',
-  DetailedPackingList: [{ Descripcion: 'X', Lote: '1' }],
+const PACKAGE_RESULT = {
+  client: 'ETIQUETAS Y CAPSULAS DE COLOMBIA ETICAP SA',
+  included: [
+    { key: 'lista_especial', label: 'Lista Especial', filename: 'Lista_Especial-OV10982.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('a') },
+    { key: 'consumo_me', label: 'Consumo de Material de Empaque', filename: 'ConsumoME-OV10982.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('b') },
+  ],
+  failed: [{ key: 'consumo_mp', label: 'Consumo de Materia Prima', error: 'no data' }],
 };
 
-const PACKING_DATA_SOLEFILMES = {
-  Cliente: 'SOLEFILMES IMPORTACAO DISTRIBUICAO E LOGISTICA LTDA',
-  DetailedPackingList: [],
+const SOLEFILMES_PACKAGE_RESULT = {
+  client: 'SOLEFILMES IMPORTACAO DISTRIBUICAO E LOGISTICA LTDA',
+  included: [
+    { key: 'lista_especial', label: 'Lista Especial', filename: 'Lista_Especial-OV10824.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('a') },
+    { key: 'empaque_solefilmes', label: 'Empaque Solefilmes', filename: 'Shipment_Traceability-OV10824.pdf', contentType: 'application/pdf', buffer: Buffer.from('b') },
+  ],
+  failed: [],
 };
 
-const SOLEFILMES_SHIPMENT_DATA = {
-  Customer: 'SOLEFILMES IMPORTACAO DISTRIBUICAO E LOGISTICA LTDA',
-  Date: '2026-09-07',
-  OrderNumber: '10824',
-  TotalNetWeight: 100,
-  TotalGrossWeight: 110,
-  Rolls: 2,
-  Pallets: 1,
-  Detalle1: [],
-};
-
-function makeService(hubCall: jest.Mock, resolveRecipients?: jest.Mock) {
+function makeService(hubCall: jest.Mock, resolveRecipients?: jest.Mock, buildDocumentPackage?: jest.Mock, confirmApproveComex?: jest.Mock) {
   const hub = { call: hubCall } as any;
   const ctx = { userId: 'u1', tenantId: 't1' } as any;
   const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
   const distributionLists = {
     resolveRecipients: resolveRecipients ?? jest.fn().mockResolvedValue({ to: ['ops@oben.com'], cc: [], bcc: [] }),
   } as any;
-  const excel = { build: jest.fn().mockReturnValue(Buffer.from('xlsx')) } as any;
-  const solefilmesPdf = { build: jest.fn().mockResolvedValue(Buffer.from('pdf')) } as any;
+  const reports = {
+    buildDocumentPackage: buildDocumentPackage ?? jest.fn().mockResolvedValue(PACKAGE_RESULT),
+    confirmApproveComex: confirmApproveComex ?? jest.fn().mockResolvedValue({ ok: true }),
+  } as any;
   return {
-    service: new PackingListAutomationService(hub, ctx, audit, distributionLists, excel, solefilmesPdf),
+    service: new PackingListAutomationService(hub, ctx, audit, distributionLists, reports),
     audit,
-    excel,
-    solefilmesPdf,
+    reports,
   };
 }
 
 describe('PackingListAutomationService', () => {
-  it('cliente normal: genera Excel y lo envía a la lista de distribución', async () => {
-    const hubCall = jest.fn()
-      .mockResolvedValueOnce({ ok: true, data: PACKING_DATA_GENERIC }) // spPackingListUSA_Paradixe
-      .mockResolvedValueOnce({ ok: true, data: { id: 'msg-1' } }); // email.send
-    const { service, excel } = makeService(hubCall);
+  it('arma un solo paquete y manda un solo correo con todo lo incluido, informando lo que falló', async () => {
+    const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-1' } });
+    const buildDocumentPackage = jest.fn().mockResolvedValue(PACKAGE_RESULT);
+    const { service, reports } = makeService(hubCall, undefined, buildDocumentPackage);
 
     const result = await service.handleOvApproved(10982);
 
-    expect(result).toEqual({ sent: true, client: PACKING_DATA_GENERIC.Cliente, format: 'excel' });
-    expect(excel.build).toHaveBeenCalledWith('Lista de Empaque', 10982, PACKING_DATA_GENERIC, 'packing_list');
-    expect(hubCall).toHaveBeenCalledTimes(2);
-    const emailArgs = hubCall.mock.calls[1][2];
+    expect(buildDocumentPackage).toHaveBeenCalledWith(10982);
+    expect(result).toEqual({
+      sent: true,
+      client: PACKAGE_RESULT.client,
+      included: ['lista_especial', 'consumo_me'],
+      failed: ['consumo_mp'],
+    });
+    const emailArgs = hubCall.mock.calls[0][2];
     expect(emailArgs.to).toBe('ops@oben.com');
-    expect(emailArgs.attachments[0].contentType).toBe(
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
+    expect(emailArgs.subject).toBe('Lista de Empaque — Orden 10982');
+    expect(emailArgs.attachments.map((a: any) => a.filename)).toEqual([
+      'Lista_Especial-OV10982.xlsx',
+      'ConsumoME-OV10982.xlsx',
+    ]);
+    expect(emailArgs.body).toContain('Consumo de Materia Prima (no data)');
+    expect(reports.confirmApproveComex).toHaveBeenCalledWith(10982);
   });
 
-  it('cliente Solefilmes: consulta el SP adicional y genera PDF en vez de Excel', async () => {
-    const hubCall = jest.fn()
-      .mockResolvedValueOnce({ ok: true, data: PACKING_DATA_SOLEFILMES }) // spPackingListUSA_Paradixe
-      .mockResolvedValueOnce({ ok: true, data: SOLEFILMES_SHIPMENT_DATA }) // spEmpaqueSolefilmes_Paradixe
-      .mockResolvedValueOnce({ ok: true, data: { id: 'msg-2' } }); // email.send
-    const { service, solefilmesPdf, excel } = makeService(hubCall);
+  it('cliente Solefilmes: el asunto lo indica cuando empaque_solefilmes viene incluido', async () => {
+    const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-2' } });
+    const buildDocumentPackage = jest.fn().mockResolvedValue(SOLEFILMES_PACKAGE_RESULT);
+    const { service } = makeService(hubCall, undefined, buildDocumentPackage);
 
     const result = await service.handleOvApproved(10824);
 
-    expect(result.format).toBe('pdf');
-    expect(hubCall).toHaveBeenNthCalledWith(2, 'obenCostOrder', 'query.run', {
-      procedure: 'spEmpaqueSolefilmes_Paradixe',
-      numberOrderSales: 10824,
-    });
-    expect(solefilmesPdf.build).toHaveBeenCalledWith(SOLEFILMES_SHIPMENT_DATA);
-    expect(excel.build).not.toHaveBeenCalled();
-    const emailArgs = hubCall.mock.calls[2][2];
-    expect(emailArgs.attachments[0].contentType).toBe('application/pdf');
+    expect(result.included).toContain('empaque_solefilmes');
+    const emailArgs = hubCall.mock.calls[0][2];
+    expect(emailArgs.subject).toBe('Lista de Empaque — Orden 10824 (Solefilmes)');
   });
 
   it('sin lista de distribución configurada: audita y rechaza sin enviar correo', async () => {
-    const hubCall = jest.fn().mockResolvedValueOnce({ ok: true, data: PACKING_DATA_GENERIC });
     const resolveRecipients = jest.fn().mockResolvedValue({ to: [], cc: [], bcc: [] });
+    const hubCall = jest.fn();
     const { service, audit } = makeService(hubCall, resolveRecipients);
 
     await expect(service.handleOvApproved(10982)).rejects.toThrow(BadRequestException);
-    expect(hubCall).toHaveBeenCalledTimes(1); // nunca llega a email.send
+    expect(hubCall).not.toHaveBeenCalled();
     expect(audit.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'ov_approved_sin_lista_distribucion' }),
     );
   });
 
-  it('si Oben no responde la lista de empaque, rechaza sin generar nada', async () => {
-    const hubCall = jest.fn().mockResolvedValueOnce({ ok: false, error: 'unreachable' });
-    const { service, excel, solefilmesPdf } = makeService(hubCall);
+  it('si no se pudo generar ningún documento, rechaza sin intentar enviar', async () => {
+    const buildDocumentPackage = jest.fn().mockResolvedValue({
+      client: '',
+      included: [],
+      failed: [{ key: 'lista_especial', label: 'Lista Especial', error: 'no se pudo consultar la lista de empaque' }],
+    });
+    const hubCall = jest.fn();
+    const { service } = makeService(hubCall, undefined, buildDocumentPackage);
 
     await expect(service.handleOvApproved(10982)).rejects.toThrow(BadRequestException);
-    expect(excel.build).not.toHaveBeenCalled();
-    expect(solefilmesPdf.build).not.toHaveBeenCalled();
+    expect(hubCall).not.toHaveBeenCalled();
+  });
+
+  it('si el correo no se pudo enviar, no confirma spApproveComex', async () => {
+    const hubCall = jest.fn().mockResolvedValue({ ok: false, error: 'smtp down' });
+    const { service, reports } = makeService(hubCall);
+
+    await expect(service.handleOvApproved(10982)).rejects.toThrow(BadRequestException);
+    expect(reports.confirmApproveComex).not.toHaveBeenCalled();
   });
 });

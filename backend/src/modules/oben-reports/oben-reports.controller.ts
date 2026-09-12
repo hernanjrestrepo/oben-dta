@@ -8,6 +8,7 @@ import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
 import { ObenReportExcelService } from './oben-report-excel.service';
+import { ObenReportsService, OBEN_QUERY_OPTIONS } from './oben-reports.service';
 import { OBEN_REPORTS, findObenReport } from './oben-report-registry';
 
 class SendReportDto {
@@ -20,9 +21,9 @@ class SendReportDto {
  * Reportes reales de Oben (spConsumoME/MP, EmpaqueUnificada/Detallada,
  * ChecLinea, EmpaqueSolefilmes, CheckSettlement) — mismo mecanismo que Lista
  * de Empaque: se consultan en vivo vía APIConsultaParadixe, nunca se
- * fabrican. El .xlsx generado es genérico (no replica pixel a pixel la
- * plantilla legada de Oben en Business/ — eso queda pendiente como
- * refinamiento visual una vez se prioricé).
+ * fabrican. Ver ObenReportsService para qué reportes componen el "conjunto
+ * de documentos" y sus formatos (EmpaqueSolefilmes va en PDF con código de
+ * barras real, no en Excel).
  */
 @UseGuards(JwtAuthGuard)
 @Controller('oben-reports')
@@ -33,6 +34,7 @@ export class ObenReportsController {
     private readonly audit: WorkflowAuditService,
     private readonly distributionLists: DistributionListsService,
     private readonly excel: ObenReportExcelService,
+    private readonly reports: ObenReportsService,
   ) {}
 
   @Get()
@@ -53,20 +55,7 @@ export class ObenReportsController {
     @Body() dto: SendReportDto,
   ) {
     const n = this.parseOrderNumber(numberOrderSales);
-
-    const results = await Promise.all(
-      OBEN_REPORTS.map(async (def) => {
-        try {
-          const data = await this.fetchReport(def.procedure, n);
-          const buffer = await this.excel.build(def.label, n, data, def.format);
-          return { def, ok: true as const, buffer };
-        } catch (err) {
-          return { def, ok: false as const, error: (err as Error).message };
-        }
-      }),
-    );
-    const included = results.filter((r) => r.ok) as Array<{ def: (typeof OBEN_REPORTS)[number]; ok: true; buffer: Buffer }>;
-    const failed = results.filter((r) => !r.ok) as Array<{ def: (typeof OBEN_REPORTS)[number]; ok: false; error: string }>;
+    const { included, failed } = await this.reports.buildDocumentPackage(n);
 
     if (included.length === 0) {
       throw new BadRequestException('Ningún reporte pudo consultarse para esta orden — no se envió nada.');
@@ -86,9 +75,9 @@ export class ObenReportsController {
       cc = [...restTo, ...resolved.cc];
     }
 
-    const includedListHtml = included.map((r) => `<li>${r.def.label}</li>`).join('');
+    const includedListHtml = included.map((r) => `<li>${r.label}</li>`).join('');
     const failedListHtml = failed.length
-      ? `<p>No se pudieron incluir (${failed.length}): ${failed.map((r) => r.def.label).join(', ')}.</p>`
+      ? `<p>No se pudieron incluir (${failed.length}): ${failed.map((r) => r.label).join(', ')}.</p>`
       : '';
 
     const sendResult = await this.hub.call<{ id: string }>(
@@ -100,10 +89,10 @@ export class ObenReportsController {
         subject: `Conjunto de documentos — Orden ${n}`,
         body: `<p>Adjunto el conjunto de documentos de la orden ${n}, consultados en vivo al sistema real de Oben.</p><ul>${includedListHtml}</ul>${failedListHtml}`,
         attachments: included.map((r) => ({
-          filename: `${r.def.label.replace(/\s+/g, '_')}-OV${n}.xlsx`,
+          filename: r.filename,
           content: r.buffer.toString('base64'),
           encoding: 'base64',
-          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          contentType: r.contentType,
         })),
       },
       { maxAttempts: 1, timeoutMs: 30_000 },
@@ -120,8 +109,8 @@ export class ObenReportsController {
         to,
         cc,
         ok: sendResult.ok,
-        included: included.map((r) => r.def.key),
-        failed: failed.map((r) => ({ key: r.def.key, error: r.error })),
+        included: included.map((r) => r.key),
+        failed: failed.map((r) => ({ key: r.key, error: r.error })),
         messageId: sendResult.data?.id ?? null,
       },
       reason: sendResult.ok ? null : sendResult.error,
@@ -130,12 +119,17 @@ export class ObenReportsController {
     if (!sendResult.ok) {
       throw new BadRequestException(sendResult.error ?? 'No se pudo enviar el correo');
     }
+
+    // Confirma a Oben que ya se generaron los documentos — best effort, no
+    // bloquea la respuesta si falla (ver ObenReportsService.confirmApproveComex).
+    await this.reports.confirmApproveComex(n);
+
     return {
       sent: true,
       to,
       cc,
-      included: included.map((r) => r.def.key),
-      failed: failed.map((r) => ({ key: r.def.key, error: r.error })),
+      included: included.map((r) => r.key),
+      failed: failed.map((r) => ({ key: r.key, error: r.error })),
     };
   }
 
@@ -246,10 +240,42 @@ export class ObenReportsController {
     return n;
   }
 
+  /**
+   * spCheckSettlement_Paradixe usa @NumberPF (Proforma) vía
+   * APILiquidacionParadixe, NO @NumberOV vía el endpoint genérico —
+   * confirmado por José el 2026-09-10 (documento de APIs/SPs de
+   * Liquidación). Antes se llamaba mal (con el número de OV, vía query.run)
+   * y siempre fallaba con "sin datos" sin importar la orden. Se resuelve el
+   * NumberPF real consultando primero spEmpaqueUnificada_Paradixe (que ya
+   * trae el campo "Proforma" para esta orden), en vez de pedirle al
+   * llamador que conozca de antemano el número de Proforma.
+   */
   private async fetchReport(procedure: string, numberOrderSales: number): Promise<unknown> {
-    const result = await this.hub.call('obenCostOrder', 'query.run', { procedure, numberOrderSales });
+    if (procedure === 'spCheckSettlement_Paradixe') {
+      return this.fetchCheckSettlement(numberOrderSales);
+    }
+    const result = await this.hub.call('obenCostOrder', 'query.run', { procedure, numberOrderSales }, OBEN_QUERY_OPTIONS);
     if (!result.ok) {
       throw new BadRequestException(result.error ?? 'No se pudo consultar el reporte en Oben');
+    }
+    return result.data;
+  }
+
+  private async fetchCheckSettlement(numberOrderSales: number): Promise<unknown> {
+    const unificadaResult = await this.hub.call('obenCostOrder', 'query.run', {
+      procedure: 'spEmpaqueUnificada_Paradixe',
+      numberOrderSales,
+    }, OBEN_QUERY_OPTIONS);
+    if (!unificadaResult.ok) {
+      throw new BadRequestException(unificadaResult.error ?? 'No se pudo resolver la Proforma de esta orden');
+    }
+    const proforma = (unificadaResult.data as Record<string, unknown> | null)?.Proforma;
+    if (!proforma) {
+      throw new BadRequestException('La orden no tiene número de Proforma asociado todavía');
+    }
+    const result = await this.hub.call('obenCostOrder', 'liquidacion.consultar', { numberPF: proforma }, OBEN_QUERY_OPTIONS);
+    if (!result.ok) {
+      throw new BadRequestException(result.error ?? 'No se pudo consultar la liquidación en Oben');
     }
     return result.data;
   }

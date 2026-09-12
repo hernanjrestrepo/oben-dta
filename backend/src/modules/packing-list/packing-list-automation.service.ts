@@ -4,21 +4,21 @@ import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
-import { ObenReportExcelService } from '../oben-reports/oben-report-excel.service';
-import { SolefilmesPdfService } from '../oben-reports/solefilmes-pdf.service';
+import { ObenReportsService } from '../oben-reports/oben-reports.service';
 
 /**
- * Dispara la generación y el envío de la Lista de Empaque automáticamente
- * cuando llega el correo real de Oben "OV [n] Aprobada En Corte" (ver
- * ImapConnectorService) — sin intervención humana, tal como lo describió
- * José el 2026-09-07.
+ * Dispara la generación y el envío de TODOS los documentos de una orden
+ * automáticamente cuando llega el correo real de Oben "OV [n] Aprobada En
+ * Corte" (ver ImapConnectorService) — sin intervención humana, tal como lo
+ * describió José el 2026-09-07.
  *
- * Regla de negocio confirmada por José: TODOS los clientes reciben la Lista
- * de Empaque en Excel (spPackingListUSA_Paradixe) salvo Solefilmes, que
- * ADEMÁS recibe el PDF con código de barras real (spEmpaqueSolefilmes_Paradixe,
- * formato "Shipment Traceability" — ver SolefilmesPdfService). Se decide
- * mirando el campo `Cliente` que ya trae la respuesta real de Oben — nunca
- * una lista de clientes hardcodeada aparte, que podría desactualizarse.
+ * Simplificado el 2026-09-11: antes este servicio armaba su propia "Lista de
+ * Empaque" (spPackingListUSA_Paradixe, un solo archivo) y le sumaba el resto
+ * del conjunto de documentos por separado. Ahora que ObenReportsService ya
+ * arma la "Lista Especial" (3 hojas, ver ObenReportExcelService) y la "Hoja
+ * de Costos" como parte del mismo conjunto, este servicio solo pide UN
+ * paquete completo y lo manda en un solo correo — ya no necesita consultar
+ * Oben ni generar documentos por su cuenta.
  */
 @Injectable()
 export class PackingListAutomationService {
@@ -29,49 +29,24 @@ export class PackingListAutomationService {
     private readonly ctx: TenantContext,
     private readonly audit: WorkflowAuditService,
     private readonly distributionLists: DistributionListsService,
-    private readonly excel: ObenReportExcelService,
-    private readonly solefilmesPdf: SolefilmesPdfService,
+    private readonly reports: ObenReportsService,
   ) {}
 
-  async handleOvApproved(numberOrderSales: number): Promise<{ sent: boolean; client: string; format: 'excel' | 'pdf' }> {
-    const packingListResult = await this.hub.call('obenCostOrder', 'query.run', {
-      procedure: 'spPackingListUSA_Paradixe',
-      numberOrderSales,
-    });
-    if (!packingListResult.ok) {
+  async handleOvApproved(
+    numberOrderSales: number,
+  ): Promise<{ sent: boolean; client: string; included: string[]; failed: string[] }> {
+    const documentPackage = await this.reports.buildDocumentPackage(numberOrderSales);
+    const includedKeys = documentPackage.included.map((r) => r.key);
+    const failedKeys = documentPackage.failed.map((r) => r.key);
+
+    if (documentPackage.included.length === 0) {
       throw new BadRequestException(
-        packingListResult.error ?? `No se pudo consultar la lista de empaque de la orden ${numberOrderSales}`,
+        documentPackage.failed[0]?.error ?? `No se pudo generar ningún documento para la orden ${numberOrderSales}`,
       );
     }
-    const packingData = packingListResult.data as Record<string, unknown>;
-    const cliente = String(packingData.Cliente ?? '');
-    const isSolefilmes = /solefilm/i.test(cliente);
 
-    let buffer: Buffer;
-    let filename: string;
-    let contentType: string;
-    let format: 'excel' | 'pdf';
-
-    if (isSolefilmes) {
-      const soleResult = await this.hub.call('obenCostOrder', 'query.run', {
-        procedure: 'spEmpaqueSolefilmes_Paradixe',
-        numberOrderSales,
-      });
-      if (!soleResult.ok) {
-        throw new BadRequestException(
-          soleResult.error ?? `No se pudo consultar el empaque de Solefilmes de la orden ${numberOrderSales}`,
-        );
-      }
-      buffer = await this.solefilmesPdf.build(soleResult.data as never);
-      filename = `Shipment_Traceability-OV${numberOrderSales}.pdf`;
-      contentType = 'application/pdf';
-      format = 'pdf';
-    } else {
-      buffer = await this.excel.build('Lista de Empaque', numberOrderSales, packingData, 'packing_list');
-      filename = `Lista_de_Empaque-OV${numberOrderSales}.xlsx`;
-      contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      format = 'excel';
-    }
+    const cliente = documentPackage.client;
+    const isSolefilmes = includedKeys.includes('empaque_solefilmes');
 
     const resolved = await this.distributionLists.resolveRecipients('document', 'packing_list');
     if (resolved.to.length === 0) {
@@ -82,16 +57,20 @@ export class PackingListAutomationService {
         entityType: 'packing_list',
         entityId: String(numberOrderSales),
         actorId: this.ctx.userId,
-        outputData: { cliente, format },
+        outputData: { cliente, included: includedKeys, failed: failedKeys },
         reason:
-          'El documento se generó correctamente pero no se envió: no hay ninguna lista de distribución asociada a "packing_list". Configúrala en Listas de Distribución.',
+          'Los documentos se generaron correctamente pero no se enviaron: no hay ninguna lista de distribución asociada a "packing_list". Configúrala en Listas de Distribución.',
       });
       throw new BadRequestException(
-        'No hay ninguna lista de distribución asociada a "packing_list" — el documento se generó pero no se pudo enviar.',
+        'No hay ninguna lista de distribución asociada a "packing_list" — los documentos se generaron pero no se pudieron enviar.',
       );
     }
     const [primaryTo, ...restTo] = resolved.to;
     const cc = [...restTo, ...resolved.cc];
+
+    const failedListHtml = documentPackage.failed.length
+      ? `<p>No se pudieron incluir (${documentPackage.failed.length}): ${documentPackage.failed.map((r) => `${r.label} (${r.error})`).join(', ')}.</p>`
+      : '';
 
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
@@ -100,15 +79,13 @@ export class PackingListAutomationService {
         to: primaryTo,
         ...(cc.length ? { cc: cc.join(',') } : {}),
         subject: `Lista de Empaque — Orden ${numberOrderSales}${isSolefilmes ? ' (Solefilmes)' : ''}`,
-        body: `<p>Adjunto la lista de empaque de la orden ${numberOrderSales}, generada automáticamente al recibir la aprobación de corte, con datos consultados en vivo al sistema real de Oben.</p>`,
-        attachments: [
-          {
-            filename,
-            content: buffer.toString('base64'),
-            encoding: 'base64',
-            contentType,
-          },
-        ],
+        body: `<p>Adjuntos los documentos de la orden ${numberOrderSales}, generados automáticamente al recibir la aprobación de corte, con datos consultados en vivo al sistema real de Oben.</p>${failedListHtml}`,
+        attachments: documentPackage.included.map((r) => ({
+          filename: r.filename,
+          content: r.buffer.toString('base64'),
+          encoding: 'base64',
+          contentType: r.contentType,
+        })),
       },
       { maxAttempts: 1, timeoutMs: 30_000 },
     );
@@ -120,7 +97,15 @@ export class PackingListAutomationService {
       entityType: 'packing_list',
       entityId: String(numberOrderSales),
       actorId: this.ctx.userId,
-      outputData: { to: primaryTo, cc, cliente, format, ok: sendResult.ok, messageId: sendResult.data?.id ?? null },
+      outputData: {
+        to: primaryTo,
+        cc,
+        cliente,
+        included: includedKeys,
+        failed: failedKeys,
+        ok: sendResult.ok,
+        messageId: sendResult.data?.id ?? null,
+      },
       reason: sendResult.ok ? null : sendResult.error,
     });
 
@@ -128,7 +113,13 @@ export class PackingListAutomationService {
       throw new BadRequestException(sendResult.error ?? 'No se pudo enviar el correo');
     }
 
-    this.logger.log(`Orden ${numberOrderSales} (${cliente}): lista de empaque generada en ${format} y enviada.`);
-    return { sent: true, client: cliente, format };
+    // Confirma a Oben que ya se generaron los documentos — best effort, no
+    // bloquea el correo si falla (ver ObenReportsService.confirmApproveComex).
+    await this.reports.confirmApproveComex(numberOrderSales);
+
+    this.logger.log(
+      `Orden ${numberOrderSales} (${cliente}): ${includedKeys.length} documentos generados y enviados (${includedKeys.join(', ')}).`,
+    );
+    return { sent: true, client: cliente, included: includedKeys, failed: failedKeys };
   }
 }
