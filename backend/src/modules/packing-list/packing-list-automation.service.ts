@@ -1,10 +1,22 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
-import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
-import { ObenReportsService } from '../oben-reports/oben-reports.service';
+import { DistributionListsService, ResolvedRecipients } from '../distribution-lists/distribution-lists.service';
+import { ObenReportsService, DocumentPackageResult, PackageFailure } from '../oben-reports/oben-reports.service';
+import { PackingListPendingRetry } from '../../entities/packing-list-pending-retry.entity';
+import { PACKING_LIST_RETRY_INTERVAL_MS } from './packing-list-retry.constants';
+
+export interface HandleOvApprovedResult {
+  sent: boolean;
+  queued: boolean;
+  client: string;
+  included: string[];
+  failed: string[];
+}
 
 /**
  * Dispara la generación y el envío de TODOS los documentos de una orden
@@ -19,6 +31,17 @@ import { ObenReportsService } from '../oben-reports/oben-reports.service';
  * de Costos" como parte del mismo conjunto, este servicio solo pide UN
  * paquete completo y lo manda en un solo correo — ya no necesita consultar
  * Oben ni generar documentos por su cuenta.
+ *
+ * Regla agregada el 2026-09-14 (pedido explícito del usuario, tras 2 correos
+ * reales enviados incompletos — OV 11094, 11064): NUNCA se manda el correo de
+ * Lista de Empaque con documentos faltantes. Si algo falla, la orden se
+ * encola (`PackingListPendingRetry`) para que `PackingListRetryProcessorService`
+ * la reintente cada 10 minutos hasta 5 veces; si sigue incompleta, se escala
+ * por correo a José Guzmán (copia Jorge Restrepo) en vez de seguir en
+ * silencio. El reintento corre en un proceso de fondo aparte — a propósito,
+ * para no bloquear el conector IMAP con una espera de hasta 50 minutos (el
+ * mismo tipo de problema que causó el bug de correos duplicados del
+ * 2026-09-11: procesamiento largo corriendo dentro del ciclo de correo).
  */
 @Injectable()
 export class PackingListAutomationService {
@@ -30,24 +53,11 @@ export class PackingListAutomationService {
     private readonly audit: WorkflowAuditService,
     private readonly distributionLists: DistributionListsService,
     private readonly reports: ObenReportsService,
+    @InjectRepository(PackingListPendingRetry)
+    private readonly retries: Repository<PackingListPendingRetry>,
   ) {}
 
-  async handleOvApproved(
-    numberOrderSales: number,
-  ): Promise<{ sent: boolean; client: string; included: string[]; failed: string[] }> {
-    const documentPackage = await this.reports.buildDocumentPackage(numberOrderSales);
-    const includedKeys = documentPackage.included.map((r) => r.key);
-    const failedKeys = documentPackage.failed.map((r) => r.key);
-
-    if (documentPackage.included.length === 0) {
-      throw new BadRequestException(
-        documentPackage.failed[0]?.error ?? `No se pudo generar ningún documento para la orden ${numberOrderSales}`,
-      );
-    }
-
-    const cliente = documentPackage.client;
-    const isSolefilmes = includedKeys.includes('empaque_solefilmes');
-
+  async handleOvApproved(numberOrderSales: number): Promise<HandleOvApprovedResult> {
     const resolved = await this.distributionLists.resolveRecipients('document', 'packing_list');
     if (resolved.to.length === 0) {
       await this.audit.log({
@@ -57,20 +67,55 @@ export class PackingListAutomationService {
         entityType: 'packing_list',
         entityId: String(numberOrderSales),
         actorId: this.ctx.userId,
-        outputData: { cliente, included: includedKeys, failed: failedKeys },
+        outputData: {},
         reason:
-          'Los documentos se generaron correctamente pero no se enviaron: no hay ninguna lista de distribución asociada a "packing_list". Configúrala en Listas de Distribución.',
+          'No hay ninguna lista de distribución asociada a "packing_list" — no se intentó ni generar los documentos.',
       });
       throw new BadRequestException(
-        'No hay ninguna lista de distribución asociada a "packing_list" — los documentos se generaron pero no se pudieron enviar.',
+        'No hay ninguna lista de distribución asociada a "packing_list" — configúrala en Listas de Distribución.',
       );
     }
+
+    const documentPackage = await this.reports.buildDocumentPackage(numberOrderSales);
+    const includedKeys = documentPackage.included.map((r) => r.key);
+    const failedKeys = documentPackage.failed.map((r) => r.key);
+
+    if (documentPackage.failed.length > 0) {
+      await this.enqueueRetry(numberOrderSales, documentPackage.failed);
+      await this.audit.log({
+        workflowName: 'packing-list-automation',
+        eventType: WorkflowEventType.ACTION_EXECUTED,
+        action: 'ov_approved_incompleto_en_cola',
+        entityType: 'packing_list',
+        entityId: String(numberOrderSales),
+        actorId: this.ctx.userId,
+        outputData: { cliente: documentPackage.client, included: includedKeys, failed: failedKeys },
+        reason: `Faltan ${documentPackage.failed.length} reporte(s) (${failedKeys.join(', ')}) — no se envía nada; se reintentará cada 10 minutos hasta 5 veces antes de escalar.`,
+      });
+      this.logger.warn(
+        `Orden ${numberOrderSales}: incompleta (${failedKeys.join(', ')}) — encolada para reintento en 10 minutos, sin enviar correo.`,
+      );
+      return { sent: false, queued: true, client: documentPackage.client, included: includedKeys, failed: failedKeys };
+    }
+
+    return this.sendCompletePackage(numberOrderSales, documentPackage, resolved);
+  }
+
+  /**
+   * Envía el correo real — SOLO se debe llamar cuando `documentPackage.failed`
+   * está vacío (ya sea en el primer intento o desde
+   * `PackingListRetryProcessorService` tras un reintento exitoso).
+   */
+  async sendCompletePackage(
+    numberOrderSales: number,
+    documentPackage: DocumentPackageResult,
+    resolved: ResolvedRecipients,
+  ): Promise<HandleOvApprovedResult> {
+    const includedKeys = documentPackage.included.map((r) => r.key);
+    const cliente = documentPackage.client;
+    const isSolefilmes = includedKeys.includes('empaque_solefilmes');
     const [primaryTo, ...restTo] = resolved.to;
     const cc = [...restTo, ...resolved.cc];
-
-    const failedListHtml = documentPackage.failed.length
-      ? `<p>No se pudieron incluir (${documentPackage.failed.length}): ${documentPackage.failed.map((r) => `${r.label} (${r.error})`).join(', ')}.</p>`
-      : '';
 
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
@@ -79,7 +124,7 @@ export class PackingListAutomationService {
         to: primaryTo,
         ...(cc.length ? { cc: cc.join(',') } : {}),
         subject: `Lista de Empaque — Orden ${numberOrderSales}${isSolefilmes ? ' (Solefilmes)' : ''}`,
-        body: `<p>Adjuntos los documentos de la orden ${numberOrderSales}, generados automáticamente al recibir la aprobación de corte, con datos consultados en vivo al sistema real de Oben.</p>${failedListHtml}`,
+        body: `<p>Adjuntos los documentos de la orden ${numberOrderSales}, generados automáticamente al recibir la aprobación de corte, con datos consultados en vivo al sistema real de Oben.</p>`,
         attachments: documentPackage.included.map((r) => ({
           filename: r.filename,
           content: r.buffer.toString('base64'),
@@ -102,7 +147,7 @@ export class PackingListAutomationService {
         cc,
         cliente,
         included: includedKeys,
-        failed: failedKeys,
+        failed: [],
         ok: sendResult.ok,
         messageId: sendResult.data?.id ?? null,
       },
@@ -120,6 +165,84 @@ export class PackingListAutomationService {
     this.logger.log(
       `Orden ${numberOrderSales} (${cliente}): ${includedKeys.length} documentos generados y enviados (${includedKeys.join(', ')}).`,
     );
-    return { sent: true, client: cliente, included: includedKeys, failed: failedKeys };
+    return { sent: true, queued: false, client: cliente, included: includedKeys, failed: [] };
+  }
+
+  /**
+   * Se llama desde `PackingListRetryProcessorService` cuando una orden sigue
+   * incompleta tras `PACKING_LIST_RETRY_MAX_ATTEMPTS` intentos (50 minutos) —
+   * avisa a un humano en vez de seguir reintentando en silencio para siempre.
+   * Best effort respecto al flujo normal: si no hay lista de distribución
+   * configurada para el escalamiento, se audita el problema pero no lanza,
+   * para no tumbar el procesador de reintentos.
+   */
+  async sendEscalation(numberOrderSales: number, failed: PackageFailure[]): Promise<void> {
+    const resolved = await this.distributionLists.resolveRecipients('document', 'packing_list_escalation');
+    if (resolved.to.length === 0) {
+      this.logger.error(
+        `Orden ${numberOrderSales}: sigue incompleta tras 5 intentos pero no hay lista de distribución "packing_list_escalation" configurada — no se pudo avisar a nadie.`,
+      );
+      await this.audit.log({
+        workflowName: 'packing-list-automation',
+        eventType: WorkflowEventType.ACTION_EXECUTED,
+        action: 'ov_approved_escalamiento_sin_lista_distribucion',
+        entityType: 'packing_list',
+        entityId: String(numberOrderSales),
+        actorId: this.ctx.userId,
+        outputData: { failed: failed.map((f) => f.key) },
+        reason: 'No hay ninguna lista de distribución asociada a "packing_list_escalation" — configúrala en Listas de Distribución.',
+      });
+      return;
+    }
+
+    const [primaryTo, ...restTo] = resolved.to;
+    const cc = [...restTo, ...resolved.cc];
+    const failedListHtml = failed.map((f) => `<li>${f.label}: ${f.error}</li>`).join('');
+
+    const sendResult = await this.hub.call<{ id: string }>(
+      'email',
+      'send',
+      {
+        to: primaryTo,
+        ...(cc.length ? { cc: cc.join(',') } : {}),
+        subject: `Orden ${numberOrderSales} — documentos incompletos tras 5 intentos`,
+        body: `<p>La orden ${numberOrderSales} sigue sin poder generar todos sus documentos después de 5 intentos automáticos (uno cada 10 minutos, ~50 minutos en total). No se envió ningún correo de Lista de Empaque para esta orden todavía.</p><p>Reportes que no se pudieron generar:</p><ul>${failedListHtml}</ul><p>¿Nos pueden ayudar a confirmar si esta orden tiene los datos completos en Oben?</p>`,
+      },
+      { maxAttempts: 1, timeoutMs: 30_000 },
+    );
+
+    await this.audit.log({
+      workflowName: 'packing-list-automation',
+      eventType: WorkflowEventType.NOTIFICATION_SENT,
+      action: 'ov_approved_escalado_tras_5_intentos',
+      entityType: 'packing_list',
+      entityId: String(numberOrderSales),
+      actorId: this.ctx.userId,
+      outputData: {
+        to: primaryTo,
+        cc,
+        failed: failed.map((f) => ({ key: f.key, error: f.error })),
+        ok: sendResult.ok,
+        messageId: sendResult.data?.id ?? null,
+      },
+      reason: sendResult.ok ? null : sendResult.error,
+    });
+  }
+
+  private async enqueueRetry(numberOrderSales: number, failed: PackageFailure[]): Promise<void> {
+    const existing = await this.retries.findOne({
+      where: { tenantId: this.ctx.tenantId, numberOrderSales, status: 'pending' },
+    });
+    if (existing) return;
+    await this.retries.save(
+      this.retries.create({
+        tenantId: this.ctx.tenantId,
+        numberOrderSales,
+        attempts: 0,
+        nextRetryAt: new Date(Date.now() + PACKING_LIST_RETRY_INTERVAL_MS),
+        status: 'pending',
+        lastMissing: failed,
+      }),
+    );
   }
 }

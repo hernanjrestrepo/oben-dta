@@ -136,6 +136,15 @@ export class AdapterRegistry {
         crearDetLiqUrl: cfg.crearDetLiqUrl as string | undefined,
         liquidacionUrl: cfg.liquidacionUrl as string | undefined,
         authToken: cfg.authToken as string | undefined,
+        // Encontrado en vivo el 2026-09-14: el timeout del fetch real
+        // (RealAdapterBase.httpJson) por defecto es 15s — MENOR que los 30s
+        // que ObenReportsService ya usa como timeout del intento único en
+        // ResilientAdapterExecutor (ver OBEN_QUERY_OPTIONS). Con eso, el
+        // AbortController interno se disparaba primero (15s) con
+        // "This operation was aborted" antes de que el timeout de 30s
+        // tuviera oportunidad de aplicar — el fix de timeouts anterior quedó
+        // incompleto. 35s le da margen para que el de 30s gane siempre.
+        timeoutMs: (cfg.timeoutMs as number | undefined) ?? 35_000,
       };
       return new ObenCostOrderRealAdapter(costOrderConfig);
     }

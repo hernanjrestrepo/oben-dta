@@ -76,6 +76,7 @@ import { FreightDestinationSurcharge } from './entities/freight-destination-surc
 import { DistributionList } from './entities/distribution-list.entity';
 import { DistributionListRecipient } from './entities/distribution-list-recipient.entity';
 import { DistributionListAssociation } from './entities/distribution-list-association.entity';
+import { PackingListPendingRetry } from './entities/packing-list-pending-retry.entity';
 
 @Module({
   imports: [
@@ -148,6 +149,7 @@ import { DistributionListAssociation } from './entities/distribution-list-associ
           DistributionList,
           DistributionListRecipient,
           DistributionListAssociation,
+          PackingListPendingRetry,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') === 'development',
