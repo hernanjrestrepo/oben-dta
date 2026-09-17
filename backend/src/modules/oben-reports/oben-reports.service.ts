@@ -160,7 +160,7 @@ export class ObenReportsService {
 
     const hojaCostos = await this.buildHojaCostos(numberOrderSales);
     if (hojaCostos.ok) {
-      included.push(hojaCostos.attachment);
+      included.push(...hojaCostos.attachments);
     } else {
       failed.push(hojaCostos.failure);
     }
@@ -215,14 +215,14 @@ export class ObenReportsService {
    * spChecLinea_Paradixe(@NumberOV) para saber qué líneas tiene la orden, y
    * por cada línea, spCostOrder_Paradixe(@NumberOV,@Linea) vía
    * APICostOrderParadixe (operación `costOrder.get`, ya conectada desde una
-   * sesión anterior). Se consolidan todas las líneas en un solo documento —
-   * José no ha confirmado si prefiere un documento por línea; se eligió
-   * consolidar para no fragmentar el correo en N adjuntos por una orden con
-   * N líneas, ajustable si la respuesta de José indica lo contrario.
+   * sesión anterior). UN DOCUMENTO POR LÍNEA — confirmado por José el
+   * 2026-09-17 (respuesta a la pregunta 3 del documento de Liquidación):
+   * antes se consolidaban todas las líneas en un solo archivo mientras no
+   * había confirmación.
    */
   private async buildHojaCostos(
     numberOrderSales: number,
-  ): Promise<{ ok: true; attachment: PackageAttachment } | { ok: false; failure: PackageFailure }> {
+  ): Promise<{ ok: true; attachments: PackageAttachment[] } | { ok: false; failure: PackageFailure }> {
     const label = 'Hoja de Costos';
     try {
       const lineasResult = await this.hub.call('obenCostOrder', 'query.run', {
@@ -250,17 +250,18 @@ export class ObenReportsService {
         return { ok: false, failure: { key: 'hoja_costos', label, error: 'Oben no tiene datos de este reporte para esta orden.' } };
       }
 
-      const buffer = await this.excel.buildHojaCostos(numberOrderSales, lineasConDatos);
-      return {
-        ok: true,
-        attachment: {
-          key: 'hoja_costos',
-          label,
+      const attachments: PackageAttachment[] = [];
+      for (const { linea, data } of lineasConDatos) {
+        const buffer = await this.excel.buildHojaCostos(numberOrderSales, linea, data);
+        attachments.push({
+          key: `hoja_costos_linea_${linea}`,
+          label: `${label} — Línea ${linea}`,
           buffer,
-          filename: `Hoja_de_Costos-OV${numberOrderSales}.xlsx`,
+          filename: `Hoja_de_Costos-OV${numberOrderSales}-Linea${linea}.xlsx`,
           contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        },
-      };
+        });
+      }
+      return { ok: true, attachments };
     } catch (err) {
       return { ok: false, failure: { key: 'hoja_costos', label, error: (err as Error).message } };
     }

@@ -825,7 +825,14 @@ export class ObenReportExcelService {
    * documento por línea, se eligió consolidar para no fragmentar el correo
    * en N adjuntos por una orden con N líneas.
    */
-  async buildHojaCostos(numberOrderSales: number, lineas: Array<{ linea: number; data: Record<string, unknown> }>): Promise<Buffer> {
+  /**
+   * Un documento POR LÍNEA (confirmado por José Guzmán el 2026-09-17,
+   * respuesta a la pregunta 3 de Preguntas_y_Requerimientos_Liquidacion_Oben:
+   * "Se debe generar un documento individual por cada línea") — antes se
+   * consolidaban todas las líneas de la orden en un solo archivo, decisión
+   * propia mientras no teníamos confirmación.
+   */
+  async buildHojaCostos(numberOrderSales: number, linea: number, data: Record<string, unknown>): Promise<Buffer> {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Hoja de Costos', { pageSetup: { fitToPage: true, orientation: 'landscape' } });
     embedLogo(wb, ws);
@@ -833,12 +840,6 @@ export class ObenReportExcelService {
     let row = 6;
     writeInfoRow(ws, row, 'Orden de Venta', numberOrderSales);
     row += 2;
-
-    if (lineas.length === 0) {
-      autoWidth(ws);
-      const buf = await wb.xlsx.writeBuffer();
-      return Buffer.from(buf);
-    }
 
     const columns: Array<[string, string]> = [
       ['ConceptoPrincipal', 'Concepto Principal'],
@@ -856,38 +857,34 @@ export class ObenReportExcelService {
       ['TotalIVA', 'Total IVA'],
     ];
 
-    for (const { linea, data } of lineas) {
-      writeSectionHeader(ws, row, `LÍNEA ${linea}`);
-      row += 1;
-      for (const [key, label] of [
-        ['Fecha', 'Fecha'],
-        ['Cliente', 'Cliente'],
-        ['Producto', 'Producto'],
-        ['Referencia', 'Referencia'],
-        ['TRM', 'TRM'],
-        ['SumaCostoTotal', 'Suma Costo Total'],
-        ['SumaTotalIVA', 'Suma Total IVA'],
-      ] as const) {
-        if (data[key] !== undefined) {
-          writeInfoRow(ws, row, label, data[key]);
-          row += 1;
-        }
-      }
-      row += 1;
-
-      const detalle = (data.Detalle as Row[] | undefined) ?? [];
-      if (detalle.length === 0) {
-        row = writeNoDataMessage(ws, row, 13);
+    writeSectionHeader(ws, row, `LÍNEA ${linea}`);
+    row += 1;
+    for (const [key, label] of [
+      ['Fecha', 'Fecha'],
+      ['Cliente', 'Cliente'],
+      ['Producto', 'Producto'],
+      ['Referencia', 'Referencia'],
+      ['TRM', 'TRM'],
+      ['SumaCostoTotal', 'Suma Costo Total'],
+      ['SumaTotalIVA', 'Suma Total IVA'],
+    ] as const) {
+      if (data[key] !== undefined) {
+        writeInfoRow(ws, row, label, data[key]);
         row += 1;
-        continue;
       }
+    }
+    row += 1;
+
+    const detalle = (data.Detalle as Row[] | undefined) ?? [];
+    if (detalle.length === 0) {
+      writeNoDataMessage(ws, row, 13);
+    } else {
       writeTableHeader(ws, row, columns.map(([, label]) => label));
       row += 1;
       for (const item of detalle) {
         writeTableRow(ws, row, columns.map(([key]) => scalar(item[key])));
         row += 1;
       }
-      row += 2;
     }
 
     autoWidth(ws);

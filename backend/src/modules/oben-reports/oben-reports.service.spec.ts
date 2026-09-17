@@ -44,7 +44,7 @@ describe('ObenReportsService.buildDocumentPackage', () => {
       'consumo_mp',
       'empaque_unificada',
       'empaque_detallada',
-      'hoja_costos',
+      'hoja_costos_linea_1',
     ]);
     expect(result.failed).toEqual([]);
     expect(result.client).toBe('ETIQUETAS Y CAPSULAS DE COLOMBIA');
@@ -124,6 +124,23 @@ describe('ObenReportsService.buildDocumentPackage', () => {
 
     expect(hubCall).toHaveBeenCalledWith('obenCostOrder', 'query.run', expect.objectContaining({ procedure: 'spChecLinea_Paradixe', numberOrderSales: 10794 }), expect.any(Object));
     expect(hubCall).toHaveBeenCalledWith('obenCostOrder', 'costOrder.get', { numberOrderSales: 10794, linea: 1 }, expect.any(Object));
+  });
+
+  it('Hoja de Costos: un documento POR LÍNEA (confirmado por José el 2026-09-17) — nunca consolidado', async () => {
+    const LINEAS_MULTI = [{ Linea: 1 }, { Linea: 2 }];
+    const hubCall = jest.fn().mockImplementation((system: string, op: string, args: any) => {
+      if (args?.procedure === 'spChecLinea_Paradixe') return Promise.resolve({ ok: true, data: LINEAS_MULTI });
+      if (op === 'costOrder.get') return Promise.resolve({ ok: true, data: { ...COST_DATA, Linea: args.linea } });
+      return defaultHubCall(system, op, args);
+    });
+    const { service } = makeService(hubCall);
+
+    const result = await service.buildDocumentPackage(10794);
+
+    const hojaKeys = result.included.map((r) => r.key).filter((k) => k.startsWith('hoja_costos'));
+    expect(hojaKeys).toEqual(['hoja_costos_linea_1', 'hoja_costos_linea_2']);
+    const filenames = result.included.filter((r) => r.key.startsWith('hoja_costos')).map((r) => r.filename);
+    expect(filenames).toEqual(['Hoja_de_Costos-OV10794-Linea1.xlsx', 'Hoja_de_Costos-OV10794-Linea2.xlsx']);
   });
 
   it('Hoja de Costos: sin líneas, se informa como fallido sin bloquear el resto', async () => {
