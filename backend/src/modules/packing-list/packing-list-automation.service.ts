@@ -16,6 +16,13 @@ export interface HandleOvApprovedResult {
   client: string;
   included: string[];
   failed: string[];
+  /**
+   * Solo presente cuando `sendCompletePackage` no pudo enviar el correo
+   * (el paquete SÍ estaba completo — la falla fue de transporte, ej. un
+   * timeout de SMTP). El llamador debe tratarlo igual que un paquete
+   * incompleto: encolar para reintento, nunca devolver `sent:true` a medias.
+   */
+  sendFailure?: PackageFailure;
 }
 
 /**
@@ -98,13 +105,40 @@ export class PackingListAutomationService {
       return { sent: false, queued: true, client: documentPackage.client, included: includedKeys, failed: failedKeys };
     }
 
-    return this.sendCompletePackage(numberOrderSales, documentPackage, resolved);
+    const result = await this.sendCompletePackage(numberOrderSales, documentPackage, resolved);
+    if (result.sendFailure) {
+      // El paquete SÍ estaba completo — la falla fue de transporte (ej. un
+      // timeout de SMTP, encontrado en vivo el 2026-09-17 con la OV 11040:
+      // "timeout: sin respuesta de email.send tras 30000ms"). Antes esto
+      // lanzaba y el correo se perdía en silencio si no llegaba un segundo
+      // disparador real de Oben para la misma orden. Se trata igual que un
+      // paquete incompleto: se encola para el mismo ciclo de reintento/
+      // escalamiento en vez de perderse.
+      await this.enqueueRetry(numberOrderSales, [result.sendFailure]);
+      await this.audit.log({
+        workflowName: 'packing-list-automation',
+        eventType: WorkflowEventType.ACTION_EXECUTED,
+        action: 'ov_approved_envio_fallido_en_cola',
+        entityType: 'packing_list',
+        entityId: String(numberOrderSales),
+        actorId: this.ctx.userId,
+        outputData: { cliente: documentPackage.client, included: includedKeys },
+        reason: `El paquete estaba completo pero el correo no se pudo enviar (${result.sendFailure.error}) — se reintentará cada 10 minutos hasta 5 veces antes de escalar.`,
+      });
+      this.logger.warn(
+        `Orden ${numberOrderSales}: paquete completo pero el envío del correo falló (${result.sendFailure.error}) — encolada para reintento.`,
+      );
+      return { sent: false, queued: true, client: documentPackage.client, included: includedKeys, failed: [] };
+    }
+    return result;
   }
 
   /**
    * Envía el correo real — SOLO se debe llamar cuando `documentPackage.failed`
    * está vacío (ya sea en el primer intento o desde
-   * `PackingListRetryProcessorService` tras un reintento exitoso).
+   * `PackingListRetryProcessorService` tras un reintento exitoso). NUNCA
+   * lanza por una falla de envío — la devuelve en `sendFailure` para que el
+   * llamador decida (encolar reintento), no para que se pierda en un throw.
    */
   async sendCompletePackage(
     numberOrderSales: number,
@@ -155,7 +189,14 @@ export class PackingListAutomationService {
     });
 
     if (!sendResult.ok) {
-      throw new BadRequestException(sendResult.error ?? 'No se pudo enviar el correo');
+      return {
+        sent: false,
+        queued: false,
+        client: cliente,
+        included: includedKeys,
+        failed: [],
+        sendFailure: { key: 'envio_correo', label: 'Envío del correo electrónico', error: sendResult.error ?? 'No se pudo enviar el correo' },
+      };
     }
 
     // Confirma a Oben que ya se generaron los documentos — best effort, no

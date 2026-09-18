@@ -128,6 +128,36 @@ describe('PackingListAutomationService', () => {
     });
   });
 
+  describe('handleOvApproved — el paquete está completo pero el ENVÍO falla (2026-09-17: OV 11040, timeout de SMTP)', () => {
+    it('no lanza ni pierde la orden — la encola igual que un paquete incompleto', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: false, error: 'timeout: sin respuesta de "email.send" tras 30000ms' });
+      const buildDocumentPackage = jest.fn().mockResolvedValue(COMPLETE_PACKAGE);
+      const { service, audit, retries, reports } = makeService(hubCall, undefined, buildDocumentPackage);
+
+      const result = await service.handleOvApproved(10824);
+
+      expect(result).toEqual({
+        sent: false,
+        queued: true,
+        client: COMPLETE_PACKAGE.client,
+        included: ['lista_especial', 'empaque_solefilmes'],
+        failed: [],
+      });
+      expect(reports.confirmApproveComex).not.toHaveBeenCalled();
+      expect(retries.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: 't1',
+          numberOrderSales: 10824,
+          status: 'pending',
+          lastMissing: [{ key: 'envio_correo', label: 'Envío del correo electrónico', error: 'timeout: sin respuesta de "email.send" tras 30000ms' }],
+        }),
+      );
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'ov_approved_envio_fallido_en_cola' }),
+      );
+    });
+  });
+
   describe('handleOvApproved — sin lista de distribución', () => {
     it('rechaza sin siquiera consultar Oben (falla rápido por configuración, no por datos)', async () => {
       const resolveRecipients = jest.fn().mockResolvedValue({ to: [], cc: [], bcc: [] });
@@ -145,13 +175,14 @@ describe('PackingListAutomationService', () => {
   });
 
   describe('sendCompletePackage', () => {
-    it('si el correo no se pudo enviar, no confirma spApproveComex', async () => {
+    it('si el correo no se pudo enviar, no confirma spApproveComex y devuelve sendFailure en vez de lanzar', async () => {
       const hubCall = jest.fn().mockResolvedValue({ ok: false, error: 'smtp down' });
       const { service, reports } = makeService(hubCall);
 
-      await expect(
-        service.sendCompletePackage(10982, COMPLETE_PACKAGE as any, { to: ['ops@oben.com'], cc: [], bcc: [] }),
-      ).rejects.toThrow(BadRequestException);
+      const result = await service.sendCompletePackage(10982, COMPLETE_PACKAGE as any, { to: ['ops@oben.com'], cc: [], bcc: [] });
+
+      expect(result.sent).toBe(false);
+      expect(result.sendFailure).toEqual({ key: 'envio_correo', label: 'Envío del correo electrónico', error: 'smtp down' });
       expect(reports.confirmApproveComex).not.toHaveBeenCalled();
     });
   });

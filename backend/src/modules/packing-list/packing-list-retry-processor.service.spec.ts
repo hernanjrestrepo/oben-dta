@@ -103,6 +103,46 @@ describe('PackingListRetryProcessorService (reintento de Lista de Empaque, pedid
     );
   });
 
+  it('si el paquete está completo pero el ENVÍO falla, NO marca "completed" — reprograma como si siguiera incompleto', async () => {
+    const buildDocumentPackage = jest.fn().mockResolvedValue(COMPLETE_PACKAGE);
+    const sendFailure = { key: 'envio_correo', label: 'Envío del correo electrónico', error: 'timeout: sin respuesta de "email.send" tras 30000ms' };
+    const sendCompletePackage = jest.fn().mockResolvedValue({ sent: false, queued: false, sendFailure });
+    const row = makeRow({ attempts: 0 });
+    const { service, automation, retries } = makeService({
+      buildDocumentPackage,
+      sendCompletePackage,
+      findDue: jest.fn().mockResolvedValue([row]),
+    });
+
+    await service.processDueRetries();
+
+    expect(retries.update).toHaveBeenCalledWith(
+      'row-1',
+      expect.objectContaining({ attempts: 1, lastMissing: [sendFailure] }),
+    );
+    expect(automation.sendEscalation).not.toHaveBeenCalled();
+  });
+
+  it('si el envío sigue fallando hasta el 5to intento, escala usando la falla de envío como motivo', async () => {
+    const buildDocumentPackage = jest.fn().mockResolvedValue(COMPLETE_PACKAGE);
+    const sendFailure = { key: 'envio_correo', label: 'Envío del correo electrónico', error: 'smtp down' };
+    const sendCompletePackage = jest.fn().mockResolvedValue({ sent: false, queued: false, sendFailure });
+    const row = makeRow({ attempts: 4 });
+    const { service, automation, retries } = makeService({
+      buildDocumentPackage,
+      sendCompletePackage,
+      findDue: jest.fn().mockResolvedValue([row]),
+    });
+
+    await service.processDueRetries();
+
+    expect(automation.sendEscalation).toHaveBeenCalledWith(10982, [sendFailure]);
+    expect(retries.update).toHaveBeenCalledWith(
+      'row-1',
+      expect.objectContaining({ status: 'escalated', attempts: 5, lastMissing: [sendFailure] }),
+    );
+  });
+
   it('solo procesa filas "pending" cuyo next_retry_at ya venció (delegado al repo, pero se confirma que se usa el resultado tal cual)', async () => {
     const findDue = jest.fn().mockResolvedValue([]);
     const { service, automation } = makeService({ findDue });

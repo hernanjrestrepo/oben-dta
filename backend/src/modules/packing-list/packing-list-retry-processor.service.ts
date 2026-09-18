@@ -67,26 +67,35 @@ export class PackingListRetryProcessorService implements OnModuleInit, OnModuleD
     const tenantCtx = await this.moduleRef.resolve(TenantContext, contextId, { strict: false });
     tenantCtx.setContext(row.tenantId, null, false);
 
+    const automation = await this.moduleRef.resolve(PackingListAutomationService, contextId, { strict: false });
     const reports = await this.moduleRef.resolve(ObenReportsService, contextId, { strict: false });
     const documentPackage = await reports.buildDocumentPackage(row.numberOrderSales);
+
+    // `stillMissing` cubre dos escenarios distintos con el mismo tratamiento
+    // de reintento/escalamiento: el paquete sigue incompleto, O el paquete
+    // quedó completo pero el envío del correo falló (ej. timeout de SMTP,
+    // encontrado en vivo el 2026-09-17 con la OV 11040 — antes esto se
+    // perdía en silencio sin reintentar ni escalar).
+    let stillMissing = documentPackage.failed;
 
     if (documentPackage.failed.length === 0) {
       const distributionLists = await this.moduleRef.resolve(DistributionListsService, contextId, { strict: false });
       const resolved = await distributionLists.resolveRecipients('document', 'packing_list');
-      const automation = await this.moduleRef.resolve(PackingListAutomationService, contextId, { strict: false });
-      await automation.sendCompletePackage(row.numberOrderSales, documentPackage, resolved);
-      await this.retries.update(row.id, { status: 'completed', lastMissing: null });
-      this.logger.log(`Orden ${row.numberOrderSales}: se completó en el reintento ${row.attempts + 1} — correo enviado.`);
-      return;
+      const result = await automation.sendCompletePackage(row.numberOrderSales, documentPackage, resolved);
+      if (!result.sendFailure) {
+        await this.retries.update(row.id, { status: 'completed', lastMissing: null });
+        this.logger.log(`Orden ${row.numberOrderSales}: se completó en el reintento ${row.attempts + 1} — correo enviado.`);
+        return;
+      }
+      stillMissing = [result.sendFailure];
     }
 
     const attempts = row.attempts + 1;
     if (attempts >= PACKING_LIST_RETRY_MAX_ATTEMPTS) {
-      const automation = await this.moduleRef.resolve(PackingListAutomationService, contextId, { strict: false });
-      await automation.sendEscalation(row.numberOrderSales, documentPackage.failed);
-      await this.retries.update(row.id, { status: 'escalated', attempts, lastMissing: documentPackage.failed });
+      await automation.sendEscalation(row.numberOrderSales, stillMissing);
+      await this.retries.update(row.id, { status: 'escalated', attempts, lastMissing: stillMissing });
       this.logger.warn(
-        `Orden ${row.numberOrderSales}: sigue incompleta tras ${attempts} intentos (${documentPackage.failed.map((f) => f.key).join(', ')}) — escalada a José/Jorge.`,
+        `Orden ${row.numberOrderSales}: sigue incompleta tras ${attempts} intentos (${stillMissing.map((f) => f.key).join(', ')}) — escalada a José/Jorge.`,
       );
       return;
     }
@@ -94,10 +103,10 @@ export class PackingListRetryProcessorService implements OnModuleInit, OnModuleD
     await this.retries.update(row.id, {
       attempts,
       nextRetryAt: new Date(Date.now() + PACKING_LIST_RETRY_INTERVAL_MS),
-      lastMissing: documentPackage.failed,
+      lastMissing: stillMissing,
     });
     this.logger.warn(
-      `Orden ${row.numberOrderSales}: intento ${attempts}/${PACKING_LIST_RETRY_MAX_ATTEMPTS} sigue incompleto (${documentPackage.failed.map((f) => f.key).join(', ')}) — próximo intento en 10 minutos.`,
+      `Orden ${row.numberOrderSales}: intento ${attempts}/${PACKING_LIST_RETRY_MAX_ATTEMPTS} sigue incompleto (${stillMissing.map((f) => f.key).join(', ')}) — próximo intento en 10 minutos.`,
     );
   }
 }
