@@ -168,4 +168,33 @@ describe('PackingListRetryProcessorService (reintento de Lista de Empaque, pedid
 
     expect(automation.sendCompletePackage).toHaveBeenCalledWith(222, COMPLETE_PACKAGE, expect.anything());
   });
+  it('no se solapa: si un ciclo sigue corriendo, un segundo tick NO vuelve a tomar las mismas filas ni reenvía el correo (incidente 2026-09-23: 20 órdenes salieron hasta 4 veces)', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const sendCompletePackage = jest.fn().mockImplementation(async () => {
+      await gate;
+      return { sent: true, queued: false };
+    });
+    const findDue = jest.fn().mockResolvedValue([makeRow()]);
+    const { service } = makeService({ sendCompletePackage, findDue });
+
+    const first = service.processDueRetries();
+    await new Promise((r) => setImmediate(r));
+    await service.processDueRetries(); // segundo tick mientras el primero sigue en curso
+    release();
+    await first;
+
+    expect(findDue).toHaveBeenCalledTimes(1);
+    expect(sendCompletePackage).toHaveBeenCalledTimes(1);
+  });
+
+  it('tras terminar un ciclo (aunque falle) el siguiente sí puede correr', async () => {
+    const findDue = jest.fn().mockRejectedValueOnce(new Error('db')).mockResolvedValue([]);
+    const { service } = makeService({ findDue });
+
+    await expect(service.processDueRetries()).rejects.toThrow('db');
+    await service.processDueRetries();
+
+    expect(findDue).toHaveBeenCalledTimes(2);
+  });
 });

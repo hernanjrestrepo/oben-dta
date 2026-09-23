@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef, ContextIdFactory } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, LessThan, Repository } from 'typeorm';
 import { ImapFlow, type FetchMessageObject } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { Tenant } from '../../entities/tenant.entity';
@@ -81,6 +81,25 @@ const WATCHDOG_MS = 20_000;
 const PROCESS_WATCHDOG_MS = 5 * 60_000;
 /** Ver nota en `connectAndWatch` — mitigación mientras se identifica la causa raíz exacta del sondeo que deja de detectar correo sin error ni cuelgue. */
 const MAX_CONNECTION_AGE_MS = 10 * 60_000;
+/**
+ * Una fila 'processing' más vieja que esto y que NO está en vuelo en este
+ * proceso es huérfana (el proceso murió a mitad — ver
+ * `recoverOrphanedMessages`). Debe superar PROCESS_WATCHDOG_MS para no
+ * confundir un procesamiento legítimo largo (o de otra instancia) con uno
+ * muerto.
+ */
+const ORPHAN_MIN_AGE_MS = PROCESS_WATCHDOG_MS + 60_000;
+/**
+ * Una huérfana MÁS vieja que esto NO se recupera sola: el negocio ya pudo
+ * haberla atendido a mano y reenviarla manda un correo real a la lista de
+ * distribución de clientes. Incidente 2026-09-23: la primera versión de la
+ * recuperación no tenía este tope y al desplegar reenvió 20 órdenes de hasta
+ * 3 semanas de antigüedad (varias repetidas). Quedan 'failed' para revisión
+ * manual.
+ */
+const ORPHAN_MAX_AGE_MS = 24 * 60 * 60_000;
+/** Máximo de OV huérfanas que se encolan por ciclo — evita ráfagas de envíos reales aunque haya un atasco grande. */
+const ORPHAN_MAX_RECOVERIES_PER_CYCLE = 3;
 
 /**
  * Adaptador de ENTRADA de correo real (WO-018 Sprint 6, requisito explícito
@@ -352,6 +371,7 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     cfg: ImapIntakeConfig,
   ): Promise<void> {
     const folder = cfg.folder ?? 'INBOX';
+    await this.recoverOrphanedMessages(tenantId, client, cfg);
     // Diagnóstico temporal (2026-08-26): el watchdog de 20s en connectAndWatch
     // no ha disparado ni una vez pese a ciclos que llevan 30+ min sin avanzar
     // — hay que ver en qué línea exacta se queda colgado la próxima vez, en
@@ -390,6 +410,93 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
       }
     }
     this.logger.debug(`[tenant ${tenantId}] processUnseen: fetch range=${range} terminado.`);
+  }
+
+  /**
+   * Recupera correos que quedaron en 'processing' porque el proceso murió a
+   * mitad (reinicio del contenedor). El watermark de UID (`getWatermarkUid`)
+   * los cuenta como vistos, así que `processUnseen` nunca los vuelve a leer y
+   * el bloque `already.status === 'processing'` de `handleMessage` jamás se
+   * alcanza — encontrado en vivo el 2026-09-23 con las OV 10983 y 11147, tras
+   * descubrir un cron que reiniciaba `dta-backend` cada 2 minutos.
+   *
+   * - "OV [n] Aprobada En Corte": se recupera vía
+   *   `PackingListAutomationService.recoverInterruptedOv`, que NO reenvía si
+   *   ya hay un envío auditado y si no, encola la orden en el reintento de
+   *   segundo plano (no bloquea este ciclo).
+   * - Cualquier otro tipo: sigue la política de siempre — no se reintenta a
+   *   ciegas (podría duplicar un efecto real); se marca 'failed' para
+   *   revisión manual.
+   */
+  private async recoverOrphanedMessages(
+    tenantId: string,
+    client: ImapFlow,
+    cfg: ImapIntakeConfig,
+  ): Promise<void> {
+    try {
+      const orphans = await this.intake.find({
+        where: {
+          tenantId,
+          status: 'processing',
+          receivedAt: LessThan(new Date(Date.now() - ORPHAN_MIN_AGE_MS)),
+        },
+        order: { receivedAt: 'DESC' },
+      });
+      const inFlight = this.getUidsInFlight(tenantId);
+      const staleBefore = Date.now() - ORPHAN_MAX_AGE_MS;
+      let recovered = 0;
+      for (const row of orphans) {
+        if (inFlight.has(Number(row.imapUid))) continue;
+        const ovMatch = row.subject.match(OV_APROBADA_EN_CORTE_RE);
+        const isStale = row.receivedAt.getTime() < staleBefore;
+        if (!ovMatch || isStale) {
+          await this.finalizeMessage(tenantId, row.messageId, {
+            status: 'failed',
+            errorMessage:
+              'Proceso interrumpido a mitad de este correo (reinicio/redeploy) antes de confirmar el resultado — revisar manualmente si el envío real llegó a completarse.',
+          });
+          this.logger.warn(
+            `[tenant ${tenantId}] correo huérfano ${row.messageId} ("${row.subject}") marcado 'failed' para revisión manual${isStale ? ' (más de 24 h de antigüedad, no se recupera solo)' : ''}.`,
+          );
+          continue;
+        }
+        if (recovered >= ORPHAN_MAX_RECOVERIES_PER_CYCLE) continue; // el resto, en el próximo ciclo
+        recovered++;
+        const numberOrderSales = Number(ovMatch[1]);
+        const outcome = await this.callRequestScoped(
+          tenantId,
+          PackingListAutomationService,
+          (svc) => svc.recoverInterruptedOv(numberOrderSales, row.receivedAt),
+        );
+        await this.finalizeMessage(tenantId, row.messageId, {
+          classificationCategory: 'packing_list_trigger',
+          classificationConfidence: 1,
+          classificationProvider: 'rules',
+          status: 'processed',
+          resultRef:
+            outcome === 'already_sent'
+              ? `${numberOrderSales}:ya_enviado_antes_del_corte`
+              : `${numberOrderSales}:recuperado_en_cola`,
+          errorMessage:
+            'Procesamiento interrumpido por reinicio del servicio; recuperado automáticamente.',
+          movedToFolder: cfg.processedFolder ?? 'Procesados',
+        });
+        await this.markSeenAndMove(
+          client,
+          Number(row.imapUid),
+          cfg,
+          cfg.processedFolder ?? 'Procesados',
+        );
+        this.logger.warn(
+          `[tenant ${tenantId}] OV ${numberOrderSales}: correo huérfano en 'processing' recuperado (${outcome}).`,
+        );
+      }
+    } catch (err) {
+      // Nunca debe tumbar el ciclo de lectura de correo.
+      this.logger.error(
+        `[tenant ${tenantId}] error recuperando correos huérfanos: ${(err as Error).message}`,
+      );
+    }
   }
 
   private getUidsInFlight(tenantId: string): Set<number> {

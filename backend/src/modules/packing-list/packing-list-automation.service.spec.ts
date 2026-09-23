@@ -33,7 +33,7 @@ function makeService(
 ) {
   const hub = { call: hubCall } as any;
   const ctx = { userId: 'u1', tenantId: 't1' } as any;
-  const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
+  const audit = { log: jest.fn().mockResolvedValue(undefined), listForEntity: jest.fn().mockResolvedValue([]) } as any;
   const distributionLists = {
     resolveRecipients: resolveRecipients ?? jest.fn().mockResolvedValue({ to: ['ops@oben.com'], cc: [], bcc: [] }),
   } as any;
@@ -155,6 +155,44 @@ describe('PackingListAutomationService', () => {
       expect(audit.log).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'ov_approved_envio_fallido_en_cola' }),
       );
+    });
+  });
+
+  describe('recoverInterruptedOv (2026-09-23: cron reiniciaba el contenedor cada 2 min, OV 10983 y 11147 quedaron en processing)', () => {
+    const since = new Date('2026-09-22T10:00:00Z');
+
+    it('si NO hay envío auditado desde el corte, encola la orden ya mismo (sin esperar 10 min) para que el reintento en segundo plano la envíe', async () => {
+      const { service, audit, retries } = makeService(jest.fn());
+
+      const outcome = await service.recoverInterruptedOv(10983, since);
+
+      expect(outcome).toBe('queued');
+      const saved = (retries.save as jest.Mock).mock.calls[0][0];
+      expect(saved).toEqual(expect.objectContaining({ tenantId: 't1', numberOrderSales: 10983, status: 'pending' }));
+      expect(saved.nextRetryAt.getTime()).toBeLessThanOrEqual(Date.now());
+      expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'ov_approved_recuperada_tras_reinicio' }));
+    });
+
+    it('si YA hay un envío real auditado desde el corte, NO encola nada (evita duplicar el correo)', async () => {
+      const { service, audit, retries } = makeService(jest.fn());
+      (audit.listForEntity as jest.Mock).mockResolvedValue([
+        { action: 'ov_approved_lista_empaque_enviada', createdAt: new Date('2026-09-22T10:03:00Z') },
+      ]);
+
+      const outcome = await service.recoverInterruptedOv(10983, since);
+
+      expect(outcome).toBe('already_sent');
+      expect(retries.save).not.toHaveBeenCalled();
+    });
+
+    it('un envío auditado ANTERIOR al corte (otro correo de la misma OV) no cuenta como ya enviado', async () => {
+      const { service, audit, retries } = makeService(jest.fn());
+      (audit.listForEntity as jest.Mock).mockResolvedValue([
+        { action: 'ov_approved_lista_empaque_enviada', createdAt: new Date('2026-09-20T10:03:00Z') },
+      ]);
+
+      expect(await service.recoverInterruptedOv(10983, since)).toBe('queued');
+      expect(retries.save).toHaveBeenCalled();
     });
   });
 

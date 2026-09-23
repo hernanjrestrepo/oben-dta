@@ -41,6 +41,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
 
     intakeRepo = {
       findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
       createQueryBuilder: jest.fn().mockReturnValue({
         insert: jest.fn().mockReturnThis(),
         into: jest.fn().mockReturnThis(),
@@ -77,7 +78,10 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
       }),
     };
 
-    packingListAutomation = { handleOvApproved: jest.fn().mockResolvedValue({ sent: true, client: 'ACME', included: ['packing_list'], failed: [] }) };
+    packingListAutomation = {
+      handleOvApproved: jest.fn().mockResolvedValue({ sent: true, client: 'ACME', included: ['packing_list'], failed: [] }),
+      recoverInterruptedOv: jest.fn().mockResolvedValue('queued'),
+    };
 
     moduleRef = {
       resolve: jest.fn((type: unknown) => {
@@ -331,6 +335,91 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
       expect.objectContaining({ status: 'failed', errorMessage: 'boom' }),
     );
     expect(c.messageFlagsAdd).toHaveBeenCalled();
+  });
+
+  describe('recoverOrphanedMessages (2026-09-23: OV 10983 y 11147 quedaron para siempre en processing tras reinicios del contenedor)', () => {
+    const orphan = (over: Record<string, unknown> = {}) => ({
+      messageId: '<ov-10983@obengroup.com>',
+      imapUid: '900',
+      subject: 'OV 10983 Aprobada En Corte',
+      status: 'processing',
+      receivedAt: new Date(Date.now() - 60 * 60_000),
+      ...over,
+    });
+
+    it('una OV huérfana en processing se recupera vía recoverInterruptedOv y la fila queda processed', async () => {
+      intakeRepo.find.mockResolvedValue([orphan()]);
+      const c = client();
+      const qb = intakeRepo.createQueryBuilder();
+
+      await (service as any).recoverOrphanedMessages(TENANT_ID, c, cfg);
+
+      expect(packingListAutomation.recoverInterruptedOv).toHaveBeenCalledWith(10983, expect.any(Date));
+      expect(packingListAutomation.handleOvApproved).not.toHaveBeenCalled();
+      expect(qb.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'processed', resultRef: '10983:recuperado_en_cola' }),
+      );
+      expect(c.messageFlagsAdd).toHaveBeenCalled();
+    });
+
+    it('si el envío ya había salido antes del corte, la fila queda processed con resultRef ya_enviado', async () => {
+      intakeRepo.find.mockResolvedValue([orphan()]);
+      packingListAutomation.recoverInterruptedOv.mockResolvedValue('already_sent');
+      const qb = intakeRepo.createQueryBuilder();
+
+      await (service as any).recoverOrphanedMessages(TENANT_ID, client(), cfg);
+
+      expect(qb.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'processed', resultRef: '10983:ya_enviado_antes_del_corte' }),
+      );
+    });
+
+    it('un correo que NO es de OV (efecto real no idempotente) no se reintenta a ciegas: queda failed para revisión manual', async () => {
+      intakeRepo.find.mockResolvedValue([orphan({ subject: 'Solicitud de cotización' })]);
+      const qb = intakeRepo.createQueryBuilder();
+
+      await (service as any).recoverOrphanedMessages(TENANT_ID, client(), cfg);
+
+      expect(packingListAutomation.recoverInterruptedOv).not.toHaveBeenCalled();
+      expect(qb.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'failed', errorMessage: expect.stringContaining('interrumpido') }),
+      );
+    });
+
+    it('una fila cuyo UID sigue en vuelo en este proceso NO se toca (es un procesamiento legítimo largo)', async () => {
+      intakeRepo.find.mockResolvedValue([orphan()]);
+      (service as any).getUidsInFlight(TENANT_ID).add(900);
+
+      await (service as any).recoverOrphanedMessages(TENANT_ID, client(), cfg);
+
+      expect(packingListAutomation.recoverInterruptedOv).not.toHaveBeenCalled();
+    });
+
+    it('una OV huérfana de MÁS de 24 h NO se recupera ni se reenvía: queda failed para revisión manual (incidente 2026-09-23: se reenviaron órdenes de hasta 3 semanas)', async () => {
+      intakeRepo.find.mockResolvedValue([orphan({ receivedAt: new Date(Date.now() - 3 * 24 * 60 * 60_000) })]);
+      const qb = intakeRepo.createQueryBuilder();
+
+      await (service as any).recoverOrphanedMessages(TENANT_ID, client(), cfg);
+
+      expect(packingListAutomation.recoverInterruptedOv).not.toHaveBeenCalled();
+      expect(qb.set).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
+    });
+
+    it('recupera como máximo 3 OV por ciclo aunque haya más huérfanas recientes (evita ráfagas de correos reales)', async () => {
+      const recent = (n: number) =>
+        orphan({ messageId: `<ov-${n}@x>`, imapUid: String(n), subject: `OV ${n} Aprobada En Corte`, receivedAt: new Date(Date.now() - 30 * 60_000) });
+      intakeRepo.find.mockResolvedValue([recent(1001), recent(1002), recent(1003), recent(1004), recent(1005)]);
+
+      await (service as any).recoverOrphanedMessages(TENANT_ID, client(), cfg);
+
+      expect(packingListAutomation.recoverInterruptedOv).toHaveBeenCalledTimes(3);
+    });
+
+    it('un error al recuperar no se propaga (no debe tumbar el ciclo de lectura de correo)', async () => {
+      intakeRepo.find.mockRejectedValue(new Error('db down'));
+
+      await expect((service as any).recoverOrphanedMessages(TENANT_ID, client(), cfg)).resolves.toBeUndefined();
+    });
   });
 
   describe('processUnseen — guardado contra reprocesamiento simultáneo del mismo UID', () => {

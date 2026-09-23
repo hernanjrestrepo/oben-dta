@@ -270,7 +270,61 @@ export class PackingListAutomationService {
     });
   }
 
-  private async enqueueRetry(numberOrderSales: number, failed: PackageFailure[]): Promise<void> {
+  /**
+   * Recupera una orden cuyo procesamiento se cortó a mitad de camino (el
+   * contenedor se reinició — ver `ImapConnectorService.recoverOrphanedMessages`).
+   * Encontrado en vivo el 2026-09-23: un cron externo reiniciaba `dta-backend`
+   * cada 2 minutos y las OV 10983 y 11147 quedaron para siempre en
+   * 'processing' (el watermark de UID ya las daba por vistas).
+   *
+   * Anti-duplicado: si desde `since` ya hay un envío real auditado
+   * (`ov_approved_lista_empaque_enviada`, se escribe justo después del envío)
+   * NO se vuelve a mandar nada. Si no lo hay, el proceso murió ANTES de
+   * enviar, así que se encola para el reintento en segundo plano ya (sin los
+   * 10 minutos de espera), que arma el paquete completo y lo envía. La única
+   * ventana residual es un corte entre el `email.send` y su registro de
+   * auditoría — milisegundos, frente a minutos de generación de documentos.
+   */
+  async recoverInterruptedOv(
+    numberOrderSales: number,
+    since: Date,
+  ): Promise<'already_sent' | 'queued'> {
+    const events = await this.audit.listForEntity('packing_list', String(numberOrderSales));
+    const alreadySent = events.some(
+      (e) => e.action === 'ov_approved_lista_empaque_enviada' && e.createdAt >= since,
+    );
+    if (alreadySent) return 'already_sent';
+
+    await this.enqueueRetry(
+      numberOrderSales,
+      [
+        {
+          key: 'proceso_interrumpido',
+          label: 'Procesamiento interrumpido por reinicio del servicio',
+          error: 'El proceso se cortó antes de completar el envío — recuperada automáticamente.',
+        },
+      ],
+      0,
+    );
+    await this.audit.log({
+      workflowName: 'packing-list-automation',
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: 'ov_approved_recuperada_tras_reinicio',
+      entityType: 'packing_list',
+      entityId: String(numberOrderSales),
+      actorId: this.ctx.userId,
+      outputData: {},
+      reason:
+        'El procesamiento quedó interrumpido a mitad de camino (reinicio del servicio) y no hay envío registrado — se encoló para generar y enviar el paquete completo.',
+    });
+    return 'queued';
+  }
+
+  private async enqueueRetry(
+    numberOrderSales: number,
+    failed: PackageFailure[],
+    delayMs: number = PACKING_LIST_RETRY_INTERVAL_MS,
+  ): Promise<void> {
     const existing = await this.retries.findOne({
       where: { tenantId: this.ctx.tenantId, numberOrderSales, status: 'pending' },
     });
@@ -280,7 +334,7 @@ export class PackingListAutomationService {
         tenantId: this.ctx.tenantId,
         numberOrderSales,
         attempts: 0,
-        nextRetryAt: new Date(Date.now() + PACKING_LIST_RETRY_INTERVAL_MS),
+        nextRetryAt: new Date(Date.now() + delayMs),
         status: 'pending',
         lastMissing: failed,
       }),

@@ -28,6 +28,13 @@ const POLL_INTERVAL_MS = 60_000;
 export class PackingListRetryProcessorService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PackingListRetryProcessorService.name);
   private timer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Guardado anti-solapamiento: un ciclo con varias órdenes tarda más que
+   * POLL_INTERVAL_MS (~9 s por orden) y sin esto el siguiente tick tomaba las
+   * mismas filas todavía 'pending' y reenviaba el mismo correo — incidente
+   * 2026-09-23: 20 órdenes salieron hasta 4 veces cada una.
+   */
+  private running = false;
 
   constructor(
     @InjectRepository(PackingListPendingRetry)
@@ -48,17 +55,23 @@ export class PackingListRetryProcessorService implements OnModuleInit, OnModuleD
   }
 
   async processDueRetries(): Promise<void> {
-    const due = await this.retries.find({
-      where: { status: 'pending', nextRetryAt: LessThanOrEqual(new Date()) },
-    });
-    for (const row of due) {
-      try {
-        await this.processOne(row);
-      } catch (err) {
-        this.logger.error(
-          `Orden ${row.numberOrderSales}: error procesando su reintento (fila ${row.id}): ${(err as Error).message}`,
-        );
+    if (this.running) return;
+    this.running = true;
+    try {
+      const due = await this.retries.find({
+        where: { status: 'pending', nextRetryAt: LessThanOrEqual(new Date()) },
+      });
+      for (const row of due) {
+        try {
+          await this.processOne(row);
+        } catch (err) {
+          this.logger.error(
+            `Orden ${row.numberOrderSales}: error procesando su reintento (fila ${row.id}): ${(err as Error).message}`,
+          );
+        }
       }
+    } finally {
+      this.running = false;
     }
   }
 
