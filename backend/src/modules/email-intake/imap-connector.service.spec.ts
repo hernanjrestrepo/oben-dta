@@ -486,6 +486,31 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
 
       expect(fakeClient.on).toHaveBeenCalledWith('error', expect.any(Function));
     });
+
+    it('el watchdog del sleep de sondeo SUPERA pollIntervalMs (con el default de 20s un pollIntervalMs=30000 forzaba una reconexión completa en cada ciclo — bug real 2026-09-23)', async () => {
+      const fakeClient = {
+        on: jest.fn(),
+        connect: jest.fn().mockResolvedValue(undefined),
+        getMailboxLock: jest.fn().mockResolvedValue({ release: jest.fn() }),
+        idle: jest.fn(),
+        status: jest.fn().mockResolvedValue({ uidNext: undefined }),
+        logout: jest.fn().mockResolvedValue(undefined),
+      };
+      (ImapFlow as unknown as jest.Mock).mockImplementation(() => fakeClient);
+      const entry = { client: null, stopped: false };
+      (service as any).connections.set(TENANT_ID, entry);
+      (service as any).sleep = jest.fn().mockImplementation(async () => {
+        entry.stopped = true; // un solo ciclo de sondeo y sale del loop
+      });
+      const watchdogSpy = jest.spyOn(service as any, 'withWatchdog');
+
+      await (service as any).connectAndWatch(TENANT_ID, { ...cfg, pollIntervalMs: 30_000 });
+
+      expect(fakeClient.idle).not.toHaveBeenCalled();
+      const sleepCall = watchdogSpy.mock.calls.find((c: unknown[]) => c[1] === 'sleep');
+      expect(sleepCall).toBeDefined();
+      expect(sleepCall![2]).toBeGreaterThan(30_000);
+    });
   });
 
   describe('readConfig — no debe autoconectar salvo configuración explícita real+enabled', () => {

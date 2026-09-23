@@ -288,7 +288,15 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         // dejan de dispararse del todo, esto no bastaría por sí solo (ver
         // la reconexión forzada externa vía cron, fuera del proceso).
         if (cfg.pollIntervalMs) {
-          await this.withWatchdog(this.sleep(cfg.pollIntervalMs), 'sleep');
+          // El watchdog debe SUPERAR la espera: con el default de 20s un
+          // pollIntervalMs de 30s siempre perdía la carrera y forzaba una
+          // reconexión completa en cada ciclo (encontrado en vivo el
+          // 2026-09-23 al configurar pollIntervalMs=30000 en producción).
+          await this.withWatchdog(
+            this.sleep(cfg.pollIntervalMs),
+            'sleep',
+            cfg.pollIntervalMs + WATCHDOG_MS,
+          );
         } else {
           await this.withWatchdog(client.idle(), 'idle');
         }
