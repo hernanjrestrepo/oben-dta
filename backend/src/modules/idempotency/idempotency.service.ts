@@ -116,6 +116,15 @@ export class IdempotencyService {
     );
   }
 
+  /** Guarda el avance parcial de un flujo largo (sin cambiar su estado) — ver LiquidacionService. */
+  async saveProgress(
+    tenantId: string,
+    key: string,
+    result: unknown,
+  ): Promise<void> {
+    await this.repo.update({ tenantId, key }, { result: result as object });
+  }
+
   async markFailed(tenantId: string, key: string, error: string): Promise<void> {
     await this.repo.update(
       { tenantId, key },

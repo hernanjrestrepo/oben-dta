@@ -15,6 +15,7 @@ import { QuotesModule } from './modules/quotes/quotes.module';
 import { EvaModule } from './modules/eva/eva.module';
 import { PackingListModule } from './modules/packing-list/packing-list.module';
 import { ObenReportsModule } from './modules/oben-reports/oben-reports.module';
+import { LiquidacionModule } from './modules/liquidacion/liquidacion.module';
 import { DashboardModule } from './modules/dashboard.module';
 import { TenantModule } from './common/tenant/tenant.module';
 import { MicrosoftOAuthModule } from './common/microsoft-oauth/microsoft-oauth.module';
@@ -177,6 +178,7 @@ import { PackingListPendingRetry } from './entities/packing-list-pending-retry.e
     PackingListModule,
     DistributionListsModule,
     ObenReportsModule,
+    LiquidacionModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
