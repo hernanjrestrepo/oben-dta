@@ -23,7 +23,7 @@ function makeService(opts: {
     save: jest.fn().mockImplementation((q) => Promise.resolve(q)),
     create: jest.fn(),
   };
-  const clientRepository = { findOne: jest.fn(), save: jest.fn() };
+  const clientRepository = { findOne: jest.fn(), save: jest.fn(), increment: jest.fn().mockResolvedValue(undefined) };
   const productRepository = { find: jest.fn(), decrement: jest.fn() };
   const tenantRepository = {
     findOne: jest.fn().mockResolvedValue({
@@ -85,7 +85,7 @@ function makeService(opts: {
     documentFlowEngine as never,
   );
 
-  return { service, quote, hub, audit, documentFlowEngine, pdfService };
+  return { service, quote, hub, audit, documentFlowEngine, pdfService, clientRepository, orders, invoices, productRepository };
 }
 
 describe('QuotesService.generateAndSendPdf — migración a DocumentFlowEngine', () => {
@@ -111,6 +111,19 @@ describe('QuotesService.generateAndSendPdf — migración a DocumentFlowEngine',
     );
     expect(result.status).toBe(QuoteStatus.SENT);
     expect(result.pdfUrl).toContain('base64');
+  });
+
+  it('si el correo NO se pudo enviar, la cotización NO queda SENT: sigue QUOTED con nota de reenvío manual (antes se marcaba SENT igual)', async () => {
+    const { service, hub, audit } = makeService({ documentFlowEnabled: false });
+    hub.call.mockResolvedValue({ ok: false, error: 'timeout: sin respuesta de "email.send" tras 30000ms' });
+
+    const result = await service.generateAndSendPdf('q1');
+
+    expect(result.status).toBe(QuoteStatus.QUOTED);
+    expect(result.notes).toContain('NO se pudo enviar');
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'email_sent', reason: expect.stringContaining('timeout') }),
+    );
   });
 
   it('flag ON → delega en DocumentFlowEngine.handle("QUOTE_REQUESTED", ...) y usa su resultado', async () => {
@@ -167,5 +180,25 @@ describe('QuotesService.generateAndSendPdf — migración a DocumentFlowEngine',
       },
     });
     await expect(service.generateAndSendPdf('q1')).rejects.toThrow(/no se completó/);
+  });
+});
+
+describe('QuotesService.simulatePayment — crédito usado atómico', () => {
+  it('suma el crédito con un UPDATE atómico (increment), no con leer-sumar-guardar que pierde pagos concurrentes', async () => {
+    const { service, quote, clientRepository, productRepository } = makeService({ documentFlowEnabled: false });
+    const q = quote as unknown as Record<string, any>;
+    q.total = 250;
+    q.items = [];
+    q.client = { id: 'c1', usedCredit: 100 };
+    const orders = (service as any).orders;
+    const invoices = (service as any).invoices;
+    orders.create = jest.fn().mockResolvedValue({ id: 'o1', orderNumber: 'OP-1', totalAmount: 250 });
+    invoices.createFromOrder = jest.fn().mockResolvedValue({ id: 'i1', invoiceNumber: 'F-1', totalAmount: 250 });
+
+    await service.simulatePayment('q1');
+
+    expect(clientRepository.increment).toHaveBeenCalledWith({ id: 'c1', tenantId: 't1' }, 'usedCredit', 250);
+    expect(clientRepository.save).not.toHaveBeenCalled();
+    expect(productRepository.decrement).not.toHaveBeenCalled();
   });
 });

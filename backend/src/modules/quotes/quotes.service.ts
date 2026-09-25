@@ -241,7 +241,11 @@ export class QuotesService {
     // respuesta al cliente sin intervención humana, dejando la cotización
     // visible en estado SENT.
     const sent = await this.generateAndSendPdf(saved.id);
-    steps.push('PDF corporativo generado y respuesta enviada al cliente.');
+    steps.push(
+      sent.status === QuoteStatus.SENT
+        ? 'PDF corporativo generado y respuesta enviada al cliente.'
+        : 'PDF corporativo generado, pero el correo al cliente NO se pudo enviar — requiere reenvío manual.',
+    );
 
     return { quote: sent, emailId: email.id, steps, outcome: 'quoted' };
   }
@@ -372,7 +376,15 @@ export class QuotesService {
       reason: sendResult.ok ? null : sendResult.error,
     });
 
-    quote.status = QuoteStatus.SENT;
+    // Solo se marca SENT si el correo realmente salió. Antes se marcaba SENT
+    // siempre: una falla de envío (ej. timeout de SMTP) quedaba auditada pero
+    // la cotización aparecía como "enviada" y nadie la reintentaba. Si falló
+    // se queda en QUOTED con una nota visible para seguimiento.
+    if (sendResult.ok) {
+      quote.status = QuoteStatus.SENT;
+    } else {
+      quote.notes = `El correo de la cotización NO se pudo enviar (${sendResult.error ?? 'error desconocido'}) — reenviar manualmente.`;
+    }
     return this.quoteRepository.save(quote);
   }
 
@@ -545,9 +557,14 @@ export class QuotesService {
         );
       }
     }
-    quote.client.usedCredit =
-      Number(quote.client.usedCredit) + Number(quote.total);
-    await this.clientRepository.save(quote.client);
+    // Atómico en Postgres (UPDATE ... SET used_credit = used_credit + N): leer
+    // usedCredit en JS, sumar y guardar pierde actualizaciones bajo pagos
+    // concurrentes del mismo cliente (mismo problema que el stock de arriba).
+    await this.clientRepository.increment(
+      { id: quote.client.id, tenantId: this.ctx.tenantId },
+      'usedCredit',
+      Number(quote.total),
+    );
 
     // Orden y factura reales (antes solo se escribía un invoiceNumber inventado
     // sin fila de Order/Invoice detrás). Se generan a partir de los mismos
