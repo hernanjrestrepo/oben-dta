@@ -126,15 +126,16 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
       throw new Error('BUSINESS_ERROR: numberOrderSales requerido');
     }
     if (procedure === 'spEmpaqueUnificada_Paradixe') {
-      const o = this.demoOrder(Number(numberOrderSales));
+      const ov = Number(numberOrderSales);
+      const o = this.demoOrder(ov);
       return {
         Fecha: new Date().toISOString().slice(0, 10),
         Cliente: o.cliente,
         Pais: o.pais,
-        OrdenVenta: String(numberOrderSales),
+        OrdenVenta: String(ov),
         Proforma: o.proforma,
         OrdenCompra: o.ordenCompra,
-        Contenedor: `DEMO${String(numberOrderSales).padStart(7, '0')}`,
+        Contenedor: `DEMO${String(ov).padStart(7, '0')}`,
         CodigoMaterial: o.detalle[0].TipoPelicula,
         Detalle: o.detalle.map((l) => ({ TipoPelicula: l.TipoPelicula, KilosTotales: l.KilosTotales })),
       };
