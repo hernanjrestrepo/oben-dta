@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DistributionList } from '../../entities/distribution-list.entity';
@@ -120,6 +120,11 @@ export class DistributionListsService {
     entityType: DistributionEntityType,
     entityKey: string,
   ): Promise<ResolvedRecipients> {
+    // TypeORM IGNORA las condiciones `undefined` del where: sin esto, un
+    // lookup sin parámetros mezclaba los destinatarios de TODAS las listas.
+    if (!entityType || !entityKey) {
+      throw new BadRequestException('entityType y entityKey son obligatorios para resolver destinatarios.');
+    }
     const assocs = await this.associations.find({
       where: this.tenantWhere({ entityType, entityKey }),
     });

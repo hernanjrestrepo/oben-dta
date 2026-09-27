@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DistributionListsService } from './distribution-lists.service';
 
 function makeRepoMock() {
@@ -55,6 +55,16 @@ describe('DistributionListsService', () => {
     associations.find.mockResolvedValue([]);
     const result = await service.resolveRecipients('document', 'packing_list');
     expect(result).toEqual({ to: [], cc: [], bcc: [] });
+  });
+
+  it.each([
+    [undefined, 'packing_list'],
+    ['document', undefined],
+    ['document', ''],
+  ])('resolveRecipients(%j, %j) exige ambos parámetros (TypeORM ignoraría el filtro y mezclaría todas las listas)', async (entityType, entityKey) => {
+    const { service, associations } = makeService();
+    await expect(service.resolveRecipients(entityType as never, entityKey as never)).rejects.toThrow(BadRequestException);
+    expect(associations.find).not.toHaveBeenCalled();
   });
 
   it('resolveRecipients() agrupa por rol los destinatarios de todas las listas asociadas', async () => {
