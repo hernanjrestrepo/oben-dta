@@ -123,7 +123,9 @@ export class ObenPlusMockAdapter extends MockAdapterBase {
       estado,
       exportacion,
       pais,
-      direccionEntrega: `DIRECCIÓN SIMULADA (Oben+ mock) — Bodega ${1 + (h[7] % 9)}, ${pais}`,
+      // Sin país en el texto: el país real del pedido lo da Oben (spEmpaqueUnificada)
+      // y otro simulador podría contradecirlo en una demo.
+      direccionEntrega: `DIRECCIÓN SIMULADA (Oben+ mock) — Bodega ${1 + (h[7] % 9)}`,
       fechas: {
         creacion,
         produccionInicio,
