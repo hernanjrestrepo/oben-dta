@@ -1,0 +1,321 @@
+<title>Pipeline Comercial Oben</title>
+<meta name="description" content="Mapa del proceso de venta a exportación/nacional de Oben — qué ya está automatizado, qué está a medias y qué falta por conectar.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f6f3ee;
+    --paper:#ffffff;
+    --ink:#1c2230;
+    --ink-soft:#5b6373;
+    --line:#e3ddd0;
+    --accent:#d9711f;
+    --accent-ink:#7a3c0f;
+    --live:#2f8f6f;
+    --live-bg:#e5f4ee;
+    --partial:#c98a1a;
+    --partial-bg:#faf1de;
+    --blocked:#c24b3d;
+    --blocked-bg:#fbe9e5;
+    --chip-border: color-mix(in srgb, currentColor 35%, transparent);
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#181a20;
+      --paper:#20232b;
+      --ink:#eceef2;
+      --ink-soft:#a3aab8;
+      --line:#33384a;
+      --accent:#f0954a;
+      --accent-ink:#ffd9b0;
+      --live:#5cc9a0;
+      --live-bg:#173229;
+      --partial:#e0ac47;
+      --partial-bg:#332a12;
+      --blocked:#ef7666;
+      --blocked-bg:#3a2020;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#181a20;
+    --paper:#20232b;
+    --ink:#eceef2;
+    --ink-soft:#a3aab8;
+    --line:#33384a;
+    --accent:#f0954a;
+    --accent-ink:#ffd9b0;
+    --live:#5cc9a0;
+    --live-bg:#173229;
+    --partial:#e0ac47;
+    --partial-bg:#332a12;
+    --blocked:#ef7666;
+    --blocked-bg:#3a2020;
+  }
+
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--sans); padding-inline:20px; padding-block:28px;}
+  .wrap{max-width:920px; margin:0 auto; display:flex; flex-direction:column; gap:28px;}
+
+  header.page{display:flex; flex-direction:column; gap:10px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--accent-ink); font-weight:600;}
+  h1{font-size:clamp(26px,4vw,34px); margin:0; line-height:1.15; text-wrap:balance; letter-spacing:-.01em;}
+  .sub{color:var(--ink-soft); font-size:15px; max-width:62ch; line-height:1.5; margin:0;}
+
+  .legend{display:flex; flex-wrap:wrap; gap:10px; padding:14px 16px; background:var(--paper); border:1px solid var(--line); border-radius:12px;}
+  .legend-item{display:flex; align-items:center; gap:7px; font-size:13px; color:var(--ink-soft);}
+  .dot{width:9px; height:9px; border-radius:50%; flex:none;}
+  .dot.live{background:var(--live);}
+  .dot.partial{background:var(--partial);}
+  .dot.blocked{background:var(--blocked);}
+
+  .summary-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  @media (max-width:560px){.summary-grid{grid-template-columns:1fr;}}
+  .summary-card{background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:14px 16px; display:flex; flex-direction:column; gap:4px;}
+  .summary-card .n{font-family:var(--mono); font-size:24px; font-weight:600; font-variant-numeric:tabular-nums;}
+  .summary-card.live .n{color:var(--live);}
+  .summary-card.partial .n{color:var(--partial);}
+  .summary-card.blocked .n{color:var(--blocked);}
+  .summary-card .lbl{font-size:12.5px; color:var(--ink-soft);}
+
+  section.stage-group{display:flex; flex-direction:column; gap:14px;}
+  .group-title{display:flex; align-items:baseline; gap:10px; padding-top:8px;}
+  .group-title h2{font-size:18px; margin:0; letter-spacing:-.01em;}
+  .group-title .tag{font-family:var(--mono); font-size:11px; color:var(--ink-soft); background:var(--bg); border:1px solid var(--line); padding:2px 8px; border-radius:999px;}
+
+  .pipe{position:relative; display:flex; flex-direction:column;}
+  .stage{position:relative; display:grid; grid-template-columns:28px 1fr; gap:14px; padding-bottom:16px;}
+  .stage:last-child{padding-bottom:0;}
+  .rail{position:relative; display:flex; justify-content:center;}
+  .rail::before{content:""; position:absolute; top:22px; bottom:-16px; width:2px; background:var(--line);}
+  .stage:last-child .rail::before{display:none;}
+  .node{width:16px; height:16px; border-radius:50%; margin-top:4px; border:3px solid var(--paper); box-shadow:0 0 0 2px var(--line); z-index:1; flex:none;}
+  .node.live{background:var(--live); box-shadow:0 0 0 2px var(--live);}
+  .node.partial{background:var(--partial); box-shadow:0 0 0 2px var(--partial);}
+  .node.blocked{background:var(--blocked); box-shadow:0 0 0 2px var(--blocked);}
+
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:14px 16px; display:flex; flex-direction:column; gap:8px;}
+  .card-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .card-head h3{font-size:15.5px; margin:0; line-height:1.35;}
+  .status{font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; padding:3px 9px; border-radius:999px; white-space:nowrap; border:1px solid transparent;}
+  .status.live{color:var(--live); background:var(--live-bg); border-color:color-mix(in srgb, var(--live) 40%, transparent);}
+  .status.partial{color:var(--partial); background:var(--partial-bg); border-color:color-mix(in srgb, var(--partial) 40%, transparent);}
+  .status.blocked{color:var(--blocked); background:var(--blocked-bg); border-color:color-mix(in srgb, var(--blocked) 40%, transparent);}
+  .card p{margin:0; font-size:13.5px; color:var(--ink-soft); line-height:1.55;}
+  .card code, .sp{font-family:var(--mono); font-size:12px; background:var(--bg); border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:var(--ink); word-break:break-word;}
+  .row-code{display:flex; flex-wrap:wrap; gap:6px;}
+  .note{font-size:12.5px; padding:8px 10px; border-radius:8px; line-height:1.5;}
+  .note.missing{background:var(--blocked-bg); color:var(--blocked);}
+  .note.confirm{background:var(--partial-bg); color:var(--partial);}
+
+  footer{padding-top:8px; border-top:1px solid var(--line); font-size:12.5px; color:var(--ink-soft); display:flex; flex-direction:column; gap:4px;}
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <div class="eyebrow">Oben Xmart — Comercial · Lista de Empaque · Liquidación · Facturación</div>
+    <h1>Del correo del cliente al PDF de la factura</h1>
+    <p class="sub">Un solo pedido, de punta a punta, marcado por dónde ya corre solo, dónde corre a medias, y dónde no hay ni un dato real todavía. Basado en la llamada del 23 de septiembre, el documento OBEN MAS–Paradixe y el código que ya está en producción.</p>
+  </header>
+
+  <div class="legend">
+    <div class="legend-item"><span class="dot live"></span> En producción, con datos reales verificados</div>
+    <div class="legend-item"><span class="dot partial"></span> Construido pero incompleto o sin disparador automático</div>
+    <div class="legend-item"><span class="dot blocked"></span> Sin ninguna fuente de datos todavía</div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card live"><div class="n">3</div><div class="lbl">etapas en producción real</div></div>
+    <div class="summary-card partial"><div class="n">3</div><div class="lbl">etapas construidas a medias</div></div>
+    <div class="summary-card blocked"><div class="n">9</div><div class="lbl">etapas sin ninguna API todavía</div></div>
+  </div>
+
+  <section class="stage-group">
+    <div class="group-title"><h2>1 · Comercial — de la orden de compra a la orden de venta activa</h2><span class="tag">Customer Service</span></div>
+    <div class="pipe">
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Orden de compra del cliente → homologación</h3><span class="status blocked">Sin API</span></div>
+          <p>El cliente manda un correo o PDF con su propia nomenclatura (ej. "SC15TN" para uno, "BOPP 15" para otro). Hoy Alejandra lo traduce a mano contra su tabla de equivalencias.</p>
+          <div class="note missing">Falta: tabla de equivalencias cliente↔producto real, y ejemplos de correos/órdenes de compra reales (compromiso de Alejandra, pendiente de reenvío).</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Proforma creada en OBEN MAS (sin cubicar)</h3><span class="status blocked">Sin API</span></div>
+          <p>Cantidades ajustadas al estándar de empaque interno. Estado inicial de la Proforma.</p>
+          <div class="note missing">Falta: un stored procedure de consulta (mismo patrón de <span class="sp">APIConsultaParadixe</span> que ya usamos) que devuelva el estado de una Proforma.</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Cubicaje (planeación, sistema Cube IQ)</h3><span class="status blocked">Sin API</span></div>
+          <p>Planeación ajusta pallets al contenedor. La Proforma pasa a "ubicada". Es un proceso externo (Cube IQ) que José confirmó no se va a optimizar por ahora.</p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>PDF de la Proforma al cliente (idéntico al oficial)</h3><span class="status blocked">Sin API</span></div>
+          <p>José fue explícito: ni una letra ni un espacio pueden cambiar frente al diseño ya aprobado por el corporativo — no se recrea, se recibe vía API tal cual.</p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Respuesta del cliente: aprueba / rechaza / modifica</h3><span class="status blocked">Sin API</span></div>
+          <p>Si aprueba, sigue. Si rechaza, se anula. Si pide modificar cantidades, la Proforma vuelve a "sin cubicar" y se repite el ciclo — automatizable una vez haya API de escritura.</p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Orden de venta retenida → validación de cartera → activa</h3><span class="status blocked">Sin API</span></div>
+          <p>Cartera valida cupo/crédito en NetSuite mediante un script; si pasa, libera. Alejandra hoy cambia el estado a "activa" a mano en OBEN MAS.</p>
+          <div class="note confirm">Según instrucción del 2026-09-27: no se integra NetSuite directamente — OBEN MAS ya recibe ese dato relevado. Falta el SP que exponga el resultado de esa validación dentro de OBEN MAS.</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Producción: fechas de corte, bobinas, cierre</h3><span class="status blocked">Sin API</span></div>
+          <p>Necesarias para el dashboard de seguimiento y para detectar cambios de fecha (ej. "el 29 ahora es el 2") que afectan el compromiso con el cliente.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="stage-group">
+    <div class="group-title"><h2>2 · Documentos de exportación / nacional completo</h2><span class="tag">Ya en producción</span></div>
+    <div class="pipe">
+
+      <div class="stage">
+        <div class="rail"><div class="node live"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Corte cerrado → correo "OV Aprobada En Corte"</h3><span class="status live">En producción</span></div>
+          <p>El disparador real: en cuanto Oben cierra el corte, dispara automáticamente todo el paquete de documentos, sin intervención humana.</p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node live"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Paquete de documentos generado y enviado</h3><span class="status live">En producción</span></div>
+          <p>Lista Especial, Unificada, Detallada, Consumo ME, Consumo MP y Hoja de Costos (un archivo por línea) — 6 componentes, con formato real de Oben (logo, Arial, sin colores de Paradixe).</p>
+          <div class="row-code">
+            <span class="sp">spPackingListUSA_Paradixe</span><span class="sp">spEmpaqueUnificada_Paradixe</span><span class="sp">spEmpaqueDetallada_Paradixe</span><span class="sp">spConsumoME_Paradixe</span><span class="sp">spConsumoMP_Paradixe</span><span class="sp">spChecLinea_Paradixe</span><span class="sp">spCostOrder_Paradixe</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node live"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Nunca se envía incompleto</h3><span class="status live">En producción</span></div>
+          <p>Si falta un componente o falla el envío, se encola y se reintenta cada 10 minutos hasta 5 veces; si sigue fallando, se escala por correo a José y Jorge en vez de perderse en silencio. Confirmado <span class="sp">spApproveComex_Paradixe</span> tras cada envío exitoso.</p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node partial"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Despacho parcial (pedidos nacionales)</h3><span class="status blocked">Sin API</span></div>
+          <p>OBEN MAS–Paradixe exige un juego de documentos "Parcial" por cada despacho parcial de un pedido nacional. Hoy no detectamos ni distinguimos un despacho parcial de uno completo.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="stage-group">
+    <div class="group-title"><h2>3 · Liquidación de exportación</h2><span class="tag">Construido, no conectado</span></div>
+    <div class="pipe">
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Disparador: último pallet a bodega de Producto Terminado</h3><span class="status blocked">Sin API</span></div>
+          <p>No existe ningún evento ni correo que nos avise de este momento. Hoy la Liquidación solo se puede lanzar a mano, vía endpoint.</p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node partial"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Borrador de liquidación</h3><span class="status partial">Construido y testeado</span></div>
+          <p>Consulta real verificada contra 3 Proformas (10867, 11357, 11271): calcula kilos y FOB, resuelve Entry Fee/ISF/Harbor Maintenance para destino USA desde nuestro maestro de tarifas, y lista explícitamente todo lo que falta — nunca inventa un valor.</p>
+          <div class="row-code"><span class="sp">spCheckSettlement_Paradixe</span></div>
+          <div class="note missing">Bloqueado: falta la fórmula de Incoterm de José (flete, seguro, otros gastos) — pedida el 2026-09-23, sin llegar. Sin eso, ninguna liquidación puede quedar "lista para enviar".</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node partial"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Envío: encabezado + detalle por línea</h3><span class="status partial">Construido, sin probar en vivo</span></div>
+          <p>Idempotente (una PF nunca se liquida dos veces), simula por defecto, y trata un timeout como ambiguo — exige confirmación explícita antes de reintentar.</p>
+          <div class="row-code"><span class="sp">spSettlement_Head</span><span class="sp">spSettlement_Detail</span></div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Correo a COMEX y Facturación con Lista Unificada + Proforma</h3><span class="status blocked">Sin construir</span></div>
+          <p>El correo de cierre de liquidación que exige OBEN MAS–Paradixe no existe todavía — depende de que la liquidación completa esté funcionando primero.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="stage-group">
+    <div class="group-title"><h2>4 · Facturación</h2><span class="tag">Sin construir</span></div>
+    <div class="pipe">
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Exportación — inmediatamente tras la liquidación</h3><span class="status blocked">Sin construir</span></div>
+          <p>Necesita: precio por película, dirección de entrega, observaciones, info comercial. Genera PDF y lo envía a COMEX.</p>
+          <div class="note missing">Dirección de entrega: confirmado que ningún reporte real que consultamos hoy la trae (Empaque Unificada/Detallada solo traen Cliente, País, Contenedor, Proforma). Hace falta un SP nuevo.</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Nacional completo — al ingresar el último pallet</h3><span class="status blocked">Sin construir</span></div>
+          <p>Usa los datos de la Proforma (precio, observaciones, info complementaria). Envía a Distribución y COMEX.</p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="rail"><div class="node blocked"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Nacional parcial — justo después de la Lista de Empaque Parcial</h3><span class="status blocked">Sin construir</span></div>
+          <p>Misma lógica que el completo, pero disparada por cada despacho parcial — depende de que exista la detección de despacho parcial (sección 2).</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>
+    <div>Fuentes: llamada "Comercial – Oben Xmart" (2026-09-23), OBEN MAS–Paradixe (alcance funcional), Requerimiento de Integración Oben+/NetSuite (2026-08-04), y el código real desplegado en producción.</div>
+    <div>Documento de trabajo — no representa un compromiso contractual de fechas.</div>
+  </footer>
+</div>
