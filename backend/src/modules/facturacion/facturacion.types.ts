@@ -52,7 +52,10 @@ export interface FacturacionDraft {
   readyToGenerate: boolean;
   /** true si algún dato del borrador salió de una fuente SIMULADA — nunca se esconde. */
   simulated: boolean;
-  /** Qué campos son simulados (hoy: `direccionEntrega` cuando sale de Oben+ simulado). */
+  /**
+   * Qué datos son simulados: `direccionEntrega` (Oben+ simulado); `pedido` y
+   * `precios` solo si el sistema de Oben está en modo simulador (dev/demo).
+   */
   simulatedFields: string[];
 }
 

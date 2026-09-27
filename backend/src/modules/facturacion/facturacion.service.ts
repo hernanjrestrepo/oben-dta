@@ -51,6 +51,8 @@ const text = (v: unknown): string | null => {
 
 /** Campos de spEmpaqueUnificada_Paradixe que usa Facturación, ya normalizados. */
 interface EmpaqueUnificadaHeader {
+  /** true si vino del simulador de obenCostOrder (dev/demo) — en producción es real. */
+  simulated: boolean;
   Cliente: string;
   Pais: string | null;
   CodigoMaterial: string | null;
@@ -115,9 +117,12 @@ export class FacturacionService {
           : 'nacional_completo'
         : 'exportacion';
 
+    const simulatedFields: string[] = header?.simulated ? ['pedido'] : [];
     let lines: FacturacionLine[] = [];
     if (proforma) {
-      const check = await this.fetchCheckSettlement(proforma);
+      const fetched = await this.fetchCheckSettlement(proforma);
+      const check = fetched?.check;
+      if (fetched?.simulated) simulatedFields.push('precios');
       if (!check) {
         missing.push(`Precios por película: no se pudo consultar spCheckSettlement_Paradixe para la Proforma ${proforma}.`);
       } else {
@@ -151,7 +156,6 @@ export class FacturacionService {
         direccionFuente = 'maestro_clientes';
       }
     }
-    const simulatedFields: string[] = [];
     if (!direccionEntrega && kind === 'exportacion' && proforma) {
       // Tercera fuente: la Proforma en Oben+ (hoy SIMULADA — queda marcada).
       const plus = await this.fetchObenPlusAddress(proforma);
@@ -416,6 +420,9 @@ export class FacturacionService {
     if (draft.simulatedFields.includes('direccionEntrega')) {
       parts.push(`<p><strong>Dirección de entrega SIMULADA (Oben+ aún sin API real):</strong> ${draft.direccionEntrega}</p>`);
     }
+    if (draft.simulatedFields.includes('pedido') || draft.simulatedFields.includes('precios')) {
+      parts.push('<p><strong>Datos del pedido y precios SIMULADOS</strong> (el sistema de Oben está en modo simulador en este entorno).</p>');
+    }
     return parts.join('');
   }
 
@@ -438,6 +445,7 @@ export class FacturacionService {
     const cliente = text(d.Cliente);
     if (!cliente) return null;
     return {
+      simulated: res.mode === 'mock',
       Cliente: cliente,
       Pais: text(d.Pais),
       CodigoMaterial: text(d.CodigoMaterial),
@@ -447,7 +455,7 @@ export class FacturacionService {
     };
   }
 
-  private async fetchCheckSettlement(numberPF: string): Promise<CheckSettlementResponse | null> {
+  private async fetchCheckSettlement(numberPF: string): Promise<{ check: CheckSettlementResponse; simulated: boolean } | null> {
     const res = await this.hub.call<CheckSettlementResponse>(
       'obenCostOrder',
       'liquidacion.consultar',
@@ -460,6 +468,6 @@ export class FacturacionService {
     for (const l of d.Detalle) {
       if (!isNum(toNum(l.CodSed_LineFilm)) || !isNum(toNum(l.KilosTotales)) || !isNum(toNum(l.Precio))) return null;
     }
-    return d as CheckSettlementResponse;
+    return { check: d as CheckSettlementResponse, simulated: res.mode === 'mock' };
   }
 }

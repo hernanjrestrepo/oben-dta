@@ -77,6 +77,9 @@ export class FacturacionPdfService {
     if (draft.simulatedFields.includes('direccionEntrega')) {
       avisos.push('Dirección de entrega SIMULADA (Oben+ aún no tiene API real).');
     }
+    if (draft.simulatedFields.includes('pedido') || draft.simulatedFields.includes('precios')) {
+      avisos.push('Datos del pedido y precios SIMULADOS (Oben en modo simulador).');
+    }
     if (avisos.length === 0) return;
     doc
       .font('Helvetica-Bold')
