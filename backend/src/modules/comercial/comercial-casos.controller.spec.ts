@@ -76,6 +76,13 @@ describe('ComercialSimuladorService', () => {
     expect(hub.call).not.toHaveBeenCalled();
   });
 
+  it('datos demo: si el cliente piloto ya existe incompleto (p. ej. sin código OBEN MAS), lo completa', async () => {
+    const { svc, clients } = make('mock');
+    clients.findOne.mockResolvedValue({ id: 'cli-1', clientId: CLIENTE_DEMO.clientId, name: 'viejo', obenCode: null, authorizedDomains: [] });
+    await svc.cargarDatosDemo();
+    expect(clients.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'cli-1', obenCode: CLIENTE_DEMO.obenCode, authorizedDomains: CLIENTE_DEMO.authorizedDomains, name: CLIENTE_DEMO.name }));
+  });
+
   it('datos demo: cliente con dominio de prueba (.example) y equivalencias con prefijo SIM-, sin duplicar', async () => {
     const { svc, clients, equivalences } = make('mock');
     const r = await svc.cargarDatosDemo();

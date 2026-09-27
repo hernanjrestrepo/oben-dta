@@ -406,6 +406,19 @@ describe('ComercialFlujoService — flujo Comercial de punta a punta (reunión 2
       expect((await w.store.get('t1', caso.numberPF!))?.anulada).toBe(true);
     });
 
+    it('modificación registrada a mano: sin referencia Oben escrita, se traduce con la tabla del cliente', async () => {
+      const w = world();
+      const caso = await enviada(w);
+      const lineas = await w.flujo.lineasManuales(caso, [
+        { codigoCliente: 'BOPP 15', kilos: 1500, anchoMm: 425 },
+        { codigoCliente: 'NO ESTÁ', kilos: 10, anchoMm: 100 },
+        { codigoCliente: 'NO ESTÁ', kilos: 10, anchoMm: 100, codigoOben: 'SIM-X1' },
+      ]);
+      expect(lineas.map((l) => l.codigoOben)).toEqual(['SIM-SC15TN', null, 'SIM-X1']);
+      const c = await w.flujo.registrarRespuesta(caso, { tipo: 'modifica', motivo: 'por teléfono', via: 'registro manual', lineas: [lineas[0]] });
+      expect(c.accionPendiente).toMatchObject({ tipo: 'modificar', lineas: [expect.objectContaining({ kilos: 1500 })] });
+    });
+
     it('modifica → se leen las nuevas cantidades y, al confirmar, la Proforma vuelve a "sin cubicar"', async () => {
       const w = world();
       const caso = await enviada(w);

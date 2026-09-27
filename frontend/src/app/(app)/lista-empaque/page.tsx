@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Package, Loader2, AlertCircle, Search, ShieldCheck, Mail, Send, CheckCircle2, Download } from 'lucide-react';
+import { extractMessage } from '@/lib/errors';
+import type { CarteraHold } from '@/types';
+import { Package, Loader2, AlertCircle, Search, ShieldCheck, Mail, Send, CheckCircle2, Download, Hourglass } from 'lucide-react';
 
 interface PackingLine {
   [key: string]: unknown;
@@ -134,6 +136,8 @@ export default function ListaEmpaquePage() {
         </div>
       </div>
 
+      <RetenidasPorCartera />
+
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
@@ -239,6 +243,80 @@ export default function ListaEmpaquePage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Regla PND (reunión 2026-09-23): órdenes aprobadas en corte cuya Lista de
+ * Empaque NO se generó porque cartera no ha liberado. Se re-verifican cada
+ * 6 horas y se generan solas al liberar; aquí se pueden liberar a mano (si
+ * cartera confirmó por fuera) o cancelar (pedido dado de baja).
+ */
+function RetenidasPorCartera() {
+  const [holds, setHolds] = useState<CarteraHold[] | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [error, setError] = useState('');
+
+  function cargar() {
+    return api
+      .getCarteraHolds()
+      .then(setHolds)
+      .catch((err) => setError(extractMessage(err, 'No se pudieron cargar las órdenes retenidas.')));
+  }
+
+  useEffect(() => {
+    void cargar();
+  }, []);
+
+  async function accion(ov: number, tipo: 'liberar' | 'cancelar') {
+    const motivo = prompt(
+      tipo === 'liberar'
+        ? `¿Cartera ya liberó la orden ${ov}? Escribe cómo lo confirmaste (queda en la auditoría):`
+        : `¿Por qué se cancela la orden ${ov}? (no generará Lista de Empaque automáticamente)`,
+    );
+    if (!motivo?.trim()) return;
+    try {
+      setBusy(ov);
+      setError('');
+      if (tipo === 'liberar') await api.releaseCarteraHold(ov, motivo.trim());
+      else await api.cancelCarteraHold(ov, motivo.trim());
+      await cargar();
+    } catch (err) {
+      setError(extractMessage(err, 'No se pudo completar la acción.'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!holds || (holds.length === 0 && !error)) return null;
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+      <h2 className="font-semibold text-amber-900 flex items-center gap-2">
+        <Hourglass className="w-5 h-5" /> Retenidas por cartera — Producir No Despachar ({holds.length})
+      </h2>
+      <p className="text-xs text-amber-900">
+        Aprobadas en corte pero cartera no ha liberado: la Lista de Empaque no se generó. Se vuelve a verificar cada 6 horas y sale sola al liberar.
+      </p>
+      {error && <p className="text-sm text-red-700">{error}</p>}
+      <ul className="divide-y divide-amber-200">
+        {holds.map((h) => (
+          <li key={h.id} className="py-2 flex flex-col md:flex-row md:items-center gap-2 text-sm">
+            <span className="font-semibold text-gray-900">OV {h.numberOrderSales}</span>
+            <span className="text-xs text-gray-600 flex-1">
+              {h.holdReason ?? ''} · retenida desde {new Date(h.createdAt).toLocaleString('es-CO')} · próxima verificación {new Date(h.nextRetryAt).toLocaleString('es-CO')}
+            </span>
+            <div className="flex gap-2">
+              <button onClick={() => accion(h.numberOrderSales, 'liberar')} disabled={busy === h.numberOrderSales} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-50">
+                Cartera ya liberó
+              </button>
+              <button onClick={() => accion(h.numberOrderSales, 'cancelar')} disabled={busy === h.numberOrderSales} className="px-3 py-1.5 bg-white border border-red-200 text-red-700 rounded-lg text-xs font-medium hover:bg-red-50 disabled:opacity-50">
+                Cancelar
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

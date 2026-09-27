@@ -20,12 +20,15 @@ import {
   Package,
   Users2,
   FileSpreadsheet,
+  Briefcase,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { useState } from 'react';
 
 const navItems = [
   { href: '/operaciones', label: 'Centro de Operaciones', icon: Activity },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/comercial', label: 'Comercial', icon: Briefcase },
   { href: '/quotes', label: 'Cotizaciones', icon: Mail },
   { href: '/orders', label: 'Órdenes', icon: ShoppingCart },
   { href: '/invoices', label: 'Facturas', icon: FileText },
@@ -33,6 +36,7 @@ const navItems = [
   { href: '/lista-empaque', label: 'Lista de Empaque', icon: Package },
   { href: '/reportes', label: 'Reportes Oben', icon: FileSpreadsheet },
   { href: '/clients', label: 'Clientes', icon: Users },
+  { href: '/equivalencias', label: 'Equivalencias', icon: ArrowRightLeft },
   { href: '/distribucion', label: 'Listas de Distribución', icon: Users2 },
 ];
 

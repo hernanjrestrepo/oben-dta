@@ -8,6 +8,7 @@ import {
   UpdateTenantUserDto, User, WorkflowEvent,
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput,
+  Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
@@ -206,6 +207,132 @@ class ApiClient {
 
   async downloadPackingListExcel(numberOrderSales: string): Promise<Blob> {
     const { data } = await this.client.get(`/packing-list/${numberOrderSales}/excel`, { responseType: 'blob' });
+    return data;
+  }
+
+  // Lista de Empaque retenida por cartera (regla PND)
+  async getCarteraHolds(): Promise<CarteraHold[]> {
+    const { data } = await this.client.get<CarteraHold[]>('/packing-list/cartera/retenciones');
+    return data;
+  }
+
+  async releaseCarteraHold(numberOrderSales: number, motivo: string): Promise<void> {
+    await this.client.post(`/packing-list/${numberOrderSales}/cartera/liberar`, { motivo });
+  }
+
+  async cancelCarteraHold(numberOrderSales: number, motivo: string): Promise<void> {
+    await this.client.post(`/packing-list/${numberOrderSales}/cartera/cancelar`, { motivo });
+  }
+
+  // Equivalencias cliente↔producto
+  async getEquivalences(clientId?: string): Promise<Equivalence[]> {
+    const { data } = await this.client.get<Equivalence[]>('/equivalences', { params: clientId ? { clientId } : undefined });
+    return data;
+  }
+
+  async createEquivalence(dto: { clientId: string; clientCode: string; obenCode: string; description?: string }): Promise<Equivalence> {
+    const { data } = await this.client.post<Equivalence>('/equivalences', dto);
+    return data;
+  }
+
+  async updateEquivalence(id: string, dto: { clientCode?: string; obenCode?: string; description?: string }): Promise<Equivalence> {
+    const { data } = await this.client.patch<Equivalence>(`/equivalences/${id}`, dto);
+    return data;
+  }
+
+  async deleteEquivalence(id: string): Promise<void> {
+    await this.client.delete(`/equivalences/${id}`);
+  }
+
+  async importEquivalences(dto: TabularImportInput): Promise<TabularImportResult> {
+    const { data } = await this.client.post<TabularImportResult>('/equivalences/import', dto, { timeout: 120000 });
+    return data;
+  }
+
+  async importClients(dto: TabularImportInput): Promise<TabularImportResult> {
+    const { data } = await this.client.post<TabularImportResult>('/clients/import', dto, { timeout: 120000 });
+    return data;
+  }
+
+  // Comercial: casos (OC → Proforma → cliente → cartera → OV activa)
+  async getComercialTablero(f: { desde?: string; hasta?: string; cliente?: string } = {}): Promise<ComercialTablero> {
+    const { data } = await this.client.get<ComercialTablero>('/comercial/casos/tablero', { params: f });
+    return data;
+  }
+
+  async getComercialCasos(f: { estado?: string; cliente?: string; desde?: string; hasta?: string } = {}): Promise<ComercialCaso[]> {
+    const { data } = await this.client.get<ComercialCaso[]>('/comercial/casos', { params: f });
+    return data;
+  }
+
+  async getComercialCaso(id: string): Promise<ComercialCaso> {
+    const { data } = await this.client.get<ComercialCaso>(`/comercial/casos/${id}`);
+    return data;
+  }
+
+  async createComercialOc(dto: { from: string; subject: string; body: string; attachments?: Array<{ filename: string; contentType?: string; contentBase64: string }> }): Promise<ComercialCaso> {
+    const { data } = await this.client.post<ComercialCaso>('/comercial/casos/oc', dto, { timeout: 120000 });
+    return data;
+  }
+
+  async editComercialCaso(id: string, dto: Record<string, unknown>): Promise<ComercialCaso> {
+    const { data } = await this.client.patch<ComercialCaso>(`/comercial/casos/${id}`, dto);
+    return data;
+  }
+
+  async confirmComercialCaso(id: string, verificadoEnObenMas = false): Promise<ComercialCaso> {
+    const { data } = await this.client.post<ComercialCaso>(`/comercial/casos/${id}/confirmar`, { confirm: true, verificadoEnObenMas });
+    return data;
+  }
+
+  async sendComercialProforma(id: string): Promise<ComercialCaso> {
+    const { data } = await this.client.post<ComercialCaso>(`/comercial/casos/${id}/enviar-cliente`, {});
+    return data;
+  }
+
+  async registerComercialRespuesta(id: string, dto: { tipo: 'aprueba' | 'rechaza' | 'modifica'; nota: string; lineas?: Array<{ codigoCliente: string; kilos: number; anchoMm: number; codigoOben?: string }> }): Promise<ComercialCaso> {
+    const { data } = await this.client.post<ComercialCaso>(`/comercial/casos/${id}/respuesta`, dto);
+    return data;
+  }
+
+  async cancelComercialCaso(id: string, motivo: string): Promise<ComercialCaso> {
+    const { data } = await this.client.post<ComercialCaso>(`/comercial/casos/${id}/anular`, { motivo });
+    return data;
+  }
+
+  async downloadProformaFirmada(id: string): Promise<Blob> {
+    const { data } = await this.client.get(`/comercial/casos/${id}/proforma-firmada`, { responseType: 'blob' });
+    return data;
+  }
+
+  async getComercialConfig(): Promise<ComercialConfig> {
+    const { data } = await this.client.get<ComercialConfig>('/comercial/configuracion');
+    return data;
+  }
+
+  async updateComercialConfig(dto: Record<string, unknown>): Promise<ComercialConfig> {
+    const { data } = await this.client.put<ComercialConfig>('/comercial/configuracion', dto);
+    return data;
+  }
+
+  // Simulador Comercial (solo con OBEN MAS en modo simulado)
+  async comercialSimDatosDemo(): Promise<{ equivalenciasCreadas: number }> {
+    const { data } = await this.client.post('/comercial/simulador/datos-demo', {});
+    return data;
+  }
+
+  async comercialSimOcDemo(): Promise<ComercialCaso> {
+    const { data } = await this.client.post<ComercialCaso>('/comercial/simulador/oc-demo', {});
+    return data;
+  }
+
+  async comercialSimControl(numberPF: string, control: 'cubicar' | 'liberar-cartera' | 'producir-no-despachar' | 'cambiar-entrega', fecha?: string): Promise<unknown> {
+    const { data } = await this.client.post(`/comercial/simulador/proformas/${encodeURIComponent(numberPF)}/${control}`, fecha ? { fecha } : {});
+    return data;
+  }
+
+  async comercialSimProcesar(): Promise<{ procesados: number }> {
+    const { data } = await this.client.post('/comercial/simulador/procesar', {});
     return data;
   }
 

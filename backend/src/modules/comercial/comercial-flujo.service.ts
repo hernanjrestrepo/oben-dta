@@ -23,7 +23,7 @@ import {
 import { ComercialIntakeService, DOMINIO_DEMO_RE, calcularMissing, faltantesLinea, type OcEntrada } from './comercial-intake.service';
 import { horasHastaSiguiente, leerConfig, parseSeguimiento, type ComercialConfig, type ConfigLeida } from './comercial-config';
 import { clasificarRespuesta, type TipoRespuesta } from './comercial-respuesta';
-import type { OcAdjunto } from './oc-extractor';
+import { construirLinea, type OcAdjunto } from './oc-extractor';
 
 const WORKFLOW = 'comercial';
 const HOUR_MS = 60 * 60 * 1000;
@@ -640,6 +640,24 @@ export class ComercialFlujoService {
         await this.avisarCS(caso, `Respuesta del cliente a la Proforma ${caso.numberPF}: revisar`, `<p>${esc(r.motivo)}</p>`);
         return caso;
     }
+  }
+
+  /**
+   * Líneas registradas a mano (respuesta por teléfono/WhatsApp): la
+   * referencia Oben escrita por la persona manda; si no la escribe, se
+   * traduce con la tabla de equivalencias del cliente — nunca se adivina.
+   */
+  async lineasManuales(caso: ComercialCase, items: Array<{ codigoCliente: string; kilos: number; anchoMm: number; codigoOben?: string }>): Promise<CasoLinea[]> {
+    const tabla = caso.clientId
+      ? (await this.equivalences.findAll(caso.clientId)).map((e) => ({ id: e.id, clientCode: e.clientCode, obenCode: e.obenCode }))
+      : [];
+    return items.map((l, i) =>
+      construirLinea(
+        i + 1,
+        { textoCliente: l.codigoCliente, codigoCliente: l.codigoCliente, cantidad: l.kilos, unidad: 'kg', ancho: l.anchoMm, unidadAncho: 'mm' },
+        l.codigoOben ? [{ id: 'manual', clientCode: l.codigoCliente, obenCode: l.codigoOben }] : tabla,
+      ),
+    );
   }
 
   async anular(id: string, motivo: string): Promise<ComercialCase> {

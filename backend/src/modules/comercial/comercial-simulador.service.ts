@@ -70,12 +70,17 @@ export class ComercialSimuladorService {
   async cargarDatosDemo() {
     await this.soloSimulado();
     const tenantId = this.ctx.tenantId;
-    let client = await this.clients.findOne({ where: { tenantId, clientId: CLIENTE_DEMO.clientId } });
-    if (!client) {
-      client = await this.clients.save(
-        this.clients.create({ ...CLIENTE_DEMO, tenantId, isActive: true, usedCredit: 0, finalCustomerInSubject: false, createdBy: this.ctx.userId ?? undefined }),
-      );
-    }
+    const existente = await this.clients.findOne({ where: { tenantId, clientId: CLIENTE_DEMO.clientId } });
+    // Siempre queda con los datos demo completos (aunque alguien lo haya editado o le falte algo).
+    const client = await this.clients.save(
+      this.clients.create({
+        ...(existente ?? { usedCredit: 0, createdBy: this.ctx.userId ?? undefined }),
+        ...CLIENTE_DEMO,
+        tenantId,
+        isActive: true,
+        finalCustomerInSubject: false,
+      }),
+    );
     const existentes = new Set((await this.equivalences.findAll(client.id)).map((e) => e.clientCode));
     let creadas = 0;
     for (const [clientCode, obenCode] of EQUIVALENCIAS_DEMO) {

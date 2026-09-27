@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Client } from '@/types';
+import { ImportPanel } from '@/components/ImportPanel';
 import {
   Search,
   Loader2,
@@ -83,6 +84,13 @@ export default function ClientsPage() {
           Nuevo Cliente
         </Link>
       </div>
+
+      <ImportPanel
+        title="Cargar el maestro de clientes (Excel/CSV)"
+        columns={['Código', 'Código Oben', 'Nombre', 'Correo (compras)', 'Dominios autorizados', 'Email comercial', 'Cliente final en asunto (sí/no)']}
+        onImport={(dto) => api.importClients(dto)}
+        onDone={loadClients}
+      />
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -210,6 +218,13 @@ function ClientCard({
           <div className="flex items-center gap-2 text-gray-600">
             <MapPin className="w-4 h-4 shrink-0" />
             <span className="truncate">{client.address}</span>
+          </div>
+        )}
+        {(client.obenCode || (client.authorizedDomains?.length ?? 0) > 0 || client.comercialEmail) && (
+          <div className="text-xs text-gray-500 space-y-0.5 pt-1">
+            {client.obenCode && <p>Código OBEN MAS: <span className="font-mono">{client.obenCode}</span></p>}
+            {(client.authorizedDomains?.length ?? 0) > 0 && <p>Dominios autorizados: {client.authorizedDomains!.join(', ')}</p>}
+            {client.comercialEmail && <p>Comercial: {client.comercialEmail}</p>}
           </div>
         )}
       </div>

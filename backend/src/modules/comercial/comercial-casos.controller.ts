@@ -23,7 +23,6 @@ import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { ComercialFlujoService } from './comercial-flujo.service';
 import { ComercialSimuladorService, type ControlSimulador } from './comercial-simulador.service';
-import { construirLinea } from './oc-extractor';
 
 class AdjuntoDto {
   @IsString()
@@ -324,13 +323,7 @@ export class ComercialCasosController {
   @RequirePermission('orders.update')
   async respuesta(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RespuestaManualDto) {
     const caso = await this.flujo.obtener(id);
-    const lineas = dto.lineas?.map((l, i) =>
-      construirLinea(
-        i + 1,
-        { textoCliente: l.codigoCliente, codigoCliente: l.codigoCliente, cantidad: l.kilos, unidad: 'kg', ancho: l.anchoMm, unidadAncho: 'mm' },
-        l.codigoOben ? [{ id: 'manual', clientCode: l.codigoCliente, obenCode: l.codigoOben }] : [],
-      ),
-    );
+    const lineas = dto.lineas?.length ? await this.flujo.lineasManuales(caso, dto.lineas) : undefined;
     return this.flujo.registrarRespuesta(caso, { tipo: dto.tipo, motivo: dto.nota, via: 'registro manual', ...(lineas ? { lineas } : {}) });
   }
 

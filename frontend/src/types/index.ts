@@ -166,6 +166,13 @@ export interface Client {
   creditLimit: number;
   usedCredit: number;
   isActive: boolean;
+  /** Código del cliente en OBEN MAS. */
+  obenCode?: string | null;
+  /** Dominios de correo autorizados (anti-fraude). */
+  authorizedDomains?: string[];
+  /** Comercial de Oben a cargo. */
+  comercialEmail?: string | null;
+  finalCustomerInSubject?: boolean;
   createdAt: string;
   updatedAt: string;
   orders?: Order[];
@@ -527,3 +534,126 @@ export interface DistributionListInput {
   recipients: { email: string; name?: string; role: DistributionRecipientRole }[];
 }
 
+
+
+// ─── Comercial (reunión 2026-09-23) ─────────────────────────────────────────
+
+export interface Equivalence {
+  id: string;
+  clientId: string;
+  client?: { id: string; name: string; clientId: string };
+  clientCode: string;
+  obenCode: string;
+  description: string | null;
+}
+
+export interface TabularImportResult<T = Record<string, unknown>> {
+  dryRun: boolean;
+  total: number;
+  creados: number;
+  actualizados: number;
+  errores: Array<{ fila: number; error: string }>;
+  filas: T[];
+}
+
+export interface TabularImportInput {
+  rows?: Record<string, unknown>[];
+  fileBase64?: string;
+  filename?: string;
+  dryRun?: boolean;
+}
+
+export type CasoEstado =
+  | 'oc_recibida'
+  | 'sin_cubicar'
+  | 'cubicada'
+  | 'enviada_cliente'
+  | 'retenida'
+  | 'activa'
+  | 'cerrada'
+  | 'rechazada'
+  | 'anulada';
+
+export interface CasoLinea {
+  n: number;
+  textoCliente: string;
+  codigoCliente: string | null;
+  codigoOben: string | null;
+  equivalenciaId: string | null;
+  cantidad: number | null;
+  unidad: string | null;
+  kilos: number | null;
+  anchoMm: number | null;
+  espesorMicras: number | null;
+  precioUnitario: number | null;
+  moneda: string | null;
+  conversiones: string[];
+  faltantes: string[];
+}
+
+export interface ComercialCaso {
+  id: string;
+  estado: CasoEstado;
+  clientId: string | null;
+  cliente: string | null;
+  codigoClienteOben: string | null;
+  clienteFinal: string | null;
+  contactoEmail: string;
+  comercialEmail: string | null;
+  ocNumero: string | null;
+  ocAsunto: string;
+  ocRecibidaEn: string;
+  ocAdjuntos: Array<{ filename: string; contentType: string | null; bytes: number; leido: boolean }>;
+  extraidoPor: 'reglas' | 'ia';
+  tipo: 'nacional' | 'exportacion' | null;
+  pais: string | null;
+  destino: { direccion: string; ciudad: string | null; pais: string; direccionId: string | null; fuente: string } | null;
+  fechaRequerida: string | null;
+  lineas: CasoLinea[];
+  missing: string[];
+  atencion: string[];
+  simulated: boolean;
+  simulatedItems: string[];
+  accionPendiente: { tipo: string; detalle: string; creadaEn: string; lineas?: CasoLinea[] } | null;
+  numberPF: string | null;
+  numberOrderSales: number | null;
+  seguimiento: { tipo: 'firma' | 'cartera' | null; enviados: number; proximoEn: string | null; ultimoEn: string | null };
+  fechas: Record<string, string>;
+  entregaComprometida: string | null;
+  entregaHistorial: Array<{ fecha: string; anterior: string | null; nueva: string | null }>;
+  eventos: Array<{ fecha: string; tipo: string; detalle: string; actor?: string | null }>;
+  proformaFirmadaNombre: string | null;
+}
+
+export interface ComercialTablero {
+  simulated: boolean;
+  total: number;
+  abiertas: number;
+  embudo: Record<CasoEstado, number>;
+  requierenAtencion: Array<{ id: string; cliente: string | null; ocNumero: string | null; numberPF: string | null; estado: CasoEstado; accionPendiente: string | null; motivos: string[] }>;
+  porCliente: Array<{ cliente: string; total: number; abiertas: number }>;
+  tiemposPromedioHoras: Record<string, number | null>;
+}
+
+export interface ComercialConfig {
+  config: {
+    habilitado: boolean;
+    modo: 'supervisado' | 'automatico';
+    seguimientoFirma: { intervalosHoras: number[]; luegoCadaHoras: number | null };
+    seguimientoCartera: { intervalosHoras: number[]; luegoCadaHoras: number | null };
+    extractor: { provider: string; host?: string; model?: string };
+    ejemplosOc: Array<{ entrada: string; salida: unknown }>;
+  };
+  porDefecto: string[];
+}
+
+export interface CarteraHold {
+  id: string;
+  numberOrderSales: number;
+  attempts: number;
+  nextRetryAt: string;
+  status: string;
+  kind: 'cartera' | 'incompleto';
+  holdReason: string | null;
+  createdAt: string;
+}
