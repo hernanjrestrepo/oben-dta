@@ -97,5 +97,6 @@ export const INTEGRATION_SYSTEMS = [
   'veta',
   'armstrong',
   'obenCostOrder',
+  'obenPlus',
 ] as const;
 export type IntegrationSystem = (typeof INTEGRATION_SYSTEMS)[number];

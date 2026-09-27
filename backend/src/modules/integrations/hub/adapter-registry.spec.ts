@@ -11,6 +11,7 @@ import { NetSuiteMockAdapter } from './adapters/netsuite.mock';
 import { VetaMockAdapter } from './adapters/veta.mock';
 import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
 import { ObenCostOrderMockAdapter } from './adapters/oben-cost-order.mock';
+import { ObenPlusMockAdapter } from './adapters/oben-plus.mock';
 import { StaticScenarioProvider } from './static-scenario-provider';
 
 function makeRegistry(tenantConfig: Record<string, unknown> = {}) {
@@ -35,6 +36,7 @@ function makeRegistry(tenantConfig: Record<string, unknown> = {}) {
     new VetaMockAdapter(scenarios),
     new ArmstrongMockAdapter(scenarios),
     new ObenCostOrderMockAdapter(scenarios),
+    new ObenPlusMockAdapter(scenarios),
     { getAccessToken: jest.fn() } as never,
     scenarios,
   );
@@ -80,8 +82,18 @@ describe('AdapterRegistry', () => {
     expect(health.state).toBe('operational');
   });
 
-  it('listSystems retorna los 12 sistemas', () => {
+  it('listSystems retorna los 13 sistemas', () => {
     const registry = makeRegistry();
-    expect(registry.listSystems()).toHaveLength(12);
+    expect(registry.listSystems()).toHaveLength(13);
+  });
+
+  it('obenPlus (Oben+) sin config → simulador; en modo real no reusa el mock', async () => {
+    const mock = await makeRegistry().resolve('t1', 'obenPlus');
+    expect(mock.mode).toBe('mock');
+    expect(mock.system).toBe('obenPlus');
+
+    const real = await makeRegistry({ obenPlus: { mode: 'real' } }).resolve('t1', 'obenPlus');
+    expect(real.mode).toBe('real');
+    expect((await real.health()).state).toBe('pending_credentials');
   });
 });

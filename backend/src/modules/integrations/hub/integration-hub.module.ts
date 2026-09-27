@@ -26,6 +26,7 @@ import { NetSuiteMockAdapter } from './adapters/netsuite.mock';
 import { VetaMockAdapter } from './adapters/veta.mock';
 import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
 import { ObenCostOrderMockAdapter } from './adapters/oben-cost-order.mock';
+import { ObenPlusMockAdapter } from './adapters/oben-plus.mock';
 
 /**
  * IntegrationHub: infraestructura común de todos los adapters + panel de escenarios.
@@ -73,6 +74,7 @@ import { ObenCostOrderMockAdapter } from './adapters/oben-cost-order.mock';
     VetaMockAdapter,
     ArmstrongMockAdapter,
     ObenCostOrderMockAdapter,
+    ObenPlusMockAdapter,
     AdapterRegistry,
     ResilientAdapterExecutor,
     IntegrationHubService,

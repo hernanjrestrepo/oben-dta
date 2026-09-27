@@ -28,6 +28,7 @@ import {
   EmailSmtpAdapterConfig,
 } from './adapters/email-smtp.real';
 import { ObenCostOrderMockAdapter } from './adapters/oben-cost-order.mock';
+import { ObenPlusMockAdapter } from './adapters/oben-plus.mock';
 import {
   ObenCostOrderRealAdapter,
   ObenCostOrderAdapterConfig,
@@ -63,6 +64,10 @@ export class AdapterRegistry {
     veta: VetaMockAdapter,
     armstrong: ArmstrongMockAdapter,
     obenCostOrder: ObenCostOrderMockAdapter,
+    // Oben+ / OBEN MAS (Proformas, cartera, cubicaje): sin API real todavía —
+    // solo existe el simulador. En modo 'real' cae al adapter HTTP genérico
+    // (configurable por rutas) hasta que haya un adapter dedicado.
+    obenPlus: ObenPlusMockAdapter,
     private readonly msToken: MicrosoftAppTokenService,
     // Referencia al provider por si algún real futuro decide reutilizar escenarios
     // en modo hibrido (por ejemplo, degradación controlada).
@@ -81,6 +86,7 @@ export class AdapterRegistry {
       veta,
       armstrong,
       obenCostOrder,
+      obenPlus,
     };
   }
 

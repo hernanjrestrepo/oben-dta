@@ -35,6 +35,7 @@ const INTEGRATION_META: Record<string, { label: string; role: string; icon: Reac
   email: { label: 'Correo (M365)', role: 'Cotizaciones / notificaciones', icon: Network },
   whatsapp: { label: 'WhatsApp', role: 'Mensajería cliente', icon: Radio },
   obenCostOrder: { label: 'Oben Mas (API)', role: 'Costos, empaque y liquidación', icon: Building2 },
+  obenPlus: { label: 'Oben+ (Comercial)', role: 'Proformas, cartera y cubicaje', icon: Workflow },
 };
 // El label ya NO se hardcodea a "Simulador activo": cada sistema puede estar
 // en modo mock o real (AdapterRegistry lo resuelve por tenant), y desde que
