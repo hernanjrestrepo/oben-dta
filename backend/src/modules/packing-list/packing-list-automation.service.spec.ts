@@ -30,6 +30,7 @@ function makeService(
   buildDocumentPackage?: jest.Mock,
   confirmApproveComex?: jest.Mock,
   retriesOverrides?: Partial<Record<'findOne' | 'create' | 'save' | 'update', jest.Mock>>,
+  carteraEvaluar?: jest.Mock,
 ) {
   const hub = { call: hubCall } as any;
   const ctx = { userId: 'u1', tenantId: 't1' } as any;
@@ -47,11 +48,18 @@ function makeService(
     save: retriesOverrides?.save ?? jest.fn().mockResolvedValue(undefined),
     update: retriesOverrides?.update ?? jest.fn().mockResolvedValue(undefined),
   } as any;
+  // Default: cartera liberada y verificada con una fuente real — el flujo de
+  // siempre. La regla PND tiene sus propias pruebas abajo.
+  const cartera = {
+    evaluar: carteraEvaluar ?? jest.fn().mockResolvedValue({ action: 'continuar', verificada: true, simulated: false, motivo: 'Cartera liberada.' }),
+  } as any;
   return {
-    service: new PackingListAutomationService(hub, ctx, audit, distributionLists, reports, retries),
+    service: new PackingListAutomationService(hub, ctx, audit, distributionLists, reports, retries, cartera),
     audit,
     reports,
     retries,
+    cartera,
+    distributionLists,
   };
 }
 
@@ -338,6 +346,143 @@ describe('PackingListAutomationService', () => {
       expect(audit.log).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'ov_approved_escalamiento_sin_lista_distribucion' }),
       );
+    });
+  });
+
+  describe('regla PND — cartera no ha liberado (reunión 2026-09-23)', () => {
+    const RETENER = { action: 'retener', pnd: true, simulated: false, motivo: 'Cartera no ha liberado la orden (PND).', observacion: 'Sin cupo' };
+    const listas = (map: Record<string, string[]>) =>
+      jest.fn(async (_t: string, key: string) => ({ to: map[key] ?? [], cc: [], bcc: [] }));
+
+    it('no genera ningún documento, no confirma ApproveComex, retiene la OV 6 horas y avisa a packing_list_cartera', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'aviso-1' } });
+      const resolve = listas({ packing_list: ['ops@oben.com'], packing_list_cartera: ['cartera@oben.com', 'cs@oben.com'] });
+      const { service, reports, retries, audit } = makeService(hubCall, resolve, undefined, undefined, undefined, jest.fn().mockResolvedValue(RETENER));
+
+      const before = Date.now();
+      const result = await service.handleOvApproved(10824);
+
+      expect(result).toMatchObject({ sent: false, queued: true, held: true, carteraMotivo: RETENER.motivo });
+      expect(reports.buildDocumentPackage).not.toHaveBeenCalled();
+      expect(reports.confirmApproveComex).not.toHaveBeenCalled();
+      const saved = retries.create.mock.calls[0][0];
+      expect(saved).toMatchObject({ numberOrderSales: 10824, kind: 'cartera', status: 'pending', attempts: 0, holdReason: RETENER.motivo });
+      expect(saved.nextRetryAt.getTime() - before).toBeGreaterThanOrEqual(6 * 60 * 60_000 - 1000);
+
+      expect(hubCall).toHaveBeenCalledTimes(1);
+      const [, , email] = hubCall.mock.calls[0];
+      expect(email).toMatchObject({ to: 'cartera@oben.com', cc: 'cs@oben.com' });
+      expect(email.subject).toBe('Orden 10824 — retenida por cartera: la Lista de Empaque no se genera');
+      expect(email.body).toContain('Producir No Despachar');
+      expect(email.body).toContain('Sin cupo');
+      expect(email.body).toContain('cada 6 horas');
+      expect(audit.log.mock.calls.map((c: any[]) => c[0].action)).toEqual(['ov_approved_retenida_por_cartera', 'ov_cartera_aviso_enviado']);
+    });
+
+    it('sin lista packing_list_cartera avisa a packing_list_escalation; sin ninguna, lo audita y no envía', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'x' } });
+      const a = makeService(hubCall, listas({ packing_list: ['ops@oben.com'], packing_list_escalation: ['jose@oben.com'] }), undefined, undefined, undefined, jest.fn().mockResolvedValue(RETENER));
+      await a.service.handleOvApproved(10824);
+      expect(hubCall.mock.calls[0][2].to).toBe('jose@oben.com');
+
+      const hubCall2 = jest.fn();
+      const b = makeService(hubCall2, listas({ packing_list: ['ops@oben.com'] }), undefined, undefined, undefined, jest.fn().mockResolvedValue(RETENER));
+      await b.service.handleOvApproved(10824);
+      expect(hubCall2).not.toHaveBeenCalled();
+      expect(b.audit.log.mock.calls.map((c: any[]) => c[0].action)).toContain('ov_cartera_aviso_sin_lista_distribucion');
+    });
+
+    it('un segundo "Aprobada en Corte" de una OV ya retenida no duplica la fila ni el aviso', async () => {
+      const hubCall = jest.fn();
+      const existing = { id: 'row-9', numberOrderSales: 10824, kind: 'cartera', attempts: 2, status: 'pending' };
+      const { service, retries } = makeService(
+        hubCall,
+        listas({ packing_list: ['ops@oben.com'], packing_list_cartera: ['c@oben.com'] }),
+        undefined,
+        undefined,
+        { findOne: jest.fn().mockResolvedValue(existing) },
+        jest.fn().mockResolvedValue(RETENER),
+      );
+      await service.handleOvApproved(10824);
+      expect(retries.save).not.toHaveBeenCalled();
+      expect(retries.update).toHaveBeenCalledWith('row-9', expect.objectContaining({ kind: 'cartera', attempts: 2 }));
+      expect(hubCall).not.toHaveBeenCalled();
+    });
+
+    it('si la fuente real de cartera falla: retiene, re-verifica en 10 minutos y avisa una sola vez', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'x' } });
+      const reintentar = { action: 'reintentar', simulated: false, motivo: 'No se pudo consultar cartera en OBEN MAS: HTTP 500' };
+      const { service, retries } = makeService(hubCall, listas({ packing_list: ['ops@oben.com'], packing_list_cartera: ['c@oben.com'] }), undefined, undefined, undefined, jest.fn().mockResolvedValue(reintentar));
+      const before = Date.now();
+      await service.handleOvApproved(10824);
+      const saved = retries.create.mock.calls[0][0];
+      expect(saved.nextRetryAt.getTime() - before).toBeLessThan(11 * 60_000);
+      expect(hubCall.mock.calls[0][2].body).toContain('HTTP 500');
+
+      // Re-verificación desde el procesador (sigue fallando): no vuelve a avisar.
+      hubCall.mockClear();
+      const gate = await service.carteraGate(10824, { id: 'r', kind: 'cartera', attempts: 0 } as any);
+      expect(gate.proceed).toBe(false);
+      expect(hubCall).not.toHaveBeenCalled();
+    });
+
+    it('re-verificación a las 6 h que sigue retenida: suma la verificación y vuelve a avisar', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'x' } });
+      const { service, retries } = makeService(hubCall, listas({ packing_list_cartera: ['c@oben.com'] }), undefined, undefined, undefined, jest.fn().mockResolvedValue(RETENER));
+      const gate = await service.carteraGate(10824, { id: 'row-1', kind: 'cartera', attempts: 1 } as any);
+      expect(gate.proceed).toBe(false);
+      expect(retries.update).toHaveBeenCalledWith('row-1', expect.objectContaining({ attempts: 2, kind: 'cartera' }));
+      expect(hubCall.mock.calls[0][2].body).toContain('verificación n.º 3');
+    });
+
+    it('cuando cartera libera, la fila pasa a "incompleto" con intentos en cero y el flujo sigue', async () => {
+      const { service, retries, audit } = makeService(jest.fn(), undefined, undefined, undefined, undefined, jest.fn().mockResolvedValue({ action: 'continuar', verificada: true, simulated: false, motivo: 'Cartera liberada.' }));
+      const gate = await service.carteraGate(10824, { id: 'row-1', kind: 'cartera', attempts: 3 } as any);
+      expect(gate).toMatchObject({ proceed: true, resetAttempts: true });
+      expect(retries.update).toHaveBeenCalledWith('row-1', { kind: 'incompleto', attempts: 0, holdReason: null, lastMissing: null });
+      expect(audit.log.mock.calls[0][0].action).toBe('ov_cartera_liberada');
+    });
+
+    it('cartera sin verificar (fuente simulada en producción): sigue el flujo de siempre y lo deja auditado', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg' } });
+      const noVerificada = { action: 'continuar', verificada: false, simulated: true, motivo: 'Cartera NO verificada: fuente SIMULADA.' };
+      const { service, audit, reports } = makeService(hubCall, undefined, undefined, undefined, undefined, jest.fn().mockResolvedValue(noVerificada));
+      const result = await service.handleOvApproved(10824);
+      expect(result.sent).toBe(true);
+      expect(reports.confirmApproveComex).toHaveBeenCalledWith(10824);
+      expect(audit.log.mock.calls[0][0]).toMatchObject({ action: 'ov_approved_cartera_no_verificada', reason: noVerificada.motivo });
+    });
+
+    it('en un entorno simulado el aviso sale rotulado [SIMULADO]', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'x' } });
+      const { service } = makeService(hubCall, listas({ packing_list: ['o@x.com'], packing_list_cartera: ['c@x.com'] }), undefined, undefined, undefined, jest.fn().mockResolvedValue({ ...RETENER, simulated: true }));
+      await service.handleOvApproved(10824);
+      expect(hubCall.mock.calls[0][2].subject).toMatch(/^\[SIMULADO\] /);
+      expect(hubCall.mock.calls[0][2].body).toContain('simulador de OBEN MAS');
+    });
+
+    describe('liberar / cancelar a mano', () => {
+      it('liberar exige que la OV esté retenida; marca override para no re-verificar y lo audita con el motivo', async () => {
+        const row = { id: 'row-1', numberOrderSales: 10824, kind: 'cartera', attempts: 1, holdReason: 'PND', status: 'pending' };
+        const { service, retries, audit } = makeService(jest.fn(), undefined, undefined, undefined, { findOne: jest.fn().mockResolvedValue(row) });
+        const out = await service.releaseCarteraHold(10824, 'Cartera confirmó por correo');
+        expect(out).toMatchObject({ kind: 'incompleto', carteraOverride: true });
+        expect(retries.update).toHaveBeenCalledWith('row-1', expect.objectContaining({ kind: 'incompleto', carteraOverride: true, attempts: 0 }));
+        expect(audit.log.mock.calls[0][0]).toMatchObject({ action: 'ov_cartera_liberada_manual', reason: 'Cartera confirmó por correo' });
+      });
+
+      it('cancelar saca la OV de la cola ("cancelled")', async () => {
+        const row = { id: 'row-1', numberOrderSales: 10824, kind: 'cartera', attempts: 4, status: 'pending' };
+        const { service, retries } = makeService(jest.fn(), undefined, undefined, undefined, { findOne: jest.fn().mockResolvedValue(row) });
+        await service.cancelCarteraHold(10824, 'El cliente no pagó: pedido dado de baja');
+        expect(retries.update).toHaveBeenCalledWith('row-1', { status: 'cancelled' });
+      });
+
+      it('una OV que no está retenida → 404', async () => {
+        const { service } = makeService(jest.fn());
+        await expect(service.releaseCarteraHold(1, 'x')).rejects.toThrow(/no está retenida por cartera/);
+        await expect(service.cancelCarteraHold(1, 'x')).rejects.toThrow(/no está retenida por cartera/);
+      });
     });
   });
 });

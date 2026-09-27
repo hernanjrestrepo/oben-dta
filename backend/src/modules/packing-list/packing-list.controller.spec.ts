@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { PackingListController } from './packing-list.controller';
+import { REQUIRE_PERMISSION_KEY } from '../security/require-permission.decorator';
 
 function makeController(hubCall: jest.Mock, resolveRecipients?: jest.Mock) {
   const hub = { call: hubCall } as any;
@@ -9,8 +10,14 @@ function makeController(hubCall: jest.Mock, resolveRecipients?: jest.Mock) {
     resolveRecipients: resolveRecipients ?? jest.fn().mockResolvedValue({ to: [], cc: [], bcc: [] }),
   } as any;
   const excel = { build: jest.fn().mockReturnValue(Buffer.from('fake-xlsx')) } as any;
+  const automation = {
+    listCarteraHolds: jest.fn().mockResolvedValue([]),
+    releaseCarteraHold: jest.fn().mockResolvedValue({}),
+    cancelCarteraHold: jest.fn().mockResolvedValue({}),
+  } as any;
   return {
-    controller: new PackingListController(hub, ctx, audit, distributionLists, excel),
+    automation,
+    controller: new PackingListController(hub, ctx, audit, distributionLists, excel, automation),
     audit,
     distributionLists,
     excel,
@@ -168,6 +175,25 @@ describe('PackingListController', () => {
 
       await expect(controller.sendByEmail('10794', {})).rejects.toThrow(BadRequestException);
       expect(hubCall).toHaveBeenCalledTimes(1); // solo query.run, nunca email.send
+    });
+  });
+
+  describe('retenciones por cartera (regla PND)', () => {
+    it('listar exige orders.read; liberar/cancelar exigen orders.update y validan la OV', async () => {
+      const { controller, automation } = makeController(jest.fn());
+      const perm = (name: keyof PackingListController) =>
+        JSON.stringify(Reflect.getMetadata(REQUIRE_PERMISSION_KEY, PackingListController.prototype[name]));
+      expect(perm('listCarteraHolds')).toContain('orders.read');
+      expect(perm('releaseCarteraHold')).toContain('orders.update');
+      expect(perm('cancelCarteraHold')).toContain('orders.update');
+
+      await controller.listCarteraHolds();
+      expect(automation.listCarteraHolds).toHaveBeenCalled();
+      await controller.releaseCarteraHold('10824', { motivo: 'Cartera confirmó' });
+      expect(automation.releaseCarteraHold).toHaveBeenCalledWith(10824, 'Cartera confirmó');
+      await controller.cancelCarteraHold('10824', { motivo: 'Pedido dado de baja' });
+      expect(automation.cancelCarteraHold).toHaveBeenCalledWith(10824, 'Pedido dado de baja');
+      expect(() => controller.releaseCarteraHold('abc', { motivo: 'x' })).toThrow(BadRequestException);
     });
   });
 });

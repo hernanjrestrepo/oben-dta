@@ -28,6 +28,7 @@ function makeService(opts: {
   buildDocumentPackage?: jest.Mock;
   sendCompletePackage?: jest.Mock;
   sendEscalation?: jest.Mock;
+  carteraGate?: jest.Mock;
   resolveRecipients?: jest.Mock;
   findDue?: jest.Mock;
   update?: jest.Mock;
@@ -42,6 +43,7 @@ function makeService(opts: {
   const automation = {
     sendCompletePackage: opts.sendCompletePackage ?? jest.fn().mockResolvedValue({ sent: true, queued: false }),
     sendEscalation: opts.sendEscalation ?? jest.fn().mockResolvedValue(undefined),
+    carteraGate: opts.carteraGate ?? jest.fn().mockResolvedValue({ proceed: true, resetAttempts: false, decision: { action: 'continuar' } }),
   };
 
   const moduleRef = {
@@ -232,5 +234,45 @@ describe('PackingListRetryProcessorService (reintento de Lista de Empaque, pedid
     await service.processDueRetries();
 
     expect(findDue).toHaveBeenCalledTimes(2);
+  });
+
+  describe('regla PND', () => {
+    it('toda fila pasa primero por cartera: si sigue retenida, no se genera ni se envía nada', async () => {
+      const carteraGate = jest.fn().mockResolvedValue({ proceed: false, decision: { action: 'retener' } });
+      const row = makeRow({ kind: 'cartera', attempts: 1 });
+      const { service, reports, automation } = makeService({ carteraGate, findDue: jest.fn().mockResolvedValue([row]) });
+
+      await service.processDueRetries();
+
+      expect(carteraGate).toHaveBeenCalledWith(10982, row);
+      expect(reports.buildDocumentPackage).not.toHaveBeenCalled();
+      expect(automation.sendCompletePackage).not.toHaveBeenCalled();
+    });
+
+    it('una OV incompleta (o recuperada tras un reinicio) también se verifica antes de enviar', async () => {
+      const carteraGate = jest.fn().mockResolvedValue({ proceed: false, decision: { action: 'retener' } });
+      const { service, automation } = makeService({ carteraGate, findDue: jest.fn().mockResolvedValue([makeRow({ kind: 'incompleto' })]) });
+      await service.processDueRetries();
+      expect(automation.sendCompletePackage).not.toHaveBeenCalled();
+    });
+
+    it('cuando cartera libera, los intentos por documentos incompletos arrancan en cero', async () => {
+      const carteraGate = jest.fn().mockResolvedValue({ proceed: true, resetAttempts: true, decision: { action: 'continuar' } });
+      const { service, retries } = makeService({
+        carteraGate,
+        buildDocumentPackage: jest.fn().mockResolvedValue(INCOMPLETE_PACKAGE),
+        findDue: jest.fn().mockResolvedValue([makeRow({ kind: 'cartera', attempts: 7 })]),
+      });
+      await service.processDueRetries();
+      expect(retries.update).toHaveBeenCalledWith('row-1', expect.objectContaining({ kind: 'incompleto', attempts: 1 }));
+    });
+
+    it('liberada a mano (override): no vuelve a consultar cartera y envía', async () => {
+      const carteraGate = jest.fn();
+      const { service, automation } = makeService({ carteraGate, findDue: jest.fn().mockResolvedValue([makeRow({ kind: 'incompleto', carteraOverride: true })]) });
+      await service.processDueRetries();
+      expect(carteraGate).not.toHaveBeenCalled();
+      expect(automation.sendCompletePackage).toHaveBeenCalled();
+    });
   });
 });

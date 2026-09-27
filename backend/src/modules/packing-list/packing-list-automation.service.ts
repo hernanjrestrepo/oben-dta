@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
@@ -8,7 +8,19 @@ import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { DistributionListsService, ResolvedRecipients } from '../distribution-lists/distribution-lists.service';
 import { ObenReportsService, DocumentPackageResult, PackageFailure } from '../oben-reports/oben-reports.service';
 import { PackingListPendingRetry } from '../../entities/packing-list-pending-retry.entity';
-import { PACKING_LIST_RETRY_INTERVAL_MS } from './packing-list-retry.constants';
+import {
+  PACKING_LIST_CARTERA_ERROR_RECHECK_MS,
+  PACKING_LIST_CARTERA_RECHECK_MS,
+  PACKING_LIST_RETRY_INTERVAL_MS,
+} from './packing-list-retry.constants';
+import { PackingListCarteraService, type CarteraDecision } from './packing-list-cartera.service';
+
+/** Lista de distribución que recibe los avisos de órdenes retenidas por cartera (PND). */
+export const PACKING_LIST_CARTERA_DISTRIBUTION_KEY = 'packing_list_cartera';
+
+export type CarteraGateResult =
+  | { proceed: true; decision: CarteraDecision; resetAttempts: boolean }
+  | { proceed: false; decision: CarteraDecision };
 
 /** Violación de índice único en Postgres. */
 const DUPLICATE_KEY_CODE = '23505';
@@ -26,6 +38,9 @@ export interface HandleOvApprovedResult {
    * incompleto: encolar para reintento, nunca devolver `sent:true` a medias.
    */
   sendFailure?: PackageFailure;
+  /** Regla PND: la orden quedó retenida porque cartera no ha liberado (no se generó nada). */
+  held?: boolean;
+  carteraMotivo?: string;
 }
 
 /**
@@ -65,6 +80,7 @@ export class PackingListAutomationService {
     private readonly reports: ObenReportsService,
     @InjectRepository(PackingListPendingRetry)
     private readonly retries: Repository<PackingListPendingRetry>,
+    private readonly cartera: PackingListCarteraService,
   ) {}
 
   async handleOvApproved(numberOrderSales: number): Promise<HandleOvApprovedResult> {
@@ -84,6 +100,13 @@ export class PackingListAutomationService {
       throw new BadRequestException(
         'No hay ninguna lista de distribución asociada a "packing_list" — configúrala en Listas de Distribución.',
       );
+    }
+
+    // Regla PND: ANTES de generar cualquier documento (José: "la lista de
+    // empaque no se debe generar" mientras cartera no libere).
+    const gate = await this.carteraGate(numberOrderSales);
+    if (!gate.proceed) {
+      return { sent: false, queued: true, held: true, carteraMotivo: gate.decision.motivo, client: '', included: [], failed: [] };
     }
 
     const documentPackage = await this.reports.buildDocumentPackage(numberOrderSales);
@@ -338,6 +361,235 @@ export class PackingListAutomationService {
         'El procesamiento quedó interrumpido a mitad de camino (reinicio del servicio) y no hay envío registrado — se encoló para generar y enviar el paquete completo.',
     });
     return 'queued';
+  }
+
+  /**
+   * Regla PND (ver PackingListCarteraService). Si cartera no liberó, deja la
+   * OV en la cola como 'cartera' — una sola fila pendiente por OV —, la
+   * re-verifica cada 6 horas y avisa. `row` es la fila pendiente cuando la
+   * llama el procesador de reintentos.
+   */
+  async carteraGate(numberOrderSales: number, row?: PackingListPendingRetry): Promise<CarteraGateResult> {
+    const decision = await this.cartera.evaluar(numberOrderSales);
+    if (decision.action === 'continuar') {
+      if (!decision.verificada && !row) {
+        await this.audit.log({
+          workflowName: 'packing-list-automation',
+          action: 'ov_approved_cartera_no_verificada',
+          entityType: 'packing_list',
+          entityId: String(numberOrderSales),
+          actorId: this.ctx.userId,
+          outputData: { simulated: decision.simulated },
+          reason: decision.motivo,
+        });
+      }
+      const wasHeld = row?.kind === 'cartera';
+      if (wasHeld) {
+        await this.retries.update(row.id, { kind: 'incompleto', attempts: 0, holdReason: null, lastMissing: null });
+        await this.audit.log({
+          workflowName: 'packing-list-automation',
+          action: 'ov_cartera_liberada',
+          entityType: 'packing_list',
+          entityId: String(numberOrderSales),
+          actorId: this.ctx.userId,
+          outputData: { verificaciones: row.attempts + 1, simulated: decision.simulated },
+          reason: 'Cartera liberó la orden: se genera y envía la Lista de Empaque.',
+        });
+        this.logger.log(`Orden ${numberOrderSales}: cartera liberó — se genera la Lista de Empaque.`);
+      }
+      return { proceed: true, decision, resetAttempts: wasHeld };
+    }
+    await this.holdForCartera(numberOrderSales, decision, row);
+    return { proceed: false, decision };
+  }
+
+  async listCarteraHolds(): Promise<PackingListPendingRetry[]> {
+    return this.retries.find({
+      where: { tenantId: this.ctx.tenantId, status: 'pending', kind: 'cartera' },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  /**
+   * Un usuario autorizado confirma que cartera ya liberó (p. ej. la API de
+   * cartera sigue caída): la orden pasa a generarse en el próximo ciclo del
+   * procesador (≤1 minuto) sin volver a verificar cartera.
+   */
+  async releaseCarteraHold(numberOrderSales: number, motivo: string): Promise<PackingListPendingRetry> {
+    const row = await this.findCarteraHold(numberOrderSales);
+    await this.retries.update(row.id, {
+      kind: 'incompleto',
+      attempts: 0,
+      carteraOverride: true,
+      nextRetryAt: new Date(),
+      holdReason: null,
+      lastMissing: null,
+    });
+    await this.audit.log({
+      workflowName: 'packing-list-automation',
+      action: 'ov_cartera_liberada_manual',
+      entityType: 'packing_list',
+      entityId: String(numberOrderSales),
+      actorId: this.ctx.userId,
+      outputData: { holdReason: row.holdReason },
+      reason: motivo,
+    });
+    return { ...row, kind: 'incompleto', carteraOverride: true };
+  }
+
+  /** El pedido se dio de baja: la orden sale de la cola y nunca genera Lista de Empaque automáticamente. */
+  async cancelCarteraHold(numberOrderSales: number, motivo: string): Promise<PackingListPendingRetry> {
+    const row = await this.findCarteraHold(numberOrderSales);
+    await this.retries.update(row.id, { status: 'cancelled' });
+    await this.audit.log({
+      workflowName: 'packing-list-automation',
+      action: 'ov_cartera_retencion_cancelada',
+      entityType: 'packing_list',
+      entityId: String(numberOrderSales),
+      actorId: this.ctx.userId,
+      outputData: { holdReason: row.holdReason, verificaciones: row.attempts },
+      reason: motivo,
+    });
+    return { ...row, status: 'cancelled' };
+  }
+
+  private async findCarteraHold(numberOrderSales: number): Promise<PackingListPendingRetry> {
+    const row = await this.retries.findOne({
+      where: { tenantId: this.ctx.tenantId, numberOrderSales, status: 'pending', kind: 'cartera' },
+    });
+    if (!row) throw new NotFoundException(`La orden ${numberOrderSales} no está retenida por cartera.`);
+    return row;
+  }
+
+  private async holdForCartera(
+    numberOrderSales: number,
+    decision: Exclude<CarteraDecision, { action: 'continuar' }>,
+    row?: PackingListPendingRetry,
+  ): Promise<void> {
+    const delay = decision.action === 'retener' ? PACKING_LIST_CARTERA_RECHECK_MS : PACKING_LIST_CARTERA_ERROR_RECHECK_MS;
+    const nextRetryAt = new Date(Date.now() + delay);
+    const existing =
+      row ??
+      (await this.retries.findOne({ where: { tenantId: this.ctx.tenantId, numberOrderSales, status: 'pending' } }));
+    const alreadyHeld = existing?.kind === 'cartera';
+    // `attempts` en una fila 'cartera' = verificaciones hechas después de la primera.
+    const checks = row && alreadyHeld ? row.attempts + 1 : alreadyHeld ? existing.attempts : 0;
+
+    if (existing) {
+      await this.retries.update(existing.id, { kind: 'cartera', attempts: checks, nextRetryAt, holdReason: decision.motivo, lastMissing: null });
+    } else {
+      try {
+        await this.retries.save(
+          this.retries.create({
+            tenantId: this.ctx.tenantId,
+            numberOrderSales,
+            attempts: 0,
+            nextRetryAt,
+            status: 'pending',
+            kind: 'cartera',
+            holdReason: decision.motivo,
+            lastMissing: null,
+          }),
+        );
+      } catch (err) {
+        // Otro disparador simultáneo de la misma OV ya dejó su fila pendiente.
+        if ((err as { code?: string }).code !== DUPLICATE_KEY_CODE) throw err;
+      }
+    }
+
+    await this.audit.log({
+      workflowName: 'packing-list-automation',
+      action: alreadyHeld ? 'ov_cartera_sigue_retenida' : 'ov_approved_retenida_por_cartera',
+      entityType: 'packing_list',
+      entityId: String(numberOrderSales),
+      actorId: this.ctx.userId,
+      outputData: {
+        decision: decision.action,
+        pnd: decision.action === 'retener' ? decision.pnd : null,
+        simulated: decision.simulated,
+        verificaciones: checks + 1,
+        proximaVerificacion: nextRetryAt.toISOString(),
+      },
+      reason: decision.motivo,
+    });
+    this.logger.warn(
+      `Orden ${numberOrderSales}: retenida por cartera (${decision.action}) — no se genera la Lista de Empaque; próxima verificación ${nextRetryAt.toISOString()}.`,
+    );
+
+    // José: "cada 6 horas le va a llegar el correo a la gente". Si solo falló
+    // la consulta, se avisa una vez (no cada 10 minutos).
+    const avisar = decision.action === 'retener' ? !(alreadyHeld && !row) : !alreadyHeld;
+    if (avisar) await this.sendCarteraNotice(numberOrderSales, decision, checks);
+  }
+
+  private async sendCarteraNotice(
+    numberOrderSales: number,
+    decision: Exclude<CarteraDecision, { action: 'continuar' }>,
+    checks: number,
+  ): Promise<void> {
+    let key = PACKING_LIST_CARTERA_DISTRIBUTION_KEY;
+    let resolved = await this.distributionLists.resolveRecipients('document', key);
+    if (resolved.to.length === 0) {
+      // Sin lista propia, avisa a quien ya recibe los escalamientos de Lista de Empaque.
+      key = 'packing_list_escalation';
+      resolved = await this.distributionLists.resolveRecipients('document', key);
+    }
+    if (resolved.to.length === 0) {
+      this.logger.error(
+        `Orden ${numberOrderSales}: retenida por cartera pero no hay lista "${PACKING_LIST_CARTERA_DISTRIBUTION_KEY}" ni "packing_list_escalation" — no se pudo avisar a nadie.`,
+      );
+      await this.audit.log({
+        workflowName: 'packing-list-automation',
+        action: 'ov_cartera_aviso_sin_lista_distribucion',
+        entityType: 'packing_list',
+        entityId: String(numberOrderSales),
+        actorId: this.ctx.userId,
+        outputData: {},
+        reason: `No hay ninguna lista de distribución asociada a "${PACKING_LIST_CARTERA_DISTRIBUTION_KEY}" — configúrala en Listas de Distribución.`,
+      });
+      return;
+    }
+
+    const sim = decision.simulated;
+    const [primaryTo, ...restTo] = resolved.to;
+    const cc = [...restTo, ...resolved.cc];
+    const cuerpo =
+      decision.action === 'retener'
+        ? [
+            `<p>Llegó la aprobación en corte de la orden ${numberOrderSales}, pero cartera todavía no la libera${decision.pnd ? ' (Producir No Despachar)' : ''}. <strong>La Lista de Empaque NO se generó</strong> — sin ella no hay predespacho.</p>`,
+            decision.observacion ? `<p>Observación de cartera: ${decision.observacion}</p>` : '',
+            `<p>Se vuelve a verificar automáticamente cada 6 horas${checks > 0 ? ` (esta es la verificación n.º ${checks + 1})` : ''}. Apenas cartera libere, la Lista de Empaque se genera y se envía sola.</p>`,
+            '<p>Si el pedido se da de baja, cancele la retención en Oben Xmart → Lista de Empaque → Retenidas por cartera.</p>',
+          ].join('')
+        : [
+            `<p>Llegó la aprobación en corte de la orden ${numberOrderSales}, pero no se pudo verificar si cartera la liberó: ${decision.motivo}</p>`,
+            '<p>La Lista de Empaque no se generó todavía. Se reintenta la consulta cada 10 minutos. Si cartera ya liberó y la consulta sigue fallando, un usuario autorizado puede liberarla manualmente en Oben Xmart → Lista de Empaque → Retenidas por cartera.</p>',
+          ].join('');
+    const aviso = sim
+      ? '<p><strong>SIMULADO:</strong> el estado de cartera viene del simulador de OBEN MAS (entorno de pruebas), no del sistema real.</p>'
+      : '';
+
+    const sendResult = await this.hub.call<{ id: string }>(
+      'email',
+      'send',
+      {
+        to: primaryTo,
+        ...(cc.length ? { cc: cc.join(',') } : {}),
+        subject: `${sim ? '[SIMULADO] ' : ''}Orden ${numberOrderSales} — retenida por cartera: la Lista de Empaque no se genera`,
+        body: `${cuerpo}${aviso}`,
+      },
+      { maxAttempts: 1, timeoutMs: 30_000 },
+    );
+    await this.audit.log({
+      workflowName: 'packing-list-automation',
+      eventType: WorkflowEventType.NOTIFICATION_SENT,
+      action: 'ov_cartera_aviso_enviado',
+      entityType: 'packing_list',
+      entityId: String(numberOrderSales),
+      actorId: this.ctx.userId,
+      outputData: { to: primaryTo, cc, lista: key, ok: sendResult.ok, messageId: sendResult.data?.id ?? null, simulated: sim },
+      reason: sendResult.ok ? null : (sendResult.error ?? 'error desconocido'),
+    });
   }
 
   private async enqueueRetry(

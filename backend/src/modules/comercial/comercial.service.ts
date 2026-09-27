@@ -17,13 +17,14 @@ import {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PROXIMAS_ENTREGAS_DIAS = 14;
-const PENDIENTES: readonly ProformaEstado[] = ['sin_cubicar', 'ubicada', 'retenida'];
+const PENDIENTES: readonly ProformaEstado[] = ['sin_cubicar', 'cubicada', 'retenida'];
 
 const SIGUIENTE_PASO: Record<ProformaEstado, string> = {
   sin_cubicar: 'Cubicaje por Planeación (Cube IQ) para ajustar pallets al contenedor.',
-  ubicada: 'Enviar la Proforma al cliente y esperar su respuesta (aprueba / rechaza / modifica).',
+  cubicada: 'Enviar la Proforma al cliente y esperar su respuesta (aprueba / rechaza / modifica).',
   retenida: 'Validación de cartera (cupo/crédito) para liberar la orden de venta.',
-  activa: 'Producción y cargue; al cerrar el corte se dispara la Lista de Empaque.',
+  activa:
+    'Producción y cargue; al cerrar el corte se dispara la Lista de Empaque — solo si cartera ya liberó (si no, es PND: Producir No Despachar).',
 };
 
 const str = (v: unknown): string | null =>
@@ -206,7 +207,11 @@ export class ComercialService {
       alertas.push(`Retenida por cartera${cartera.observacion ? `: ${cartera.observacion}` : '.'}`);
     }
     if (status.estado === 'activa' && cartera && !cartera.liberada) {
-      alertas.push('Inconsistencia en Oben+: la orden está activa pero no registra liberación de cartera.');
+      // Reunión 2026-09-23 (José, 41:00): "Producir No Despachar" — la orden
+      // sigue su ciclo en OBEN MAS pero cartera no ha liberado en NetSuite.
+      alertas.push(
+        'PND (Producir No Despachar): la orden está activa pero cartera no ha liberado — la Lista de Empaque queda retenida hasta que libere.',
+      );
     }
     const entrega = status.fechas.entregaComprometida;
     const cargaCompleta =

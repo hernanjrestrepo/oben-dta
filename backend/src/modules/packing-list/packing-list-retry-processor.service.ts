@@ -87,6 +87,19 @@ export class PackingListRetryProcessorService implements OnModuleInit, OnModuleD
     tenantCtx.setContext(row.tenantId, null, false);
 
     const automation = await this.moduleRef.resolve(PackingListAutomationService, contextId, { strict: false });
+
+    // Regla PND: toda orden en cola (retenida por cartera, incompleta o
+    // recuperada tras un reinicio) vuelve a pasar por cartera antes de generar
+    // nada — salvo que un usuario la haya liberado manualmente.
+    let previousAttempts = row.attempts;
+    if (!row.carteraOverride) {
+      const gate = await automation.carteraGate(row.numberOrderSales, row);
+      if (!gate.proceed) return;
+      if (gate.resetAttempts) previousAttempts = 0;
+    } else if (row.kind === 'cartera') {
+      previousAttempts = 0;
+    }
+
     const reports = await this.moduleRef.resolve(ObenReportsService, contextId, { strict: false });
     const documentPackage = await reports.buildDocumentPackage(row.numberOrderSales);
 
@@ -103,13 +116,13 @@ export class PackingListRetryProcessorService implements OnModuleInit, OnModuleD
       const result = await automation.sendCompletePackage(row.numberOrderSales, documentPackage, resolved);
       if (!result.sendFailure) {
         await this.retries.update(row.id, { status: 'completed', lastMissing: null });
-        this.logger.log(`Orden ${row.numberOrderSales}: se completó en el reintento ${row.attempts + 1} — correo enviado.`);
+        this.logger.log(`Orden ${row.numberOrderSales}: se completó en el reintento ${previousAttempts + 1} — correo enviado.`);
         return;
       }
       stillMissing = [result.sendFailure];
     }
 
-    const attempts = row.attempts + 1;
+    const attempts = previousAttempts + 1;
     if (attempts >= PACKING_LIST_RETRY_MAX_ATTEMPTS) {
       await automation.sendEscalation(row.numberOrderSales, stillMissing);
       await this.retries.update(row.id, { status: 'escalated', attempts, lastMissing: stillMissing });
@@ -120,6 +133,7 @@ export class PackingListRetryProcessorService implements OnModuleInit, OnModuleD
     }
 
     await this.retries.update(row.id, {
+      kind: 'incompleto',
       attempts,
       nextRetryAt: new Date(Date.now() + PACKING_LIST_RETRY_INTERVAL_MS),
       lastMissing: stillMissing,

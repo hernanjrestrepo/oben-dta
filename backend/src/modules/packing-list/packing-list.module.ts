@@ -8,17 +8,19 @@ import { AuthModule } from '../auth/auth.module';
 import { DistributionListsModule } from '../distribution-lists/distribution-lists.module';
 import { ObenReportsModule } from '../oben-reports/oben-reports.module';
 import { PackingListPendingRetry } from '../../entities/packing-list-pending-retry.entity';
+import { Tenant } from '../../entities/tenant.entity';
+import { PackingListCarteraService } from './packing-list-cartera.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PackingListPendingRetry]),
+    TypeOrmModule.forFeature([PackingListPendingRetry, Tenant]),
     IntegrationHubModule,
     AuthModule,
     DistributionListsModule,
     ObenReportsModule,
   ],
   controllers: [PackingListController],
-  providers: [PackingListAutomationService, PackingListRetryProcessorService],
+  providers: [PackingListAutomationService, PackingListRetryProcessorService, PackingListCarteraService],
   exports: [PackingListAutomationService],
 })
 export class PackingListModule {}

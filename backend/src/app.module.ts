@@ -34,6 +34,7 @@ import { ComercialModule } from './modules/comercial/comercial.module';
 
 // Import all entities
 import { Client } from './entities/client.entity';
+import { ObenPlusSimProforma } from './entities/oben-plus-sim-proforma.entity';
 import { Tenant } from './entities/tenant.entity';
 import { ModuleCatalog } from './entities/module-catalog.entity';
 import { Permission } from './entities/permission.entity';
@@ -156,6 +157,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
           DistributionListAssociation,
           PackingListPendingRetry,
           ClientProductEquivalence,
+          ObenPlusSimProforma,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') === 'development',

@@ -659,9 +659,11 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
           PackingListAutomationService,
           (svc) => svc.handleOvApproved(numberOrderSales),
         );
-        resultRef = result.queued
-          ? `${numberOrderSales}:en_cola_reintento`
-          : `${numberOrderSales}:${result.included.join('+')}`;
+        resultRef = result.held
+          ? `${numberOrderSales}:retenida_por_cartera`
+          : result.queued
+            ? `${numberOrderSales}:en_cola_reintento`
+            : `${numberOrderSales}:${result.included.join('+')}`;
         await this.finalizeMessage(tenantId, messageId, {
           classificationCategory: category,
           classificationConfidence: confidence,

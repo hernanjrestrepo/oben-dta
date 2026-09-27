@@ -9,10 +9,10 @@ import type { AdapterMode } from '../integrations/hub/adapter.types';
  * servicio la valida igual, sin asumirla.
  *
  * Estados de la Proforma según el blueprint: se crea "sin cubicar", Planeación
- * la cubica ("ubicada"), el cliente la aprueba y la OV queda "retenida" hasta
+ * la cubica ("cubicada"), el cliente la aprueba y la OV queda "retenida" hasta
  * que Cartera libera el cupo, y entonces pasa a "activa".
  */
-export const PROFORMA_ESTADOS = ['sin_cubicar', 'ubicada', 'retenida', 'activa'] as const;
+export const PROFORMA_ESTADOS = ['sin_cubicar', 'cubicada', 'retenida', 'activa'] as const;
 export type ProformaEstado = (typeof PROFORMA_ESTADOS)[number];
 
 export interface ProformaFechas {
@@ -100,7 +100,7 @@ export interface ComercialDashboard {
   generadoEn: string;
   totales: {
     total: number;
-    /** sin_cubicar + ubicada + retenida: todavía no están en producción. */
+    /** sin_cubicar + cubicada + retenida: todavía no están en producción. */
     pendientes: number;
     activas: number;
     exportacion: number;

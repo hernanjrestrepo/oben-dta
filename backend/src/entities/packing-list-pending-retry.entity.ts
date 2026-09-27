@@ -1,7 +1,14 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
-export type PackingListRetryStatus = 'pending' | 'completed' | 'escalated';
+export type PackingListRetryStatus = 'pending' | 'completed' | 'escalated' | 'cancelled';
+
+/**
+ * 'incompleto': falta un documento o falló el envío (cada 10 min, máx. 5).
+ * 'cartera': retenida por la regla PND — cartera no ha liberado (cada 6 h,
+ * sin límite, hasta que libere o alguien la cancele).
+ */
+export type PackingListRetryKind = 'incompleto' | 'cartera';
 
 export interface PackingListRetryMissingItem {
   key: string;
@@ -35,6 +42,17 @@ export class PackingListPendingRetry extends TenantScopedEntity {
 
   @Column({ type: 'varchar', default: 'pending' })
   status: PackingListRetryStatus;
+
+  @Column({ type: 'varchar', default: 'incompleto' })
+  kind: PackingListRetryKind;
+
+  /** Por qué está retenida (regla PND / fuente de cartera caída). */
+  @Column({ name: 'hold_reason', type: 'text', nullable: true })
+  holdReason: string | null;
+
+  /** Un usuario autorizado confirmó que cartera liberó (p. ej. con la API de cartera caída): no se vuelve a verificar. */
+  @Column({ name: 'cartera_override', type: 'boolean', default: false })
+  carteraOverride: boolean;
 
   @Column({ name: 'last_missing', type: 'jsonb', nullable: true })
   lastMissing: PackingListRetryMissingItem[] | null;

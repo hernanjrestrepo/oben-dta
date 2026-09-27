@@ -217,7 +217,7 @@ describe('ComercialService — seguimiento de Proformas (Oben+)', () => {
   describe('siguiente paso y alertas (solo a partir de datos devueltos)', () => {
     it.each([
       ['sin_cubicar', /Cubicaje/],
-      ['ubicada', /aprueba \/ rechaza \/ modifica/],
+      ['cubicada', /aprueba \/ rechaza \/ modifica/],
       ['retenida', /cartera/],
       ['activa', /Lista de Empaque/],
     ])('estado %s → siguiente paso %s', async (estado, paso) => {
@@ -238,13 +238,13 @@ describe('ComercialService — seguimiento de Proformas (Oben+)', () => {
       expect((await service.getProforma('11271')).alertas).toEqual(['Retenida por cartera: Cupo excedido']);
     });
 
-    it('activa sin liberación de cartera → alerta de inconsistencia de datos', async () => {
+    it('activa sin liberación de cartera → alerta PND (Producir No Despachar), no un error de datos', async () => {
       const { service } = withResponses({
         'proforma.status': STATUS(),
         'proforma.cartera': CARTERA({ liberada: false }),
         'proforma.cubicaje': CUBICAJE(),
       });
-      expect((await service.getProforma('11271')).alertas).toEqual([expect.stringContaining('Inconsistencia')]);
+      expect((await service.getProforma('11271')).alertas).toEqual([expect.stringMatching(/^PND \(Producir No Despachar\)/)]);
     });
 
     it('entrega comprometida vencida sin carga completa → alerta; con carga completa → no', async () => {

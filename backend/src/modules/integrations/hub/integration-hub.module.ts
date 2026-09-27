@@ -27,6 +27,8 @@ import { VetaMockAdapter } from './adapters/veta.mock';
 import { ArmstrongMockAdapter } from './adapters/armstrong.mock';
 import { ObenCostOrderMockAdapter } from './adapters/oben-cost-order.mock';
 import { ObenPlusMockAdapter } from './adapters/oben-plus.mock';
+import { OBEN_PLUS_SIM_STORE, TypeOrmObenPlusSimStore } from './oben-plus-sim.store';
+import { ObenPlusSimProforma } from '../../../entities/oben-plus-sim-proforma.entity';
 
 /**
  * IntegrationHub: infraestructura común de todos los adapters + panel de escenarios.
@@ -38,7 +40,7 @@ import { ObenPlusMockAdapter } from './adapters/oben-plus.mock';
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Tenant, MockScenario, IntegrationDeadLetter]),
+    TypeOrmModule.forFeature([Tenant, MockScenario, IntegrationDeadLetter, ObenPlusSimProforma]),
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -75,6 +77,8 @@ import { ObenPlusMockAdapter } from './adapters/oben-plus.mock';
     ArmstrongMockAdapter,
     ObenCostOrderMockAdapter,
     ObenPlusMockAdapter,
+    TypeOrmObenPlusSimStore,
+    { provide: OBEN_PLUS_SIM_STORE, useExisting: TypeOrmObenPlusSimStore },
     AdapterRegistry,
     ResilientAdapterExecutor,
     IntegrationHubService,

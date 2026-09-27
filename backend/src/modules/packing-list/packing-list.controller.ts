@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
-import { IsEmail, IsOptional } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
@@ -11,6 +11,7 @@ import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
 import { ObenReportExcelService } from '../oben-reports/oben-report-excel.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
+import { PackingListAutomationService } from './packing-list-automation.service';
 
 class SendPackingListDto {
   // Opcional: si no viene, se resuelve con la lista de distribución asociada
@@ -19,6 +20,14 @@ class SendPackingListDto {
   @IsOptional()
   @IsEmail()
   to?: string;
+}
+
+class CarteraHoldActionDto {
+  /** Obligatorio: queda en la auditoría quién liberó/canceló y por qué. */
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  motivo!: string;
 }
 
 /**
@@ -44,7 +53,29 @@ export class PackingListController {
     private readonly audit: WorkflowAuditService,
     private readonly distributionLists: DistributionListsService,
     private readonly excel: ObenReportExcelService,
+    private readonly automation: PackingListAutomationService,
   ) {}
+
+  /** Órdenes aprobadas en corte que NO generaron Lista de Empaque porque cartera no ha liberado (regla PND). */
+  @Get('cartera/retenciones')
+  @RequirePermission('orders.read')
+  listCarteraHolds() {
+    return this.automation.listCarteraHolds();
+  }
+
+  /** Un usuario confirma que cartera ya liberó: la Lista de Empaque se genera en el próximo minuto, sin re-verificar. */
+  @Post(':numberOrderSales/cartera/liberar')
+  @RequirePermission('orders.update')
+  releaseCarteraHold(@Param('numberOrderSales') numberOrderSales: string, @Body() dto: CarteraHoldActionDto) {
+    return this.automation.releaseCarteraHold(this.parseOrderNumber(numberOrderSales), dto.motivo);
+  }
+
+  /** El pedido se dio de baja: la orden sale de la cola y nunca genera Lista de Empaque automáticamente. */
+  @Post(':numberOrderSales/cartera/cancelar')
+  @RequirePermission('orders.update')
+  cancelCarteraHold(@Param('numberOrderSales') numberOrderSales: string, @Body() dto: CarteraHoldActionDto) {
+    return this.automation.cancelCarteraHold(this.parseOrderNumber(numberOrderSales), dto.motivo);
+  }
 
   @Get(':numberOrderSales')
   @RequirePermission('orders.read')
