@@ -12,7 +12,7 @@
   --tinta: #1D2330; --tinta-2: #4A5263; --tinta-3: #7A8292;
   --papel: #FFFFFF; --fondo: #F7F4F0; --linea: #E6DFD6;
   --vivo: #15803D; --vivo-bg: #DCFCE7;
-  --listo: #B45309; --listo-bg: #FEF3C7;
+  --listo: #0E7490; --listo-bg: #CFFAFE;
   --espera: #B42318; --espera-bg: #FEE4E2;
   --sim: #6D28D9; --sim-bg: #F1E9FE;
   --mono: 'Geist Mono', 'DejaVu Sans Mono', monospace;
@@ -188,7 +188,7 @@ td:first-child { color: var(--tinta); font-weight: 600; }
   </div>
   <div style="margin-top:22px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:13px; color:var(--tinta-2);">
     <span class="chip vivo">En producción</span> ya funcionando con datos reales en el servidor de Oben
-    <span class="chip listo" style="margin-left:14px">Listo por instalar</span> construido y probado, se instala en el próximo despliegue
+    <span class="chip listo" style="margin-left:14px">Instalado</span> en el servidor de Oben; se activa con el piloto o con las APIs de Oben
     <span class="chip espera" style="margin-left:14px">Espera a Oben</span> depende de una API o un dato de Oben (mientras tanto, simulado)
   </div>
   <div class="banda-titulo">Qué gana cada equipo</div>
@@ -217,7 +217,7 @@ td:first-child { color: var(--tinta); font-weight: 600; }
         <li><b>Proforma</b> en OBEN MAS → cubicaje → envío al cliente</li>
         <li><b>Aprobación</b>, cartera y orden de venta activa</li>
       </ul>
-      <div class="estado"><span class="chip listo">Listo por instalar</span><span class="chip espera">APIs OBEN MAS</span></div>
+      <div class="estado"><span class="chip listo">Instalado</span><span class="chip espera">APIs OBEN MAS</span></div>
     </div>
     <div class="etapa">
       <div class="cab"><div class="num">2</div><h3>Producción y corte</h3></div>
@@ -235,7 +235,7 @@ td:first-child { color: var(--tinta); font-weight: 600; }
         <li><b>Reintentos</b> y escalamiento si falta algo</li>
         <li><b>Regla PND</b>: no se genera si cartera no liberó</li>
       </ul>
-      <div class="estado"><span class="chip vivo">En producción</span><span class="chip listo">Regla PND por instalar</span></div>
+      <div class="estado"><span class="chip vivo">En producción</span><span class="chip listo">Regla PND instalada</span></div>
     </div>
     <div class="etapa">
       <div class="cab"><div class="num">4</div><h3>Liquidación</h3></div>
@@ -244,7 +244,7 @@ td:first-child { color: var(--tinta); font-weight: 600; }
         <li><b>Registro</b> en Oben (encabezado + detalle)</li>
         <li><b>Correo de cierre</b> a COMEX y Facturación</li>
       </ul>
-      <div class="estado"><span class="chip listo">Listo por instalar</span><span class="chip espera">Fórmula Incoterm</span></div>
+      <div class="estado"><span class="chip listo">Instalado</span><span class="chip espera">Fórmula Incoterm</span></div>
     </div>
     <div class="etapa">
       <div class="cab"><div class="num">5</div><h3>Facturación</h3></div>
@@ -252,7 +252,7 @@ td:first-child { color: var(--tinta); font-weight: 600; }
         <li><b>Borrador PDF</b> con precios y dirección de entrega</li>
         <li><b>Factura electrónica</b> al enviar a COMEX</li>
       </ul>
-      <div class="estado"><span class="chip listo">Listo por instalar</span><span class="chip espera">Proveedor DIAN</span></div>
+      <div class="estado"><span class="chip listo">Instalado</span><span class="chip espera">Proveedor DIAN</span></div>
     </div>
   </div>
   <div class="banda-titulo">Cuando pasa esto, el sistema hace aquello</div>
@@ -475,7 +475,7 @@ td:first-child { color: var(--tinta); font-weight: 600; }
 
 <!-- 15 · PND -->
 <section class="slide">
-  <div class="top"><div class="seccion">Lista de Empaque · Regla "Producir No Despachar"</div><span class="chip listo">Listo por instalar</span></div>
+  <div class="top"><div class="seccion">Lista de Empaque · Regla "Producir No Despachar"</div><span class="chip listo">Instalado</span></div>
   <div class="dos">
     <div class="shot"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / lista-empaque</span><b>SIMULADO</b></div><div class="img"><img src="capturas/13-lista-empaque.jpg" alt="Lista de Empaque con órdenes retenidas por cartera"></div></div>
     <div class="col">
@@ -512,7 +512,7 @@ td:first-child { color: var(--tinta); font-weight: 600; }
 
 <!-- 17 · Liquidación -->
 <section class="slide">
-  <div class="top"><div class="seccion">Liquidación de exportación</div><div class="chips"><span class="chip listo">Listo por instalar</span><span class="chip espera">Fórmula Incoterm</span></div></div>
+  <div class="top"><div class="seccion">Liquidación de exportación</div><div class="chips"><span class="chip listo">Instalado</span><span class="chip espera">Fórmula Incoterm</span></div></div>
   <h1>Liquidar una Proforma sin hoja de cálculo paralela</h1>
   <div class="dos mitad" style="margin-top:8px">
     <div class="col">
@@ -537,7 +537,7 @@ td:first-child { color: var(--tinta); font-weight: 600; }
 
 <!-- 18 · Facturación -->
 <section class="slide">
-  <div class="top"><div class="seccion">Facturación</div><div class="chips"><span class="chip listo">Listo por instalar</span><span class="chip espera">Proveedor DIAN</span></div></div>
+  <div class="top"><div class="seccion">Facturación</div><div class="chips"><span class="chip listo">Instalado</span><span class="chip espera">Proveedor DIAN</span></div></div>
   <div class="dos inv">
     <div class="col">
       <h1 style="font-size:28px">El borrador de la factura, armado con los datos de la orden</h1>
@@ -579,14 +579,14 @@ td:first-child { color: var(--tinta); font-weight: 600; }
       <tr><th style="width:26%">Pieza</th><th style="width:17%">Estado</th><th>Qué depende de Oben</th></tr>
       <tr><td>Lista de Empaque automática, reintentos y escalamiento</td><td><span class="chip vivo">En producción</span></td><td>Nada: corre con la API de reportes de Oben y el correo real.</td></tr>
       <tr><td>Reportes Oben y consulta de Lista de Empaque</td><td><span class="chip vivo">En producción</span></td><td>Nada.</td></tr>
-      <tr><td>Regla PND (retenidas por cartera)</td><td><span class="chip listo">Listo por instalar</span></td><td>API de cartera por orden de venta en OBEN MAS (mientras tanto, simulada y sin efecto sobre órdenes reales).</td></tr>
-      <tr><td>Flujo Comercial: OC → Proforma → cliente → cartera → activa</td><td><span class="chip listo">Listo por instalar</span></td><td>APIs de OBEN MAS: estado de la Proforma, cartera, maestro de clientes, PDF oficial y transacciones (crear, modificar, aprobar, anular, activar).</td></tr>
-      <tr><td>Equivalencias y maestro de clientes</td><td><span class="chip listo">Listo por instalar</span></td><td>La tabla de equivalencias y los datos de los clientes del piloto (Alejandra).</td></tr>
-      <tr><td>Liquidación: borrador, registro y correo de cierre</td><td><span class="chip listo">Listo por instalar</span></td><td>Fórmula de Incoterm; evento de "último pallet en bodega" para dispararla sola.</td></tr>
-      <tr><td>Facturación: borrador PDF y factura electrónica</td><td><span class="chip listo">Listo por instalar</span></td><td>Proveedor de facturación electrónica (DIAN); dirección de entrega desde OBEN MAS; identificar despachos parciales nacionales.</td></tr>
+      <tr><td>Regla PND (retenidas por cartera)</td><td><span class="chip listo">Instalado</span></td><td>API de cartera por orden de venta en OBEN MAS (mientras tanto, simulada y sin efecto sobre órdenes reales).</td></tr>
+      <tr><td>Flujo Comercial: OC → Proforma → cliente → cartera → activa</td><td><span class="chip listo">Instalado</span></td><td>APIs de OBEN MAS: estado de la Proforma, cartera, maestro de clientes, PDF oficial y transacciones (crear, modificar, aprobar, anular, activar).</td></tr>
+      <tr><td>Equivalencias y maestro de clientes</td><td><span class="chip listo">Instalado</span></td><td>La tabla de equivalencias y los datos de los clientes del piloto (Alejandra).</td></tr>
+      <tr><td>Liquidación: borrador, registro y correo de cierre</td><td><span class="chip listo">Instalado</span></td><td>Fórmula de Incoterm; evento de "último pallet en bodega" para dispararla sola.</td></tr>
+      <tr><td>Facturación: borrador PDF y factura electrónica</td><td><span class="chip listo">Instalado</span></td><td>Proveedor de facturación electrónica (DIAN); dirección de entrega desde OBEN MAS; identificar despachos parciales nacionales.</td></tr>
     </table>
   </div>
-  <p style="font-size:12px; color:var(--tinta-3); margin-top:10px">"Listo por instalar" = construido y con pruebas automáticas en verde; se instala en el servidor de Oben en el próximo despliegue. Lo que depende de Oben funciona hoy contra un simulador rotulado y se conecta cuando exista.</p>
+  <p style="font-size:12px; color:var(--tinta-3); margin-top:10px">"Instalado" = en el servidor de Oben desde el 27 de septiembre de 2026, con pruebas automáticas en verde; se activa con el piloto. Lo que depende de Oben funciona contra un simulador rotulado y se conecta cuando exista.</p>
   <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>20</span></div>
 </section>
 
@@ -628,9 +628,9 @@ td:first-child { color: var(--tinta); font-weight: 600; }
 <section class="slide cierre">
   <div class="top"><div class="seccion">Próximos pasos</div></div>
   <h1>Del entorno de pruebas al piloto</h1>
-  <p class="lead">El orden propuesto. Cada paso se puede hacer sin esperar al siguiente.</p>
+  <p class="lead">El primero ya está hecho. Los demás se pueden avanzar sin esperar al siguiente.</p>
   <div class="ruta">
-    <div class="hito"><div class="n">PASO 1</div><h3>Instalar en el servidor de Oben</h3><p>Lo que está "listo por instalar" entra al servidor. Nada cambia para los usuarios hasta encender el buzón.</p><div class="dueno">Paradixe</div></div>
+    <div class="hito" style="border-color:#4ADE80"><div class="n" style="color:#4ADE80">PASO 1 · HECHO</div><h3>Instalado en el servidor de Oben</h3><p>Todo el desarrollo quedó instalado el 27 de septiembre de 2026. Nada cambia para los usuarios hasta encender el buzón.</p><div class="dueno">Paradixe</div></div>
     <div class="hito"><div class="n">PASO 2</div><h3>Cargar los datos del piloto</h3><p>Equivalencias y maestro de 1 o 2 clientes desde Excel, más las listas de distribución.</p><div class="dueno">Alejandra + Paradixe</div></div>
     <div class="hito"><div class="n">PASO 3</div><h3>Piloto supervisado</h3><p>Buzón encendido para esos clientes, con freno de mano: cada paso lo confirma Customer Service.</p><div class="dueno">Customer Service</div></div>
     <div class="hito"><div class="n">PASO 4</div><h3>Conectar OBEN MAS</h3><p>A medida que José entregue cada API, esa parte deja de estar simulada. No hay que rehacer pantallas ni flujos.</p><div class="dueno">José + Paradixe</div></div>
@@ -640,7 +640,7 @@ td:first-child { color: var(--tinta); font-weight: 600; }
     <p style="font-size:30px; line-height:1.2; font-weight:650; letter-spacing:-.02em; color:#fff; text-wrap:balance">Las personas deciden; el sistema ejecuta y deja constancia.</p>
     <div style="display:flex; flex-direction:column; gap:8px; font-size:13px; color:#C9CFDA; line-height:1.5">
       <div><span class="chip vivo">En producción</span>&nbsp; Lista de Empaque automática y Reportes Oben</div>
-      <div><span class="chip listo">Listo por instalar</span>&nbsp; Comercial, maestros, regla PND, Liquidación y Facturación</div>
+      <div><span class="chip listo">Instalado</span>&nbsp; Comercial, maestros, regla PND, Liquidación y Facturación</div>
       <div><span class="chip espera">Espera a Oben</span>&nbsp; APIs de OBEN MAS, fórmula Incoterm, proveedor DIAN</div>
     </div>
   </div>

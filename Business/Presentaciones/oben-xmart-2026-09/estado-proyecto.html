@@ -6,7 +6,7 @@
   :root{
     --bg:#F6F3EF; --paper:#FFFFFF; --paper-2:#FBF9F6; --ink:#1D2330; --ink-2:#4A5263; --ink-3:#7A8292; --line:#E6DFD6;
     --accent:#E8631F; --accent-soft:#FDEBDF; --accent-ink:#9A3F0E;
-    --vivo:#15803D; --vivo-bg:#DCFCE7; --listo:#B45309; --listo-bg:#FEF3C7; --espera:#B42318; --espera-bg:#FEE4E2; --fase:#475467; --fase-bg:#EAECF0;
+    --vivo:#15803D; --vivo-bg:#DCFCE7; --inst:#0E7490; --inst-bg:#CFFAFE; --espera:#B42318; --espera-bg:#FEE4E2; --fase:#475467; --fase-bg:#EAECF0;
     --sim:#6D28D9; --sim-bg:#F1E9FE; --hl:#FFF4D6; --shadow:0 8px 24px -14px rgba(29,35,48,.35);
     --sans:'Geist','Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif; --mono:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
     color-scheme: light;
@@ -15,7 +15,7 @@
     :root:not([data-theme="light"]){
       --bg:#15171C; --paper:#1E2129; --paper-2:#1A1D24; --ink:#ECEEF2; --ink-2:#B3B9C6; --ink-3:#8A91A0; --line:#2F3441;
       --accent:#FF8A4C; --accent-soft:#3A2519; --accent-ink:#FFC29E;
-      --vivo:#4ADE80; --vivo-bg:#14301F; --listo:#FBBF24; --listo-bg:#352A10; --espera:#F97066; --espera-bg:#3A1C1A; --fase:#B3B9C6; --fase-bg:#2A2F3A;
+      --vivo:#4ADE80; --vivo-bg:#14301F; --inst:#67E8F9; --inst-bg:#0F2F36; --espera:#F97066; --espera-bg:#3A1C1A; --fase:#B3B9C6; --fase-bg:#2A2F3A;
       --sim:#C4A5FF; --sim-bg:#2B2140; --hl:#3A3016; --shadow:0 8px 24px -14px rgba(0,0,0,.7);
       color-scheme: dark;
     }
@@ -23,7 +23,7 @@
   :root[data-theme="dark"]{
     --bg:#15171C; --paper:#1E2129; --paper-2:#1A1D24; --ink:#ECEEF2; --ink-2:#B3B9C6; --ink-3:#8A91A0; --line:#2F3441;
     --accent:#FF8A4C; --accent-soft:#3A2519; --accent-ink:#FFC29E;
-    --vivo:#4ADE80; --vivo-bg:#14301F; --listo:#FBBF24; --listo-bg:#352A10; --espera:#F97066; --espera-bg:#3A1C1A; --fase:#B3B9C6; --fase-bg:#2A2F3A;
+    --vivo:#4ADE80; --vivo-bg:#14301F; --inst:#67E8F9; --inst-bg:#0F2F36; --espera:#F97066; --espera-bg:#3A1C1A; --fase:#B3B9C6; --fase-bg:#2A2F3A;
     --sim:#C4A5FF; --sim-bg:#2B2140; --hl:#3A3016; --shadow:0 8px 24px -14px rgba(0,0,0,.7);
     color-scheme: dark;
   }
@@ -52,7 +52,7 @@
   .cifra .n{font-family:var(--mono);font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
   .cifra .t{font-size:14px;font-weight:600;color:var(--ink)}
   .cifra .l{font-size:12.5px;color:var(--ink-2)}
-  .cifra.vivo .n{color:var(--vivo)} .cifra.listo .n{color:var(--listo)} .cifra.espera .n{color:var(--espera)} .cifra.fase .n{color:var(--fase)}
+  .cifra.vivo .n{color:var(--vivo)} .cifra.inst .n{color:var(--inst)} .cifra.espera .n{color:var(--espera)} .cifra.fase .n{color:var(--fase)}
 
   /* Mapa */
   .mapa-wrap{overflow-x:auto;margin-inline:-4px;padding:4px}
@@ -94,7 +94,7 @@
   .paso p{margin:0;font-size:14px;color:var(--ink-2)}
   .chip{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;flex:none}
   .chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
-  .chip.vivo{color:var(--vivo);background:var(--vivo-bg)} .chip.listo{color:var(--listo);background:var(--listo-bg)} .chip.espera{color:var(--espera);background:var(--espera-bg)} .chip.fase{color:var(--fase);background:var(--fase-bg)} .chip.sim{color:var(--sim);background:var(--sim-bg)}
+  .chip.vivo{color:var(--vivo);background:var(--vivo-bg)} .chip.inst{color:var(--inst);background:var(--inst-bg)} .chip.espera{color:var(--espera);background:var(--espera-bg)} .chip.fase{color:var(--fase);background:var(--fase-bg)} .chip.sim{color:var(--sim);background:var(--sim-bg)}
   .falta{font-size:13px;background:var(--paper-2);border:1px dashed var(--line);border-radius:8px;padding:8px 10px;color:var(--ink-2)}
   .falta b{color:var(--ink)}
   .deps{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -136,10 +136,10 @@
 
 <div class="wrap">
   <header class="page">
-    <div class="eyebrow"><span>Oben Xmart</span><span class="dot"></span><span>Estado del proyecto</span><span class="dot"></span><span>Actualizado el 27 de septiembre de 2026</span></div>
+    <div class="eyebrow"><span>Oben Xmart</span><span class="dot"></span><span>Estado del proyecto</span><span class="dot"></span><span>Instalado en el servidor de Oben · 27 de septiembre de 2026</span></div>
     <h1>Del correo del cliente al PDF de la factura</h1>
-    <p class="sub">Cada paso del proceso, con su estado real: qué ya funciona en el servidor de Oben, qué está construido y listo para instalar, y qué espera una respuesta o una API de Oben. Toque una cifra, una etapa o una pregunta para filtrar.</p>
-    <div class="aviso"><span aria-hidden="true">●</span><div><strong>Nuestra parte está completa.</strong> Todo lo que depende de Oben funciona hoy contra un simulador rotulado <strong>SIMULADO</strong> y se conecta al sistema real sin rehacer nada. Lo marcado "listo por instalar" todavía <strong>no</strong> está en el servidor de Oben.</div></div>
+    <p class="sub">Cada paso del proceso, con su estado real: qué ya se usa con datos reales, qué está instalado en el servidor de Oben y se activa con el piloto, y qué espera una respuesta o una API de Oben. Toque una cifra, una etapa o una pregunta para filtrar.</p>
+    <div class="aviso"><span aria-hidden="true">●</span><div><strong>Todo nuestro desarrollo está instalado en el servidor de Oben.</strong> Lo que depende de Oben funciona contra un simulador rotulado <strong>SIMULADO</strong> y se conecta al sistema real sin rehacer nada. Para los usuarios no cambia nada hasta que se encienda el piloto: el buzón de pedidos sigue apagado.</div></div>
   </header>
 
   <section class="resumen" aria-label="Resumen">
@@ -168,7 +168,7 @@
     <div>
       <div class="sec-t" style="margin-bottom:10px"><h2>Preguntas frecuentes</h2></div>
       <details open><summary>¿Cubicaje o cubicada?</summary><p>Las dos. <b>Cubicaje</b> es el proceso de Planeación (ajustar pallets al contenedor con Cube IQ). <b>Cubicada</b> es el estado en que queda la Proforma después: sin cubicar → cubicada → retenida → activa. "Ubicada" era un error de transcripción y ya se corrigió en el sistema.</p></details>
-      <details><summary>¿Qué significa "listo por instalar"?</summary><p>Está construido y tiene pruebas automáticas en verde, pero todavía no se instaló en el servidor de Oben. Se instala en el próximo despliegue y no cambia nada para los usuarios hasta que Oben encienda cada parte.</p></details>
+      <details><summary>¿Qué significa "instalado"?</summary><p>Ya está en el servidor de Oben (desde el 27 de septiembre de 2026) y tiene pruebas automáticas en verde. Se activa por partes: el flujo Comercial cuando se encienda el buzón del piloto y se carguen equivalencias y clientes; lo que depende de OBEN MAS, a medida que lleguen sus APIs. Mientras tanto, lo simulado se rotula SIMULADO y nunca se escribe en OBEN MAS ni sale a un cliente real.</p></details>
       <details><summary>¿Por qué hay datos simulados?</summary><p>Para dejar todo listo sin esperar las APIs de OBEN MAS. El simulador responde con la misma forma de datos que el sistema real. Todo dato simulado se rotula como tal en pantallas, correos y PDF, y hay candados para que nada simulado se escriba en OBEN MAS ni llegue a un cliente real.</p></details>
       <details><summary>¿Quién confirma lo que hace el sistema?</summary><p>Con el "freno de mano" (modo supervisado), cada escritura en OBEN MAS espera la confirmación de Customer Service. Pasar a automático es una decisión de Oben, por cliente o para todos.</p></details>
       <details><summary>¿Hay una presentación del software?</summary><p>Sí: Paradixe preparó un documento en PDF de 22 páginas con capturas de cada pantalla y de los correos automáticos (entorno de pruebas, datos simulados). Es la mejor forma de verlo si esta página no carga en su red.</p></details>
@@ -177,6 +177,7 @@
       <div class="sec-t" style="margin-bottom:10px"><h2>Qué cambió desde la versión anterior</h2></div>
       <div class="cambios">
         <ul>
+          <li><b>Instalación:</b> todo lo que estaba "listo por instalar" quedó en el servidor de Oben el 27 de septiembre de 2026.</li>
           <li><b>Liquidación:</b> el correo de cierre a COMEX y Facturación ya está construido (antes "sin construir").</li>
           <li><b>Facturación:</b> borrador PDF de exportación, nacional completo y nacional parcial, construido (antes "sin construir").</li>
           <li><b>Comercial completo:</b> de la orden de compra a la orden de venta activa, con freno de mano, recordatorios, cartera y cambios de fecha.</li>
@@ -199,8 +200,8 @@
 <script>
 (function(){
   var ESTADOS = {
-    vivo:   {t:'En producción', l:'ya funcionan con datos reales en el servidor de Oben', color:'var(--vivo)'},
-    listo:  {t:'Listo por instalar', l:'construidos y probados, se instalan en el próximo despliegue', color:'var(--listo)'},
+    vivo:   {t:'En producción', l:'ya se usan con datos reales', color:'var(--vivo)'},
+    inst:   {t:'Instalado', l:'en el servidor de Oben; se activan con el piloto o con las APIs de Oben', color:'var(--inst)'},
     espera: {t:'Espera a Oben', l:'dependen de una API o un dato de Oben', color:'var(--espera)'},
     fase:   {t:'Siguiente fase', l:'quedan para después del piloto', color:'var(--fase)'}
   };
@@ -224,16 +225,16 @@
   };
   var ETAPAS = [
     {id:'comercial', t:'Comercial', who:'Customer Service', sub:'De la orden de compra a la orden de venta activa', pasos:[
-      {t:'Orden de compra por correo → caso', e:'listo', d:'Cada OC que llega al buzón (PDF, Excel, CSV o texto) abre un caso. Una OC que llega por otro canal se registra a mano y sigue el mismo camino.', f:'Definir el buzón de OC y encenderlo cuando empiece el piloto.', q:['J2','A3']},
-      {t:'Traducción a referencias Oben y conversión de unidades', e:'listo', d:'Tabla de equivalencias por cliente (carga desde Excel). Libras → kg; pulgadas y cm → mm. Sin equivalencia, la línea queda como faltante: nunca se adivina.', f:'Equivalencias reales de los clientes del piloto.', q:['A1','A5']},
-      {t:'Cliente por dominio y destino desde el maestro', e:'listo', sim:true, d:'Solo se aceptan dominios autorizados; uno parecido se trata como sospechoso. País y direcciones salen del maestro de OBEN MAS; si hay varias y la OC no dice cuál, se pregunta.', f:'Maestro de clientes vía API (hoy simulado) y datos de los clientes del piloto.', q:['J1','A2']},
-      {t:'Proforma en OBEN MAS (sin cubicar)', e:'listo', sim:true, d:'Con freno de mano: Customer Service revisa el caso y confirma; recién ahí se crea la Proforma.', f:'Transacción "crear Proforma" y su ambiente de pruebas.', q:['J1','J2']},
-      {t:'Cubicaje por Planeación → Proforma cubicada', e:'listo', sim:true, d:'El sistema detecta el cambio de estado; el trabajo en Cube IQ no cambia.', f:'Estado de la Proforma vía API.', q:['J1']},
-      {t:'Proforma al cliente y recordatorios', e:'listo', sim:true, d:'Sale el PDF oficial con copia al comercial y a quien Oben defina; los recordatorios van en el mismo hilo del correo.', f:'PDF oficial de OBEN MAS (idéntico al aprobado, no se recrea) y confirmar tiempos y copias.', q:['J1','A4','A6','A7']},
-      {t:'Respuesta del cliente: aprueba, rechaza o modifica', e:'listo', d:'Se reconoce por el hilo o por el número de Proforma en el asunto. Si pide modificar, la Proforma vuelve a "sin cubicar" y se repite el ciclo.', f:'Transacciones aprobar, anular y modificar.', q:['J1']},
-      {t:'OV retenida → cartera → activa', e:'listo', sim:true, d:'La aprobación se reenvía a cartera, el comercial recibe seguimiento mientras no libera y, al liberar, la orden pasa a activa con confirmación.', f:'Dato de cartera por OV (el que NetSuite releva a OBEN MAS) y transacción "activar".', q:['J1','A4','A7']},
-      {t:'Cambios de fecha de entrega', e:'listo', sim:true, d:'Si Planeación mueve la fecha comprometida, queda en el historial del caso y se avisa a Customer Service.', f:'Fechas de la Proforma vía API.', q:['J1']},
-      {t:'Tablero, tiempos y freno de mano', e:'listo', d:'Embudo por estado, casos que requieren atención, tiempos promedio por etapa y pedidos por cliente, con filtros por fecha y cliente. Modo supervisado o automático.', q:[]},
+      {t:'Orden de compra por correo → caso', e:'inst', d:'Cada OC que llega al buzón (PDF, Excel, CSV o texto) abre un caso. Una OC que llega por otro canal se registra a mano y sigue el mismo camino.', f:'Definir el buzón de OC y encenderlo cuando empiece el piloto.', q:['J2','A3']},
+      {t:'Traducción a referencias Oben y conversión de unidades', e:'inst', d:'Tabla de equivalencias por cliente (carga desde Excel). Libras → kg; pulgadas y cm → mm. Sin equivalencia, la línea queda como faltante: nunca se adivina.', f:'Equivalencias reales de los clientes del piloto.', q:['A1','A5']},
+      {t:'Cliente por dominio y destino desde el maestro', e:'inst', sim:true, d:'Solo se aceptan dominios autorizados; uno parecido se trata como sospechoso. País y direcciones salen del maestro de OBEN MAS; si hay varias y la OC no dice cuál, se pregunta.', f:'Maestro de clientes vía API (hoy simulado) y datos de los clientes del piloto.', q:['J1','A2']},
+      {t:'Proforma en OBEN MAS (sin cubicar)', e:'inst', sim:true, d:'Con freno de mano: Customer Service revisa el caso y confirma; recién ahí se crea la Proforma.', f:'Transacción "crear Proforma" y su ambiente de pruebas.', q:['J1','J2']},
+      {t:'Cubicaje por Planeación → Proforma cubicada', e:'inst', sim:true, d:'El sistema detecta el cambio de estado; el trabajo en Cube IQ no cambia.', f:'Estado de la Proforma vía API.', q:['J1']},
+      {t:'Proforma al cliente y recordatorios', e:'inst', sim:true, d:'Sale el PDF oficial con copia al comercial y a quien Oben defina; los recordatorios van en el mismo hilo del correo.', f:'PDF oficial de OBEN MAS (idéntico al aprobado, no se recrea) y confirmar tiempos y copias.', q:['J1','A4','A6','A7']},
+      {t:'Respuesta del cliente: aprueba, rechaza o modifica', e:'inst', d:'Se reconoce por el hilo o por el número de Proforma en el asunto. Si pide modificar, la Proforma vuelve a "sin cubicar" y se repite el ciclo.', f:'Transacciones aprobar, anular y modificar.', q:['J1']},
+      {t:'OV retenida → cartera → activa', e:'inst', sim:true, d:'La aprobación se reenvía a cartera, el comercial recibe seguimiento mientras no libera y, al liberar, la orden pasa a activa con confirmación.', f:'Dato de cartera por OV (el que NetSuite releva a OBEN MAS) y transacción "activar".', q:['J1','A4','A7']},
+      {t:'Cambios de fecha de entrega', e:'inst', sim:true, d:'Si Planeación mueve la fecha comprometida, queda en el historial del caso y se avisa a Customer Service.', f:'Fechas de la Proforma vía API.', q:['J1']},
+      {t:'Tablero, tiempos y freno de mano', e:'inst', d:'Embudo por estado, casos que requieren atención, tiempos promedio por etapa y pedidos por cliente, con filtros por fecha y cliente. Modo supervisado o automático.', q:[]},
       {t:'Lectura de órdenes de compra con IA', e:'fase', d:'El código existe; hoy la lectura es por reglas. La referencia Oben siempre sale de la tabla de equivalencias, nunca de la IA.', f:'Decidir dónde corre el servicio de IA y contar con ejemplos reales de OC.', q:['A3']}
     ]},
     {id:'corte', t:'Producción y corte', who:'Planta · OBEN MAS', sub:'El cierre del corte dispara los documentos', pasos:[
@@ -243,18 +244,18 @@
       {t:'Paquete completo de documentos', e:'vivo', d:'Lista Especial (3 hojas), Unificada, Detallada, Consumo de Material de Empaque, Consumo de Materia Prima y Hoja de Costos (un archivo por línea), en el formato de Oben. Solefilmes en PDF cuando aplica.', q:[]},
       {t:'Nunca se envía incompleto', e:'vivo', d:'Si falta un documento, se reintenta cada 10 minutos; al quinto intento se escala a José y Jorge. Tras cada envío se confirma con spApproveComex_Paradixe.', q:[]},
       {t:'Reportes Oben a pedido', e:'vivo', d:'Consulta de cualquier reporte por orden de venta, en tablas legibles, descarga en Excel o envío por correo; el paquete completo también se puede reenviar a mano.', q:[]},
-      {t:'Regla PND: retenidas por cartera', e:'listo', sim:true, d:'Si cartera no liberó, la Lista de Empaque no se genera: se revisa cada 6 horas, se avisa a cartera y COMEX, y se puede liberar o cancelar a mano con registro.', f:'Dato de cartera por OV y confirmar el comportamiento PND. Un dato simulado nunca retiene ni libera una orden real.', q:['J1','J3']},
+      {t:'Regla PND: retenidas por cartera', e:'inst', sim:true, d:'Si cartera no liberó, la Lista de Empaque no se genera: se revisa cada 6 horas, se avisa a cartera y COMEX, y se puede liberar o cancelar a mano con registro.', f:'Dato de cartera por OV y confirmar el comportamiento PND. Un dato simulado nunca retiene ni libera una orden real.', q:['J1','J3']},
       {t:'Despacho parcial nacional', e:'espera', d:'OBEN MAS–Paradixe pide un juego de documentos "Parcial" por cada despacho parcial de un pedido nacional.', f:'Cómo identificar en OBEN MAS que un despacho es parcial.', q:['J8']}
     ]},
     {id:'liquidacion', t:'Liquidación', who:'COMEX · Facturación', sub:'Liquidación de exportación', pasos:[
       {t:'Disparador: último pallet en bodega de Producto Terminado', e:'espera', d:'Hoy la liquidación se lanza a mano desde el sistema.', f:'Un evento o correo en ese momento.', q:['J5']},
-      {t:'Borrador de liquidación', e:'listo', sim:true, d:'Kilos y FOB por línea; para USA, Entry Fee, ISF y Harbor Maintenance desde el maestro de tarifas; lista lo que falta. Verificado contra Proformas reales (10867, 11357, 11271).', f:'Fórmula de Incoterm (flete, seguro, otros gastos). Hoy está simulada y con candado.', q:['J4']},
-      {t:'Registro en Oben (encabezado + detalle)', e:'listo', d:'Una Proforma nunca se liquida dos veces; si la conexión se corta a mitad, pide confirmación antes de reintentar. Bloqueado mientras la fórmula sea simulada.', f:'Fórmula de Incoterm real.', q:['J4']},
-      {t:'Correo de cierre a COMEX y Facturación', e:'listo', d:'Con la Lista de Empaque Unificada y la Proforma aprobada. Solo sale cuando la liquidación está completa en Oben y no hay adjuntos simulados.', f:'Qué Proforma adjuntar (oficial o firmada) y destinatarios.', q:['J7','J1','A7']}
+      {t:'Borrador de liquidación', e:'inst', sim:true, d:'Kilos y FOB por línea; para USA, Entry Fee, ISF y Harbor Maintenance desde el maestro de tarifas; lista lo que falta. Verificado contra Proformas reales (10867, 11357, 11271).', f:'Fórmula de Incoterm (flete, seguro, otros gastos). Hoy está simulada y con candado.', q:['J4']},
+      {t:'Registro en Oben (encabezado + detalle)', e:'inst', d:'Una Proforma nunca se liquida dos veces; si la conexión se corta a mitad, pide confirmación antes de reintentar. Bloqueado mientras la fórmula sea simulada.', f:'Fórmula de Incoterm real.', q:['J4']},
+      {t:'Correo de cierre a COMEX y Facturación', e:'inst', d:'Con la Lista de Empaque Unificada y la Proforma aprobada. Solo sale cuando la liquidación está completa en Oben y no hay adjuntos simulados.', f:'Qué Proforma adjuntar (oficial o firmada) y destinatarios.', q:['J7','J1','A7']}
     ]},
     {id:'facturacion', t:'Facturación', who:'Facturación · COMEX', sub:'Exportación y nacional', pasos:[
-      {t:'Exportación: borrador después de la liquidación', e:'listo', sim:true, d:'PDF con cliente, Proforma, OC, contenedor, películas, precios y kilos. La dirección de entrega sale de OBEN MAS (hoy simulada y rotulada en el PDF).', f:'Dirección de entrega vía API.', q:['J1']},
-      {t:'Nacional completo', e:'listo', d:'Mismo borrador con los datos de la Proforma (precio, observaciones, información complementaria), para Distribución y COMEX.', f:'Disparo automático al ingresar el último pallet.', q:['J5']},
+      {t:'Exportación: borrador después de la liquidación', e:'inst', sim:true, d:'PDF con cliente, Proforma, OC, contenedor, películas, precios y kilos. La dirección de entrega sale de OBEN MAS (hoy simulada y rotulada en el PDF).', f:'Dirección de entrega vía API.', q:['J1']},
+      {t:'Nacional completo', e:'inst', d:'Mismo borrador con los datos de la Proforma (precio, observaciones, información complementaria), para Distribución y COMEX.', f:'Disparo automático al ingresar el último pallet.', q:['J5']},
       {t:'Factura electrónica', e:'espera', d:'Se emite al enviar a COMEX; el flujo ya la pide a un proveedor simulado.', f:'Proveedor de facturación electrónica (DIAN).', q:['J6']},
       {t:'Nacional parcial', e:'espera', d:'El borrador parcial ya existe y se puede generar marcándolo a mano; falta que el sistema lo detecte solo.', f:'Cómo identificar un despacho parcial en OBEN MAS.', q:['J8']}
     ]}
