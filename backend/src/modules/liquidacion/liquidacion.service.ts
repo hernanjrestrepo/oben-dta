@@ -182,6 +182,7 @@ export class LiquidacionService {
       lines,
       missing,
       readyToSubmit: missing.length === 0,
+      simulated: this.calculator.simulated,
     };
   }
 
@@ -191,6 +192,16 @@ export class LiquidacionService {
     options: LiquidacionSubmitOptions = {},
   ): Promise<LiquidacionSubmitResult> {
     const draft = await this.getDraft(numberPF, input);
+    // Candado: un borrador armado con la fórmula de Incoterm SIMULADA nunca
+    // escribe en el ERP real de Oben — ni primer envío ni reanudación. Se
+    // revisa antes de tocar la idempotencia y antes de cualquier llamada.
+    if (options.confirm === true && draft.simulated) {
+      throw new BadRequestException({
+        message:
+          'Esta liquidación usa la fórmula de Incoterm SIMULADA (LIQUIDACION_SIMULATION_MODE): se puede simular sin confirm, pero nunca enviarse a Oben. Falta la fórmula real de José.',
+        simulated: true,
+      });
+    }
     if (!draft.readyToSubmit) {
       throw new BadRequestException({
         message: 'La liquidación no se puede enviar todavía: faltan datos (no se inventan).',
@@ -200,7 +211,7 @@ export class LiquidacionService {
     const payloads = this.buildPayloads(draft);
 
     if (options.confirm !== true) {
-      return { dryRun: true, numberPF: draft.numberPF, payloads };
+      return { dryRun: true, simulated: draft.simulated, numberPF: draft.numberPF, payloads };
     }
 
     // headId/detailsDone declaran que algo YA existe en Oben: solo tienen

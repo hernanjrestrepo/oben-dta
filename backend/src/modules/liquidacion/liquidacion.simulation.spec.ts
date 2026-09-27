@@ -1,6 +1,10 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { LiquidacionService } from './liquidacion.service';
-import type { LiquidacionValueCalculator } from './liquidacion-value-calculator';
+import {
+  PendingFormulaCalculator,
+  SimulatedIncotermCalculator,
+  type LiquidacionValueCalculator,
+} from './liquidacion-value-calculator';
 import type { LiquidacionInput } from './liquidacion.types';
 
 /**
@@ -100,8 +104,13 @@ class FakeIdempotency {
   }
 }
 
-/** SOLO PRUEBA — no es la fórmula real de José. */
+/**
+ * SOLO PRUEBA — no es la fórmula real de José. Declara `simulated:false`
+ * porque hace el papel del futuro calculador REAL (para ejercitar los envíos
+ * con confirm:true); el candado de la fórmula simulada se prueba aparte.
+ */
 const testCalculator: LiquidacionValueCalculator = {
+  simulated: false,
   compute: ({ line }) => {
     const r = (n: number) => Math.round(n * 100) / 100;
     const freight = r(line.kilosTotal * 0.1);
@@ -157,7 +166,7 @@ const usaInput = (extra: LiquidacionInput = {}): LiquidacionInput => ({ header: 
 describe('Liquidación — simulación completa (datos reales de spCheckSettlement, escrituras simuladas)', () => {
   describe('borrador con las respuestas REALES de Oben', () => {
     it('PF 11271 (USA): deriva kilos y FOB del SP, toma Entry Fee/ISF/Harbor del maestro, y lista lo que falta (nada se inventa)', async () => {
-      const { service } = build({ calculator: { compute: () => ({}) } });
+      const { service } = build({ calculator: { simulated: false, compute: () => ({}) } });
       const draft = await service.getDraft('11271');
 
       expect(draft.pais).toBe('USA');
@@ -181,7 +190,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     });
 
     it('PF 11357 (Colombia, doméstica): NO exige los cargos de USA ni consulta el maestro de tarifas', async () => {
-      const { service, rates } = build({ calculator: { compute: () => ({}) } });
+      const { service, rates } = build({ calculator: { simulated: false, compute: () => ({}) } });
       const draft = await service.getDraft('11357');
 
       expect(draft.esUSA).toBe(false);
@@ -210,7 +219,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
 
   describe('envío', () => {
     it('sin datos completos NO escribe nada en Oben y devuelve la lista de faltantes', async () => {
-      const { service, sim } = build({ calculator: { compute: () => ({}) } });
+      const { service, sim } = build({ calculator: { simulated: false, compute: () => ({}) } });
       await expect(service.submit('11271', {}, { confirm: true })).rejects.toThrow(BadRequestException);
       expect(sim.writes()).toHaveLength(0);
     });
@@ -535,6 +544,72 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     });
   });
 
+  describe('fórmula de Incoterm SIMULADA — candado contra envíos reales', () => {
+    const simulada = () => build({ calculator: new SimulatedIncotermCalculator() });
+    const HEADER_CO = { direccion: 'Cra 1', puertoArribo: 'Buenaventura', puertoEmbarque: 'Cartagena', paNcm: '3920.20', paNaladi: '3920.20.00' };
+
+    it('con la fórmula simulada un borrador puede quedar completo, pero declara simulated:true', async () => {
+      const { service } = simulada();
+
+      const draft = await service.getDraft('11357', { header: HEADER_CO });
+
+      expect(draft.readyToSubmit).toBe(true);
+      expect(draft.simulated).toBe(true);
+      expect(draft.lines[0]).toMatchObject({ valueFreight: 679.34, valueSure: 50.44, expensesOther: 161.34, total: 17025.54 });
+    });
+
+    it('USA con cargos del maestro + digitados: también completo y simulado', async () => {
+      const { service } = simulada();
+      const draft = await service.getDraft('11271', usaInput());
+      expect(draft).toMatchObject({ readyToSubmit: true, simulated: true, esUSA: true });
+    });
+
+    it('dry-run (sin confirm) SÍ se permite: devuelve los payloads marcados como simulados y no escribe nada', async () => {
+      const { service, sim, idem } = simulada();
+
+      const res = await service.submit('11357', { header: HEADER_CO });
+
+      expect(res).toMatchObject({ dryRun: true, simulated: true });
+      expect(res.payloads?.details[0]).toMatchObject({ valueFreight: 679.34 });
+      expect(sim.writes()).toHaveLength(0);
+      expect(idem.rows.size).toBe(0);
+    });
+
+    it('confirm:true con la fórmula simulada se RECHAZA antes de tocar la idempotencia o Oben', async () => {
+      const { service, sim, idem, audit } = simulada();
+
+      await expect(service.submit('11357', { header: HEADER_CO }, { confirm: true })).rejects.toThrow(/SIMULADA/);
+
+      expect(sim.writes()).toHaveLength(0);
+      expect(idem.rows.size).toBe(0);
+      expect(audit.log).not.toHaveBeenCalled();
+    });
+
+    it('tampoco se puede usar para REANUDAR una liquidación a medias (el registro queda intacto)', async () => {
+      const { service, sim, idem } = simulada();
+      idem.rows.set('liquidacion:11357', { status: 'failed', result: { headId: 5000, detailsDone: [] }, updatedAt: Date.now() });
+
+      await expect(
+        service.submit('11357', { header: HEADER_CO }, { confirm: true, resume: true, acknowledgeAmbiguous: true, headId: 5000 }),
+      ).rejects.toThrow(/SIMULADA/);
+
+      expect(sim.writes()).toHaveLength(0);
+      expect(idem.rows.get('liquidacion:11357')?.status).toBe('failed');
+    });
+
+    it('el rechazo aplica aunque el borrador simulado esté incompleto (el motivo es la fórmula, no los datos)', async () => {
+      const { service } = simulada();
+      await expect(service.submit('11357', {}, { confirm: true })).rejects.toThrow(/SIMULADA/);
+    });
+
+    it('con el calculador de producción (fórmula pendiente) el borrador NO es simulado', async () => {
+      const { service } = build({ calculator: new PendingFormulaCalculator() });
+      const draft = await service.getDraft('11357', { header: HEADER_CO });
+      expect(draft.simulated).toBe(false);
+      expect(draft.readyToSubmit).toBe(false); // flete/seguro/otros siguen faltando
+    });
+  });
+
   describe('lo que digita el usuario manda sobre los defaults', () => {
     it('los valores de encabezado del usuario (p. ej. otro Entry Fee) sobrescriben el maestro de tarifas', async () => {
       const { service } = build();
@@ -544,7 +619,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     });
 
     it('un valor explícito 0 (p. ej. sin seguro) es válido — solo null/ausente cuenta como faltante', async () => {
-      const { service } = build({ calculator: { compute: () => ({}) } });
+      const { service } = build({ calculator: { simulated: false, compute: () => ({}) } });
       const line = {
         kilosTotalUnit: 1, valueTotal: 1, valueFreight: 0, valueFreightUnit: 0, valueSure: 0, valueSureUnit: 0,
         expensesOther: 0, expensesOtherUnit: 0, subTotal: 1, total: 1, totalUnidad: 1,

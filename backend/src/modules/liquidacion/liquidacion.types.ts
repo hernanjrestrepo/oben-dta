@@ -77,6 +77,12 @@ export interface LiquidacionDraft {
   /** Todo lo que falta para poder enviar — nada se inventa. */
   missing: string[];
   readyToSubmit: boolean;
+  /**
+   * true = flete/seguro/otros gastos salieron de la fórmula de Incoterm
+   * SIMULADA. Un borrador simulado puede simularse (dry-run) pero NUNCA
+   * enviarse a Oben con `confirm:true`.
+   */
+  simulated: boolean;
 }
 
 export interface LiquidacionSubmitOptions {
@@ -108,6 +114,8 @@ export interface LiquidacionProgress {
 
 export interface LiquidacionSubmitResult {
   dryRun: boolean;
+  /** Solo en dry-run: los payloads se armaron con la fórmula simulada. */
+  simulated?: boolean;
   alreadyDone?: boolean;
   numberPF: string;
   headId?: number;
