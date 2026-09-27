@@ -1,4 +1,7 @@
+import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
 import { EquivalencesController } from './equivalences.controller';
+import { CreateEquivalenceDto, UpdateEquivalenceDto } from './dto/client-product-equivalence.dto';
 
 describe('EquivalencesController', () => {
   function makeController(overrides: Partial<Record<string, jest.Mock>> = {}) {
@@ -41,5 +44,28 @@ describe('EquivalencesController', () => {
 
     expect(resolve).toHaveBeenCalledWith('c1', 'BOPP 15');
     expect(result).toBe('SC15TN');
+  });
+});
+
+describe('DTOs de equivalencias', () => {
+  it('un código hecho solo de espacios no es válido', async () => {
+    const dto = plainToInstance(CreateEquivalenceDto, {
+      clientId: '6f1c1f7e-8d3a-4c55-9d7e-0b5b1b6f2a10',
+      clientCode: '   ',
+      obenCode: 'SC15TN',
+    });
+    const errors = await validate(dto);
+    expect(errors.map((e) => e.property)).toEqual(['clientCode']);
+  });
+
+  it('clientId debe ser un UUID', async () => {
+    const dto = plainToInstance(CreateEquivalenceDto, { clientId: 'c1', clientCode: 'BOPP 1', obenCode: 'SC15TN' });
+    const errors = await validate(dto);
+    expect(errors.map((e) => e.property)).toEqual(['clientId']);
+  });
+
+  it('update parcial válido', async () => {
+    const errors = await validate(plainToInstance(UpdateEquivalenceDto, { obenCode: 'SC20TN' }));
+    expect(errors).toEqual([]);
   });
 });
