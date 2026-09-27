@@ -28,6 +28,7 @@ import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.
 import { EmailIntakeModule } from './modules/email-intake/email-intake.module';
 import { FreightRatesModule } from './modules/freight-rates/freight-rates.module';
 import { DistributionListsModule } from './modules/distribution-lists/distribution-lists.module';
+import { EquivalencesModule } from './modules/equivalences/equivalences.module';
 
 // Import all entities
 import { Client } from './entities/client.entity';
@@ -78,6 +79,7 @@ import { DistributionList } from './entities/distribution-list.entity';
 import { DistributionListRecipient } from './entities/distribution-list-recipient.entity';
 import { DistributionListAssociation } from './entities/distribution-list-association.entity';
 import { PackingListPendingRetry } from './entities/packing-list-pending-retry.entity';
+import { ClientProductEquivalence } from './entities/client-product-equivalence.entity';
 
 @Module({
   imports: [
@@ -151,6 +153,7 @@ import { PackingListPendingRetry } from './entities/packing-list-pending-retry.e
           DistributionListRecipient,
           DistributionListAssociation,
           PackingListPendingRetry,
+          ClientProductEquivalence,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') === 'development',
@@ -179,6 +182,7 @@ import { PackingListPendingRetry } from './entities/packing-list-pending-retry.e
     DistributionListsModule,
     ObenReportsModule,
     LiquidacionModule,
+    EquivalencesModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
