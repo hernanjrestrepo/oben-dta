@@ -16,28 +16,18 @@ export default function FletesPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    load();
+    Promise.all([api.getFreightInland(), api.getFreightTransload(), api.getFreightSurcharges()])
+      .then(([i, t, s]) => {
+        setInland(i);
+        setTransload(t);
+        setSurcharges(s);
+      })
+      .catch((err: unknown) => {
+        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+        setError(msg || 'Error cargando el maestro de tarifas');
+      })
+      .finally(() => setLoading(false));
   }, []);
-
-  async function load() {
-    try {
-      setLoading(true);
-      setError('');
-      const [i, t, s] = await Promise.all([
-        api.getFreightInland(),
-        api.getFreightTransload(),
-        api.getFreightSurcharges(),
-      ]);
-      setInland(i);
-      setTransload(t);
-      setSurcharges(s);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || 'Error cargando el maestro de tarifas');
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const tabs: { key: Tab; label: string; icon: React.ElementType; count: number }[] = [
     { key: 'inland', label: 'Inland / Canada', icon: Truck, count: inland.length },

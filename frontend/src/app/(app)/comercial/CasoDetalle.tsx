@@ -215,7 +215,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
                         )}
                       </td>
                       <td className="px-2 py-1.5">
-                        {editable ? <input value={e.kilos} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, kilos: ev.target.value } })} className={`${inputCls} w-20 !py-1`} /> : (l.kilos ?? '—')}
+                        {editable ? <input value={e.kilos} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, kilos: ev.target.value } })} className={`${inputCls} w-28 !py-1 tabular-nums`} /> : (l.kilos ?? '—')}
                       </td>
                       <td className="px-2 py-1.5">
                         {editable ? <input value={e.anchoMm} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, anchoMm: ev.target.value } })} className={`${inputCls} w-20 !py-1`} /> : (l.anchoMm ?? '—')}

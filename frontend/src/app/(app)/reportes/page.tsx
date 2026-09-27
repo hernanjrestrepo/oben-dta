@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { FileSpreadsheet, Loader2, AlertCircle, Search, ShieldCheck, Mail, Send, CheckCircle2, Package, Download } from 'lucide-react';
+import VistaDatosOben from '@/components/VistaDatosOben';
 
 interface ReportType {
   key: string;
@@ -121,7 +122,7 @@ export default function ReportesPage() {
           Reportes Oben
         </h1>
         <p className="text-gray-500 mt-1">
-          Consulta en vivo al ERP real de Oben (consumo de materiales, empaque, chequeos) y envío por correo en Excel — no se generan datos localmente.
+          Consulta en vivo al ERP de Oben (consumo de materiales, empaque, chequeos) y envío por correo en Excel — no se inventan datos (en el entorno de pruebas responde su simulador, siempre rotulado SIMULADO).
         </p>
       </div>
 
@@ -222,9 +223,11 @@ export default function ReportesPage() {
         <>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-green-700">
+              <div className={`flex items-center gap-2 ${data?.simulated === true ? 'text-purple-800' : 'text-green-700'}`}>
                 <ShieldCheck className="w-5 h-5" />
-                <p className="text-sm font-semibold">{currentLabel} — datos reales de Oben</p>
+                <p className="text-sm font-semibold">
+                  {currentLabel} — {data?.simulated === true ? 'SIMULADO: datos del simulador de Oben (entorno de pruebas)' : 'datos reales de Oben'}
+                </p>
               </div>
               <button
                 onClick={handleDownload}
@@ -281,10 +284,14 @@ export default function ReportesPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <p className="text-xs font-medium text-gray-500 uppercase mb-3">Vista previa (JSON crudo de Oben)</p>
-            <pre className="text-xs text-gray-700 bg-gray-50 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
-              {JSON.stringify(data, null, 2)}
-            </pre>
+            <p className="text-xs font-medium text-gray-500 uppercase mb-3">Vista previa</p>
+            <VistaDatosOben data={data} />
+            <details className="mt-4">
+              <summary className="text-xs text-gray-500 cursor-pointer">Ver la respuesta original de Oben (JSON)</summary>
+              <pre className="mt-2 text-xs text-gray-700 bg-gray-50 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
+                {JSON.stringify(data, null, 2)}
+              </pre>
+            </details>
           </div>
         </>
       )}

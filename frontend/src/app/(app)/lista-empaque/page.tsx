@@ -85,7 +85,7 @@ export default function ListaEmpaquePage() {
   }
 
   const lines = (data?.DetailedPackingList as PackingLine[] | undefined) ?? [];
-  const columns = lines.length > 0 ? Object.keys(lines[0]).filter((k) => k !== 'PO') : [];
+  const columns = lines.length > 0 ? Object.keys(lines[0]).filter((k) => k !== 'PO' && k !== 'simulated') : [];
   const summaryFields: Array<[string, string]> = [
     ['Cliente', 'Cliente'],
     ['Documento', 'Documento'],
@@ -102,7 +102,7 @@ export default function ListaEmpaquePage() {
           Lista de Empaque
         </h1>
         <p className="text-gray-500 mt-1">
-          Consulta en vivo al ERP real de Oben — no se generan datos localmente, se trae la información real del sistema de producción.
+          Consulta en vivo al ERP de Oben — no se inventan datos: se muestra lo que responde el sistema de producción (en el entorno de pruebas, su simulador, siempre rotulado SIMULADO).
         </p>
       </div>
 
@@ -149,10 +149,17 @@ export default function ListaEmpaquePage() {
         <>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-green-700">
-                <ShieldCheck className="w-5 h-5" />
-                <p className="text-sm font-semibold">Datos reales de Oben — {lines.length} línea{lines.length !== 1 ? 's' : ''}</p>
-              </div>
+              {data.simulated === true ? (
+                <div className="flex items-center gap-2 text-purple-800">
+                  <ShieldCheck className="w-5 h-5" />
+                  <p className="text-sm font-semibold">SIMULADO — datos del simulador de Oben (entorno de pruebas) — {lines.length} línea{lines.length !== 1 ? 's' : ''}</p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-green-700">
+                  <ShieldCheck className="w-5 h-5" />
+                  <p className="text-sm font-semibold">Datos reales de Oben — {lines.length} línea{lines.length !== 1 ? 's' : ''}</p>
+                </div>
+              )}
               <button
                 onClick={handleDownload}
                 disabled={downloading}

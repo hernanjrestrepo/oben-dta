@@ -42,8 +42,13 @@ export default function DistribucionPage() {
     }
   }
 
+  // Carga inicial: el estado se actualiza en los callbacks de la promesa (regla de React 19).
   useEffect(() => {
-    load();
+    api
+      .getDistributionLists()
+      .then(setLists)
+      .catch(() => setError('No se pudieron cargar las listas de distribución.'))
+      .finally(() => setLoading(false));
   }, []);
 
   function updateRecipient(i: number, patch: Partial<RecipientDraft>) {
