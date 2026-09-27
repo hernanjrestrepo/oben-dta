@@ -150,6 +150,11 @@ function build(opts: { calculator?: LiquidacionValueCalculator } = {}) {
       missing: [],
     }),
   };
+  // Correo de cierre (OBEN MAS §1.2): se prueba a fondo en liquidacion-cierre.service.spec.ts;
+  // aquí solo importa CUÁNDO se dispara.
+  const cierre = {
+    enviarTrasCompletar: jest.fn(async (numberPF: string) => ({ sent: true, numberPF, to: ['comex@oben.com'], cc: [], adjuntos: [], simulated: false })),
+  };
   const service = new LiquidacionService(
     sim as never,
     { tenantId: 't1', userId: 'u1' } as never,
@@ -157,8 +162,9 @@ function build(opts: { calculator?: LiquidacionValueCalculator } = {}) {
     idem as never,
     rates as never,
     opts.calculator ?? testCalculator,
+    cierre as never,
   );
-  return { service, sim, idem, audit, rates };
+  return { service, sim, idem, audit, rates, cierre };
 }
 
 const usaInput = (extra: LiquidacionInput = {}): LiquidacionInput => ({ header: { ...HEADER_USER, ...USA_CHARGES }, ...extra });
@@ -607,6 +613,53 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       const draft = await service.getDraft('11357', { header: HEADER_CO });
       expect(draft.simulated).toBe(false);
       expect(draft.readyToSubmit).toBe(false); // flete/seguro/otros siguen faltando
+    });
+  });
+
+  describe('correo de cierre (OBEN MAS §1.2): solo cuando la liquidación CONCLUYE en Oben', () => {
+    it('al completar, dispara el correo una vez y guarda OV/cliente/simulated:false en el evento de completado', async () => {
+      const { service, cierre, audit } = build();
+
+      const res = await service.submit('11271', usaInput(), { confirm: true });
+
+      expect(cierre.enviarTrasCompletar).toHaveBeenCalledTimes(1);
+      expect(cierre.enviarTrasCompletar).toHaveBeenCalledWith('11271');
+      expect(res.cierre).toMatchObject({ sent: true });
+      const done = audit.log.mock.calls.find((c) => c[0].action === 'liquidacion_completada')![0];
+      expect(done.outputData).toMatchObject({ ordenVenta: '11086', cliente: 'OBEN US, LLC', simulated: false });
+      // El correo sale DESPUÉS de registrar la liquidación como completada.
+      const completedAt = audit.log.mock.invocationCallOrder[audit.log.mock.calls.indexOf(audit.log.mock.calls.find((c) => c[0].action === 'liquidacion_completada')!)];
+      expect(cierre.enviarTrasCompletar.mock.invocationCallOrder[0]).toBeGreaterThan(completedAt);
+    });
+
+    it('un dry-run, una liquidación a medias o una PF ya liquidada NO disparan el correo', async () => {
+      const { service, sim, cierre } = build();
+      await service.submit('11271', usaInput());
+      sim.failOn('liquidacion.crearDetalle', 1, 'HTTP 500: Error en el SP');
+      await expect(service.submit('11271', usaInput(), { confirm: true })).rejects.toThrow(BadRequestException);
+      expect(cierre.enviarTrasCompletar).not.toHaveBeenCalled();
+
+      await service.submit('11271', usaInput(), { confirm: true, resume: true }); // completa → 1 correo
+      await service.submit('11271', usaInput(), { confirm: true }); // alreadyDone → ninguno más
+      expect(cierre.enviarTrasCompletar).toHaveBeenCalledTimes(1);
+    });
+
+    it('con la fórmula simulada nunca se llega a disparar (el candado rechaza antes)', async () => {
+      const { service, cierre } = build({ calculator: new SimulatedIncotermCalculator() });
+      await expect(service.submit('11271', usaInput(), { confirm: true })).rejects.toThrow(/SIMULADA/);
+      expect(cierre.enviarTrasCompletar).not.toHaveBeenCalled();
+    });
+
+    it('si el correo no sale, la liquidación (ya creada en Oben) NO falla: el resultado lo informa para reintentar', async () => {
+      const { service, cierre, idem } = build();
+      cierre.enviarTrasCompletar.mockResolvedValueOnce({
+        sent: false, numberPF: '11271', to: [], cc: [], adjuntos: [], simulated: false, error: 'smtp down',
+      } as never);
+
+      const res = await service.submit('11271', usaInput(), { confirm: true });
+
+      expect(res).toMatchObject({ dryRun: false, headId: 5000, detailsCreated: 1, cierre: { sent: false, error: 'smtp down' } });
+      expect(idem.rows.get('liquidacion:11271')?.status).toBe('completed');
     });
   });
 

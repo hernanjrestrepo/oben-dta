@@ -3,15 +3,19 @@ import { IntegrationHubModule } from '../integrations/hub/integration-hub.module
 import { AuthModule } from '../auth/auth.module';
 import { FreightRatesModule } from '../freight-rates/freight-rates.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
+import { DistributionListsModule } from '../distribution-lists/distribution-lists.module';
+import { ObenReportsModule } from '../oben-reports/oben-reports.module';
+import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import { LiquidacionController } from './liquidacion.controller';
 import { LiquidacionService } from './liquidacion.service';
 import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFromEnv } from './liquidacion-value-calculator';
 
 @Module({
-  imports: [IntegrationHubModule, AuthModule, FreightRatesModule, IdempotencyModule],
+  imports: [IntegrationHubModule, AuthModule, FreightRatesModule, IdempotencyModule, DistributionListsModule, ObenReportsModule],
   controllers: [LiquidacionController],
   providers: [
     LiquidacionService,
+    LiquidacionCierreService,
     {
       // Producción (variable ausente): PendingFormulaCalculator — nada se
       // calcula hasta que José entregue la fórmula. Dev/demo:

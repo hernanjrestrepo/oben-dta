@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
+import PDFDocument from 'pdfkit';
 import { MockAdapterBase } from '../mock-adapter-base';
 import { AdapterCapability } from '../adapter.types';
 import { SCENARIO_PROVIDER, ScenarioProvider } from '../scenario.types';
@@ -52,6 +53,15 @@ export interface ObenPlusProformaList {
   proformas: ObenPlusProformaStatus[];
 }
 
+/** El PDF oficial de la Proforma (el real vendrá de OBEN MAS tal cual, sin recrearlo). */
+export interface ObenPlusProformaPdf {
+  simulated: true;
+  numberPF: string;
+  filename: string;
+  contentType: 'application/pdf';
+  contentBase64: string;
+}
+
 /** Catálogo fijo de Proformas SIMULADAS para listados/dashboard — prefijo SIM- para que nunca se confundan con una PF real. */
 const CATALOGO_SIMULADO = Array.from({ length: 12 }, (_, i) => `SIM-${90001 + i}`);
 const CLIENTES_SIMULADOS = [
@@ -94,6 +104,7 @@ export class ObenPlusMockAdapter extends MockAdapterBase {
       { operation: 'proforma.cartera', method: 'read', description: 'Liberación de cartera de una Proforma (simulado)' },
       { operation: 'proforma.cubicaje', method: 'read', description: 'Contenedores planeados vs cargados, peso y volumen (simulado)' },
       { operation: 'proforma.list', method: 'read', description: 'Proformas en seguimiento, filtrables por cliente/estado (simulado)' },
+      { operation: 'proforma.pdf', method: 'read', description: 'PDF de la Proforma (simulado — NO es el documento oficial)' },
     ];
   }
 
@@ -103,6 +114,48 @@ export class ObenPlusMockAdapter extends MockAdapterBase {
       'proforma.cartera': this.wrap((args) => this.cartera(requirePF(args)), 'proforma.cartera'),
       'proforma.cubicaje': this.wrap((args) => this.cubicaje(requirePF(args)), 'proforma.cubicaje'),
       'proforma.list': this.wrap((args) => this.list(args), 'proforma.list'),
+      'proforma.pdf': this.wrap((args) => this.pdf(requirePF(args)), 'proforma.pdf'),
+    };
+  }
+
+  /**
+   * José fue explícito: el PDF real de la Proforma NO se recrea — ni una letra
+   * ni un espacio puede cambiar frente al diseño aprobado por el corporativo;
+   * se recibe vía API tal cual. Este es solo un marcador SIMULADO, rotulado en
+   * cada página, para poder probar el correo de cierre de Liquidación.
+   */
+  private async pdf(numberPF: string): Promise<ObenPlusProformaPdf> {
+    const status = this.status(numberPF);
+    const doc = new PDFDocument({ size: 'letter', margin: 48 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    const done = new Promise<Buffer>((resolve, reject) => {
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+    });
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#B00020').text('PROFORMA SIMULADA', { align: 'center' });
+    doc
+      .font('Helvetica')
+      .fontSize(10)
+      .text('NO es el documento oficial de Oben — el PDF real vendrá de OBEN MAS vía API, idéntico al aprobado.', { align: 'center' });
+    doc.moveDown();
+    doc.fillColor('#111111').fontSize(11);
+    for (const [label, value] of [
+      ['Proforma', numberPF],
+      ['Cliente (simulado)', status.cliente],
+      ['País (simulado)', status.pais],
+      ['Estado (simulado)', status.estado],
+      ['Fecha de creación (simulada)', status.fechas.creacion],
+    ]) {
+      doc.font('Helvetica-Bold').text(`${label}: `, { continued: true }).font('Helvetica').text(value);
+    }
+    doc.end();
+    return {
+      simulated: true,
+      numberPF,
+      filename: `Proforma_SIMULADA-PF${numberPF}.pdf`,
+      contentType: 'application/pdf',
+      contentBase64: (await done).toString('base64'),
     };
   }
 

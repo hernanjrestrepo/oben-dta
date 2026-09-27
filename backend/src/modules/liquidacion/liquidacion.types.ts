@@ -113,6 +113,8 @@ export interface LiquidacionProgress {
 }
 
 export interface LiquidacionSubmitResult {
+  /** Solo cuando la liquidación se completó en esta llamada: resultado del correo de cierre (OBEN MAS §1.2). */
+  cierre?: CierreEnvioResult;
   dryRun: boolean;
   /** Solo en dry-run: los payloads se armaron con la fórmula simulada. */
   simulated?: boolean;
@@ -121,4 +123,47 @@ export interface LiquidacionSubmitResult {
   headId?: number;
   detailsCreated?: number;
   payloads?: { header: Record<string, unknown>; details: Record<string, unknown>[] };
+}
+
+/** Adjunto del correo de cierre de Liquidación (OBEN MAS §1.2). */
+export interface CierreAdjunto {
+  key: 'empaque_unificada' | 'proforma';
+  label: string;
+  filename: string;
+  /** true = el documento salió de un simulador — el correo lo rotula siempre. */
+  simulated: boolean;
+}
+
+/** Qué saldría en el correo de cierre y si puede enviarse (sin enviar nada). */
+export interface CierrePreview {
+  numberPF: string;
+  ordenVenta: string | null;
+  cliente: string | null;
+  /** La liquidación concluyó en Oben (evento `liquidacion_completada`). */
+  liquidacionCompletada: boolean;
+  headId: number | null;
+  detalles: number | null;
+  destinatarios: { to: string[]; cc: string[] };
+  asunto: string | null;
+  adjuntos: CierreAdjunto[];
+  /** true si algún adjunto es simulado. */
+  simulated: boolean;
+  /** Rótulos de lo simulado, tal como aparecen en el correo. */
+  simulatedItems: string[];
+  missing: string[];
+  yaEnviado: boolean;
+  puedeEnviar: boolean;
+}
+
+export interface CierreEnvioResult {
+  sent: boolean;
+  numberPF: string;
+  to: string[];
+  cc: string[];
+  adjuntos: CierreAdjunto[];
+  simulated: boolean;
+  messageId?: string | null;
+  /** Por qué no salió (lo que falta / el error) — la liquidación en Oben NO se ve afectada. */
+  missing?: string[];
+  error?: string;
 }

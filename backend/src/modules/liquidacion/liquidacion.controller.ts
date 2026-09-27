@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { LiquidacionService } from './liquidacion.service';
+import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type { LiquidacionHeaderValues, LiquidacionLineValues } from './liquidacion.types';
 
 export const LIQUIDACION_PERMISSION = 'exportations.liquidate';
@@ -41,6 +42,13 @@ class LiquidacionInputDto {
   detailsDone?: number[];
 }
 
+class CierreDto {
+  /** Reenviar aunque ya se haya enviado el correo de cierre de esta PF. */
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
+}
+
 /**
  * Todas las rutas exigen `exportations.liquidate` (ya existe en el catálogo;
  * lo recibe `tenant.admin`, no `tenant.viewer`): submit con `confirm:true` crea
@@ -49,7 +57,10 @@ class LiquidacionInputDto {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('liquidacion')
 export class LiquidacionController {
-  constructor(private readonly liquidacion: LiquidacionService) {}
+  constructor(
+    private readonly liquidacion: LiquidacionService,
+    private readonly cierre: LiquidacionCierreService,
+  ) {}
 
   /** Borrador de solo lectura: consulta spCheckSettlement y muestra qué falta. */
   @Get(':numberPF/draft')
@@ -80,5 +91,19 @@ export class LiquidacionController {
         detailsDone: dto.detailsDone,
       },
     );
+  }
+
+  /** Vista previa del correo de cierre (OBEN MAS §1.2): destinatarios, adjuntos, qué es simulado y si puede salir. No envía nada. */
+  @Get(':numberPF/cierre')
+  @RequirePermission(LIQUIDACION_PERMISSION)
+  cierrePreview(@Param('numberPF') numberPF: string) {
+    return this.cierre.preview(numberPF);
+  }
+
+  /** Envía (o reintenta) el correo de cierre de una liquidación YA concluida en Oben. */
+  @Post(':numberPF/cierre')
+  @RequirePermission(LIQUIDACION_PERMISSION)
+  cierreEnviar(@Param('numberPF') numberPF: string, @Body() dto: CierreDto) {
+    return this.cierre.enviar(numberPF, { force: dto.force ?? false });
   }
 }

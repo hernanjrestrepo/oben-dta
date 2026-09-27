@@ -9,6 +9,10 @@ import { LiquidacionService } from '../liquidacion/liquidacion.service';
 import { SimulatedIncotermCalculator } from '../liquidacion/liquidacion-value-calculator';
 import { FacturacionService } from '../facturacion/facturacion.service';
 import { FacturacionPdfService } from '../facturacion/facturacion-pdf.service';
+import { LiquidacionCierreService } from '../liquidacion/liquidacion-cierre.service';
+import { ObenReportsService } from '../oben-reports/oben-reports.service';
+import { ObenReportExcelService } from '../oben-reports/oben-report-excel.service';
+import { SolefilmesPdfService } from '../oben-reports/solefilmes-pdf.service';
 
 /**
  * Flujo Comercial → Liquidación → Facturación de punta a punta en MODO
@@ -71,16 +75,34 @@ function pipeline(opts: { dianMode?: 'mock' | 'real' } = {}) {
     resolveSurcharges: jest.fn().mockResolvedValue({ entryFee: 110, importerSecurityFiling: 20, harborMaintenanceFee: 4.73, destinationCharges: null, missing: [] }),
   };
   const ctx = { tenantId: 't1', userId: 'u1' };
+  const distributionLists = { resolveRecipients: jest.fn().mockResolvedValue({ to: ['comex@oben.com'], cc: [], bcc: [] }) };
+  const cierre = new LiquidacionCierreService(
+    hub as never,
+    ctx as never,
+    audit as never,
+    distributionLists as never,
+    new ObenReportsService(hub as never, new ObenReportExcelService(), new SolefilmesPdfService()),
+  );
   return {
+    cierre,
+    audit,
     calls,
     idempotency,
     comercial: new ComercialService(hub as never),
-    liquidacion: new LiquidacionService(hub as never, ctx as never, audit as never, idempotency as never, rates as never, new SimulatedIncotermCalculator()),
+    liquidacion: new LiquidacionService(
+      hub as never,
+      ctx as never,
+      audit as never,
+      idempotency as never,
+      rates as never,
+      new SimulatedIncotermCalculator(),
+      cierre,
+    ),
     facturacion: new FacturacionService(
       hub as never,
       ctx as never,
       audit as never,
-      { resolveRecipients: jest.fn().mockResolvedValue({ to: ['comex@oben.com'], cc: [], bcc: [] }) } as never,
+      distributionLists as never,
       new FacturacionPdfService(),
       { find: jest.fn().mockResolvedValue([]) } as never,
       idempotency as never,
@@ -151,6 +173,23 @@ describe('Pipeline Comercial → Liquidación → Facturación en MODO SIMULADO'
     expect(p.calls.some((c) => c.system === 'obenPlus')).toBe(false);
 
     await expect(p.facturacion.send(ov)).resolves.toMatchObject({ cufeSimulado: true });
+  });
+
+  it('correo de cierre: la vista previa arma Unificada + Proforma SIMULADA rotuladas, pero no sale sin una liquidación concluida', async () => {
+    const p = pipeline();
+    const { ov, pf } = await findOrder(p, (pais) => pais !== 'COLOMBIA' && pais !== 'USA');
+
+    const preview = await p.cierre.preview(pf);
+    expect(preview).toMatchObject({ ordenVenta: String(ov), liquidacionCompletada: false, puedeEnviar: false, simulated: true, missing: [] });
+    expect(preview.adjuntos.map((a) => [a.key, a.simulated])).toEqual([
+      ['empaque_unificada', true],
+      ['proforma', true],
+    ]);
+
+    // En modo simulado la liquidación nunca concluye (candado): el correo tampoco sale.
+    await expect(p.liquidacion.submit(pf, { header: HEADER }, { confirm: true })).rejects.toThrow(/SIMULADA/);
+    await expect(p.cierre.enviar(pf)).rejects.toThrow(/no ha concluido/);
+    expect(p.calls.filter((c) => c.system === 'email')).toEqual([]);
   });
 
   it('el tablero Comercial agrega el catálogo simulado y lo declara', async () => {

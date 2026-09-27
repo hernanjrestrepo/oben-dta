@@ -25,11 +25,11 @@ describe('LiquidacionController — control de acceso', () => {
     expect(LIQUIDACION_PERMISSION).toBe('exportations.liquidate');
   });
 
-  it('tiene exactamente las 3 rutas esperadas (draft GET, draft POST, submit POST)', () => {
-    expect(routes.sort()).toEqual(['draft', 'draftWithInput', 'submit']);
+  it('tiene exactamente las 5 rutas esperadas (draft GET/POST, submit, vista previa y envío del correo de cierre)', () => {
+    expect(routes.sort()).toEqual(['cierreEnviar', 'cierrePreview', 'draft', 'draftWithInput', 'submit']);
   });
 
-  it.each(['draft', 'draftWithInput', 'submit'])('la ruta %s exige exportations.liquidate', (name) => {
+  it.each(['draft', 'draftWithInput', 'submit', 'cierrePreview', 'cierreEnviar'])('la ruta %s exige exportations.liquidate', (name) => {
     const req = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto[name] as object) as {
       permissions: string[];
       mode: string;

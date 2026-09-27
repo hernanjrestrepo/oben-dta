@@ -1,9 +1,11 @@
+import { inflateSync } from 'zlib';
 import { StaticScenarioProvider } from '../static-scenario-provider';
 import {
   ObenPlusCartera,
   ObenPlusCubicaje,
   ObenPlusMockAdapter,
   ObenPlusProformaList,
+  ObenPlusProformaPdf,
   ObenPlusProformaStatus,
   PROFORMA_ESTADOS,
 } from './oben-plus.mock';
@@ -18,15 +20,15 @@ describe('ObenPlusMockAdapter (Oben+ / OBEN MAS — SIMULADO)', () => {
   };
   const all = async () => (await call<ObenPlusProformaList>('proforma.list', {})).data!.proformas;
 
-  it('se declara como mock del sistema obenPlus con las 4 operaciones', () => {
+  it('se declara como mock del sistema obenPlus con las 5 operaciones', () => {
     expect(adapter.mode).toBe('mock');
     expect(adapter.system).toBe('obenPlus');
     expect(adapter.capabilities().map((c) => c.operation).sort()).toEqual(
-      ['proforma.cartera', 'proforma.cubicaje', 'proforma.list', 'proforma.status'],
+      ['proforma.cartera', 'proforma.cubicaje', 'proforma.list', 'proforma.pdf', 'proforma.status'],
     );
   });
 
-  it.each(['proforma.status', 'proforma.cartera', 'proforma.cubicaje', 'proforma.list'])(
+  it.each(['proforma.status', 'proforma.cartera', 'proforma.cubicaje', 'proforma.list', 'proforma.pdf'])(
     '%s marca TODO payload con simulated:true (nunca se confunde con un dato real)',
     async (op) => {
       const res = await call<{ simulated: boolean; proformas?: Array<{ simulated: boolean }> }>(op, { numberPF: '11271' });
@@ -107,5 +109,32 @@ describe('ObenPlusMockAdapter (Oben+ / OBEN MAS — SIMULADO)', () => {
     const res = await call('proforma.list', { estado: 'aprobada' });
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/estado inválido/);
+  });
+
+  it('proforma.pdf entrega un PDF válido, rotulado como PROFORMA SIMULADA, con nombre de archivo "SIMULADA"', async () => {
+    const res = await call<ObenPlusProformaPdf>('proforma.pdf', { numberPF: '11271' });
+    expect(res.ok).toBe(true);
+    expect(res.data).toMatchObject({ simulated: true, numberPF: '11271', filename: 'Proforma_SIMULADA-PF11271.pdf', contentType: 'application/pdf' });
+
+    const pdf = Buffer.from(res.data!.contentBase64, 'base64');
+    expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
+    // Texto visible del PDF (content streams de pdfkit, hex WinAnsi dentro de TJ).
+    const raw = pdf.toString('latin1');
+    const texts: string[] = [];
+    for (const m of raw.matchAll(/stream\r?\n/g)) {
+      const start = m.index + m[0].length;
+      let content: string;
+      try {
+        content = inflateSync(Buffer.from(raw.slice(start, raw.indexOf('endstream', start)), 'latin1')).toString('latin1');
+      } catch {
+        continue;
+      }
+      for (const tj of content.matchAll(/\[([^\]]*)\]\s*TJ/g)) {
+        texts.push(Buffer.from([...tj[1].matchAll(/<([0-9a-fA-F]*)>/g)].map((h) => h[1]).join(''), 'hex').toString('latin1'));
+      }
+    }
+    const visible = texts.join('').replace(/\s+/g, '');
+    expect(visible).toContain('PROFORMASIMULADA');
+    expect(visible).toContain('NOeseldocumentooficial');
   });
 });

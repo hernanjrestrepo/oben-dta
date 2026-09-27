@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { ObenReportExcelService } from './oben-report-excel.service';
 import { SolefilmesPdfService } from './solefilmes-pdf.service';
-import { OBEN_REPORTS } from './oben-report-registry';
+import { OBEN_REPORTS, findObenReport } from './oben-report-registry';
 
 export interface PackageAttachment {
   key: string;
@@ -275,6 +275,42 @@ export class ObenReportsService {
    * no nos ha confirmado el comportamiento exacto esperado ante un fallo
    * (ver Preguntas y Requerimientos — Proceso de Liquidación, pregunta 5).
    */
+  /**
+   * Arma UN reporte Excel suelto del registro (p. ej. la Lista de Empaque
+   * Unificada que exige el correo de cierre de Liquidación). Misma validación
+   * que el paquete: sin tabla de datos → falla, nunca un Excel casi vacío.
+   * `simulated` = el dato vino del simulador de obenCostOrder (dev/demo).
+   */
+  async buildReport(
+    key: string,
+    numberOrderSales: number,
+  ): Promise<{ ok: true; attachment: PackageAttachment; simulated: boolean } | { ok: false; failure: PackageFailure }> {
+    const def = findObenReport(key);
+    if (!def) return { ok: false, failure: { key, label: key, error: `Reporte "${key}" no existe` } };
+    try {
+      const result = await this.hub.call('obenCostOrder', 'query.run', { procedure: def.procedure, numberOrderSales }, OBEN_QUERY_OPTIONS);
+      if (!result.ok) throw new Error(result.error ?? 'No se pudo consultar el reporte en Oben');
+      const record = (result.data ?? {}) as Record<string, unknown>;
+      if (!hasTableData(def.key, record)) {
+        return { ok: false, failure: { key: def.key, label: def.label, error: 'Oben no tiene datos de este reporte para esta orden.' } };
+      }
+      const buffer = await this.excel.build(def.label, numberOrderSales, result.data, def.format);
+      return {
+        ok: true,
+        simulated: result.mode === 'mock',
+        attachment: {
+          key: def.key,
+          label: def.label,
+          buffer,
+          filename: `${def.label.replace(/\s+/g, '_')}-OV${numberOrderSales}.xlsx`,
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      };
+    } catch (err) {
+      return { ok: false, failure: { key: def.key, label: def.label, error: (err as Error).message } };
+    }
+  }
+
   async confirmApproveComex(numberOrderSales: number): Promise<{ ok: boolean; error?: string; response?: unknown }> {
     try {
       const result = await this.hub.call('obenCostOrder', 'query.run', {

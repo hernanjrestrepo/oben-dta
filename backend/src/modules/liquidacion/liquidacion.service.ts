@@ -7,6 +7,7 @@ import { IdempotencyService } from '../idempotency/idempotency.service';
 import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { LIQUIDACION_VALUE_CALCULATOR, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
+import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
   CheckSettlementResponse,
   LiquidacionDraft,
@@ -110,6 +111,7 @@ export class LiquidacionService {
     private readonly rates: LiquidacionRatesService,
     @Inject(LIQUIDACION_VALUE_CALCULATOR)
     private readonly calculator: LiquidacionValueCalculator,
+    private readonly cierre: LiquidacionCierreService,
   ) {}
 
   async getDraft(numberPF: string, input: LiquidacionInput = {}): Promise<LiquidacionDraft> {
@@ -372,13 +374,25 @@ export class LiquidacionService {
       entityType: 'liquidacion',
       entityId: draft.numberPF,
       actorId: this.ctx.userId,
-      outputData: { headId: progress.headId, details: progress.detailsDone.length },
+      outputData: {
+        headId: progress.headId,
+        details: progress.detailsDone.length,
+        ordenVenta: draft.ordenVenta,
+        cliente: draft.cliente,
+        // Siempre false (el candado de arriba impide completar una simulada);
+        // queda explícito para el correo de cierre.
+        simulated: draft.simulated,
+      },
     });
+    // OBEN MAS §1.2: al concluir, correo automático a COMEX y Facturación. Un
+    // fallo del correo nunca deshace ni hace fallar la liquidación ya creada.
+    const cierre = await this.cierre.enviarTrasCompletar(draft.numberPF);
     return {
       dryRun: false,
       numberPF: draft.numberPF,
       headId: progress.headId ?? undefined,
       detailsCreated: progress.detailsDone.length,
+      cierre,
     };
   }
 
