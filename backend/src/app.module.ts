@@ -30,6 +30,7 @@ import { FreightRatesModule } from './modules/freight-rates/freight-rates.module
 import { DistributionListsModule } from './modules/distribution-lists/distribution-lists.module';
 import { EquivalencesModule } from './modules/equivalences/equivalences.module';
 import { FacturacionModule } from './modules/facturacion/facturacion.module';
+import { ComercialModule } from './modules/comercial/comercial.module';
 
 // Import all entities
 import { Client } from './entities/client.entity';
@@ -185,6 +186,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
     LiquidacionModule,
     EquivalencesModule,
     FacturacionModule,
+    ComercialModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
