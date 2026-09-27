@@ -14,17 +14,16 @@ import { TenantContext } from './tenant-context.service';
  * Fuente de verdad: el JWT (contiene tenantId + userId + isSuperAdmin).
  * Header X-Tenant-Id se acepta SOLO para superadmin (impersonación controlada).
  *
- * Rutas whitelisted (públicas o cross-tenant): /auth/login, /auth/register, /health, /.
+ * Rutas whitelisted (públicas o cross-tenant): /auth/login, /health, /.
+ *
+ * `/auth/register` NO está aquí a propósito: ahora exige estar autenticado
+ * (crea un usuario dentro del tenant de quien llama, ver AuthService.register),
+ * así que necesita que TenantContext se resuelva igual que cualquier otra
+ * ruta de negocio.
  */
 @Injectable({ scope: Scope.REQUEST })
 export class TenantInterceptor implements NestInterceptor {
-  private static readonly PUBLIC_PATHS = [
-    '/',
-    '/health',
-    '/auth/login',
-    '/auth/register',
-    '/auth/refresh',
-  ];
+  private static readonly PUBLIC_PATHS = ['/', '/health', '/auth/login', '/auth/refresh'];
 
   constructor(private readonly ctx: TenantContext) {}
 

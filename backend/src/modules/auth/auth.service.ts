@@ -13,6 +13,15 @@ import { Tenant, TenantStatus } from '../../entities/tenant.entity';
 import { RegisterDto, LoginDto, PlatformLoginDto } from './dto/auth.dto';
 import { AuthorizationService } from '../security/authorization.service';
 import { LicensingService } from '../security/licensing.service';
+import { TenantContext } from '../../common/tenant/tenant-context.service';
+
+export interface CreatedUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  tenantId: string;
+}
 
 export interface AuthResponse {
   access_token: string;
@@ -56,6 +65,7 @@ export class AuthService {
     private jwtService: JwtService,
     @Optional() private readonly authz?: AuthorizationService,
     @Optional() private readonly licensing?: LicensingService,
+    @Optional() private readonly ctx?: TenantContext,
   ) {}
 
   private async resolveTenant(slug: string | undefined): Promise<Tenant> {
@@ -75,10 +85,26 @@ export class AuthService {
     return tenant;
   }
 
-  async register(dto: RegisterDto): Promise<AuthResponse> {
-    const tenant = await this.resolveTenant(dto.tenantSlug);
+  /**
+   * Crea un usuario DENTRO del tenant de quien llama — ya no es un registro
+   * público. El endpoint exige el permiso `users.create`, así que el tenant
+   * SIEMPRE sale de TenantContext (el JWT de quien llama), nunca de un campo
+   * del body: aceptar un tenant elegido por el cliente le permitiría a un
+   * admin de un tenant crear usuarios dentro de OTRO tenant.
+   *
+   * A propósito NO devuelve tokens: quien llama es un admin creando una
+   * cuenta para otra persona, no la persona iniciando sesión — entregarle
+   * tokens de la cuenta nueva sería suplantación. El usuario nuevo queda sin
+   * rol (sin acceso a datos de negocio) hasta que se le asigne uno en
+   * Administración → Roles, e inicia sesión él mismo con su contraseña.
+   */
+  async register(dto: RegisterDto): Promise<CreatedUser> {
+    if (!this.ctx) {
+      throw new UnauthorizedException('No se pudo resolver el tenant de la sesión actual.');
+    }
+    const tenantId = this.ctx.tenantId;
     const existingUser = await this.userRepository.findOne({
-      where: { email: dto.email, tenantId: tenant.id },
+      where: { email: dto.email, tenantId },
     });
     if (existingUser) {
       throw new BadRequestException(
@@ -92,11 +118,11 @@ export class AuthService {
       email: dto.email,
       passwordHash,
       isActive: true,
-      tenantId: tenant.id,
+      tenantId,
       isSuperAdmin: false,
     });
     await this.userRepository.save(user);
-    return this.generateTokens(user, tenant);
+    return { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, tenantId };
   }
 
   async login(dto: LoginDto): Promise<AuthResponse> {

@@ -1,7 +1,8 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
 import { TenantStatus } from '../../entities/tenant.entity';
+import { TenantContext } from '../../common/tenant/tenant-context.service';
 
 function makeUser(overrides: Record<string, unknown> = {}) {
   return {
@@ -195,5 +196,84 @@ describe('AuthService', () => {
 
     await svc.logout('u1');
     await expect(svc.refresh(login.refresh_token)).rejects.toThrow(/revocado/);
+  });
+});
+
+describe('AuthService.register() — crea un usuario dentro del tenant de quien llama', () => {
+  function makeCreateRepos(existing: Array<{ email: string; tenantId: string }> = []) {
+    const saved: Array<Record<string, unknown>> = [];
+    const users = {
+      findOne: jest.fn(async ({ where }: { where: { email: string; tenantId: string } }) =>
+        existing.find((u) => u.email === where.email && u.tenantId === where.tenantId) ?? null,
+      ),
+      create: jest.fn((partial) => partial),
+      save: jest.fn(async (entity: Record<string, unknown>) => {
+        const withId = { id: 'new-user-1', ...entity };
+        saved.push(withId);
+        return withId;
+      }),
+    };
+    const tenants = { findOne: jest.fn() };
+    return { users, tenants, saved };
+  }
+
+  function ctxFor(tenantId: string) {
+    const ctx = new TenantContext();
+    ctx.setContext(tenantId, 'caller-1', false);
+    return ctx;
+  }
+
+  it('crea el usuario en el tenant de TenantContext, no en uno elegido por el body', async () => {
+    const { users, tenants, saved } = makeCreateRepos();
+    const svc = new AuthService(users as never, tenants as never, makeJwt() as never, undefined, undefined, ctxFor('tenant-caller'));
+
+    const result = await svc.register({
+      firstName: 'Ana',
+      lastName: 'Gómez',
+      email: 'ana@oben.com',
+      password: 'CorrectPass123!',
+      // un campo extra tipo tenantSlug, si llegara, se ignora igual.
+      tenantSlug: 'otro-tenant',
+    } as never);
+
+    expect(result.tenantId).toBe('tenant-caller');
+    expect(saved[0]).toMatchObject({ tenantId: 'tenant-caller', isActive: true, isSuperAdmin: false });
+  });
+
+  it('nunca devuelve access_token/refresh_token (quien crea el usuario no debe recibir su sesión)', async () => {
+    const { users, tenants } = makeCreateRepos();
+    const svc = new AuthService(users as never, tenants as never, makeJwt() as never, undefined, undefined, ctxFor('t1'));
+
+    const result = await svc.register({ firstName: 'A', lastName: 'B', email: 'a@oben.com', password: 'CorrectPass123!' });
+
+    expect(result).not.toHaveProperty('access_token');
+    expect(result).not.toHaveProperty('refresh_token');
+  });
+
+  it('rechaza un correo ya registrado en el MISMO tenant', async () => {
+    const { users, tenants } = makeCreateRepos([{ email: 'dup@oben.com', tenantId: 't1' }]);
+    const svc = new AuthService(users as never, tenants as never, makeJwt() as never, undefined, undefined, ctxFor('t1'));
+
+    await expect(
+      svc.register({ firstName: 'A', lastName: 'B', email: 'dup@oben.com', password: 'CorrectPass123!' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('el mismo correo SÍ se puede crear en un tenant distinto (aislamiento real)', async () => {
+    const { users, tenants, saved } = makeCreateRepos([{ email: 'dup@oben.com', tenantId: 'tenant-a' }]);
+    const svc = new AuthService(users as never, tenants as never, makeJwt() as never, undefined, undefined, ctxFor('tenant-b'));
+
+    await svc.register({ firstName: 'A', lastName: 'B', email: 'dup@oben.com', password: 'CorrectPass123!' });
+
+    expect(saved[0]).toMatchObject({ tenantId: 'tenant-b' });
+  });
+
+  it('sin TenantContext resuelto, rechaza en vez de crear un usuario sin tenant', async () => {
+    const { users, tenants } = makeCreateRepos();
+    const svc = new AuthService(users as never, tenants as never, makeJwt() as never);
+
+    await expect(
+      svc.register({ firstName: 'A', lastName: 'B', email: 'a@oben.com', password: 'CorrectPass123!' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 });

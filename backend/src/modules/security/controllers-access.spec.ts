@@ -9,8 +9,9 @@ import { REQUIRE_PERMISSION_KEY, type PermissionRequirement } from './require-pe
 /**
  * Política transversal (ver nota en PermissionsGuard): TODA ruta de negocio
  * exige JwtAuthGuard + PermissionsGuard + @RequirePermission. Estar
- * autenticado NO basta — `POST /auth/register` es público, así que
- * "autenticado" incluye a cualquiera que conozca el slug del tenant.
+ * autenticado NO basta a secas — por eso `POST /auth/register` (que antes
+ * era público) ahora exige `users.create`: de lo contrario cualquiera que
+ * conociera el slug del tenant podía crearse una cuenta.
  *
  * Este test recorre todos los `*.controller.ts` de `src/` y falla si aparece
  * una ruta nueva sin permiso. Las únicas excepciones son las de abajo, cada
@@ -19,7 +20,6 @@ import { REQUIRE_PERMISSION_KEY, type PermissionRequirement } from './require-pe
 const ROUTES_WITHOUT_PERMISSION: Record<string, string> = {
   'AppController.getHello': 'público: saludo de la raíz, sin datos',
   'HealthController.check': 'público: health check del contenedor',
-  'AuthController.register': 'público: alta de usuario (sin roles → sin acceso a datos de negocio)',
   'AuthController.login': 'público: inicio de sesión',
   'AuthController.platformLogin': 'público: inicio de sesión de plataforma',
   'AuthController.refresh': 'público: renovación de token (valida el refresh token)',
@@ -109,6 +109,7 @@ describe('Control de acceso — todas las rutas de todos los controllers', () =>
     ['EquivalencesController.update', 'products.update'],
     ['EvaController.chat', 'quotes.create'],
     ['IntegrationHubController.execute', 'integrations.update'],
+    ['AuthController.register', 'users.create'],
   ])('%s (efecto real: correo/escritura) exige %s, no un permiso de solo lectura', (id, permission) => {
     const route = routes.find((r) => r.id === id);
     expect(route?.requirement?.permissions).toEqual([permission]);
