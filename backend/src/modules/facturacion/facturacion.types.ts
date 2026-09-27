@@ -36,8 +36,12 @@ export interface FacturacionDraft {
   /** null = no se puede clasificar: Oben no trajo el país (nunca se asume Exportación ni Nacional). */
   kind: FacturacionKind | null;
   direccionEntrega: string | null;
-  /** De dónde salió la dirección — nunca se adivina; solo se usa si viene del maestro de clientes o la digitó el usuario. */
-  direccionFuente: 'maestro_clientes' | 'digitada' | null;
+  /**
+   * De dónde salió la dirección — nunca se adivina: la digitó el usuario, viene
+   * del maestro de clientes, o de la Proforma en Oben+ (`oben_plus`, hoy
+   * SIMULADO: ver `simulatedFields`).
+   */
+  direccionFuente: 'maestro_clientes' | 'digitada' | 'oben_plus' | null;
   observaciones: string | null;
   infoComercial: string | null;
   lines: FacturacionLine[];
@@ -46,12 +50,28 @@ export interface FacturacionDraft {
   /** Todo lo que falta para poder generar el documento — nada se inventa. */
   missing: string[];
   readyToGenerate: boolean;
+  /** true si algún dato del borrador salió de una fuente SIMULADA — nunca se esconde. */
+  simulated: boolean;
+  /** Qué campos son simulados (hoy: `direccionEntrega` cuando sale de Oben+ simulado). */
+  simulatedFields: string[];
+}
+
+/** Resultado de la emisión de factura electrónica (sistema `dian` del hub — hoy SIMULADO). */
+export interface FacturaElectronica {
+  invoiceNumber: string;
+  cufe: string;
+  status: string;
+  /** true = CUFE del simulador DIAN: no tiene validez fiscal. */
+  simulated: boolean;
+  emitidaEn: string | null;
 }
 
 export interface FacturacionDocument {
   draft: FacturacionDraft;
   filename: string;
   pdf: Buffer;
+  /** null = todavía no se ha emitido (se emite al enviar, no al descargar). */
+  facturaElectronica: FacturaElectronica | null;
 }
 
 export interface FacturacionSendResult {
@@ -59,4 +79,8 @@ export interface FacturacionSendResult {
   to: string[];
   cc: string[];
   filename: string;
+  cufe: string;
+  cufeSimulado: boolean;
+  /** true si el documento enviado lleva algún dato simulado (CUFE o dirección). */
+  simulated: boolean;
 }

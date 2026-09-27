@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
-import type { FacturacionDraft, FacturacionKind } from './facturacion.types';
+import type { FacturaElectronica, FacturacionDraft, FacturacionKind } from './facturacion.types';
 
 const PAGE_MARGIN = 36;
 const PAGE_WIDTH = 612; // letter, points
@@ -12,18 +12,20 @@ const KIND_LABEL: Record<FacturacionKind, string> = {
   nacional_parcial: 'Pedido Nacional — Despacho Parcial',
 };
 
+/** Rótulo obligatorio mientras el CUFE salga del simulador DIAN. */
+export const CUFE_SIMULADO_LABEL = 'CUFE SIMULADO — pendiente de proveedor DIAN real';
+
 /**
  * Documento de apoyo para Facturación/COMEX armado con datos reales
  * (Empaque Unificada + Check Settlement) según los 3 flujos descritos en
- * `Business/OBEN MAS - PARADIXE.pdf`. Deliberadamente NO es la factura
- * electrónica DIAN: no existe todavía un proveedor de facturación
- * electrónica definido (pregunta abierta con Oben, 2026-09-27) ni CUFE, así
- * que el PDF lo deja explícito en el pie de página para que nadie lo tome
- * como el documento fiscal final.
+ * `Business/OBEN MAS - PARADIXE.pdf`. Todo dato SIMULADO (CUFE del simulador
+ * DIAN, dirección tomada de Oben+ simulado) se rotula como tal en un recuadro
+ * al inicio, junto al propio dato y en el pie — nadie debe poder tomarlo como
+ * el documento fiscal final.
  */
 @Injectable()
 export class FacturacionPdfService {
-  async build(draft: FacturacionDraft): Promise<Buffer> {
+  async build(draft: FacturacionDraft, facturaElectronica: FacturaElectronica | null = null): Promise<Buffer> {
     const doc = new PDFDocument({ size: 'letter', margin: PAGE_MARGIN });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
@@ -33,9 +35,10 @@ export class FacturacionPdfService {
     });
 
     this.renderHeader(doc, draft);
-    this.renderInfoBox(doc, draft);
+    this.renderSimulationBanner(doc, draft, facturaElectronica);
+    this.renderInfoBox(doc, draft, facturaElectronica);
     this.renderLines(doc, draft);
-    this.renderFooter(doc);
+    this.renderFooter(doc, facturaElectronica);
 
     doc.end();
     return done;
@@ -64,7 +67,35 @@ export class FacturacionPdfService {
     doc.moveDown(0.5);
   }
 
-  private renderInfoBox(doc: PDFKit.PDFDocument, draft: FacturacionDraft): void {
+  private renderSimulationBanner(
+    doc: PDFKit.PDFDocument,
+    draft: FacturacionDraft,
+    factura: FacturaElectronica | null,
+  ): void {
+    const avisos: string[] = [];
+    if (factura?.simulated) avisos.push(`${CUFE_SIMULADO_LABEL}.`);
+    if (draft.simulatedFields.includes('direccionEntrega')) {
+      avisos.push('Dirección de entrega SIMULADA (Oben+ aún no tiene API real).');
+    }
+    if (avisos.length === 0) return;
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(9)
+      .fillColor('#B00020')
+      .text(`DOCUMENTO CON DATOS SIMULADOS — ${avisos.join(' ')}`, PAGE_MARGIN, doc.y, {
+        width: CONTENT_WIDTH,
+        align: 'center',
+      });
+    doc.moveDown(0.5);
+  }
+
+  private renderInfoBox(doc: PDFKit.PDFDocument, draft: FacturacionDraft, factura: FacturaElectronica | null): void {
+    const direccion = draft.direccionEntrega
+      ? `${draft.direccionEntrega}${draft.simulatedFields.includes('direccionEntrega') ? ' (SIMULADA — Oben+)' : ''}`
+      : '— (sin definir)';
+    const facturaElectronica = factura
+      ? `${factura.invoiceNumber} — CUFE ${factura.cufe}${factura.simulated ? ` (${CUFE_SIMULADO_LABEL})` : ''}`
+      : 'Pendiente de emisión (se emite al enviar a COMEX)';
     const rows: Array<[string, string]> = [
       ['Orden de venta', String(draft.numberOrderSales)],
       ['Cliente', draft.cliente],
@@ -73,7 +104,8 @@ export class FacturacionPdfService {
       ['Orden de compra', draft.ordenCompra ?? '—'],
       ['Contenedor', draft.contenedor ?? '—'],
       ['Código de material', draft.codigoMaterial ?? '—'],
-      ['Dirección de entrega', draft.direccionEntrega ?? '— (sin definir)'],
+      ['Dirección de entrega', direccion],
+      ['Factura electrónica', facturaElectronica],
     ];
     doc.font('Helvetica').fontSize(9).fillColor('#111111');
     for (const [label, value] of rows) {
@@ -120,14 +152,18 @@ export class FacturacionPdfService {
     doc.moveDown(1);
   }
 
-  private renderFooter(doc: PDFKit.PDFDocument): void {
+  private renderFooter(doc: PDFKit.PDFDocument, factura: FacturaElectronica | null): void {
+    const fiscal = !factura
+      ? 'Factura electrónica aún no emitida: este documento no tiene validez fiscal.'
+      : factura.simulated
+        ? `${CUFE_SIMULADO_LABEL}: este documento no tiene validez fiscal.`
+        : `Factura electrónica ${factura.invoiceNumber}, CUFE ${factura.cufe}.`;
     doc
       .font('Helvetica-Oblique')
       .fontSize(7)
       .fillColor('#888888')
       .text(
-        'Documento de apoyo generado por Oben Xmart con datos reales de Oben (Empaque Unificada / Check Settlement) para revisión de Facturación y COMEX. ' +
-          'No constituye la factura electrónica DIAN — el proveedor de facturación electrónica aún no está definido.',
+        `Documento de apoyo generado por Oben Xmart con datos de Oben (Empaque Unificada / Check Settlement) para revisión de Facturación y COMEX. ${fiscal}`,
         PAGE_MARGIN,
         doc.y,
         { width: CONTENT_WIDTH },
