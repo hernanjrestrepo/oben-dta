@@ -31,6 +31,8 @@ function makeService(opts: {
   resolveRecipients?: jest.Mock;
   findDue?: jest.Mock;
   update?: jest.Mock;
+  /** Estado ACTUAL de cada fila al momento de procesarla (default: sigue 'pending'). */
+  currentStatus?: Record<string, string>;
 }) {
   const tenantCtx = { setContext: jest.fn() };
   const reports = { buildDocumentPackage: opts.buildDocumentPackage ?? jest.fn().mockResolvedValue(COMPLETE_PACKAGE) };
@@ -54,6 +56,10 @@ function makeService(opts: {
 
   const retries = {
     find: opts.findDue ?? jest.fn().mockResolvedValue([makeRow()]),
+    findOne: jest.fn(async ({ where }: { where: { id: string } }) => ({
+      id: where.id,
+      status: opts.currentStatus?.[where.id] ?? 'pending',
+    })),
     update: opts.update ?? jest.fn().mockResolvedValue(undefined),
   } as any;
 
@@ -186,6 +192,36 @@ describe('PackingListRetryProcessorService (reintento de Lista de Empaque, pedid
 
     expect(findDue).toHaveBeenCalledTimes(1);
     expect(sendCompletePackage).toHaveBeenCalledTimes(1);
+  });
+
+  it('si la fila ya no está pending al llegar su turno (un disparador directo ya envió la OV), no la vuelve a enviar', async () => {
+    const rowA = makeRow({ id: 'row-a', numberOrderSales: 111 });
+    const rowB = makeRow({ id: 'row-b', numberOrderSales: 222 });
+    const { service, automation, reports, retries } = makeService({
+      findDue: jest.fn().mockResolvedValue([rowA, rowB]),
+      currentStatus: { 'row-a': 'completed' },
+    });
+
+    await service.processDueRetries();
+
+    expect(reports.buildDocumentPackage).toHaveBeenCalledTimes(1);
+    expect(automation.sendCompletePackage).toHaveBeenCalledTimes(1);
+    expect(automation.sendCompletePackage).toHaveBeenCalledWith(222, COMPLETE_PACKAGE, expect.anything());
+    expect(retries.update).not.toHaveBeenCalledWith('row-a', expect.anything());
+  });
+
+  it('una falla al escalar no marca la fila como escalada (se reintenta en el próximo ciclo, no se pierde)', async () => {
+    const buildDocumentPackage = jest.fn().mockResolvedValue(INCOMPLETE_PACKAGE);
+    const sendEscalation = jest.fn().mockRejectedValue(new Error('db caída'));
+    const { service, retries } = makeService({
+      buildDocumentPackage,
+      sendEscalation,
+      findDue: jest.fn().mockResolvedValue([makeRow({ attempts: 4 })]),
+    });
+
+    await service.processDueRetries();
+
+    expect(retries.update).not.toHaveBeenCalled();
   });
 
   it('tras terminar un ciclo (aunque falle) el siguiente sí puede correr', async () => {

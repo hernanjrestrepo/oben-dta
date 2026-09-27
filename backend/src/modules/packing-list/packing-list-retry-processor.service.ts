@@ -76,6 +76,12 @@ export class PackingListRetryProcessorService implements OnModuleInit, OnModuleD
   }
 
   private async processOne(row: PackingListPendingRetry): Promise<void> {
+    // La lista de filas vencidas se leyó al inicio del ciclo, que puede durar
+    // minutos (~9 s por orden): si mientras tanto un disparador directo ya
+    // envió esta OV (ver handleOvApproved), la fila dejó de estar 'pending'.
+    const current = await this.retries.findOne({ where: { id: row.id } });
+    if (current?.status !== 'pending') return;
+
     const contextId = ContextIdFactory.create();
     const tenantCtx = await this.moduleRef.resolve(TenantContext, contextId, { strict: false });
     tenantCtx.setContext(row.tenantId, null, false);

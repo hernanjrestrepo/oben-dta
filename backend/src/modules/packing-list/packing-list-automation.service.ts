@@ -10,6 +10,9 @@ import { ObenReportsService, DocumentPackageResult, PackageFailure } from '../ob
 import { PackingListPendingRetry } from '../../entities/packing-list-pending-retry.entity';
 import { PACKING_LIST_RETRY_INTERVAL_MS } from './packing-list-retry.constants';
 
+/** Violación de índice único en Postgres. */
+const DUPLICATE_KEY_CODE = '23505';
+
 export interface HandleOvApprovedResult {
   sent: boolean;
   queued: boolean;
@@ -130,6 +133,13 @@ export class PackingListAutomationService {
       );
       return { sent: false, queued: true, client: documentPackage.client, included: includedKeys, failed: [] };
     }
+    // Un disparador anterior de la misma OV pudo haber quedado en cola
+    // (incompleto o envío fallido). Este envío ya lo resolvió: si se deja
+    // 'pending', el procesador de reintentos la vuelve a mandar.
+    await this.retries.update(
+      { tenantId: this.ctx.tenantId, numberOrderSales, status: 'pending' },
+      { status: 'completed', lastMissing: null },
+    );
     return result;
   }
 
@@ -290,8 +300,11 @@ export class PackingListAutomationService {
     since: Date,
   ): Promise<'already_sent' | 'queued'> {
     const events = await this.audit.listForEntity('packing_list', String(numberOrderSales));
+    // El intento FALLIDO también se audita como 'ov_approved_lista_empaque_enviada'
+    // (con ok:false) — contarlo como enviado perdía la orden si el proceso
+    // murió entre ese registro y el encolado del reintento.
     const alreadySent = events.some(
-      (e) => e.action === 'ov_approved_lista_empaque_enviada' && e.createdAt >= since,
+      (e) => e.action === 'ov_approved_lista_empaque_enviada' && e.outputData?.ok !== false && e.createdAt >= since,
     );
     if (alreadySent) return 'already_sent';
 
@@ -329,15 +342,23 @@ export class PackingListAutomationService {
       where: { tenantId: this.ctx.tenantId, numberOrderSales, status: 'pending' },
     });
     if (existing) return;
-    await this.retries.save(
-      this.retries.create({
-        tenantId: this.ctx.tenantId,
-        numberOrderSales,
-        attempts: 0,
-        nextRetryAt: new Date(Date.now() + delayMs),
-        status: 'pending',
-        lastMissing: failed,
-      }),
-    );
+    try {
+      await this.retries.save(
+        this.retries.create({
+          tenantId: this.ctx.tenantId,
+          numberOrderSales,
+          attempts: 0,
+          nextRetryAt: new Date(Date.now() + delayMs),
+          status: 'pending',
+          lastMissing: failed,
+        }),
+      );
+    } catch (err) {
+      // Carrera con otro encolado simultáneo de la misma OV: el índice único
+      // parcial (status='pending', migración 0013) ya dejó UNA fila en cola,
+      // que es justo el objetivo — no es un error del flujo.
+      if ((err as { code?: string }).code === DUPLICATE_KEY_CODE) return;
+      throw err;
+    }
   }
 }

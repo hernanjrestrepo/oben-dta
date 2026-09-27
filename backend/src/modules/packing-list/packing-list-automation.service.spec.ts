@@ -185,6 +185,26 @@ describe('PackingListAutomationService', () => {
       expect(retries.save).not.toHaveBeenCalled();
     });
 
+    it('un intento de envío FALLIDO (auditado con ok:false) no cuenta como enviado — antes la OV se perdía', async () => {
+      const { service, audit, retries } = makeService(jest.fn());
+      (audit.listForEntity as jest.Mock).mockResolvedValue([
+        { action: 'ov_approved_lista_empaque_enviada', outputData: { ok: false }, createdAt: new Date('2026-09-22T10:03:00Z') },
+      ]);
+
+      expect(await service.recoverInterruptedOv(10983, since)).toBe('queued');
+      expect(retries.save).toHaveBeenCalledWith(expect.objectContaining({ numberOrderSales: 10983, status: 'pending' }));
+    });
+
+    it('un envío auditado sin el campo ok (histórico) sigue contando como enviado — ante la duda, no duplicar', async () => {
+      const { service, audit, retries } = makeService(jest.fn());
+      (audit.listForEntity as jest.Mock).mockResolvedValue([
+        { action: 'ov_approved_lista_empaque_enviada', outputData: null, createdAt: new Date('2026-09-22T10:03:00Z') },
+      ]);
+
+      expect(await service.recoverInterruptedOv(10983, since)).toBe('already_sent');
+      expect(retries.save).not.toHaveBeenCalled();
+    });
+
     it('un envío auditado ANTERIOR al corte (otro correo de la misma OV) no cuenta como ya enviado', async () => {
       const { service, audit, retries } = makeService(jest.fn());
       (audit.listForEntity as jest.Mock).mockResolvedValue([
@@ -192,6 +212,56 @@ describe('PackingListAutomationService', () => {
       ]);
 
       expect(await service.recoverInterruptedOv(10983, since)).toBe('queued');
+      expect(retries.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('handleOvApproved — cola de reintentos', () => {
+    it('un envío directo exitoso cierra el reintento pendiente de la misma OV (si no, el procesador la reenviaba)', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-2' } });
+      const { service, retries } = makeService(hubCall);
+
+      await service.handleOvApproved(10824);
+
+      expect(retries.update).toHaveBeenCalledWith(
+        { tenantId: 't1', numberOrderSales: 10824, status: 'pending' },
+        { status: 'completed', lastMissing: null },
+      );
+    });
+
+    it('si el envío directo falla, NO cierra ningún reintento pendiente', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: false, error: 'smtp down' });
+      const { service, retries } = makeService(hubCall);
+
+      await service.handleOvApproved(10824);
+
+      expect(retries.update).not.toHaveBeenCalled();
+    });
+
+    it('si otro encolado simultáneo ganó el índice único (23505), la orden igual queda en cola: no lanza', async () => {
+      const save = jest.fn().mockRejectedValue(Object.assign(new Error('duplicate key'), { code: '23505' }));
+      const buildDocumentPackage = jest.fn().mockResolvedValue(INCOMPLETE_PACKAGE);
+      const { service } = makeService(jest.fn(), undefined, buildDocumentPackage, undefined, { save });
+
+      await expect(service.handleOvApproved(10982)).resolves.toMatchObject({ queued: true, sent: false });
+    });
+
+    it('cualquier otro error al encolar SÍ se propaga (el llamador lo registra como fallido, no se pierde en silencio)', async () => {
+      const save = jest.fn().mockRejectedValue(Object.assign(new Error('connection terminated'), { code: '57P01' }));
+      const buildDocumentPackage = jest.fn().mockResolvedValue(INCOMPLETE_PACKAGE);
+      const { service } = makeService(jest.fn(), undefined, buildDocumentPackage, undefined, { save });
+
+      await expect(service.handleOvApproved(10982)).rejects.toThrow('connection terminated');
+    });
+
+    it('el envío fallido se audita (ok:false) ANTES de encolar, con el motivo real', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: false, error: 'smtp down' });
+      const { service, audit, retries } = makeService(hubCall);
+
+      await service.handleOvApproved(10824);
+
+      const sentLog = (audit.log as jest.Mock).mock.calls.find((c) => c[0].action === 'ov_approved_lista_empaque_enviada')[0];
+      expect(sentLog).toMatchObject({ outputData: expect.objectContaining({ ok: false }), reason: 'smtp down' });
       expect(retries.save).toHaveBeenCalled();
     });
   });
