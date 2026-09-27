@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TabularImportDto } from '../../common/import/tabular-import';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('clients')
@@ -33,6 +34,18 @@ export class ClientsController {
     @CurrentUser('sub') userId: string,
   ): Promise<Client> {
     return this.clientsService.create(dto, userId);
+  }
+
+  /**
+   * Carga masiva del maestro de clientes desde Excel/CSV (o filas JSON):
+   * código, código en OBEN MAS, nombre, correo de compras, dominios
+   * autorizados, correo del comercial. `dryRun:true` solo valida. Todo o nada.
+   */
+  @Post('import')
+  @RequirePermission('clients.create')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
+  importClients(@Body() dto: TabularImportDto, @CurrentUser('sub') userId: string) {
+    return this.clientsService.importClients(dto, userId);
   }
 
   @Get()

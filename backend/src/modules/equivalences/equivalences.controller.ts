@@ -4,12 +4,14 @@ import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { EquivalencesService } from './equivalences.service';
 import { CreateEquivalenceDto, UpdateEquivalenceDto } from './dto/client-product-equivalence.dto';
+import { TabularImportDto } from '../../common/import/tabular-import';
 
 /**
  * Administrador de homologación cliente↔producto (ver
  * ClientProductEquivalence). Reemplaza la hoja de cálculo manual de
- * Alejandra — todavía es solo CRUD, sin ningún consumidor automático.
- * Es un maestro de códigos de producto: usa los permisos de `products`.
+ * Alejandra; la usa la lectura automática de órdenes de compra del flujo
+ * Comercial. Es un maestro de códigos de producto: usa los permisos de
+ * `products`.
  */
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('equivalences')
@@ -20,6 +22,13 @@ export class EquivalencesController {
   @RequirePermission('products.create')
   create(@Body() dto: CreateEquivalenceDto) {
     return this.service.create(dto);
+  }
+
+  /** Carga masiva desde el Excel/CSV de Alejandra. `dryRun:true` solo valida. Todo o nada. */
+  @Post('import')
+  @RequirePermission('products.create')
+  importEquivalences(@Body() dto: TabularImportDto) {
+    return this.service.importEquivalences(dto);
   }
 
   @Get()

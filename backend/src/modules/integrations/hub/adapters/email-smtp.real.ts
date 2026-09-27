@@ -158,6 +158,13 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
     const bcc = this.parseAddressList(args.bcc);
 
     const transporter = await this.getTransporter();
+    // Hilo del correo (flujo Comercial: la Proforma y sus recordatorios van
+    // en el mismo hilo de la orden de compra del cliente).
+    const inReplyTo = typeof args.inReplyTo === 'string' && args.inReplyTo ? args.inReplyTo : undefined;
+    const references = Array.isArray(args.references)
+      ? args.references.filter((r): r is string => typeof r === 'string' && !!r)
+      : undefined;
+
     const info = await transporter.sendMail({
       from: this.smtpConfig.fromAddress,
       to,
@@ -166,6 +173,8 @@ export class EmailSmtpRealAdapter extends BaseAdapter {
       subject,
       html: body,
       attachments: this.parseAttachments(args),
+      ...(inReplyTo ? { inReplyTo } : {}),
+      ...(references?.length ? { references } : {}),
     });
     return { id: info.messageId, delivered: true };
   }

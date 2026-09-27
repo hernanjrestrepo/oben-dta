@@ -1,4 +1,7 @@
-import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import type { Repository } from 'typeorm';
+import { ComercialCase } from '../../entities/comercial-case.entity';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -11,6 +14,7 @@ const WORKFLOW_NAME = 'liquidacion';
 /** Lista de distribución del correo de cierre: COMEX y Facturación (OBEN MAS §1.2). */
 export const CIERRE_DISTRIBUTION_KEY = 'liquidacion_cierre';
 export const PROFORMA_SIMULADA_LABEL = 'Proforma: PDF SIMULADO desde Oben+ — NO es el documento oficial de OBEN MAS (pendiente de su API)';
+export const PROFORMA_FIRMADA_SIMULADA_LABEL = 'Proforma aprobada por el cliente: viene de un caso comercial SIMULADO (datos de prueba)';
 export const UNIFICADA_SIMULADA_LABEL = 'Lista de Empaque Unificada: datos del SIMULADOR de Oben (este entorno no está conectado al sistema real)';
 
 const text = (v: unknown): string | null =>
@@ -19,6 +23,8 @@ const text = (v: unknown): string | null =>
 interface Adjunto extends CierreAdjunto {
   buffer: Buffer;
   contentType: string;
+  /** 'cliente' = la Proforma que el cliente devolvió aprobada (caso comercial); 'obenPlus' = el PDF de OBEN MAS. */
+  origen?: 'cliente' | 'obenPlus';
 }
 
 interface Preparado {
@@ -57,6 +63,7 @@ export class LiquidacionCierreService {
     private readonly audit: WorkflowAuditService,
     private readonly distributionLists: DistributionListsService,
     private readonly reports: ObenReportsService,
+    @Optional() @InjectRepository(ComercialCase) private readonly casos?: Repository<ComercialCase>,
   ) {}
 
   /** Qué saldría y si puede salir — no envía nada. */
@@ -225,7 +232,8 @@ export class LiquidacionCierreService {
     else adjuntos.push(proforma);
 
     const simulatedItems = [
-      ...(adjuntos.some((a) => a.key === 'proforma' && a.simulated) ? [PROFORMA_SIMULADA_LABEL] : []),
+      ...(adjuntos.some((a) => a.key === 'proforma' && a.simulated && a.origen !== 'cliente') ? [PROFORMA_SIMULADA_LABEL] : []),
+      ...(adjuntos.some((a) => a.key === 'proforma' && a.simulated && a.origen === 'cliente') ? [PROFORMA_FIRMADA_SIMULADA_LABEL] : []),
       ...(adjuntos.some((a) => a.key === 'empaque_unificada' && a.simulated) ? [UNIFICADA_SIMULADA_LABEL] : []),
     ];
     const simulated = simulatedItems.length > 0;
@@ -249,7 +257,14 @@ export class LiquidacionCierreService {
     return { preview, adjuntos, liquidacionSimulada };
   }
 
+  /**
+   * OBEN MAS §1.2: la Proforma adjunta es la "aprobada por el cliente". Si el
+   * flujo Comercial la recibió (respuesta del cliente con la Proforma
+   * firmada), va esa; si no, el PDF de la Proforma desde OBEN MAS.
+   */
   private async fetchProformaPdf(pf: string): Promise<Adjunto | { error: string }> {
+    const firmada = await this.proformaFirmada(pf);
+    if (firmada) return firmada;
     const res = await this.hub.call<Record<string, unknown>>('obenPlus', 'proforma.pdf', { numberPF: pf }, OBEN_QUERY_OPTIONS);
     if (!res.ok) return { error: `Proforma ${pf}: no se pudo obtener el PDF de Oben+ (${res.error ?? 'error desconocido'}).` };
     const base64 = text(res.data?.contentBase64);
@@ -266,6 +281,29 @@ export class LiquidacionCierreService {
       contentType: 'application/pdf',
       buffer,
       simulated,
+      origen: 'obenPlus',
+    };
+  }
+
+  private async proformaFirmada(pf: string): Promise<Adjunto | null> {
+    if (!this.casos) return null;
+    const caso = await this.casos
+      .createQueryBuilder('c')
+      .addSelect('c.proformaFirmada')
+      .where('c.tenant_id = :t AND c.number_pf = :pf AND c.proforma_firmada IS NOT NULL', { t: this.ctx.tenantId, pf })
+      .orderBy('c.updated_at', 'DESC')
+      .getOne();
+    const buffer = caso?.proformaFirmada ?? null;
+    if (!caso || !buffer || buffer.subarray(0, 4).toString() !== '%PDF') return null;
+    const simulated = caso.simulated;
+    return {
+      key: 'proforma',
+      label: 'Proforma aprobada por el cliente',
+      filename: simulated ? `Proforma_aprobada_SIMULADA-PF${pf}.pdf` : (caso.proformaFirmadaNombre ?? `Proforma_aprobada-PF${pf}.pdf`),
+      contentType: 'application/pdf',
+      buffer,
+      simulated,
+      origen: 'cliente',
     };
   }
 

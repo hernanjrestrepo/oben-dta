@@ -7,6 +7,7 @@ import { ImapConnectorService } from './imap-connector.service';
 import { ClassificationModule } from '../classification/classification.module';
 import { FreightRatesModule } from '../freight-rates/freight-rates.module';
 import { PackingListModule } from '../packing-list/packing-list.module';
+import { ComercialModule } from '../comercial/comercial.module';
 
 /**
  * Adaptador de entrada de correo real (IMAP) — WO-018 Sprint 6. Deliberadamente
@@ -26,6 +27,7 @@ import { PackingListModule } from '../packing-list/packing-list.module';
     ClassificationModule,
     FreightRatesModule,
     PackingListModule,
+    ComercialModule,
   ],
   providers: [ImapConnectorService],
   exports: [ImapConnectorService],

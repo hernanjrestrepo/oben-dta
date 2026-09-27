@@ -5,15 +5,25 @@ import { ClientProductEquivalence } from '../../entities/client-product-equivale
 import { Client } from '../../entities/client.entity';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { CreateEquivalenceDto, UpdateEquivalenceDto } from './dto/client-product-equivalence.dto';
+import { pick, readTabular, type TabularImportDto, type TabularImportResult } from '../../common/import/tabular-import';
+
+export interface EquivalenceImportRow {
+  clientId: string;
+  cliente: string;
+  clientCode: string;
+  obenCode: string;
+  description: string | null;
+  accion: 'crear' | 'actualizar';
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const DUPLICATE_KEY_CODE = '23505';
 
 /**
- * Homologación cliente↔producto (ver ClientProductEquivalence). Puro CRUD
- * administrable — todavía no la consulta ningún flujo automático: eso
- * depende de la interpretación de órdenes de compra vía IA, que a su vez
- * depende de la API de OBEN MAS/Oben+ (sin construir, ver blueprint
- * Comercial 2026-09-27).
+ * Homologación cliente↔producto (ver ClientProductEquivalence): CRUD
+ * administrable, carga masiva desde el Excel de Alejandra y fuente de la
+ * traducción automática de las órdenes de compra (ComercialIntakeService).
  */
 @Injectable()
 export class EquivalencesService {
@@ -92,6 +102,86 @@ export class EquivalencesService {
       where: { tenantId: this.ctx.tenantId, clientId, clientCode: clientCode.trim() },
     });
     return found?.obenCode ?? null;
+  }
+
+  /**
+   * Carga masiva de la tabla de equivalencias (Excel/CSV/JSON) que entregue
+   * Alejandra. Columnas: cliente (código interno, código en OBEN MAS, nombre
+   * exacto o id), código del cliente, código Oben, descripción. Todo o nada:
+   * si una fila tiene un error, no se escribe ninguna. Actualiza por
+   * (cliente, código del cliente).
+   */
+  async importEquivalences(dto: TabularImportDto): Promise<TabularImportResult<EquivalenceImportRow>> {
+    const rows = readTabular(dto);
+    const tenantId = this.ctx.tenantId;
+    const clients = await this.clients.find({ where: { tenantId } });
+    const findClient = (ref: string): Client | null => {
+      const r = ref.trim().toLowerCase();
+      const hits = clients.filter(
+        (c) =>
+          (UUID_RE.test(ref) && c.id === ref) ||
+          c.clientId.toLowerCase() === r ||
+          (c.obenCode ?? '').toLowerCase() === r ||
+          c.name.trim().toLowerCase() === r,
+      );
+      return hits.length === 1 ? hits[0] : null;
+    };
+
+    const errores: Array<{ fila: number; error: string }> = [];
+    const filas: EquivalenceImportRow[] = [];
+    const seen = new Set<string>();
+    for (const [i, row] of rows.entries()) {
+      const fila = i + 2;
+      try {
+        const ref = pick(row, 'cliente', 'codigo cliente oben', 'codigo oben cliente', 'clientId', 'id cliente');
+        const clientCode = pick(row, 'codigo del cliente', 'codigo cliente', 'referencia cliente', 'como lo pide el cliente', 'clientCode');
+        const obenCode = pick(row, 'codigo oben', 'referencia oben', 'obenCode', 'codigo interno');
+        if (!ref) throw new Error('falta el cliente');
+        if (!clientCode) throw new Error('falta el código/nombre con que el cliente pide el material');
+        if (!obenCode) throw new Error('falta la referencia de Oben');
+        const client = findClient(ref);
+        if (!client) throw new Error(`cliente "${ref}" no encontrado (o ambiguo) — cárgalo primero en el maestro de clientes`);
+        const key = `${client.id}|${clientCode.toLowerCase()}`;
+        if (seen.has(key)) throw new Error(`"${clientCode}" está repetido para ${client.name}`);
+        seen.add(key);
+        const existing = await this.repo.findOne({ where: { tenantId, clientId: client.id, clientCode } });
+        filas.push({
+          clientId: client.id,
+          cliente: client.name,
+          clientCode,
+          obenCode,
+          description: pick(row, 'descripcion', 'description', 'observacion') || null,
+          accion: existing ? 'actualizar' : 'crear',
+        });
+      } catch (err) {
+        errores.push({ fila, error: (err as Error).message });
+      }
+    }
+
+    const result: TabularImportResult<EquivalenceImportRow> = {
+      dryRun: !!dto.dryRun,
+      total: rows.length,
+      creados: errores.length ? 0 : filas.filter((f) => f.accion === 'crear').length,
+      actualizados: errores.length ? 0 : filas.filter((f) => f.accion === 'actualizar').length,
+      errores,
+      filas,
+    };
+    if (dto.dryRun || errores.length > 0) return result;
+
+    for (const f of filas) {
+      const existing = await this.repo.findOne({ where: { tenantId, clientId: f.clientId, clientCode: f.clientCode } });
+      await this.repo.save(
+        this.repo.create({
+          ...(existing ? { id: existing.id } : {}),
+          tenantId,
+          clientId: f.clientId,
+          clientCode: f.clientCode,
+          obenCode: f.obenCode,
+          description: f.description,
+        }),
+      );
+    }
+    return result;
   }
 
   private mapWriteError(err: unknown, clientCode: string): Error {

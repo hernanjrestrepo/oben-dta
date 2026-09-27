@@ -14,6 +14,7 @@ export type EmailIntakeRoute =
   | 'comex'
   | 'freight_rates'
   | 'packing_list_trigger'
+  | 'comercial_respuesta'
   | 'unknown';
 
 export type EmailIntakeStatus = 'processing' | 'processed' | 'failed' | 'skipped';

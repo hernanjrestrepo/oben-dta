@@ -7,6 +7,7 @@ import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.servic
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { FreightRateImportService } from '../freight-rates/freight-rate-import.service';
+import { ComercialFlujoService } from '../comercial/comercial-flujo.service';
 import { PackingListAutomationService } from '../packing-list/packing-list-automation.service';
 
 jest.mock('mailparser');
@@ -34,6 +35,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
   let tenantCtx: any;
   let freightRatesService: any;
   let packingListAutomation: any;
+  let comercialFlujo: any;
   let service: ImapConnectorService;
 
   beforeEach(() => {
@@ -59,7 +61,7 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
       }),
     };
     clientsRepo = { findOne: jest.fn().mockResolvedValue(null) };
-    tenantsRepo = { find: jest.fn().mockResolvedValue([]) };
+    tenantsRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue({ id: TENANT_ID, settings: {} }) };
 
     classifiers = { resolve: jest.fn() };
 
@@ -83,8 +85,14 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
       recoverInterruptedOv: jest.fn().mockResolvedValue('queued'),
     };
 
+    comercialFlujo = {
+      procesarCorreoRespuesta: jest.fn().mockResolvedValue(null),
+      recibirOc: jest.fn().mockResolvedValue({ id: 'caso-1' }),
+    };
+
     moduleRef = {
       resolve: jest.fn((type: unknown) => {
+        if (type === ComercialFlujoService) return Promise.resolve(comercialFlujo);
         if (type === TenantContext) return Promise.resolve(tenantCtx);
         if (type === QuotesService) return Promise.resolve(quotesService);
         if (type === PurchaseOrdersService) return Promise.resolve(poService);
@@ -621,6 +629,59 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
     it('devuelve la config cuando mode=real e imap.enabled=true con credenciales', () => {
       const imap = { enabled: true, host: 'imap.office365.com', user: 'u', pass: 'p' };
       expect((service as any).readConfig(tenant({ email: { mode: 'real', imap } }))).toEqual(imap);
+    });
+  });
+
+  describe('flujo Comercial (settings.comercial.habilitado)', () => {
+    const conComercial = () => tenantsRepo.findOne.mockResolvedValue({ id: TENANT_ID, settings: { comercial: { habilitado: true } } });
+
+    it('apagado (por defecto): ni se consulta el flujo Comercial — el correo sigue su camino de siempre', async () => {
+      classifiers.resolve.mockResolvedValue({ classify: jest.fn().mockResolvedValue({ category: 'purchase_order', confidence: 0.9, provider: 'rules' }) });
+      await (service as any).handleMessage(TENANT_ID, client(), cfg, makeMsg());
+      expect(comercialFlujo.procesarCorreoRespuesta).not.toHaveBeenCalled();
+      expect(comercialFlujo.recibirOc).not.toHaveBeenCalled();
+      expect(poService.processIncomingEmail).toHaveBeenCalled();
+    });
+
+    it('encendido: una respuesta en el hilo de una Proforma va al caso, antes del clasificador', async () => {
+      conComercial();
+      comercialFlujo.procesarCorreoRespuesta.mockResolvedValue({ caso: { id: 'caso-9' }, tipo: 'aprueba' });
+      (simpleParser as unknown as jest.Mock).mockResolvedValue({
+        messageId: '<resp-1@corp.com>',
+        inReplyTo: '<MAIL-1@oben>',
+        references: ['<oc-1@corp.com>', '<MAIL-1@oben>'],
+        from: { value: [{ address: 'compras@corp.com' }] },
+        subject: 'Re: Proforma SIM-95001 [PF SIM-95001]',
+        text: 'Aprobada, adjunto firmada.',
+        attachments: [{ filename: 'firmada.pdf', contentType: 'application/pdf', content: Buffer.from('%PDF-1.4') }],
+      });
+      const c = client();
+      await (service as any).handleMessage(TENANT_ID, c, cfg, makeMsg());
+      expect(comercialFlujo.procesarCorreoRespuesta).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: 'compras@corp.com',
+          inReplyTo: '<MAIL-1@oben>',
+          references: ['<oc-1@corp.com>', '<MAIL-1@oben>'],
+          attachments: [expect.objectContaining({ filename: 'firmada.pdf', content: expect.any(Buffer) })],
+        }),
+      );
+      expect(classifiers.resolve).not.toHaveBeenCalled();
+      expect(c.messageFlagsAdd).toHaveBeenCalled();
+    });
+
+    it('encendido: una orden de compra nueva abre un caso Comercial en vez del flujo genérico de PO', async () => {
+      conComercial();
+      classifiers.resolve.mockResolvedValue({ classify: jest.fn().mockResolvedValue({ category: 'purchase_order', confidence: 0.9, provider: 'rules' }) });
+      await (service as any).handleMessage(TENANT_ID, client(), cfg, makeMsg());
+      expect(comercialFlujo.recibirOc).toHaveBeenCalledWith(expect.objectContaining({ from: 'cliente@corp.com', messageId: '<msg-1@corp.com>' }), 'correo');
+      expect(poService.processIncomingEmail).not.toHaveBeenCalled();
+    });
+
+    it('si no se puede leer la configuración del tenant, el correo sigue por el camino de siempre', async () => {
+      tenantsRepo.findOne.mockRejectedValue(new Error('db'));
+      classifiers.resolve.mockResolvedValue({ classify: jest.fn().mockResolvedValue({ category: 'quote_request', confidence: 0.7, provider: 'rules' }) });
+      await (service as any).handleMessage(TENANT_ID, client(), cfg, makeMsg());
+      expect(quotesService.processIncomingEmail).toHaveBeenCalled();
     });
   });
 });

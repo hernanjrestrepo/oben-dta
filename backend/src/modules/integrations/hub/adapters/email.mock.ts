@@ -12,6 +12,7 @@ import { SCENARIO_PROVIDER, ScenarioProvider } from '../scenario.types';
 export class EmailMockAdapter extends MockAdapterBase {
   readonly system = 'email';
 
+  private seq = 0;
   private readonly outbox = new Map<
     string,
     Array<{
@@ -19,6 +20,9 @@ export class EmailMockAdapter extends MockAdapterBase {
       to: string;
       subject: string;
       body: string;
+      cc?: string;
+      inReplyTo?: string;
+      attachments: number;
       sentAt: string;
     }>
   >();
@@ -64,10 +68,14 @@ export class EmailMockAdapter extends MockAdapterBase {
     if (!to) throw new Error('BUSINESS_ERROR: to requerido');
     if (!subject) throw new Error('BUSINESS_ERROR: subject requerido');
     const record = {
-      id: `MAIL-${Date.now()}`,
+      // Con forma de Message-ID para que el hilo (In-Reply-To) funcione igual que con SMTP real.
+      id: `<MAIL-${Date.now()}-${++this.seq}@oben-xmart.mock>`,
       to,
       subject,
       body,
+      ...(typeof args.cc === 'string' && args.cc ? { cc: args.cc } : {}),
+      ...(typeof args.inReplyTo === 'string' && args.inReplyTo ? { inReplyTo: args.inReplyTo } : {}),
+      attachments: Array.isArray(args.attachments) ? args.attachments.length : 0,
       sentAt: new Date().toISOString(),
     };
     const list = this.outbox.get(tenantId) ?? [];

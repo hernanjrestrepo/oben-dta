@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   CIERRE_DISTRIBUTION_KEY,
   LiquidacionCierreService,
+  PROFORMA_FIRMADA_SIMULADA_LABEL,
   PROFORMA_SIMULADA_LABEL,
   UNIFICADA_SIMULADA_LABEL,
 } from './liquidacion-cierre.service';
@@ -33,6 +34,8 @@ function make(opts: {
   proforma?: unknown;
   email?: unknown;
   consultar?: unknown;
+  /** Caso comercial con la Proforma aprobada por el cliente (flujo Comercial). */
+  firmada?: { proformaFirmada: Buffer; proformaFirmadaNombre: string; simulated: boolean } | null;
 } = {}) {
   const obenPlus = new ObenPlusMockAdapter(new StaticScenarioProvider());
   const hub = {
@@ -53,7 +56,14 @@ function make(opts: {
     resolveRecipients: jest.fn().mockResolvedValue({ to: opts.to ?? ['comex@oben.com', 'facturacion@oben.com'], cc: [], bcc: [] }),
   };
   const reports = { buildReport: jest.fn().mockResolvedValue(opts.unificada ?? UNIFICADA_OK) };
-  const service = new LiquidacionCierreService(hub as never, CTX as never, audit as never, distributionLists as never, reports as never);
+  const qb = {
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(opts.firmada ?? null),
+  };
+  const casos = { createQueryBuilder: jest.fn(() => qb) };
+  const service = new LiquidacionCierreService(hub as never, CTX as never, audit as never, distributionLists as never, reports as never, casos as never);
   const emails = () => hub.call.mock.calls.filter((c) => c[0] === 'email');
   /** Argumentos del primer correo enviado. */
   const sentEmail = () => emails()[0][2] as { subject: string; body: string; attachments: Array<{ filename: string; content: string }> };
@@ -225,5 +235,42 @@ describe('LiquidacionCierreService — correo de cierre a COMEX/Facturación (OB
     const { service, hub } = make();
     await expect(service.preview(pf)).rejects.toThrow(BadRequestException);
     expect(hub.call).not.toHaveBeenCalled();
+  });
+
+  describe('Proforma aprobada por el cliente (OBEN MAS §1.2: "aprobada por el cliente")', () => {
+    const PDF = Buffer.from('%PDF-1.4 proforma firmada por el cliente');
+
+    it('si el flujo Comercial recibió la Proforma firmada, se adjunta esa (no el PDF de OBEN MAS) y sin rótulo si es real', async () => {
+      const { service, hub, sentEmail } = make({
+        events: [COMPLETADA],
+        firmada: { proformaFirmada: PDF, proformaFirmadaNombre: 'PF11271_firmada.pdf', simulated: false },
+      });
+      const r = await service.enviar('11271');
+      expect(r.adjuntos.find((a) => a.key === 'proforma')).toMatchObject({ label: 'Proforma aprobada por el cliente', filename: 'PF11271_firmada.pdf', simulated: false });
+      expect(hub.call.mock.calls.some((c) => c[1] === 'proforma.pdf')).toBe(false);
+      const pdf = sentEmail().attachments.find((a) => a.filename === 'PF11271_firmada.pdf')!;
+      expect(Buffer.from(pdf.content, 'base64').toString()).toContain('firmada por el cliente');
+      expect(r.simulated).toBe(false);
+    });
+
+    it('si ese caso comercial era SIMULADO, se rotula como tal (asunto y cuerpo)', async () => {
+      const { service, sentEmail } = make({
+        events: [COMPLETADA],
+        firmada: { proformaFirmada: PDF, proformaFirmadaNombre: 'x.pdf', simulated: true },
+      });
+      const p = await service.preview('11271');
+      expect(p.simulatedItems).toEqual([PROFORMA_FIRMADA_SIMULADA_LABEL]);
+      await service.enviar('11271');
+      expect(sentEmail().subject).toMatch(/^\[SIMULADO\]/);
+      expect(sentEmail().body).toContain(PROFORMA_FIRMADA_SIMULADA_LABEL);
+      expect(sentEmail().body).toContain('Proforma_aprobada_SIMULADA-PF11271.pdf <strong>(SIMULADO)</strong>');
+    });
+
+    it('sin Proforma firmada en el flujo Comercial: sigue usando el PDF de OBEN MAS', async () => {
+      const { service, hub } = make({ events: [COMPLETADA], firmada: null });
+      const p = await service.preview('11271');
+      expect(hub.call.mock.calls.some((c) => c[1] === 'proforma.pdf')).toBe(true);
+      expect(p.simulatedItems).toContain(PROFORMA_SIMULADA_LABEL);
+    });
   });
 });

@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsString,
   IsEmail,
   IsOptional,
@@ -36,6 +37,27 @@ export class CreateClientDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /** Código del cliente en OBEN MAS. */
+  @IsOptional()
+  @IsString()
+  obenCode?: string;
+
+  /** Dominios de correo autorizados (ej. ["cliente.com"]). */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  authorizedDomains?: string[];
+
+  /** Comercial de Oben a cargo (copia de la Proforma, seguimiento de cartera). */
+  @IsOptional()
+  @IsEmail()
+  comercialEmail?: string;
+
+  /** Intermediario (ej. Oben US): el cliente final viene en el asunto del correo. */
+  @IsOptional()
+  @IsBoolean()
+  finalCustomerInSubject?: boolean;
 }
 
 export class UpdateClientDto {
@@ -64,4 +86,25 @@ export class UpdateClientDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /** Código del cliente en OBEN MAS. */
+  @IsOptional()
+  @IsString()
+  obenCode?: string;
+
+  /** Dominios de correo autorizados (ej. ["cliente.com"]). */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  authorizedDomains?: string[];
+
+  /** Comercial de Oben a cargo (copia de la Proforma, seguimiento de cartera). */
+  @IsOptional()
+  @IsEmail()
+  comercialEmail?: string;
+
+  /** Intermediario (ej. Oben US): el cliente final viene en el asunto del correo. */
+  @IsOptional()
+  @IsBoolean()
+  finalCustomerInSubject?: boolean;
 }

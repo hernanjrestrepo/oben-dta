@@ -24,6 +24,7 @@ import { QuotesService } from '../quotes/quotes.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
 import { FreightRateImportService } from '../freight-rates/freight-rate-import.service';
 import { PackingListAutomationService } from '../packing-list/packing-list-automation.service';
+import { ComercialFlujoService } from '../comercial/comercial-flujo.service';
 
 /**
  * Asunto exacto y estable del correo automático que envía Oben al aprobar el
@@ -677,6 +678,47 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
+      // Flujo Comercial (reunión 2026-09-23), solo si el tenant lo habilitó
+      // (settings.comercial.habilitado): una respuesta del cliente a una
+      // Proforma se reconoce por el hilo, ANTES del clasificador general.
+      const comercial = await this.comercialHabilitado(tenantId);
+      const fullAttachments = (parsed.attachments ?? []).map((a) => ({
+        filename: a.filename ?? 'archivo',
+        contentType: a.contentType ?? null,
+        content: a.content as Buffer,
+      }));
+      if (comercial) {
+        const references = Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : [];
+        const respuesta = await this.callRequestScoped(tenantId, ComercialFlujoService, (svc) =>
+          svc.procesarCorreoRespuesta({
+            from,
+            subject,
+            body,
+            messageId,
+            inReplyTo: parsed.inReplyTo ?? null,
+            references,
+            attachments: fullAttachments,
+          }),
+        );
+        if (respuesta) {
+          category = 'comercial_respuesta';
+          confidence = 1;
+          provider = 'rules';
+          resultRef = `${respuesta.caso.id}:${respuesta.tipo}`;
+          await this.finalizeMessage(tenantId, messageId, {
+            classificationCategory: category,
+            classificationConfidence: confidence,
+            classificationProvider: provider,
+            status,
+            resultRef,
+            errorMessage,
+            movedToFolder: cfg.processedFolder ?? 'Procesados',
+          });
+          await this.markSeenAndMove(client, msg.uid, cfg, cfg.processedFolder ?? 'Procesados');
+          return;
+        }
+      }
+
       const senderDomain = (from.split('@')[1] ?? '').toLowerCase().trim();
       const knownClient = senderDomain
         ? await this.clients.findOne({
@@ -709,6 +751,13 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
           break;
         }
         case 'purchase_order': {
+          if (comercial) {
+            const caso = await this.callRequestScoped(tenantId, ComercialFlujoService, (svc) =>
+              svc.recibirOc({ from, subject, body, messageId, attachments: fullAttachments }, 'correo'),
+            );
+            resultRef = `comercial:${caso.id}`;
+            break;
+          }
           const result = await this.callRequestScoped(
             tenantId,
             PurchaseOrdersService,
@@ -887,6 +936,18 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
    * cualquier request HTTP, fijando el tenant manualmente antes de invocarlo.
    * Mismo patrón usado en los tests e2e de idempotencia de RC1 Sprint 4.
    */
+  /** `settings.comercial.habilitado`. Si no se puede leer, el correo sigue por el camino de siempre. */
+  private async comercialHabilitado(tenantId: string): Promise<boolean> {
+    try {
+      const tenant = await this.tenants.findOne({ where: { id: tenantId } });
+      const comercial = (tenant?.settings as { comercial?: { habilitado?: unknown } } | undefined)?.comercial;
+      return comercial?.habilitado === true;
+    } catch (err) {
+      this.logger.warn(`[tenant ${tenantId}] no se pudo leer settings.comercial: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
   private async callRequestScoped<TInstance, R>(
     tenantId: string,
     type: new (...args: unknown[]) => TInstance,

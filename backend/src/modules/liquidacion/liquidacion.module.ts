@@ -1,4 +1,6 @@
 import { Logger, Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ComercialCase } from '../../entities/comercial-case.entity';
 import { IntegrationHubModule } from '../integrations/hub/integration-hub.module';
 import { AuthModule } from '../auth/auth.module';
 import { FreightRatesModule } from '../freight-rates/freight-rates.module';
@@ -11,7 +13,15 @@ import { LiquidacionService } from './liquidacion.service';
 import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFromEnv } from './liquidacion-value-calculator';
 
 @Module({
-  imports: [IntegrationHubModule, AuthModule, FreightRatesModule, IdempotencyModule, DistributionListsModule, ObenReportsModule],
+  imports: [
+    TypeOrmModule.forFeature([ComercialCase]),
+    IntegrationHubModule,
+    AuthModule,
+    FreightRatesModule,
+    IdempotencyModule,
+    DistributionListsModule,
+    ObenReportsModule,
+  ],
   controllers: [LiquidacionController],
   providers: [
     LiquidacionService,

@@ -150,4 +150,55 @@ describe('EquivalencesService (homologación cliente↔producto)', () => {
 
     expect(del).toHaveBeenCalledWith({ tenantId: TENANT_ID, id: 'eq-1' });
   });
+
+  describe('importEquivalences (tabla de Alejandra)', () => {
+    const CLIENTES = [
+      { id: 'c1', clientId: 'SIM-CLI-01', obenCode: 'OB-001', name: 'Cliente Uno' },
+      { id: 'c2', clientId: 'SIM-CLI-02', obenCode: null, name: 'Cliente Dos' },
+    ];
+    function withClients(repoOverrides: Partial<Record<string, jest.Mock>> = {}) {
+      const made = makeService(repoOverrides);
+      made.clients.find = jest.fn().mockResolvedValue(CLIENTES);
+      return made;
+    }
+
+    it('identifica al cliente por código interno, código en OBEN MAS o nombre, y crea/actualiza', async () => {
+      const findOne = jest.fn(async ({ where }: any) => (where.clientCode === 'BOPP 345' ? { id: 'eq-9' } : null));
+      const { service, repo } = withClients({ findOne });
+      const res = await service.importEquivalences({
+        rows: [
+          { Cliente: 'SIM-CLI-01', 'Código del cliente': 'BOPP 1', 'Código Oben': 'SC15TN' },
+          { Cliente: 'OB-001', 'Código del cliente': 'BOPP 345', 'Código Oben': 'SC15TN', Descripción: 'mismo material' },
+          { Cliente: 'cliente dos', 'Código del cliente': 'Poliéster 15g', 'Código Oben': 'ET12' },
+        ],
+      });
+      expect(res).toMatchObject({ total: 3, creados: 2, actualizados: 1, errores: [] });
+      expect(repo.save).toHaveBeenCalledTimes(3);
+      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ id: 'eq-9', clientId: 'c1', clientCode: 'BOPP 345', description: 'mismo material' }));
+    });
+
+    it('todo o nada: una fila mala (cliente desconocido, código vacío o repetido) y no se escribe ninguna', async () => {
+      const { service, repo } = withClients();
+      const res = await service.importEquivalences({
+        rows: [
+          { Cliente: 'SIM-CLI-01', 'Código del cliente': 'BOPP 1', 'Código Oben': 'SC15TN' },
+          { Cliente: 'NO EXISTE', 'Código del cliente': 'X', 'Código Oben': 'Y' },
+          { Cliente: 'SIM-CLI-01', 'Código del cliente': '', 'Código Oben': 'Y' },
+          { Cliente: 'SIM-CLI-01', 'Código del cliente': 'BOPP 1', 'Código Oben': 'OTRO' },
+        ],
+      });
+      expect(res.errores.map((e) => e.fila)).toEqual([3, 4, 5]);
+      expect(res.errores[0].error).toMatch(/no encontrado/);
+      expect(res.errores[2].error).toMatch(/repetido/);
+      expect(res).toMatchObject({ creados: 0, actualizados: 0 });
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it('dryRun valida y muestra qué haría, sin escribir', async () => {
+      const { service, repo } = withClients();
+      const res = await service.importEquivalences({ dryRun: true, rows: [{ Cliente: 'SIM-CLI-02', 'Codigo cliente': 'A', 'Codigo Oben': 'B' }] });
+      expect(res).toMatchObject({ dryRun: true, creados: 1, filas: [{ cliente: 'Cliente Dos', accion: 'crear' }] });
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
 });

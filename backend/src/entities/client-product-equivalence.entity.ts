@@ -7,9 +7,9 @@ import { Client } from './client.entity';
  * manda un SC25TN800" — cada cliente nombra el mismo material a su manera:
  * "BOPP 1" para uno, "BOPP 345" para otro, y ambos son el mismo SC15TN
  * interno de Oben). Alejandra la mantiene hoy a mano; este es el
- * administrador que reemplaza esa hoja de cálculo — todavía no está
- * conectado a ninguna interpretación automática de órdenes de compra (eso
- * depende de la API de OBEN MAS/Oben+, que aún no existe).
+ * administrador que reemplaza esa hoja de cálculo (con carga masiva desde
+ * Excel) y la fuente de la lectura automática de órdenes de compra del flujo
+ * Comercial.
  */
 @Entity('client_product_equivalences')
 @Unique('UQ_client_product_equivalence', ['tenantId', 'clientId', 'clientCode'])
