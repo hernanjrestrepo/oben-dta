@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Oben Xmart — Cómo funciona</title>
+<style>
+@font-face { font-family: 'Geist'; font-style: normal; font-weight: 300 800; src: url(fuentes/Geist-latin.woff2) format('woff2'); }
+@font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 400 600; src: url(fuentes/GeistMono-latin.woff2) format('woff2'); }
+@page { size: 1280px 720px; margin: 0; }
+:root {
+  --naranja: #F47735; --naranja-osc: #C9551A; --naranja-claro: #FDEBDF;
+  --tinta: #1D2330; --tinta-2: #4A5263; --tinta-3: #7A8292;
+  --papel: #FFFFFF; --fondo: #F7F4F0; --linea: #E6DFD6;
+  --vivo: #15803D; --vivo-bg: #DCFCE7;
+  --listo: #B45309; --listo-bg: #FEF3C7;
+  --espera: #B42318; --espera-bg: #FEE4E2;
+  --sim: #6D28D9; --sim-bg: #F1E9FE;
+  --mono: 'Geist Mono', 'DejaVu Sans Mono', monospace;
+  --sans: 'Geist', 'Liberation Sans', 'DejaVu Sans', sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #d9d4cc; }
+body { font-family: var(--sans); color: var(--tinta); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.slide { width: 1280px; height: 720px; position: relative; overflow: hidden; background: var(--fondo); page-break-after: always; break-after: page; display: flex; flex-direction: column; padding: 40px 56px 46px; }
+@media screen { .slide { margin: 24px auto; box-shadow: 0 6px 30px rgba(0,0,0,.18); } }
+.slide:last-child { page-break-after: auto; break-after: auto; }
+
+/* Cabecera y pie de cada página */
+.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.top .chips { display: flex; gap: 8px; }
+.seccion { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--naranja-osc); font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.seccion::before { content: ""; width: 22px; height: 3px; background: var(--naranja); border-radius: 2px; }
+.pie { position: absolute; left: 56px; right: 56px; bottom: 16px; display: flex; justify-content: space-between; font-size: 11px; color: var(--tinta-3); font-family: var(--mono); letter-spacing: .04em; }
+h1 { font-size: 34px; line-height: 1.12; margin: 0 0 8px; letter-spacing: -.02em; font-weight: 700; text-wrap: balance; max-width: 1000px; }
+h2 { font-size: 19px; margin: 0 0 6px; letter-spacing: -.01em; font-weight: 650; }
+.lead { font-size: 16px; line-height: 1.5; color: var(--tinta-2); margin: 0 0 18px; max-width: 980px; }
+p { margin: 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.chip.vivo { color: var(--vivo); background: var(--vivo-bg); }
+.chip.listo { color: var(--listo); background: var(--listo-bg); }
+.chip.espera { color: var(--espera); background: var(--espera-bg); }
+.chip.sim { color: var(--sim); background: var(--sim-bg); }
+
+/* Captura con marco de navegador */
+.shot { background: var(--papel); border: 1px solid var(--linea); border-radius: 12px; box-shadow: 0 10px 30px -12px rgba(29,35,48,.28); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+.shot .barra { height: 26px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 10px; background: #F1EDE8; border-bottom: 1px solid var(--linea); font-family: var(--mono); font-size: 10.5px; color: var(--tinta-3); }
+.shot .barra i { width: 8px; height: 8px; border-radius: 50%; background: #D6CFC6; display: block; }
+.shot .barra span { margin-left: 8px; }
+.shot .barra b { margin-left: auto; font-weight: 600; color: var(--sim); }
+.shot .img { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.shot img { width: 100%; height: 100%; object-fit: cover; object-position: top left; display: block; }
+.shot img.abajo { object-position: bottom left; }
+.shot img.contener { object-fit: contain; object-position: top center; background: #fff; }
+.marca { position: absolute; width: 26px; height: 26px; border-radius: 50%; background: var(--naranja); color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px #fff, 0 4px 10px rgba(0,0,0,.25); }
+
+/* Explicaciones numeradas */
+.pasos { display: flex; flex-direction: column; gap: 12px; }
+.paso { display: grid; grid-template-columns: 26px 1fr; gap: 12px; align-items: start; }
+.paso .n { width: 26px; height: 26px; border-radius: 50%; background: var(--naranja); color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.paso h3 { font-size: 14.5px; margin: 2px 0 3px; font-weight: 650; }
+.paso p { font-size: 13px; line-height: 1.5; color: var(--tinta-2); }
+
+.dos { display: grid; grid-template-columns: 1.55fr 1fr; gap: 28px; flex: 1; min-height: 0; }
+.dos.mitad { grid-template-columns: 1fr 1fr; }
+.dos.inv { grid-template-columns: 1fr 1.55fr; }
+.col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.nota { font-size: 12px; line-height: 1.5; color: var(--tinta-2); background: var(--papel); border: 1px solid var(--linea); border-left: 3px solid var(--naranja); border-radius: 8px; padding: 10px 12px; }
+.nota.sim { border-left-color: var(--sim); }
+.nota strong { color: var(--tinta); }
+
+/* Correos */
+.correo { background: var(--papel); border: 1px solid var(--linea); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 6px 18px -12px rgba(29,35,48,.3); }
+.correo .meta { font-family: var(--mono); font-size: 10.5px; color: var(--tinta-3); line-height: 1.45; }
+.correo .asunto { font-size: 13.5px; font-weight: 650; line-height: 1.35; }
+.correo .asunto em { font-style: normal; color: var(--sim); font-family: var(--mono); font-size: 11px; font-weight: 600; }
+.correo .cuerpo { font-size: 12px; line-height: 1.5; color: var(--tinta-2); }
+.correo .adj { display: flex; flex-wrap: wrap; gap: 5px; }
+.correo .adj span { font-family: var(--mono); font-size: 10px; background: var(--fondo); border: 1px solid var(--linea); border-radius: 5px; padding: 2px 6px; color: var(--tinta); }
+.quien { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--naranja-osc); }
+
+/* Bandas de apoyo */
+.banda { display: grid; gap: 12px; margin-top: auto; }
+.banda .item { background: var(--papel); border: 1px solid var(--linea); border-radius: 10px; padding: 11px 13px; display: flex; flex-direction: column; gap: 4px; }
+.banda .item b { font-size: 13px; }
+.banda .item span { font-size: 12px; line-height: 1.45; color: var(--tinta-2); }
+.banda .item em { font-style: normal; font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--naranja-osc); font-weight: 600; }
+.banda-titulo { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-3); font-weight: 600; margin: 18px 0 8px; }
+.pila { display: grid; grid-template-rows: 1fr 1fr; gap: 14px; min-height: 0; }
+
+/* Portada */
+.portada { background: var(--naranja); color: #fff; padding: 56px 64px; justify-content: space-between; }
+.portada .logo { height: 120px; width: auto; align-self: flex-start; margin: -28px 0 0 -40px; }
+.portada h1 { font-size: 58px; line-height: 1.02; max-width: 900px; margin: 0 0 18px; letter-spacing: -.03em; }
+.portada .sub { font-size: 20px; line-height: 1.45; max-width: 760px; opacity: .95; }
+.portada .base { display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; font-size: 13px; line-height: 1.5; }
+.portada .base .aviso { max-width: 620px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.35); border-radius: 10px; padding: 12px 14px; }
+.portada .fecha { font-family: var(--mono); letter-spacing: .08em; text-transform: uppercase; font-size: 12px; text-align: right; }
+.portada .pista { position: absolute; right: -80px; top: 80px; width: 560px; height: 560px; border-radius: 50%; border: 70px solid rgba(255,255,255,.08); }
+
+/* Resumen */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.tile { background: var(--papel); border: 1px solid var(--linea); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+.tile .big { font-size: 34px; font-weight: 750; letter-spacing: -.03em; color: var(--naranja-osc); line-height: 1; }
+.tile h3 { font-size: 14.5px; margin: 0; }
+.tile p { font-size: 12.5px; line-height: 1.5; color: var(--tinta-2); }
+
+/* Mapa del proceso */
+.mapa { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; position: relative; margin-top: 6px; }
+.etapa { position: relative; padding: 0 10px; display: flex; flex-direction: column; gap: 10px; }
+.etapa .cab { display: flex; align-items: center; gap: 10px; }
+.etapa .num { width: 40px; height: 40px; border-radius: 50%; background: var(--papel); border: 3px solid var(--naranja); color: var(--naranja-osc); font-weight: 750; font-size: 17px; display: flex; align-items: center; justify-content: center; z-index: 1; flex: none; }
+.etapa h3 { font-size: 16px; margin: 0; line-height: 1.2; background: var(--fondo); padding-right: 8px; position: relative; z-index: 1; }
+.mapa::before { content: ""; position: absolute; left: 30px; right: 40px; top: 19px; height: 3px; background: linear-gradient(90deg, var(--naranja) 0 100%); opacity: .35; }
+.etapa ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.etapa li { font-size: 13px; line-height: 1.42; color: var(--tinta-2); background: var(--papel); border: 1px solid var(--linea); border-radius: 8px; padding: 7px 9px; }
+.etapa li b { color: var(--tinta); font-weight: 600; }
+.etapa .estado { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+
+/* Reglas */
+.reglas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.regla { background: var(--papel); border: 1px solid var(--linea); border-radius: 12px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+.regla svg { width: 30px; height: 30px; stroke: var(--naranja-osc); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.regla h3 { font-size: 16px; margin: 0; }
+.regla p { font-size: 13px; line-height: 1.5; color: var(--tinta-2); }
+.regla.destacada { background: var(--tinta); color: #fff; border-color: var(--tinta); }
+.regla.destacada p { color: #D5D9E0; }
+.regla.destacada svg { stroke: #FFB48A; }
+
+/* Tablas */
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--tinta-3); font-weight: 600; padding: 7px 10px; border-bottom: 2px solid var(--linea); }
+td { padding: 8px 10px; border-bottom: 1px solid var(--linea); vertical-align: top; line-height: 1.45; color: var(--tinta-2); }
+td:first-child { color: var(--tinta); font-weight: 600; }
+.tabla { background: var(--papel); border: 1px solid var(--linea); border-radius: 12px; padding: 6px 8px; }
+
+/* Preguntas */
+.preg { background: var(--papel); border: 1px solid var(--linea); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.preg ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.preg li { font-size: 14px; line-height: 1.45; color: var(--tinta-2); padding-left: 2px; }
+.preg li b { color: var(--tinta); }
+.preg .cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.preg .cab span { font-size: 11.5px; color: var(--tinta-3); }
+
+/* Próximos pasos */
+.ruta { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.hito { background: var(--papel); border: 1px solid var(--linea); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; position: relative; }
+.hito .n { font-family: var(--mono); font-size: 12px; color: var(--naranja-osc); font-weight: 600; letter-spacing: .08em; }
+.hito h3 { font-size: 16.5px; margin: 0; line-height: 1.25; }
+.hito p { font-size: 13.5px; line-height: 1.5; color: var(--tinta-2); }
+.hito .dueno { margin-top: auto; font-family: var(--mono); font-size: 10.5px; color: var(--tinta-3); text-transform: uppercase; letter-spacing: .06em; }
+.cierre { background: var(--tinta); color: #fff; }
+.cierre .seccion { color: #FFB48A; }
+.cierre h1 { color: #fff; }
+.cierre .lead { color: #D5D9E0; }
+.cierre .hito { background: #262E3E; border-color: #36405A; }
+.cierre .hito h3 { color: #fff; }
+.cierre .hito p { color: #C9CFDA; }
+.cierre .pie { color: #8E97A8; }
+</style>
+</head>
+<body>
+
+<!-- 1 · Portada -->
+<section class="slide portada">
+  <div class="pista"></div>
+  <img class="logo" src="capturas/logo-oben.svg" alt="Oben Group">
+  <div>
+    <h1>Oben Xmart: del correo del cliente al despacho</h1>
+    <p class="sub">Cómo funciona el software, pantalla por pantalla: la orden de compra, la Proforma, la cartera, la Lista de Empaque, la Liquidación y la factura, en un solo flujo que nunca inventa un dato.</p>
+  </div>
+  <div class="base">
+    <div class="aviso"><strong>Sobre las capturas:</strong> todas vienen del entorno de pruebas, con datos <strong>SIMULADOS</strong> (clientes, referencias y órdenes ficticias, rotuladas así en pantalla y en cada correo). No aparece ningún dato real de Oben ni de sus clientes.</div>
+    <div class="fecha">Septiembre 2026<br>Preparado por Paradixe para Oben Group</div>
+  </div>
+</section>
+
+<!-- 2 · En una página -->
+<section class="slide">
+  <div class="top"><div class="seccion">En una página</div></div>
+  <h1>Menos digitación, cero reprocesos y cada paso a la vista</h1>
+  <p class="lead">Oben Xmart se conecta a los sistemas de Oben y hace el trabajo repetitivo: lee las órdenes de compra, prepara la Proforma, hace el seguimiento con el cliente y con cartera, arma los documentos de exportación y avisa a quien corresponde. Las personas deciden; el sistema ejecuta y deja constancia.</p>
+  <div class="tiles">
+    <div class="tile"><div class="big">1 → 7</div><h3>Un correo, siete documentos</h3><p>Cuando Oben aprueba el corte de una orden, la Lista de Empaque y sus reportes salen solos, completos y en el formato de Oben.</p></div>
+    <div class="tile"><div class="big">0</div><h3>Datos inventados</h3><p>Si falta una dirección, una equivalencia o una fecha, el caso se detiene y lo pide. Nunca se rellena con supuestos.</p></div>
+    <div class="tile"><div class="big">100%</div><h3>Confirmado por una persona</h3><p>Con el "freno de mano", cada escritura en OBEN MAS espera la confirmación de Customer Service hasta que ustedes decidan automatizarla.</p></div>
+    <div class="tile"><div class="big">24/7</div><h3>Seguimiento que no se olvida</h3><p>Recordatorios al cliente, avisos a cartera y al comercial, reintentos y escalamiento si algo falla.</p></div>
+  </div>
+  <div style="margin-top:22px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:13px; color:var(--tinta-2);">
+    <span class="chip vivo">En producción</span> ya funcionando con datos reales en el servidor de Oben
+    <span class="chip listo" style="margin-left:14px">Listo por instalar</span> construido y probado, se instala en el próximo despliegue
+    <span class="chip espera" style="margin-left:14px">Espera a Oben</span> depende de una API o un dato de Oben (mientras tanto, simulado)
+  </div>
+  <div class="banda-titulo">Qué gana cada equipo</div>
+  <div class="banda" style="grid-template-columns: repeat(6, 1fr); margin-top:0">
+    <div class="item"><em>Customer Service</em><span>Deja de digitar órdenes: revisa el caso armado y confirma con un clic.</span></div>
+    <div class="item"><em>Cartera</em><span>Recibe cada aprobación al instante; las órdenes PND se retienen solas.</span></div>
+    <div class="item"><em>Comerciales</em><span>Saben cuándo su orden se activa, se rechaza o sigue esperando cartera.</span></div>
+    <div class="item"><em>COMEX</em><span>El paquete de exportación completo apenas se aprueba el corte.</span></div>
+    <div class="item"><em>Facturación</em><span>Borrador con los datos de la orden y el cierre de la liquidación.</span></div>
+    <div class="item"><em>Gerencia</em><span>Tablero por etapa, tiempos promedio y auditoría de cada paso.</span></div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>2</span></div>
+</section>
+
+<!-- 3 · Mapa del proceso -->
+<section class="slide">
+  <div class="top"><div class="seccion">Mapa del proceso</div></div>
+  <h1>Un pedido de punta a punta, en cinco etapas</h1>
+  <p class="lead">Cada etapa toma lo que dejó la anterior. Donde hoy falta una API de Oben, el sistema funciona completo contra un simulador rotulado, y se conecta al sistema real sin rehacer nada.</p>
+  <div class="mapa">
+    <div class="etapa">
+      <div class="cab"><div class="num">1</div><h3>Comercial</h3></div>
+      <ul>
+        <li><b>Orden de compra</b> por correo (PDF, Excel o texto)</li>
+        <li><b>Traducción</b> con la tabla de equivalencias y conversión de unidades</li>
+        <li><b>Proforma</b> en OBEN MAS → cubicaje → envío al cliente</li>
+        <li><b>Aprobación</b>, cartera y orden de venta activa</li>
+      </ul>
+      <div class="estado"><span class="chip listo">Listo por instalar</span><span class="chip espera">APIs OBEN MAS</span></div>
+    </div>
+    <div class="etapa">
+      <div class="cab"><div class="num">2</div><h3>Producción y corte</h3></div>
+      <ul>
+        <li>Producción en planta (fuera de Oben Xmart)</li>
+        <li><b>Cambios de fecha</b> de entrega: aviso automático al comercial</li>
+        <li>Cierre del corte → correo <b>"OV Aprobada En Corte"</b></li>
+      </ul>
+      <div class="estado"><span class="chip vivo">Disparador real</span></div>
+    </div>
+    <div class="etapa">
+      <div class="cab"><div class="num">3</div><h3>Lista de Empaque</h3></div>
+      <ul>
+        <li><b>Paquete completo</b>: Lista Especial, Unificada, Detallada, Consumos y Hoja de Costos</li>
+        <li><b>Reintentos</b> y escalamiento si falta algo</li>
+        <li><b>Regla PND</b>: no se genera si cartera no liberó</li>
+      </ul>
+      <div class="estado"><span class="chip vivo">En producción</span><span class="chip listo">Regla PND por instalar</span></div>
+    </div>
+    <div class="etapa">
+      <div class="cab"><div class="num">4</div><h3>Liquidación</h3></div>
+      <ul>
+        <li><b>Borrador</b> con kilos, FOB y cargos de destino</li>
+        <li><b>Registro</b> en Oben (encabezado + detalle)</li>
+        <li><b>Correo de cierre</b> a COMEX y Facturación</li>
+      </ul>
+      <div class="estado"><span class="chip listo">Listo por instalar</span><span class="chip espera">Fórmula Incoterm</span></div>
+    </div>
+    <div class="etapa">
+      <div class="cab"><div class="num">5</div><h3>Facturación</h3></div>
+      <ul>
+        <li><b>Borrador PDF</b> con precios y dirección de entrega</li>
+        <li><b>Factura electrónica</b> al enviar a COMEX</li>
+      </ul>
+      <div class="estado"><span class="chip listo">Listo por instalar</span><span class="chip espera">Proveedor DIAN</span></div>
+    </div>
+  </div>
+  <div class="banda-titulo">Cuando pasa esto, el sistema hace aquello</div>
+  <div class="banda" style="grid-template-columns: repeat(6, 1fr); margin-top:0">
+    <div class="item"><b>Llega una OC</b><span>Abre un caso, lo traduce y marca lo que falta.</span></div>
+    <div class="item"><b>Planeación cubica</b><span>Envía la Proforma al cliente y programa recordatorios.</span></div>
+    <div class="item"><b>El cliente responde</b><span>Aprueba, rechaza o modifica, leído del mismo hilo.</span></div>
+    <div class="item"><b>Cartera libera</b><span>La orden de venta pasa a activa y se avisa al comercial.</span></div>
+    <div class="item"><b>Se cierra el corte</b><span>Arma y envía el paquete de la Lista de Empaque.</span></div>
+    <div class="item"><b>Último pallet en bodega</b><span>Dispararía la Liquidación (pendiente de ese evento en Oben).</span></div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>3</span></div>
+</section>
+
+<!-- 4 · Reglas de oro -->
+<section class="slide">
+  <div class="top"><div class="seccion">Cómo trabaja</div></div>
+  <h1>Seis reglas que el sistema no se salta</h1>
+  <p class="lead">Están en el código y tienen pruebas automáticas que fallan si alguien las rompe.</p>
+  <div class="reglas">
+    <div class="regla destacada"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg><h3>Nunca se inventa un dato</h3><p>Lo que no viene en la orden, en el maestro o en OBEN MAS queda como "falta" y bloquea el paso siguiente hasta que una persona lo resuelva.</p></div>
+    <div class="regla"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14" opacity=".0"/><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 9h8M8 15h5"/></svg><h3>Lo simulado siempre se marca</h3><p>Pantallas, correos y documentos con datos de prueba llevan el rótulo SIMULADO. Nada simulado se escribe en un OBEN MAS real ni sale a un cliente real.</p></div>
+    <div class="regla"><svg viewBox="0 0 24 24"><rect x="6" y="10" width="12" height="10" rx="2"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg><h3>Freno de mano</h3><p>En modo supervisado, crear, aprobar, modificar, anular o activar en OBEN MAS espera la confirmación de una persona. Pasar a automático es decisión de Oben.</p></div>
+    <div class="regla"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><h3>Nada sale incompleto</h3><p>Si un documento del paquete falla, se reintenta cada 10 minutos; a los 5 intentos se escala a José y Jorge en vez de enviarse a medias.</p></div>
+    <div class="regla"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg><h3>Solo remitentes autorizados</h3><p>Una orden de compra solo se atribuye a un cliente si llega desde uno de sus dominios registrados. Un dominio parecido se trata como sospechoso.</p></div>
+    <div class="regla"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><h3>Todo queda registrado</h3><p>Cada caso tiene su bitácora (qué pasó, cuándo y quién lo confirmó) y cada acción queda en la auditoría del sistema.</p></div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>4</span></div>
+</section>
+
+<!-- 5 · Centro de Operaciones -->
+<section class="slide">
+  <div class="top"><div class="seccion">Centro de Operaciones</div><span class="chip sim">Datos de prueba</span></div>
+  <div class="dos">
+    <div class="shot"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / operaciones</span><b>SIMULADO</b></div><div class="img"><img src="capturas/01-operaciones.jpg" alt="Centro de Operaciones"></div></div>
+    <div class="col">
+      <h1 style="font-size:28px">El estado de cada conexión, de un vistazo</h1>
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Un tablero por sistema</h3><p>OBEN MAS, Oben Mas (API de reportes), correo, DIAN, NetSuite, transporte y los demás sistemas del ecosistema, cada uno con su estado.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Real o simulador, siempre visible</h3><p>Cada conexión dice si está hablando con el sistema real o con su simulador. En esta demo todas están en simulador; en el servidor de Oben, la API de reportes y el correo ya corren en real.</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Cambiar a real no rehace nada</h3><p>El simulador responde con la misma forma de datos que la API real: cuando Oben entrega una API, se conecta y el resto del flujo sigue igual.</p></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>5</span></div>
+</section>
+
+<!-- 6 · Comercial tablero -->
+<section class="slide">
+  <div class="top"><div class="seccion">Comercial · Tablero</div><span class="chip sim">Datos de prueba</span></div>
+  <div class="dos">
+    <div class="shot"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / comercial</span><b>SIMULADO</b></div><div class="img">
+      <img src="capturas/03-comercial-tablero.jpg" alt="Tablero Comercial">
+      <div class="marca" style="left:19%; top:28%">1</div>
+      <div class="marca" style="left:19%; top:52%">2</div>
+      <div class="marca" style="left:71%; top:52%">3</div>
+      <div class="marca" style="left:19%; top:86%">4</div>
+    </div></div>
+    <div class="col">
+      <h1 style="font-size:28px">Todos los pedidos, por etapa</h1>
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Embudo por estado</h3><p>OC recibida → sin cubicar → cubicada → enviada al cliente → retenida por cartera → activa. Filtrable por fechas y por cliente.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Requieren atención</h3><p>Lo que espera a una persona: una confirmación del freno de mano, una dirección por escoger, una equivalencia que falta o un remitente no reconocido.</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Tiempos y clientes</h3><p>Horas promedio entre etapas (de la OC a la Proforma, del envío a la aprobación, de retenida a activa) y pedidos abiertos por cliente.</p></div></div>
+        <div class="paso"><div class="n">4</div><div><h3>Simulador (solo en pruebas)</h3><p>Hace lo que en la vida real hacen Planeación, cartera o producción en OBEN MAS, para poder recorrer el flujo completo. Desaparece con OBEN MAS real conectado.</p></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>6</span></div>
+</section>
+
+<!-- 7 · Lectura de una OC -->
+<section class="slide">
+  <div class="top"><div class="seccion">Comercial · Lectura de la orden de compra</div><span class="chip sim">Datos de prueba</span></div>
+  <div class="dos inv">
+    <div class="col">
+      <h1 style="font-size:28px">Una orden en inglés, en libras y pulgadas, traducida sin digitar</h1>
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Llega por correo</h3><p>Un cliente intermediario de EE. UU. escribe "PO 7789 | End customer: ACME PACKAGING". El sistema lo identifica por su dominio y toma el cliente final del asunto.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Traduce sus referencias</h3><p>"BOPP CLEAR 20 MIC" se convierte en la referencia Oben según la tabla de equivalencias de ese cliente. Nada se adivina: sin equivalencia, la línea queda como faltante.</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Convierte unidades</h3><p>4.409,25 lb → 2.000 kg; 20 in → 508 mm. Cada conversión queda escrita al lado de la línea para revisarla.</p></div></div>
+        <div class="paso"><div class="n">4</div><div><h3>Destino desde el maestro</h3><p>País y dirección salen del maestro del cliente en OBEN MAS; la orden queda como exportación a USA.</p></div></div>
+        <div class="paso"><div class="n">5</div><div><h3>Espera la confirmación</h3><p>Customer Service revisa, corrige si hace falta y confirma: recién ahí se crea la Proforma en OBEN MAS.</p></div></div>
+      </div>
+    </div>
+    <div class="shot"><div class="barra"><i></i><i></i><i></i><span>comercial / caso PO-7789</span><b>SIMULADO</b></div><div class="img"><img src="capturas/06-caso-usa.jpg" alt="Caso de un cliente intermediario de USA"></div></div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>7</span></div>
+</section>
+
+<!-- 8 · Faltantes y fraude -->
+<section class="slide">
+  <div class="top"><div class="seccion">Comercial · Cuando falta algo, se detiene</div><span class="chip sim">Datos de prueba</span></div>
+  <h1>El sistema prefiere preguntar antes que equivocarse</h1>
+  <div class="dos mitad" style="margin-top:6px">
+    <div class="col">
+      <div class="shot" style="flex:1"><div class="barra"><i></i><i></i><i></i><span>comercial / caso OC-SIM-0990</span><b>SIMULADO</b></div><div class="img"><img src="capturas/07-caso-faltantes.jpg" alt="Caso con datos faltantes"></div></div>
+      <div class="nota"><strong>Dos faltantes, cero supuestos.</strong> El cliente tiene dos direcciones y la orden no dice cuál; y pide un producto que no está en su tabla de equivalencias. El caso no avanza hasta que Customer Service escoge la dirección y registra la equivalencia.</div>
+    </div>
+    <div class="col">
+      <div class="shot" style="flex:1"><div class="barra"><i></i><i></i><i></i><span>comercial / remitente no reconocido</span><b>SIMULADO</b></div><div class="img"><img src="capturas/08-caso-fraude.jpg" alt="Remitente no autorizado"></div></div>
+      <div class="nota"><strong>Posible suplantación.</strong> Llega "cliente-simulad<b>0</b>.example" (con cero) pidiendo cambiar la dirección de entrega. No coincide con ningún dominio autorizado: no se asigna a ningún cliente y queda para revisión.</div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>8</span></div>
+</section>
+
+<!-- 9 · De punta a punta -->
+<section class="slide">
+  <div class="top"><div class="seccion">Comercial · Un pedido completo</div><span class="chip sim">Datos de prueba</span></div>
+  <div class="dos">
+    <div class="pila">
+      <div class="shot"><div class="barra"><i></i><i></i><i></i><span>caso OC-SIM-0009 · encabezado y líneas</span><b>SIMULADO</b></div><div class="img"><img style="object-position: 0 31%" src="capturas/05-caso-activa.jpg" alt="Caso activo: líneas"></div></div>
+      <div class="shot"><div class="barra"><i></i><i></i><i></i><span>caso OC-SIM-0009 · fechas y bitácora</span><b>SIMULADO</b></div><div class="img"><img style="object-position: 0 78%" src="capturas/05-caso-activa.jpg" alt="Caso activo: fechas y bitácora"></div></div>
+    </div>
+    <div class="col">
+      <h1 style="font-size:26px">De la OC a la orden de venta activa, con cada paso firmado</h1>
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Fechas de cada fase</h3><p>OC recibida, Proforma creada, cubicada, enviada, aprobada, retenida, liberada por cartera y activa.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Bitácora legible</h3><p>Qué pasó y quién lo confirmó, con nombre y correo. Los correos al cliente, a cartera y al comercial también quedan anotados.</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Fecha comprometida</h3><p>Si Planeación mueve la entrega en OBEN MAS, el cambio queda en el historial y se avisa.</p></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>9</span></div>
+</section>
+
+<!-- 10 · Casos y modificación -->
+<section class="slide">
+  <div class="top"><div class="seccion">Comercial · Casos</div><span class="chip sim">Datos de prueba</span></div>
+  <div class="dos">
+    <div class="shot"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / comercial · casos</span><b>SIMULADO</b></div><div class="img"><img src="capturas/04-comercial-casos.jpg" alt="Lista de casos"></div></div>
+    <div class="col">
+      <div class="shot" style="flex:1"><div class="barra"><i></i><i></i><i></i><span>caso OC-SIM-0004 · el cliente pide un cambio</span></div><div class="img"><img src="capturas/08b-caso-modificacion.jpg" alt="Modificación pedida por el cliente"></div></div>
+      <div class="nota"><strong>Aprueba, rechaza o modifica.</strong> La respuesta del cliente se reconoce en el mismo hilo del correo. Si pide cambiar cantidades, la Proforma vuelve a "sin cubicar" para que Planeación la cubique otra vez, y la nueva versión sale al cliente.</div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>10</span></div>
+</section>
+
+<!-- 11 · Correos Comercial -->
+<section class="slide">
+  <div class="top"><div class="seccion">Comercial · Correos automáticos</div><span class="chip sim">Correos de prueba</span></div>
+  <h1>Cada quien recibe lo suyo, en el momento justo</h1>
+  <p class="lead" style="margin-bottom:12px">Estos correos salieron del entorno de pruebas durante la demo. Los destinatarios salen de las listas de distribución que Oben configura; en pruebas todos los asuntos llevan [SIMULADO].</p>
+  <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;">
+    <div class="correo"><div class="quien">Al cliente · con la Proforma adjunta</div><div class="meta">Para: compras@cliente-simulado.example · CC: comercial, Customer Service, cartera</div><div class="asunto"><em>[SIMULADO]</em> Proforma SIM-95007 — su orden de compra OC-SIM-0009</div><div class="cuerpo">Adjuntamos la Proforma correspondiente a su orden de compra. Por favor revísela y respóndanos en este mismo correo con su aprobación (Proforma firmada o confirmación por escrito), o indíquenos si requiere algún cambio.</div><div class="adj"><span>Proforma SIM-95007.pdf</span></div></div>
+    <div class="correo"><div class="quien">A cartera · cuando el cliente aprueba</div><div class="meta">Para: cartera@oben-demo.example</div><div class="asunto"><em>[SIMULADO]</em> Proforma SIM-95007 aprobada — OV 9000007 retenida, pendiente de cartera</div><div class="cuerpo">El cliente aprobó la Proforma. La orden de venta quedó retenida en OBEN MAS a la espera de la validación de cartera. Mientras no libere, el comercial recibe seguimiento.</div></div>
+    <div class="correo"><div class="quien">A Customer Service · freno de mano</div><div class="meta">Para: servicioalcliente@oben-demo.example</div><div class="asunto"><em>[SIMULADO]</em> [Comercial] Confirmar: Cartera liberó la OV 9000007: pasarla a ACTIVA en OBEN MAS</div><div class="cuerpo">El flujo está en modo supervisado: esta acción espera tu confirmación en Oben Xmart → Comercial.</div></div>
+    <div class="correo"><div class="quien">Al comercial · orden activa</div><div class="meta">Para: comercial@oben-simulado.example · CC: Customer Service</div><div class="asunto"><em>[SIMULADO]</em> [Comercial] Orden de venta 9000007 activa</div><div class="cuerpo">Cartera liberó la orden y quedó activa en OBEN MAS: comienza producción.</div></div>
+  </div>
+  <div class="banda-titulo" style="margin-top:14px">Otros avisos automáticos del flujo</div>
+  <div class="banda" style="grid-template-columns: repeat(6, 1fr); margin-top:0">
+    <div class="item"><b>Recordatorio al cliente</b><span>"Re: Proforma … [PF n]" en el mismo hilo, mientras no responda.</span></div>
+    <div class="item"><b>Seguimiento al comercial</b><span>"OV … retenida por cartera hace N día(s)", hasta que cartera libere.</span></div>
+    <div class="item"><b>Cambio de fecha de entrega</b><span>A Customer Service cuando Planeación mueve la fecha comprometida.</span></div>
+    <div class="item"><b>El cliente pide modificar</b><span>A Customer Service, con las nuevas cantidades listas para revisar.</span></div>
+    <div class="item"><b>Proforma rechazada</b><span>Al comercial, con el motivo que dio el cliente.</span></div>
+    <div class="item"><b>Alerta de remitente</b><span>A Customer Service si una orden o respuesta llega de un dominio no autorizado.</span></div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>11</span></div>
+</section>
+
+<!-- 12 · Configuración -->
+<section class="slide">
+  <div class="top"><div class="seccion">Comercial · Configuración</div><span class="chip sim">Datos de prueba</span></div>
+  <div class="dos">
+    <div class="shot"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / comercial · configuración</span></div><div class="img"><img src="capturas/10-comercial-config.jpg" alt="Configuración Comercial"></div></div>
+    <div class="col">
+      <h1 style="font-size:28px">Oben decide cuánto automatizar</h1>
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Buzón de pedidos</h3><p>Apagado, el buzón sigue funcionando como hoy. Encendido, cada orden de compra abre un caso. Se enciende cuando empiece el piloto.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Freno de mano</h3><p>Supervisado (cada escritura en OBEN MAS con confirmación) o automático. Se cambia con un clic, sin programar.</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Seguimientos</h3><p>Propuesta de la reunión: recordar al cliente cada 24 horas tres veces y luego semanal; lo mismo al comercial mientras cartera no libera. Customer Service ajusta los tiempos.</p></div></div>
+        <div class="paso"><div class="n">4</div><div><h3>Lectura de órdenes</h3><p>Hoy por reglas; con ejemplos reales de órdenes también puede leerlas con IA. La referencia Oben siempre sale de la tabla de equivalencias, nunca de la IA.</p></div></div>
+      </div>
+      <div class="nota">También hay una pestaña <strong>Nueva orden de compra</strong> para registrar a mano una OC que llegó por otro canal (WhatsApp, teléfono); sigue exactamente el mismo camino que un correo.</div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>12</span></div>
+</section>
+
+<!-- 13 · Maestros -->
+<section class="slide">
+  <div class="top"><div class="seccion">Maestros · Equivalencias y clientes</div><span class="chip sim">Datos de prueba</span></div>
+  <h1>Lo que Customer Service sabe de memoria, cargado una sola vez</h1>
+  <div class="dos mitad" style="margin-top:6px">
+    <div class="col">
+      <div class="shot" style="flex:1"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / equivalencias</span><b>SIMULADO</b></div><div class="img"><img src="capturas/11-equivalencias.jpg" alt="Equivalencias"></div></div>
+      <div class="nota"><strong>Equivalencias:</strong> cómo pide cada cliente y a qué referencia Oben corresponde ("BOPP 15" → referencia Oben). Se cargan desde Excel con vista previa; si una fila tiene error, no se carga nada.</div>
+    </div>
+    <div class="col">
+      <div class="shot" style="flex:1"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / clientes</span><b>SIMULADO</b></div><div class="img"><img src="capturas/12-clientes.jpg" alt="Clientes"></div></div>
+      <div class="nota"><strong>Maestro de clientes:</strong> código en OBEN MAS, dominios de correo autorizados, comercial a cargo y si es intermediario (con el cliente final en el asunto). También se carga desde Excel.</div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>13</span></div>
+</section>
+
+<!-- 14 · Lista de Empaque automática -->
+<section class="slide">
+  <div class="top"><div class="seccion">Lista de Empaque · Automática</div><span class="chip vivo">En producción</span></div>
+  <h1>Aprobado el corte, el paquete de documentos sale solo</h1>
+  <p class="lead">Es la parte que ya funciona en el servidor de Oben con datos reales. El correo "OV Aprobada En Corte" dispara la consulta a Oben y el envío a COMEX, sin intervención.</p>
+  <div class="dos mitad">
+    <div class="col">
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Consulta en vivo</h3><p>Uno a uno (la API de Oben no admite consultas simultáneas): Lista Especial, Unificada, Detallada, Consumo de Material de Empaque, Consumo de Materia Prima y la Hoja de Costos, un archivo por línea.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Formato de Oben</h3><p>Excel con el logo y la estructura de los archivos que Oben ya envía; la Lista Especial con sus tres hojas; Solefilmes en PDF "Shipment Traceability" solo cuando el cliente es Solefilmes.</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Completo o nada</h3><p>Si un reporte no trae datos, no se adjunta un Excel vacío: la orden se reintenta cada 10 minutos y, al quinto intento, se escala a José y Jorge.</p></div></div>
+        <div class="paso"><div class="n">4</div><div><h3>Confirma a Oben</h3><p>Tras el envío se registra en Oben que la documentación ya salió.</p></div></div>
+      </div>
+    </div>
+    <div class="col" style="justify-content:center">
+      <div class="correo"><div class="quien">A COMEX · paquete completo (demo)</div><div class="meta">Para: comex@oben-demo.example (lista de distribución "Lista de Empaque")</div><div class="asunto"><em>[SIMULADO]</em> Lista de Empaque — Orden 10801</div><div class="cuerpo">Adjuntos los documentos de la orden 10801, generados automáticamente al recibir la aprobación de corte. En el servidor de Oben el correo dice que los datos vienen en vivo del sistema real; en pruebas dice que vienen del simulador.</div><div class="adj"><span>Lista_Especial-OV10801.xlsx</span><span>Consumo_de_Material_de_Empaque.xlsx</span><span>Consumo_de_Materia_Prima.xlsx</span><span>Lista_de_Empaque_Unificada.xlsx</span><span>Lista_de_Empaque_Detallada.xlsx</span><span>Hoja_de_Costos-Linea1.xlsx</span><span>Hoja_de_Costos-Linea2.xlsx</span></div></div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>14</span></div>
+</section>
+
+<!-- 15 · PND -->
+<section class="slide">
+  <div class="top"><div class="seccion">Lista de Empaque · Regla "Producir No Despachar"</div><span class="chip listo">Listo por instalar</span></div>
+  <div class="dos">
+    <div class="shot"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / lista-empaque</span><b>SIMULADO</b></div><div class="img"><img src="capturas/13-lista-empaque.jpg" alt="Lista de Empaque con órdenes retenidas por cartera"></div></div>
+    <div class="col">
+      <h1 style="font-size:27px">Sin liberación de cartera, no hay Lista de Empaque</h1>
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Retenidas por cartera</h3><p>Si la orden llega aprobada en corte pero cartera no la ha liberado (PND), la Lista de Empaque no se genera y la orden queda en este panel.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Se revisa sola</h3><p>Cada 6 horas se vuelve a consultar cartera; apenas libere, el paquete se genera y se envía sin que nadie lo pida.</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Decisión humana</h3><p>"Cartera ya liberó" o "Cancelar" si el pedido se dio de baja, con motivo y registro en auditoría.</p></div></div>
+      </div>
+      <div class="correo"><div class="quien">A cartera, con copia a COMEX</div><div class="asunto"><em>[SIMULADO]</em> Orden 10811 — retenida por cartera: la Lista de Empaque no se genera</div><div class="cuerpo">Se vuelve a verificar automáticamente cada 6 horas. Apenas cartera libere, la Lista de Empaque se genera y se envía sola.</div></div>
+      <div class="nota sim">El estado de cartera viene de OBEN MAS. Hasta que exista esa API se simula, y un dato simulado <strong>nunca</strong> retiene ni libera una orden real.</div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>15</span></div>
+</section>
+
+<!-- 16 · Reportes -->
+<section class="slide">
+  <div class="top"><div class="seccion">Reportes Oben</div><span class="chip vivo">En producción</span></div>
+  <div class="dos">
+    <div class="shot"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / reportes</span><b>SIMULADO</b></div><div class="img"><img src="capturas/14-reportes.jpg" alt="Reportes Oben"></div></div>
+    <div class="col">
+      <h1 style="font-size:28px">Cualquier reporte, cuando se necesite</h1>
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Consulta por orden de venta</h3><p>Consumo de materiales, empaque unificado y detallado, chequeos: se consulta en vivo y se ve en pantalla.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Descarga o envío</h3><p>Excel en el formato de Oben, por descarga o por correo a la lista de distribución asociada o a un destinatario puntual.</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Paquete completo a pedido</h3><p>El mismo paquete del envío automático se puede reenviar a mano, por ejemplo a un cliente que lo pide de nuevo.</p></div></div>
+      </div>
+      <div class="nota">Arriba de cada consulta el sistema dice de dónde vienen los datos: <strong>"datos reales de Oben"</strong> en el servidor de Oben o <strong>"SIMULADO"</strong> en pruebas.</div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>16</span></div>
+</section>
+
+<!-- 17 · Liquidación -->
+<section class="slide">
+  <div class="top"><div class="seccion">Liquidación de exportación</div><div class="chips"><span class="chip listo">Listo por instalar</span><span class="chip espera">Fórmula Incoterm</span></div></div>
+  <h1>Liquidar una Proforma sin hoja de cálculo paralela</h1>
+  <div class="dos mitad" style="margin-top:8px">
+    <div class="col">
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Borrador con los datos de Oben</h3><p>Kilos y valor FOB por línea desde la Proforma; para destino USA, Entry Fee, ISF y Harbor Maintenance desde el maestro de tarifas. Lo que no está queda listado como faltante.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Registro en Oben, una sola vez</h3><p>Encabezado y detalle por línea. Una Proforma nunca se liquida dos veces; si la conexión se corta a mitad, pide confirmación antes de reintentar.</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Correo de cierre</h3><p>Al concluir, sale a COMEX y Facturación con la Lista de Empaque Unificada y la Proforma aprobada, como lo pide el documento OBEN MAS–Paradixe.</p></div></div>
+      </div>
+      <div class="nota sim"><strong>Candado:</strong> la fórmula de Incoterm (flete, seguro, otros gastos) está simulada hasta recibir la de José. Mientras sea simulada, ninguna liquidación se puede registrar en el sistema real.</div>
+    </div>
+    <div class="col" style="justify-content:center">
+      <div class="correo"><div class="quien">Vista previa del correo de cierre (demo)</div><div class="meta">Para: comex@oben-demo.example, facturacion@oben-demo.example<br>(lista de distribución "Cierre de Liquidación")</div><div class="asunto"><em>[SIMULADO]</em> Liquidación concluida — PF 11001 / OV 10801</div><div class="cuerpo">Cliente Demo Oben (MEXICO). Adjuntos: Lista de Empaque Unificada y Proforma. El envío queda bloqueado mientras la liquidación no esté completa en Oben y mientras haya adjuntos simulados.</div><div class="adj"><span>Lista_de_Empaque_Unificada-OV10801.xlsx</span><span>Proforma_SIMULADA-PF11001.pdf</span></div></div>
+      <div class="tabla"><table>
+        <tr><th>Línea</th><th>Película</th><th>Kilos</th><th>Precio</th><th>FOB (USD)</th></tr>
+        <tr><td>100</td><td>SC---0015TN</td><td>2.880</td><td>2,59</td><td>7.459,20</td></tr>
+        <tr><td>101</td><td>ENA--0012TM</td><td>2.870</td><td>2,56</td><td>7.347,20</td></tr>
+      </table><p style="font-size:11px; color:var(--tinta-3); padding:6px 10px 4px">Borrador de la PF 11001 en el entorno de pruebas (valores simulados).</p></div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>17</span></div>
+</section>
+
+<!-- 18 · Facturación -->
+<section class="slide">
+  <div class="top"><div class="seccion">Facturación</div><div class="chips"><span class="chip listo">Listo por instalar</span><span class="chip espera">Proveedor DIAN</span></div></div>
+  <div class="dos inv">
+    <div class="col">
+      <h1 style="font-size:28px">El borrador de la factura, armado con los datos de la orden</h1>
+      <div class="pasos">
+        <div class="paso"><div class="n">1</div><div><h3>Datos de la orden</h3><p>Cliente, país, Proforma, orden de compra, contenedor, películas, precios y kilos, desde la Lista de Empaque Unificada y la liquidación.</p></div></div>
+        <div class="paso"><div class="n">2</div><div><h3>Dirección de entrega desde OBEN MAS</h3><p>Ningún reporte actual trae la dirección; se tomará de OBEN MAS cuando exista su API (hoy, simulada y rotulada en el PDF).</p></div></div>
+        <div class="paso"><div class="n">3</div><div><h3>Factura electrónica</h3><p>Se emite al enviar a COMEX a través del proveedor de facturación electrónica que Oben defina. Mientras tanto el borrador dice claramente que no tiene validez fiscal.</p></div></div>
+      </div>
+      <div class="nota">Nacional completo y nacional parcial siguen la misma lógica; el parcial necesita saber en OBEN MAS cuándo un despacho es parcial.</div>
+    </div>
+    <div class="shot"><div class="barra"><i></i><i></i><i></i><span>borrador de facturación · OV 10801</span><b>SIMULADO</b></div><div class="img"><img style="object-position: top center" src="capturas/factura-sim.png" alt="Borrador de facturación"></div></div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>18</span></div>
+</section>
+
+<!-- 19 · Distribución y auditoría -->
+<section class="slide">
+  <div class="top"><div class="seccion">Listas de distribución y auditoría</div></div>
+  <h1>Quién recibe qué, y qué pasó, sin preguntarle a nadie</h1>
+  <div class="dos mitad" style="margin-top:6px">
+    <div class="col">
+      <div class="shot" style="flex:1"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / distribucion</span><b>SIMULADO</b></div><div class="img"><img src="capturas/15-distribucion.jpg" alt="Listas de distribución"></div></div>
+      <div class="nota"><strong>Listas de distribución:</strong> Customer Service, copia de la Proforma, cartera, Lista de Empaque, retenidas por cartera, cierre de Liquidación y escalamiento. Oben las administra; el código no tiene correos escritos a mano.</div>
+    </div>
+    <div class="col">
+      <div class="shot" style="flex:1"><div class="barra"><i></i><i></i><i></i><span>oben-xmart / auditoria</span><b>SIMULADO</b></div><div class="img"><img src="capturas/16-auditoria.jpg" alt="Auditoría"></div></div>
+      <div class="nota"><strong>Auditoría:</strong> cada consulta, envío, confirmación y cambio de configuración queda registrado con fecha, usuario y resultado.</div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>19</span></div>
+</section>
+
+<!-- 20 · Real vs simulado -->
+<section class="slide">
+  <div class="top"><div class="seccion">Qué es real hoy</div></div>
+  <h1>Estado de cada pieza, sin maquillaje</h1>
+  <div class="tabla" style="margin-top:6px">
+    <table>
+      <tr><th style="width:26%">Pieza</th><th style="width:17%">Estado</th><th>Qué depende de Oben</th></tr>
+      <tr><td>Lista de Empaque automática, reintentos y escalamiento</td><td><span class="chip vivo">En producción</span></td><td>Nada: corre con la API de reportes de Oben y el correo real.</td></tr>
+      <tr><td>Reportes Oben y consulta de Lista de Empaque</td><td><span class="chip vivo">En producción</span></td><td>Nada.</td></tr>
+      <tr><td>Regla PND (retenidas por cartera)</td><td><span class="chip listo">Listo por instalar</span></td><td>API de cartera por orden de venta en OBEN MAS (mientras tanto, simulada y sin efecto sobre órdenes reales).</td></tr>
+      <tr><td>Flujo Comercial: OC → Proforma → cliente → cartera → activa</td><td><span class="chip listo">Listo por instalar</span></td><td>APIs de OBEN MAS: estado de la Proforma, cartera, maestro de clientes, PDF oficial y transacciones (crear, modificar, aprobar, anular, activar).</td></tr>
+      <tr><td>Equivalencias y maestro de clientes</td><td><span class="chip listo">Listo por instalar</span></td><td>La tabla de equivalencias y los datos de los clientes del piloto (Alejandra).</td></tr>
+      <tr><td>Liquidación: borrador, registro y correo de cierre</td><td><span class="chip listo">Listo por instalar</span></td><td>Fórmula de Incoterm; evento de "último pallet en bodega" para dispararla sola.</td></tr>
+      <tr><td>Facturación: borrador PDF y factura electrónica</td><td><span class="chip listo">Listo por instalar</span></td><td>Proveedor de facturación electrónica (DIAN); dirección de entrega desde OBEN MAS; identificar despachos parciales nacionales.</td></tr>
+    </table>
+  </div>
+  <p style="font-size:12px; color:var(--tinta-3); margin-top:10px">"Listo por instalar" = construido y con pruebas automáticas en verde; se instala en el servidor de Oben en el próximo despliegue. Lo que depende de Oben funciona hoy contra un simulador rotulado y se conecta cuando exista.</p>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>20</span></div>
+</section>
+
+<!-- 21 · Lo que necesitamos -->
+<section class="slide">
+  <div class="top"><div class="seccion">Lo que necesitamos de ustedes</div></div>
+  <h1 style="font-size:30px">Con esto, lo simulado pasa a real</h1>
+  <div class="dos mitad" style="margin-top:4px; gap:18px">
+    <div class="preg">
+      <div class="cab"><h2>José · OBEN MAS y sistemas</h2><span>8 puntos</span></div>
+      <ol>
+        <li><b>APIs de OBEN MAS</b> (mismo esquema de APIConsultaParadixe): estado y fechas de la Proforma con dirección y número de OV; cartera por OV; maestro de clientes; PDF oficial de la Proforma (¿base64, URL o archivo?); transacciones crear, modificar, aprobar, anular y activar.</li>
+        <li><b>Ambiente de pruebas</b> para esas transacciones, y el <b>buzón</b> que recibe las órdenes de compra (las credenciales se configuran en el servidor, no por chat).</li>
+        <li><b>PND:</b> ¿confirmas que un pedido PND recibe "OV Aprobada En Corte" aunque cartera no haya liberado, y que la Lista de Empaque no debe generarse? ¿spApproveComex habilita el predespacho?</li>
+        <li><b>Fórmula de Incoterm</b> para Liquidación (flete, seguro, otros gastos).</li>
+        <li>¿Hay un <b>evento o correo</b> cuando el último pallet entra a bodega de Producto Terminado?</li>
+        <li><b>Proveedor de facturación electrónica</b> (DIAN): ¿definido?</li>
+        <li>Cierre de Liquidación: ¿sirve el <b>PDF oficial</b> de la Proforma o debe ser la copia firmada por el cliente?</li>
+        <li><b>Despachos parciales nacionales:</b> ¿cómo se identifican en OBEN MAS?</li>
+      </ol>
+    </div>
+    <div class="preg">
+      <div class="cab"><h2>Alejandra · Customer Service</h2><span>7 puntos</span></div>
+      <ol>
+        <li><b>Equivalencias</b> de 1 o 2 clientes del piloto en Excel: Cliente | Código del cliente | Código Oben | Descripción.</li>
+        <li>De esos clientes: <b>código en OBEN MAS, dominios</b> de correo autorizados, <b>comercial</b> a cargo y si es <b>intermediario</b>.</li>
+        <li>Reenviar <b>3 a 5 órdenes de compra reales</b> tal como llegan (con adjuntos, incluida la más desordenada) y la Proforma que resultó de cada una.</li>
+        <li><b>Seguimientos:</b> ¿sirve recordar al cliente cada 24 h (3 veces) y luego semanal, y lo mismo al comercial mientras cartera no libera?</li>
+        <li><b>Gramos a micras:</b> ¿hay una tabla o regla? Mientras tanto se resuelve con las equivalencias.</li>
+        <li>¿Cartera recibe copia de la Proforma al enviarse al cliente, o solo cuando el cliente la aprueba?</li>
+        <li><b>Destinatarios</b> de cada aviso (Customer Service, copia de Proforma, cartera y, con José, COMEX + Facturación para el cierre): quién va en "para" y quién en copia.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>21</span></div>
+</section>
+
+<!-- 22 · Próximos pasos -->
+<section class="slide cierre">
+  <div class="top"><div class="seccion">Próximos pasos</div></div>
+  <h1>Del entorno de pruebas al piloto</h1>
+  <p class="lead">El orden propuesto. Cada paso se puede hacer sin esperar al siguiente.</p>
+  <div class="ruta">
+    <div class="hito"><div class="n">PASO 1</div><h3>Instalar en el servidor de Oben</h3><p>Lo que está "listo por instalar" entra al servidor. Nada cambia para los usuarios hasta encender el buzón.</p><div class="dueno">Paradixe</div></div>
+    <div class="hito"><div class="n">PASO 2</div><h3>Cargar los datos del piloto</h3><p>Equivalencias y maestro de 1 o 2 clientes desde Excel, más las listas de distribución.</p><div class="dueno">Alejandra + Paradixe</div></div>
+    <div class="hito"><div class="n">PASO 3</div><h3>Piloto supervisado</h3><p>Buzón encendido para esos clientes, con freno de mano: cada paso lo confirma Customer Service.</p><div class="dueno">Customer Service</div></div>
+    <div class="hito"><div class="n">PASO 4</div><h3>Conectar OBEN MAS</h3><p>A medida que José entregue cada API, esa parte deja de estar simulada. No hay que rehacer pantallas ni flujos.</p><div class="dueno">José + Paradixe</div></div>
+    <div class="hito"><div class="n">PASO 5</div><h3>Pasar a automático</h3><p>Cuando Customer Service confíe en los resultados, se cambia a automático por cliente o para todos.</p><div class="dueno">Decisión de Oben</div></div>
+  </div>
+  <div style="margin-top:auto; margin-bottom:18px; display:grid; grid-template-columns: 1.3fr 1fr; gap:28px; align-items:end;">
+    <p style="font-size:30px; line-height:1.2; font-weight:650; letter-spacing:-.02em; color:#fff; text-wrap:balance">Las personas deciden; el sistema ejecuta y deja constancia.</p>
+    <div style="display:flex; flex-direction:column; gap:8px; font-size:13px; color:#C9CFDA; line-height:1.5">
+      <div><span class="chip vivo">En producción</span>&nbsp; Lista de Empaque automática y Reportes Oben</div>
+      <div><span class="chip listo">Listo por instalar</span>&nbsp; Comercial, maestros, regla PND, Liquidación y Facturación</div>
+      <div><span class="chip espera">Espera a Oben</span>&nbsp; APIs de OBEN MAS, fórmula Incoterm, proveedor DIAN</div>
+    </div>
+  </div>
+  <div class="pie"><span>Oben Xmart · Cómo funciona</span><span>22</span></div>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,389 @@
+<title>Pipeline Comercial Oben</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#F6F3EF; --paper:#FFFFFF; --paper-2:#FBF9F6; --ink:#1D2330; --ink-2:#4A5263; --ink-3:#7A8292; --line:#E6DFD6;
+    --accent:#E8631F; --accent-soft:#FDEBDF; --accent-ink:#9A3F0E;
+    --vivo:#15803D; --vivo-bg:#DCFCE7; --listo:#B45309; --listo-bg:#FEF3C7; --espera:#B42318; --espera-bg:#FEE4E2; --fase:#475467; --fase-bg:#EAECF0;
+    --sim:#6D28D9; --sim-bg:#F1E9FE; --hl:#FFF4D6; --shadow:0 8px 24px -14px rgba(29,35,48,.35);
+    --sans:'Geist','Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif; --mono:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#15171C; --paper:#1E2129; --paper-2:#1A1D24; --ink:#ECEEF2; --ink-2:#B3B9C6; --ink-3:#8A91A0; --line:#2F3441;
+      --accent:#FF8A4C; --accent-soft:#3A2519; --accent-ink:#FFC29E;
+      --vivo:#4ADE80; --vivo-bg:#14301F; --listo:#FBBF24; --listo-bg:#352A10; --espera:#F97066; --espera-bg:#3A1C1A; --fase:#B3B9C6; --fase-bg:#2A2F3A;
+      --sim:#C4A5FF; --sim-bg:#2B2140; --hl:#3A3016; --shadow:0 8px 24px -14px rgba(0,0,0,.7);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#15171C; --paper:#1E2129; --paper-2:#1A1D24; --ink:#ECEEF2; --ink-2:#B3B9C6; --ink-3:#8A91A0; --line:#2F3441;
+    --accent:#FF8A4C; --accent-soft:#3A2519; --accent-ink:#FFC29E;
+    --vivo:#4ADE80; --vivo-bg:#14301F; --listo:#FBBF24; --listo-bg:#352A10; --espera:#F97066; --espera-bg:#3A1C1A; --fase:#B3B9C6; --fase-bg:#2A2F3A;
+    --sim:#C4A5FF; --sim-bg:#2B2140; --hl:#3A3016; --shadow:0 8px 24px -14px rgba(0,0,0,.7);
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:28px 48px}
+  .wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+  h1,h2,h3{text-wrap:balance;margin:0}
+  button{font:inherit;color:inherit;cursor:pointer}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-ink);font-weight:600;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  header.page{display:flex;flex-direction:column;gap:12px}
+  header h1{font-size:clamp(28px,4.6vw,42px);line-height:1.08;letter-spacing:-.025em}
+  .sub{color:var(--ink-2);font-size:16px;max-width:66ch;margin:0}
+  .aviso{display:flex;gap:10px;align-items:flex-start;background:var(--paper);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--ink-2);max-width:760px}
+  .aviso strong{color:var(--ink)}
+
+  /* Resumen */
+  .resumen{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
+  .barra{display:flex;height:16px;border-radius:999px;overflow:hidden;background:var(--line);gap:2px}
+  .barra button{border:0;padding:0;height:100%;transition:filter .15s}
+  .barra button:hover{filter:brightness(1.1)}
+  .cifras{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media (max-width:720px){.cifras{grid-template-columns:repeat(2,1fr)}}
+  .cifra{border:1px solid var(--line);background:var(--paper-2);border-radius:10px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px}
+  .cifra[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:-1px}
+  .cifra .n{font-family:var(--mono);font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+  .cifra .t{font-size:14px;font-weight:600;color:var(--ink)}
+  .cifra .l{font-size:12.5px;color:var(--ink-2)}
+  .cifra.vivo .n{color:var(--vivo)} .cifra.listo .n{color:var(--listo)} .cifra.espera .n{color:var(--espera)} .cifra.fase .n{color:var(--fase)}
+
+  /* Mapa */
+  .mapa-wrap{overflow-x:auto;margin-inline:-4px;padding:4px}
+  .mapa{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px;min-width:780px}
+  .etapa-btn{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:left;display:flex;flex-direction:column;gap:8px;position:relative}
+  .etapa-btn:hover{border-color:var(--accent)}
+  .etapa-btn .num{font-family:var(--mono);font-size:11px;color:var(--accent-ink);letter-spacing:.08em;font-weight:600}
+  .etapa-btn .t{font-weight:650;font-size:15px;line-height:1.25}
+  .etapa-btn .who{font-size:12px;color:var(--ink-3)}
+  .puntos{display:flex;gap:4px;flex-wrap:wrap}
+  .puntos i{width:10px;height:10px;border-radius:3px;display:block}
+  .etapa-btn:not(:last-child)::after{content:"";position:absolute;right:-9px;top:50%;width:8px;height:2px;background:var(--line)}
+
+  /* Controles */
+  .controles{display:flex;flex-direction:column;gap:10px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);padding-block:10px;margin-block:-10px}
+  .fila{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .fila .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-right:4px}
+  .pill{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:6px 12px;font-size:13.5px;display:inline-flex;gap:7px;align-items:center}
+  .pill[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .pill .c{font-family:var(--mono);font-size:11.5px;opacity:.75}
+  .estado-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .activo-q{display:none;align-items:center;gap:10px;background:var(--hl);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px}
+  .activo-q.on{display:flex}
+  .activo-q button{margin-left:auto;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:4px 10px;font-size:13px}
+
+  /* Etapas */
+  .etapa{display:flex;flex-direction:column;gap:12px;scroll-margin-top:120px}
+  .etapa-head{display:flex;align-items:center;gap:12px;background:none;border:0;padding:0;text-align:left;width:100%}
+  .etapa-head .num{width:36px;height:36px;border-radius:50%;border:2px solid var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;background:var(--paper)}
+  .etapa-head h2{font-size:21px;letter-spacing:-.01em}
+  .etapa-head .meta{font-size:13px;color:var(--ink-3)}
+  .etapa-head .chev{margin-left:auto;font-family:var(--mono);color:var(--ink-3);font-size:13px;flex:none}
+  .pasos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media (max-width:760px){.pasos{grid-template-columns:1fr}}
+  .paso{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;transition:background .2s,border-color .2s}
+  .paso.hl{background:var(--hl);border-color:var(--accent)}
+  .paso-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .paso h3{font-size:15.5px;line-height:1.35}
+  .paso p{margin:0;font-size:14px;color:var(--ink-2)}
+  .chip{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;flex:none}
+  .chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .chip.vivo{color:var(--vivo);background:var(--vivo-bg)} .chip.listo{color:var(--listo);background:var(--listo-bg)} .chip.espera{color:var(--espera);background:var(--espera-bg)} .chip.fase{color:var(--fase);background:var(--fase-bg)} .chip.sim{color:var(--sim);background:var(--sim-bg)}
+  .falta{font-size:13px;background:var(--paper-2);border:1px dashed var(--line);border-radius:8px;padding:8px 10px;color:var(--ink-2)}
+  .falta b{color:var(--ink)}
+  .deps{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .dep{border:1px solid var(--line);background:var(--paper-2);border-radius:6px;padding:2px 8px;font-size:12px;font-family:var(--mono)}
+  .dep:hover{border-color:var(--accent)}
+  .deps .lbl{font-size:12px;color:var(--ink-3)}
+  .vacio{font-size:14px;color:var(--ink-3);padding:6px 2px}
+
+  /* Preguntas */
+  .preguntas{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:760px){.preguntas{grid-template-columns:1fr}}
+  .pcol{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+  .pcol h3{font-size:17px}
+  .pcol .quien{font-size:13px;color:var(--ink-3);margin-top:-6px}
+  .q{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--paper-2);scroll-margin-top:130px}
+  .q.hl{background:var(--hl);border-color:var(--accent)}
+  .q .qt{display:flex;gap:10px;align-items:flex-start}
+  .q .id{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent-ink);background:var(--accent-soft);border-radius:6px;padding:1px 7px;flex:none}
+  .q .tx{font-size:14px;color:var(--ink)}
+  .q .det{font-size:13px;color:var(--ink-2);margin:0}
+  .q .ver{align-self:flex-start;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:4px 10px;font-size:12.5px}
+  .q .ver:hover{border-color:var(--accent)}
+
+  /* FAQ y cambios */
+  .dos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:760px){.dos{grid-template-columns:1fr}}
+  details{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  details+details{margin-top:10px}
+  summary{cursor:pointer;font-weight:600;font-size:15px}
+  details p{margin:8px 0 0;font-size:14px;color:var(--ink-2)}
+  .cambios{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .cambios ul{margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--ink-2)}
+  .cambios li b{color:var(--ink)}
+  .sec-t{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .sec-t h2{font-size:22px;letter-spacing:-.01em}
+  .sec-t span{font-size:14px;color:var(--ink-3)}
+  footer{border-top:1px solid var(--line);padding-top:14px;font-size:13px;color:var(--ink-3);display:flex;flex-direction:column;gap:4px}
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <div class="eyebrow"><span>Oben Xmart</span><span class="dot"></span><span>Estado del proyecto</span><span class="dot"></span><span>Actualizado el 27 de septiembre de 2026</span></div>
+    <h1>Del correo del cliente al PDF de la factura</h1>
+    <p class="sub">Cada paso del proceso, con su estado real: qué ya funciona en el servidor de Oben, qué está construido y listo para instalar, y qué espera una respuesta o una API de Oben. Toque una cifra, una etapa o una pregunta para filtrar.</p>
+    <div class="aviso"><span aria-hidden="true">●</span><div><strong>Nuestra parte está completa.</strong> Todo lo que depende de Oben funciona hoy contra un simulador rotulado <strong>SIMULADO</strong> y se conecta al sistema real sin rehacer nada. Lo marcado "listo por instalar" todavía <strong>no</strong> está en el servidor de Oben.</div></div>
+  </header>
+
+  <section class="resumen" aria-label="Resumen">
+    <div class="barra" id="barra" role="group" aria-label="Proporción de pasos por estado"></div>
+    <div class="cifras" id="cifras"></div>
+  </section>
+
+  <section aria-label="Etapas del proceso">
+    <div class="mapa-wrap"><div class="mapa" id="mapa"></div></div>
+  </section>
+
+  <div class="controles" id="controles">
+    <div class="fila" id="filtros"><span class="lbl">Estado</span></div>
+    <div class="fila" id="personas"><span class="lbl">Depende de</span></div>
+    <div class="activo-q" id="activoQ"><span id="activoQtxt"></span><button id="limpiarQ" type="button">Quitar filtro</button></div>
+  </div>
+
+  <div id="etapas" style="display:flex;flex-direction:column;gap:30px"></div>
+
+  <section id="preguntas" style="display:flex;flex-direction:column;gap:14px;scroll-margin-top:120px">
+    <div class="sec-t"><h2>Lo que necesitamos de Oben</h2><span>Lista unificada, reemplaza las preguntas anteriores. Toque "Ver qué desbloquea".</span></div>
+    <div class="preguntas" id="listaPreg"></div>
+  </section>
+
+  <section class="dos">
+    <div>
+      <div class="sec-t" style="margin-bottom:10px"><h2>Preguntas frecuentes</h2></div>
+      <details open><summary>¿Cubicaje o cubicada?</summary><p>Las dos. <b>Cubicaje</b> es el proceso de Planeación (ajustar pallets al contenedor con Cube IQ). <b>Cubicada</b> es el estado en que queda la Proforma después: sin cubicar → cubicada → retenida → activa. "Ubicada" era un error de transcripción y ya se corrigió en el sistema.</p></details>
+      <details><summary>¿Qué significa "listo por instalar"?</summary><p>Está construido y tiene pruebas automáticas en verde, pero todavía no se instaló en el servidor de Oben. Se instala en el próximo despliegue y no cambia nada para los usuarios hasta que Oben encienda cada parte.</p></details>
+      <details><summary>¿Por qué hay datos simulados?</summary><p>Para dejar todo listo sin esperar las APIs de OBEN MAS. El simulador responde con la misma forma de datos que el sistema real. Todo dato simulado se rotula como tal en pantallas, correos y PDF, y hay candados para que nada simulado se escriba en OBEN MAS ni llegue a un cliente real.</p></details>
+      <details><summary>¿Quién confirma lo que hace el sistema?</summary><p>Con el "freno de mano" (modo supervisado), cada escritura en OBEN MAS espera la confirmación de Customer Service. Pasar a automático es una decisión de Oben, por cliente o para todos.</p></details>
+      <details><summary>¿Hay una presentación del software?</summary><p>Sí: Paradixe preparó un documento en PDF de 22 páginas con capturas de cada pantalla y de los correos automáticos (entorno de pruebas, datos simulados). Es la mejor forma de verlo si esta página no carga en su red.</p></details>
+    </div>
+    <div>
+      <div class="sec-t" style="margin-bottom:10px"><h2>Qué cambió desde la versión anterior</h2></div>
+      <div class="cambios">
+        <ul>
+          <li><b>Liquidación:</b> el correo de cierre a COMEX y Facturación ya está construido (antes "sin construir").</li>
+          <li><b>Facturación:</b> borrador PDF de exportación, nacional completo y nacional parcial, construido (antes "sin construir").</li>
+          <li><b>Comercial completo:</b> de la orden de compra a la orden de venta activa, con freno de mano, recordatorios, cartera y cambios de fecha.</li>
+          <li><b>Regla PND:</b> sin liberación de cartera no se genera la Lista de Empaque.</li>
+          <li><b>Maestros:</b> equivalencias y clientes con carga desde Excel y vista previa.</li>
+          <li><b>Rotulado:</b> todo correo con datos de prueba lleva [SIMULADO]; la bitácora muestra el nombre de quien confirma.</li>
+          <li><b>Reportes Oben:</b> vista en tablas en lugar de datos crudos.</li>
+          <li><b>Preguntas:</b> unificadas en una sola lista para José y Alejandra; la de PND quedó corregida.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>Fuentes: reunión Comercial – Oben Xmart (23 sep 2026), documento OBEN MAS–Paradixe, requerimiento de integración Oben+/NetSuite (4 ago 2026) y el código del proyecto.</div>
+    <div>Documento de trabajo preparado por Paradixe. No representa un compromiso contractual de fechas.</div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var ESTADOS = {
+    vivo:   {t:'En producción', l:'ya funcionan con datos reales en el servidor de Oben', color:'var(--vivo)'},
+    listo:  {t:'Listo por instalar', l:'construidos y probados, se instalan en el próximo despliegue', color:'var(--listo)'},
+    espera: {t:'Espera a Oben', l:'dependen de una API o un dato de Oben', color:'var(--espera)'},
+    fase:   {t:'Siguiente fase', l:'quedan para después del piloto', color:'var(--fase)'}
+  };
+  var PERSONAS = { J:'José · OBEN MAS y sistemas', A:'Alejandra · Customer Service' };
+  var Q = {
+    J1:{t:'APIs de OBEN MAS (mismo esquema de APIConsultaParadixe)', d:'a) Proforma: estado (sin cubicar / cubicada / retenida / activa), fechas (creación, producción, entrega comprometida), dirección de entrega y número de OV. b) Cartera por OV: liberada sí/no (el dato que NetSuite releva a OBEN MAS). c) Maestro de clientes: país, direcciones de entrega y comercial asignado. d) PDF oficial de la Proforma: ¿base64, URL o archivo? e) Transacciones: crear la Proforma desde la OC, modificar cantidades, aprobar (OV retenida), anular y activar la OV.'},
+    J2:{t:'Ambiente de pruebas y buzón de órdenes de compra', d:'¿Cuándo queda el ambiente de pruebas para las transacciones del punto J1-e? ¿Qué buzón recibe las órdenes de compra de los clientes? Las credenciales se configuran directo en el servidor, no por chat.'},
+    J3:{t:'Confirmar el comportamiento de "Producir No Despachar"', d:'En la reunión se dijo que en un pedido PND llega "OV Aprobada En Corte" aunque cartera no haya liberado, y que la Lista de Empaque no se debe generar. ¿Confirmas? ¿Y qué hace spApproveComex_Paradixe (que llamamos al enviar la Lista de Empaque): habilita el predespacho?'},
+    J4:{t:'Fórmula de Incoterm para Liquidación', d:'Cómo se calculan flete, seguro y otros gastos por Incoterm.'},
+    J5:{t:'Evento de "último pallet en bodega de Producto Terminado"', d:'¿Hay algún evento o correo en ese momento? Con él, la Liquidación (y la factura nacional completa) se disparan solas.'},
+    J6:{t:'Proveedor de facturación electrónica (DIAN)', d:'¿Está definido o sigue abierto?'},
+    J7:{t:'Proforma del correo de cierre de Liquidación', d:'El documento OBEN MAS–Paradixe pide la Proforma "aprobada por el cliente". ¿Sirve el PDF oficial de OBEN MAS o debe ser la copia firmada que devuelve el cliente?'},
+    J8:{t:'Despachos parciales nacionales', d:'¿Cómo identificamos en OBEN MAS que un despacho es parcial?'},
+    A1:{t:'Equivalencias de 1 o 2 clientes del piloto', d:'En Excel con columnas: Cliente | Código del cliente (como lo pide) | Código Oben | Descripción. Se carga tal cual.'},
+    A2:{t:'Datos de esos clientes', d:'Código en OBEN MAS, dominios de correo autorizados (ej. @cliente.com), correo del comercial a cargo, y si es intermediario (ej. Oben US, con el cliente final en el asunto).'},
+    A3:{t:'3 a 5 órdenes de compra reales', d:'Reenviarlas tal como llegan (con adjuntos), incluida la más desordenada, y la Proforma que resultó de cada una.'},
+    A4:{t:'Tiempos de seguimiento', d:'La propuesta es recordar al cliente cada 24 h (3 veces) y luego semanal, y lo mismo al comercial mientras cartera no libera. ¿Sirve así?'},
+    A5:{t:'Gramos a micras', d:'¿Hay una tabla o regla? Mientras tanto se resuelve solo con las equivalencias.'},
+    A6:{t:'Copia de la Proforma a cartera', d:'¿Cartera recibe copia de la Proforma cuando se envía al cliente, o solo cuando el cliente la aprueba?'},
+    A7:{t:'Destinatarios de cada aviso', d:'Customer Service, copia de la Proforma, cartera y, con José, COMEX + Facturación para el cierre de Liquidación: quién va en "para" y quién en copia.'}
+  };
+  var ETAPAS = [
+    {id:'comercial', t:'Comercial', who:'Customer Service', sub:'De la orden de compra a la orden de venta activa', pasos:[
+      {t:'Orden de compra por correo → caso', e:'listo', d:'Cada OC que llega al buzón (PDF, Excel, CSV o texto) abre un caso. Una OC que llega por otro canal se registra a mano y sigue el mismo camino.', f:'Definir el buzón de OC y encenderlo cuando empiece el piloto.', q:['J2','A3']},
+      {t:'Traducción a referencias Oben y conversión de unidades', e:'listo', d:'Tabla de equivalencias por cliente (carga desde Excel). Libras → kg; pulgadas y cm → mm. Sin equivalencia, la línea queda como faltante: nunca se adivina.', f:'Equivalencias reales de los clientes del piloto.', q:['A1','A5']},
+      {t:'Cliente por dominio y destino desde el maestro', e:'listo', sim:true, d:'Solo se aceptan dominios autorizados; uno parecido se trata como sospechoso. País y direcciones salen del maestro de OBEN MAS; si hay varias y la OC no dice cuál, se pregunta.', f:'Maestro de clientes vía API (hoy simulado) y datos de los clientes del piloto.', q:['J1','A2']},
+      {t:'Proforma en OBEN MAS (sin cubicar)', e:'listo', sim:true, d:'Con freno de mano: Customer Service revisa el caso y confirma; recién ahí se crea la Proforma.', f:'Transacción "crear Proforma" y su ambiente de pruebas.', q:['J1','J2']},
+      {t:'Cubicaje por Planeación → Proforma cubicada', e:'listo', sim:true, d:'El sistema detecta el cambio de estado; el trabajo en Cube IQ no cambia.', f:'Estado de la Proforma vía API.', q:['J1']},
+      {t:'Proforma al cliente y recordatorios', e:'listo', sim:true, d:'Sale el PDF oficial con copia al comercial y a quien Oben defina; los recordatorios van en el mismo hilo del correo.', f:'PDF oficial de OBEN MAS (idéntico al aprobado, no se recrea) y confirmar tiempos y copias.', q:['J1','A4','A6','A7']},
+      {t:'Respuesta del cliente: aprueba, rechaza o modifica', e:'listo', d:'Se reconoce por el hilo o por el número de Proforma en el asunto. Si pide modificar, la Proforma vuelve a "sin cubicar" y se repite el ciclo.', f:'Transacciones aprobar, anular y modificar.', q:['J1']},
+      {t:'OV retenida → cartera → activa', e:'listo', sim:true, d:'La aprobación se reenvía a cartera, el comercial recibe seguimiento mientras no libera y, al liberar, la orden pasa a activa con confirmación.', f:'Dato de cartera por OV (el que NetSuite releva a OBEN MAS) y transacción "activar".', q:['J1','A4','A7']},
+      {t:'Cambios de fecha de entrega', e:'listo', sim:true, d:'Si Planeación mueve la fecha comprometida, queda en el historial del caso y se avisa a Customer Service.', f:'Fechas de la Proforma vía API.', q:['J1']},
+      {t:'Tablero, tiempos y freno de mano', e:'listo', d:'Embudo por estado, casos que requieren atención, tiempos promedio por etapa y pedidos por cliente, con filtros por fecha y cliente. Modo supervisado o automático.', q:[]},
+      {t:'Lectura de órdenes de compra con IA', e:'fase', d:'El código existe; hoy la lectura es por reglas. La referencia Oben siempre sale de la tabla de equivalencias, nunca de la IA.', f:'Decidir dónde corre el servicio de IA y contar con ejemplos reales de OC.', q:['A3']}
+    ]},
+    {id:'corte', t:'Producción y corte', who:'Planta · OBEN MAS', sub:'El cierre del corte dispara los documentos', pasos:[
+      {t:'Correo "OV Aprobada En Corte" como disparador', e:'vivo', d:'En cuanto Oben cierra el corte, se dispara el paquete de documentos de la orden, sin intervención humana.', q:[]}
+    ]},
+    {id:'empaque', t:'Lista de Empaque', who:'COMEX', sub:'Documentos de exportación y nacional', pasos:[
+      {t:'Paquete completo de documentos', e:'vivo', d:'Lista Especial (3 hojas), Unificada, Detallada, Consumo de Material de Empaque, Consumo de Materia Prima y Hoja de Costos (un archivo por línea), en el formato de Oben. Solefilmes en PDF cuando aplica.', q:[]},
+      {t:'Nunca se envía incompleto', e:'vivo', d:'Si falta un documento, se reintenta cada 10 minutos; al quinto intento se escala a José y Jorge. Tras cada envío se confirma con spApproveComex_Paradixe.', q:[]},
+      {t:'Reportes Oben a pedido', e:'vivo', d:'Consulta de cualquier reporte por orden de venta, en tablas legibles, descarga en Excel o envío por correo; el paquete completo también se puede reenviar a mano.', q:[]},
+      {t:'Regla PND: retenidas por cartera', e:'listo', sim:true, d:'Si cartera no liberó, la Lista de Empaque no se genera: se revisa cada 6 horas, se avisa a cartera y COMEX, y se puede liberar o cancelar a mano con registro.', f:'Dato de cartera por OV y confirmar el comportamiento PND. Un dato simulado nunca retiene ni libera una orden real.', q:['J1','J3']},
+      {t:'Despacho parcial nacional', e:'espera', d:'OBEN MAS–Paradixe pide un juego de documentos "Parcial" por cada despacho parcial de un pedido nacional.', f:'Cómo identificar en OBEN MAS que un despacho es parcial.', q:['J8']}
+    ]},
+    {id:'liquidacion', t:'Liquidación', who:'COMEX · Facturación', sub:'Liquidación de exportación', pasos:[
+      {t:'Disparador: último pallet en bodega de Producto Terminado', e:'espera', d:'Hoy la liquidación se lanza a mano desde el sistema.', f:'Un evento o correo en ese momento.', q:['J5']},
+      {t:'Borrador de liquidación', e:'listo', sim:true, d:'Kilos y FOB por línea; para USA, Entry Fee, ISF y Harbor Maintenance desde el maestro de tarifas; lista lo que falta. Verificado contra Proformas reales (10867, 11357, 11271).', f:'Fórmula de Incoterm (flete, seguro, otros gastos). Hoy está simulada y con candado.', q:['J4']},
+      {t:'Registro en Oben (encabezado + detalle)', e:'listo', d:'Una Proforma nunca se liquida dos veces; si la conexión se corta a mitad, pide confirmación antes de reintentar. Bloqueado mientras la fórmula sea simulada.', f:'Fórmula de Incoterm real.', q:['J4']},
+      {t:'Correo de cierre a COMEX y Facturación', e:'listo', d:'Con la Lista de Empaque Unificada y la Proforma aprobada. Solo sale cuando la liquidación está completa en Oben y no hay adjuntos simulados.', f:'Qué Proforma adjuntar (oficial o firmada) y destinatarios.', q:['J7','J1','A7']}
+    ]},
+    {id:'facturacion', t:'Facturación', who:'Facturación · COMEX', sub:'Exportación y nacional', pasos:[
+      {t:'Exportación: borrador después de la liquidación', e:'listo', sim:true, d:'PDF con cliente, Proforma, OC, contenedor, películas, precios y kilos. La dirección de entrega sale de OBEN MAS (hoy simulada y rotulada en el PDF).', f:'Dirección de entrega vía API.', q:['J1']},
+      {t:'Nacional completo', e:'listo', d:'Mismo borrador con los datos de la Proforma (precio, observaciones, información complementaria), para Distribución y COMEX.', f:'Disparo automático al ingresar el último pallet.', q:['J5']},
+      {t:'Factura electrónica', e:'espera', d:'Se emite al enviar a COMEX; el flujo ya la pide a un proveedor simulado.', f:'Proveedor de facturación electrónica (DIAN).', q:['J6']},
+      {t:'Nacional parcial', e:'espera', d:'El borrador parcial ya existe y se puede generar marcándolo a mano; falta que el sistema lo detecte solo.', f:'Cómo identificar un despacho parcial en OBEN MAS.', q:['J8']}
+    ]}
+  ];
+
+  var estadoFiltro = null, personaFiltro = null, preguntaFiltro = null;
+  var todos = [];
+  ETAPAS.forEach(function(et){ et.pasos.forEach(function(p, i){ p.id = et.id + '-' + (i + 1); p.etapa = et.id; todos.push(p); }); });
+  var abiertas = {}; ETAPAS.forEach(function(et){ abiertas[et.id] = true; });
+
+  function el(tag, attrs, html){ var n = document.createElement(tag); if (attrs) for (var k in attrs) { if (k === 'class') n.className = attrs[k]; else n.setAttribute(k, attrs[k]); } if (html != null) n.innerHTML = html; return n; }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function contar(e){ return todos.filter(function(p){ return p.e === e; }).length; }
+  function visible(p){
+    if (estadoFiltro && p.e !== estadoFiltro) return false;
+    if (personaFiltro && !p.q.some(function(q){ return q.charAt(0) === personaFiltro; })) return false;
+    if (preguntaFiltro && p.q.indexOf(preguntaFiltro) === -1) return false;
+    return true;
+  }
+
+  function pintarResumen(){
+    var barra = document.getElementById('barra'), cifras = document.getElementById('cifras');
+    barra.innerHTML = ''; cifras.innerHTML = '';
+    Object.keys(ESTADOS).forEach(function(k){
+      var n = contar(k); if (!n) return;
+      var b = el('button', {type:'button', title: ESTADOS[k].t + ': ' + n, 'aria-label': ESTADOS[k].t + ': ' + n});
+      b.style.flex = n; b.style.background = ESTADOS[k].color;
+      b.onclick = function(){ setEstado(estadoFiltro === k ? null : k); };
+      barra.appendChild(b);
+      var c = el('button', {type:'button', class:'cifra ' + k, 'aria-pressed': String(estadoFiltro === k)}, '<span class="n">' + n + '</span><span class="t">' + ESTADOS[k].t + '</span><span class="l">' + ESTADOS[k].l + '</span>');
+      c.onclick = function(){ setEstado(estadoFiltro === k ? null : k); };
+      cifras.appendChild(c);
+    });
+  }
+
+  function pintarMapa(){
+    var mapa = document.getElementById('mapa'); mapa.innerHTML = '';
+    ETAPAS.forEach(function(et, i){
+      var b = el('button', {type:'button', class:'etapa-btn'});
+      var pts = et.pasos.map(function(p){ return '<i title="' + esc(p.t) + '" style="background:' + ESTADOS[p.e].color + ';opacity:' + (visible(p) ? 1 : .25) + '"></i>'; }).join('');
+      b.innerHTML = '<span class="num">ETAPA ' + (i + 1) + '</span><span class="t">' + esc(et.t) + '</span><span class="puntos">' + pts + '</span><span class="who">' + esc(et.who) + '</span>';
+      b.onclick = function(){ abiertas[et.id] = true; pintarEtapas(); irA(et.id); };
+      mapa.appendChild(b);
+    });
+  }
+
+  function pintarControles(){
+    var f = document.getElementById('filtros'), p = document.getElementById('personas');
+    f.querySelectorAll('.pill').forEach(function(x){ x.remove(); });
+    p.querySelectorAll('.pill').forEach(function(x){ x.remove(); });
+    var todo = el('button', {type:'button', class:'pill', 'aria-pressed': String(!estadoFiltro)}, 'Todos <span class="c">' + todos.length + '</span>');
+    todo.onclick = function(){ setEstado(null); }; f.appendChild(todo);
+    Object.keys(ESTADOS).forEach(function(k){
+      var b = el('button', {type:'button', class:'pill', 'aria-pressed': String(estadoFiltro === k)}, '<span class="estado-dot" style="background:' + ESTADOS[k].color + '"></span>' + ESTADOS[k].t + ' <span class="c">' + contar(k) + '</span>');
+      b.onclick = function(){ setEstado(estadoFiltro === k ? null : k); }; f.appendChild(b);
+    });
+    Object.keys(PERSONAS).forEach(function(k){
+      var n = todos.filter(function(x){ return x.q.some(function(q){ return q.charAt(0) === k; }); }).length;
+      var b = el('button', {type:'button', class:'pill', 'aria-pressed': String(personaFiltro === k)}, esc(PERSONAS[k]) + ' <span class="c">' + n + '</span>');
+      b.onclick = function(){ personaFiltro = personaFiltro === k ? null : k; preguntaFiltro = null; refrescar(); }; p.appendChild(b);
+    });
+    var aq = document.getElementById('activoQ');
+    if (preguntaFiltro) { aq.classList.add('on'); document.getElementById('activoQtxt').innerHTML = 'Mostrando lo que desbloquea <b>' + preguntaFiltro + '</b>: ' + esc(Q[preguntaFiltro].t); }
+    else aq.classList.remove('on');
+  }
+
+  function pintarEtapas(){
+    var cont = document.getElementById('etapas'); cont.innerHTML = '';
+    ETAPAS.forEach(function(et, i){
+      var sec = el('section', {class:'etapa', id: et.id});
+      var vis = et.pasos.filter(visible);
+      var head = el('button', {type:'button', class:'etapa-head', 'aria-expanded': String(!!abiertas[et.id])},
+        '<span class="num">' + (i + 1) + '</span><span><h2>' + esc(et.t) + '</h2><span class="meta">' + esc(et.sub) + ' · ' + esc(et.who) + ' · ' + vis.length + ' de ' + et.pasos.length + ' pasos</span></span><span class="chev">' + (abiertas[et.id] ? 'Ocultar' : 'Mostrar') + '</span>');
+      head.onclick = function(){ abiertas[et.id] = !abiertas[et.id]; pintarEtapas(); };
+      sec.appendChild(head);
+      if (abiertas[et.id]) {
+        var grid = el('div', {class:'pasos'});
+        if (!vis.length) grid.appendChild(el('div', {class:'vacio'}, 'Ningún paso de esta etapa coincide con el filtro.'));
+        vis.forEach(function(p){
+          var card = el('article', {class:'paso' + (preguntaFiltro && p.q.indexOf(preguntaFiltro) !== -1 ? ' hl' : ''), id:'p-' + p.id});
+          var chips = '<span class="chip ' + p.e + '">' + ESTADOS[p.e].t + '</span>' + (p.sim ? '<span class="chip sim">Con simulador</span>' : '');
+          var html = '<div class="paso-head"><h3>' + esc(p.t) + '</h3><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' + chips + '</span></div><p>' + esc(p.d) + '</p>';
+          if (p.f) html += '<div class="falta"><b>Falta:</b> ' + esc(p.f) + '</div>';
+          card.innerHTML = html;
+          if (p.q.length) {
+            var deps = el('div', {class:'deps'}, '<span class="lbl">Depende de</span>');
+            p.q.forEach(function(q){
+              var b = el('button', {type:'button', class:'dep', title: Q[q].t}, q + ' · ' + (q.charAt(0) === 'J' ? 'José' : 'Alejandra'));
+              b.onclick = function(){ irAPregunta(q); };
+              deps.appendChild(b);
+            });
+            card.appendChild(deps);
+          }
+          grid.appendChild(card);
+        });
+        sec.appendChild(grid);
+      }
+      cont.appendChild(sec);
+    });
+  }
+
+  function pintarPreguntas(){
+    var cont = document.getElementById('listaPreg'); cont.innerHTML = '';
+    Object.keys(PERSONAS).forEach(function(k){
+      var col = el('div', {class:'pcol'});
+      var ids = Object.keys(Q).filter(function(q){ return q.charAt(0) === k; });
+      col.appendChild(el('h3', null, esc(PERSONAS[k])));
+      col.appendChild(el('div', {class:'quien'}, ids.length + ' puntos'));
+      ids.forEach(function(q){
+        var n = todos.filter(function(p){ return p.q.indexOf(q) !== -1; }).length;
+        var box = el('div', {class:'q' + (preguntaFiltro === q ? ' hl' : ''), id:'q-' + q});
+        box.innerHTML = '<div class="qt"><span class="id">' + q + '</span><span class="tx">' + esc(Q[q].t) + '</span></div><p class="det">' + esc(Q[q].d) + '</p>';
+        var b = el('button', {type:'button', class:'ver'}, 'Ver qué desbloquea (' + n + ' paso' + (n === 1 ? '' : 's') + ')');
+        b.onclick = function(){ preguntaFiltro = q; estadoFiltro = null; personaFiltro = null; ETAPAS.forEach(function(et){ abiertas[et.id] = true; }); refrescar(); var primero = todos.filter(visible)[0]; if (primero) irA('p-' + primero.id); };
+        box.appendChild(b);
+        col.appendChild(box);
+      });
+      cont.appendChild(col);
+    });
+  }
+
+  function irA(id){ var n = document.getElementById(id); if (n) n.scrollIntoView({behavior:'smooth', block:'start'}); }
+  function irAPregunta(q){ preguntaFiltro = q; refrescar(); irA('q-' + q); }
+  function setEstado(k){ estadoFiltro = k; preguntaFiltro = null; refrescar(); }
+  function refrescar(){ pintarResumen(); pintarMapa(); pintarControles(); pintarEtapas(); pintarPreguntas(); }
+  document.getElementById('limpiarQ').onclick = function(){ preguntaFiltro = null; refrescar(); };
+
+  refrescar();
+  var h = (location.hash || '').replace('#', '');
+  if (h && document.getElementById(h)) setTimeout(function(){ irA(h); }, 50);
+})();
+</script>
