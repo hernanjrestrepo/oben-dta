@@ -12,6 +12,7 @@ import { DistributionListsService } from '../distribution-lists/distribution-lis
 import { ObenReportExcelService } from '../oben-reports/oben-report-excel.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { PackingListAutomationService } from './packing-list-automation.service';
+import { origenDatosOben } from '../oben-reports/origen-datos';
 
 class SendPackingListDto {
   // Opcional: si no viene, se resuelve con la lista de distribución asociada
@@ -81,7 +82,7 @@ export class PackingListController {
   @RequirePermission('orders.read')
   async getByOrderNumber(@Param('numberOrderSales') numberOrderSales: string) {
     const n = this.parseOrderNumber(numberOrderSales);
-    return this.fetchPackingList(n);
+    return this.marcarSimulado(await this.fetchPackingList(n));
   }
 
   /** Descarga directa del .xlsx — mismos datos que se ven en pantalla, sin pasar por correo. */
@@ -131,14 +132,15 @@ export class PackingListController {
     }
 
     const filename = `Lista_de_Empaque-OV${n}.xlsx`;
+    const origen = origenDatosOben((await this.hub.capabilities('obenCostOrder')).mode === 'mock');
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
       'send',
       {
         to,
         ...(cc.length ? { cc: cc.join(',') } : {}),
-        subject: `Lista de Empaque — Orden ${n}`,
-        body: `<p>Adjunto la lista de empaque de la orden ${n}, consultada en vivo al sistema real de Oben.</p>`,
+        subject: `${origen.prefijoAsunto}Lista de Empaque — Orden ${n}`,
+        body: `<p>Adjunto la lista de empaque de la orden ${n}, ${origen.frase}.</p>`,
         attachments: [
           {
             filename,
@@ -166,6 +168,13 @@ export class PackingListController {
       throw new BadRequestException(sendResult.error ?? 'No se pudo enviar el correo');
     }
     return { sent: true, to, cc };
+  }
+
+  /** En un entorno con el simulador de Oben, la pantalla debe decirlo (nunca "datos reales"). */
+  private async marcarSimulado(data: unknown): Promise<unknown> {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+    const { mode } = await this.hub.capabilities('obenCostOrder');
+    return mode === 'mock' ? { ...(data as Record<string, unknown>), simulated: true } : data;
   }
 
   private parseOrderNumber(raw: string): number {

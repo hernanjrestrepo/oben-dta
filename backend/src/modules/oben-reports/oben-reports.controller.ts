@@ -13,6 +13,7 @@ import { ObenReportExcelService } from './oben-report-excel.service';
 import { ObenReportsService, OBEN_QUERY_OPTIONS } from './oben-reports.service';
 import { OBEN_REPORTS, findObenReport } from './oben-report-registry';
 import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.service';
+import { origenDatosOben } from './origen-datos';
 
 class SendReportDto {
   @IsOptional()
@@ -118,6 +119,7 @@ export class ObenReportsController {
     const failedListHtml = failed.length
       ? `<p>No se pudieron incluir (${failed.length}): ${failed.map((r) => r.label).join(', ')}.</p>`
       : '';
+    const origen = origenDatosOben((await this.hub.capabilities('obenCostOrder')).mode === 'mock');
 
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
@@ -125,8 +127,8 @@ export class ObenReportsController {
       {
         to,
         ...(cc.length ? { cc: cc.join(',') } : {}),
-        subject: `Conjunto de documentos — Orden ${n}`,
-        body: `<p>Adjunto el conjunto de documentos de la orden ${n}, consultados en vivo al sistema real de Oben.</p><ul>${includedListHtml}</ul>${failedListHtml}`,
+        subject: `${origen.prefijoAsunto}Conjunto de documentos — Orden ${n}`,
+        body: `<p>Adjunto el conjunto de documentos de la orden ${n}, ${origen.frase}.</p><ul>${includedListHtml}</ul>${failedListHtml}`,
         attachments: included.map((r) => ({
           filename: r.filename,
           content: r.buffer.toString('base64'),
@@ -177,7 +179,12 @@ export class ObenReportsController {
   async getReport(@Param('key') key: string, @Param('numberOrderSales') numberOrderSales: string) {
     const def = this.requireReport(key);
     const n = this.parseOrderNumber(numberOrderSales);
-    return this.fetchReport(def.procedure, n);
+    const data = await this.fetchReport(def.procedure, n);
+    // En un entorno con el simulador de Oben, la pantalla debe decirlo (nunca "datos reales").
+    if (data && typeof data === 'object' && !Array.isArray(data) && (await this.hub.capabilities('obenCostOrder')).mode === 'mock') {
+      return { ...(data as Record<string, unknown>), simulated: true };
+    }
+    return data;
   }
 
   @Get(':key/:numberOrderSales/excel')
@@ -229,14 +236,15 @@ export class ObenReportsController {
     }
 
     const filename = `${def.label.replace(/\s+/g, '_')}-OV${n}.xlsx`;
+    const origen = origenDatosOben((await this.hub.capabilities('obenCostOrder')).mode === 'mock');
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
       'send',
       {
         to,
         ...(cc.length ? { cc: cc.join(',') } : {}),
-        subject: `${def.label} — Orden ${n}`,
-        body: `<p>Adjunto el reporte "${def.label}" de la orden ${n}, consultado en vivo al sistema real de Oben.</p>`,
+        subject: `${origen.prefijoAsunto}${def.label} — Orden ${n}`,
+        body: `<p>Adjunto el reporte "${def.label}" de la orden ${n}, ${origen.frase}.</p>`,
         attachments: [
           {
             filename,

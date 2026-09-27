@@ -7,6 +7,7 @@ import { SCENARIO_PROVIDER, ScenarioProvider } from '../scenario.types';
 /** En el simulador, Proforma = Orden de venta + este desfase (biyectivo: Liquidación resuelve el país desde la OV). */
 const PF_OFFSET = 200;
 const PAISES_DEMO = ['USA', 'COLOMBIA', 'ECUADOR', 'COLOMBIA', 'MEXICO'];
+const redondear = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Mock de APICostOrderParadixe — misma forma de respuesta que la API real
@@ -86,6 +87,47 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
     };
   }
 
+  /** Rollos simulados de la OV (2 estibas × 3 rollos por línea), coherentes con demoOrder. */
+  private demoRollos(numberOrderSales: number) {
+    const o = this.demoOrder(numberOrderSales);
+    return o.detalle.flatMap((l, i) => {
+      const ancho = 425 + i * 75;
+      const netoRollo = redondear(l.KilosTotales / 6);
+      return Array.from({ length: 6 }, (_, k) => {
+        const pallet = `PAL-SIM-${numberOrderSales}-${i + 1}${Math.floor(k / 3) + 1}`;
+        const brutoPaleta = redondear(netoRollo * 3 + 25);
+        return {
+          PO: o.ordenCompra,
+          CodigoInternacional: `INT-${l.TipoPelicula}`,
+          Descripcion: `${l.TipoPelicula} (SIMULADO)`,
+          CodigoItem: l.TipoPelicula,
+          Producto: 'PELÍCULA SIMULADA',
+          Tratamiento: 'UN LADO',
+          NroUnico: `R-SIM-${numberOrderSales}-${i + 1}${String(k + 1).padStart(2, '0')}`,
+          CodigoBarraPallet: pallet,
+          Ancho: ancho,
+          WidthIn: redondear(ancho / 25.4),
+          ODmm: 600,
+          ODin: redondear(600 / 25.4),
+          LongMt: 6000,
+          LengthFt: redondear(6000 * 3.28084),
+          Lote: `LOTE-SIM-${numberOrderSales}`,
+          BobinaPesoNetoKg: netoRollo,
+          RollNetWeightLb: redondear(netoRollo * 2.20462),
+          PesoNetoKg: netoRollo,
+          PesoNetoLb: redondear(netoRollo * 2.20462),
+          PesoBrutoKg: redondear(netoRollo + 3),
+          PesoBrutoLb: redondear((netoRollo + 3) * 2.20462),
+          PaletaPesoNetoKg: redondear(netoRollo * 3),
+          PalletNetWeightLb: redondear(netoRollo * 3 * 2.20462),
+          PaletaPesoBrutoKg: brutoPaleta,
+          PalletGrossWeightLb: redondear(brutoPaleta * 2.20462),
+          Bobinas: 3,
+        };
+      });
+    });
+  }
+
   private consultarLiquidacion(args: Record<string, unknown>) {
     const numberPF = Number(args.numberPF);
     if (args.numberPF === undefined || args.numberPF === null || !Number.isFinite(numberPF)) {
@@ -138,6 +180,100 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
         Contenedor: `DEMO${String(ov).padStart(7, '0')}`,
         CodigoMaterial: o.detalle[0].TipoPelicula,
         Detalle: o.detalle.map((l) => ({ TipoPelicula: l.TipoPelicula, KilosTotales: l.KilosTotales })),
+      };
+    }
+    // Resto del paquete de la Lista de Empaque, con la forma real de cada SP
+    // (ver ObenReportExcelService). Todo rotulado SIMULADO: nunca es de Oben.
+    if (procedure === 'spChecLinea_Paradixe') {
+      return this.demoOrder(Number(numberOrderSales)).detalle.map((_, i) => ({ Linea: i + 1 }));
+    }
+    if (procedure === 'spPackingListUSA_Paradixe') {
+      const ov = Number(numberOrderSales);
+      const o = this.demoOrder(ov);
+      return {
+        Fecha: new Date().toISOString().slice(0, 10),
+        Cliente: o.cliente,
+        Almacen: 'BODEGA SIMULADA',
+        OC_Cliente: o.ordenCompra,
+        Documento: o.proforma,
+        Contenedor: `DEMO${String(ov).padStart(7, '0')}`,
+        Numero: String(ov),
+        Local: 'PLANTA SIMULADA',
+        DetailedPackingList: this.demoRollos(ov),
+      };
+    }
+    if (procedure === 'spEmpaqueDetallada_Paradixe') {
+      const ov = Number(numberOrderSales);
+      const o = this.demoOrder(ov);
+      const rollos = this.demoRollos(ov);
+      const pallets = [...new Set(rollos.map((r) => r.CodigoBarraPallet))];
+      return {
+        Fecha: new Date().toISOString().slice(0, 10),
+        Cliente: o.cliente,
+        Pais: o.pais,
+        Proforma: o.proforma,
+        OrdenCompra: o.ordenCompra,
+        Contenedor: `DEMO${String(ov).padStart(7, '0')}`,
+        CodigoMaterial: o.detalle[0].TipoPelicula,
+        TotalPallet: pallets.length,
+        TotalBobinas: rollos.length,
+        TotalPesoNetoKg: redondear(rollos.reduce((a, r) => a + r.BobinaPesoNetoKg, 0)),
+        TotalPesoBrutoKg: redondear(rollos.reduce((a, r) => a + r.PesoBrutoKg, 0)),
+        Detalle1: pallets.map((codigo) => ({
+          Codigo: codigo,
+          TipoPallet: 'ESTIBA DE MADERA (SIMULADA)',
+          Detalle2: rollos
+            .filter((r) => r.CodigoBarraPallet === codigo)
+            .map((r) => ({
+              CodigoInterno: r.NroUnico,
+              TipoPelicula: r.CodigoItem,
+              AnchoMm: r.Ancho,
+              AnchoIn: r.WidthIn,
+              PesoNetoKg: r.BobinaPesoNetoKg,
+              PesoNetoLb: r.RollNetWeightLb,
+              PesoBrutoKg: r.PesoBrutoKg,
+              PesoBrutoLb: r.PesoBrutoLb,
+              Metraje: r.LongMt,
+              MetrajeFt: r.LengthFt,
+              Lote: r.Lote,
+              FabricacionMFG: new Date().toISOString().slice(0, 10),
+              Empalmes: 0,
+            })),
+        })),
+      };
+    }
+    if (procedure === 'spConsumoME_Paradixe') {
+      const ov = Number(numberOrderSales);
+      const o = this.demoOrder(ov);
+      const rollos = this.demoRollos(ov);
+      return {
+        Fecha: new Date().toISOString().slice(0, 10),
+        Cliente: o.cliente,
+        OrdenVenta: String(ov),
+        Detalle1: o.detalle.map((l) => {
+          const propios = rollos.filter((r) => r.CodigoItem === l.TipoPelicula);
+          return {
+            Pelicula: l.TipoPelicula,
+            Detalle2: [
+              { Material: 'CORE 6" (SIMULADO)', Cantidad: propios.length, Observacion: '' },
+              { Material: 'ESTIBA DE MADERA (SIMULADA)', Cantidad: new Set(propios.map((r) => r.CodigoBarraPallet)).size, Observacion: '' },
+              { Material: 'STRETCH FILM kg (SIMULADO)', Cantidad: redondear(propios.length * 0.35), Observacion: '' },
+            ],
+          };
+        }),
+      };
+    }
+    if (procedure === 'spConsumoMP_Paradixe') {
+      const ov = Number(numberOrderSales);
+      const o = this.demoOrder(ov);
+      return {
+        Fecha: new Date().toISOString().slice(0, 10),
+        Cliente: o.cliente,
+        OrdenVenta: String(ov),
+        Detalle: o.detalle.flatMap((l) => [
+          { Pelicula: l.TipoPelicula, PesoPelicula: l.KilosTotales, Material: 'MP-SIM-01', NombreMaterial: 'RESINA BASE (SIMULADA)', Cantidad: redondear(l.KilosTotales * 0.94), Porcentaje: 94 },
+          { Pelicula: l.TipoPelicula, PesoPelicula: l.KilosTotales, Material: 'MP-SIM-02', NombreMaterial: 'ADITIVO (SIMULADO)', Cantidad: redondear(l.KilosTotales * 0.06), Porcentaje: 6 },
+        ]),
       };
     }
     return {

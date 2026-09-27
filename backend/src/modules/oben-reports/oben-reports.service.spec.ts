@@ -143,6 +143,20 @@ describe('ObenReportsService.buildDocumentPackage', () => {
     expect(filenames).toEqual(['Hoja_de_Costos-OV10794-Linea1.xlsx', 'Hoja_de_Costos-OV10794-Linea2.xlsx']);
   });
 
+  it('Hoja de Costos: si Oben responde las líneas en un formato inesperado (no lista), falla con mensaje claro sin romper el paquete', async () => {
+    const hubCall = jest.fn().mockImplementation((system: string, op: string, args: any) => {
+      if (args?.procedure === 'spChecLinea_Paradixe') return Promise.resolve({ ok: true, data: { Detalle: [{ Campo: 'x' }] } });
+      return defaultHubCall(system, op, args);
+    });
+    const { service } = makeService(hubCall);
+
+    const result = await service.buildDocumentPackage(10794);
+
+    expect(result.failed).toContainEqual({ key: 'hoja_costos', label: 'Hoja de Costos', error: expect.stringMatching(/formato inesperado/) });
+    expect(result.included.map((r) => r.key)).toContain('lista_especial');
+    expect(hubCall).not.toHaveBeenCalledWith('obenCostOrder', 'costOrder.get', expect.anything(), expect.anything());
+  });
+
   it('Hoja de Costos: sin líneas, se informa como fallido sin bloquear el resto', async () => {
     const hubCall = jest.fn().mockImplementation((system: string, op: string, args: any) => {
       if (args?.procedure === 'spChecLinea_Paradixe') return Promise.resolve({ ok: true, data: [] });

@@ -3,7 +3,7 @@ import { PackingListController } from './packing-list.controller';
 import { REQUIRE_PERMISSION_KEY } from '../security/require-permission.decorator';
 
 function makeController(hubCall: jest.Mock, resolveRecipients?: jest.Mock) {
-  const hub = { call: hubCall } as any;
+  const hub = { call: hubCall, capabilities: jest.fn().mockResolvedValue({ mode: 'real' }) } as any;
   const ctx = { userId: 'u1', tenantId: 't1' } as any;
   const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
   const distributionLists = {
@@ -195,5 +195,11 @@ describe('PackingListController', () => {
       expect(automation.cancelCarteraHold).toHaveBeenCalledWith(10824, 'Pedido dado de baja');
       expect(() => controller.releaseCarteraHold('abc', { motivo: 'x' })).toThrow(BadRequestException);
     });
+  });
+
+  it('con el simulador de Oben conectado, la respuesta lo dice (simulated:true) para que la pantalla no muestre "datos reales"', async () => {
+    const { controller } = makeController(jest.fn().mockResolvedValue({ ok: true, data: SAMPLE_DATA }));
+    (controller as any).hub.capabilities.mockResolvedValue({ mode: 'mock' });
+    await expect(controller.getByOrderNumber('10794')).resolves.toMatchObject({ Cliente: SAMPLE_DATA.Cliente, simulated: true });
   });
 });

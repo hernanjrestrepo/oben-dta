@@ -11,6 +11,7 @@ import { ClientsService } from '../clients/clients.service';
 import { EquivalencesService } from '../equivalences/equivalences.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { Tenant } from '../../entities/tenant.entity';
+import { User } from '../../entities/user.entity';
 import {
   CASO_ESTADOS,
   CASO_ESTADOS_ABIERTOS,
@@ -347,7 +348,7 @@ export class ComercialFlujoService {
     opts: { confirmadoPor?: string | null; verificadoEnObenMas?: boolean } = {},
   ): Promise<ComercialCase> {
     await this.candadoEscritura(caso);
-    const quien = opts.confirmadoPor ? ` (confirmado por ${opts.confirmadoPor})` : ' (automático)';
+    const quien = opts.confirmadoPor ? ` (confirmado por ${await this.nombreUsuario(opts.confirmadoPor)})` : ' (automático)';
     const ahora = new Date().toISOString();
     switch (accion.tipo) {
       case 'crear_proforma': {
@@ -1011,6 +1012,18 @@ export class ComercialFlujoService {
       body: cuerpoHtml,
       enHilo: false,
     });
+  }
+
+  /** La bitácora la leen personas: nombre y correo de quien confirmó, no su ID interno (que queda en `actor`). */
+  private async nombreUsuario(userId: string): Promise<string> {
+    try {
+      const u = await this.casos.manager?.findOne(User, { where: { id: userId, tenantId: this.ctx.tenantId } });
+      if (!u) return 'un usuario';
+      const nombre = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+      return nombre ? `${nombre} <${u.email}>` : u.email;
+    } catch {
+      return 'un usuario';
+    }
   }
 
   private evento(caso: ComercialCase, tipo: string, detalle: string, actor?: string | null): void {

@@ -11,7 +11,7 @@ function makeController(
   buildDocumentPackage?: jest.Mock,
   resolveSurcharges?: jest.Mock,
 ) {
-  const hub = { call: hubCall } as any;
+  const hub = { call: hubCall, capabilities: jest.fn().mockResolvedValue({ mode: 'real' }) } as any;
   const ctx = { userId: 'u1', tenantId: 't1' } as any;
   const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
   const distributionLists = {

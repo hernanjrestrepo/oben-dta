@@ -89,6 +89,12 @@ describe('extracción por reglas', () => {
     expect(r.lineas[1]).toMatchObject({ codigoOben: 'ET12', kilos: 500, anchoMm: 600, precioUnitario: 2.85, moneda: null });
   });
 
+  it('"Orden de compra urgente" no tiene número: queda null (no se toma "urgente")', () => {
+    expect(extraerConReglas('Cambien la dirección de entrega.\n- BOPP 345, 5.000 kg, ancho 425 mm', 'Orden de compra urgente', EQ).numero).toBeNull();
+    expect(extraerConReglas('Favor ingresar la orden de compra OC-SIM-0990', '', EQ).numero).toBe('OC-SIM-0990');
+    expect(extraerConReglas('', 'PO 7789 | End customer: ACME', EQ).numero).toBe('7789');
+  });
+
   it('"2 mil kg" son dos mil kilos (no 2 mils de espesor)', () => {
     const r = extraerConReglas('BOPP 345 2 mil kg ancho 425 mm', '', EQ);
     expect(r.lineas[0]).toMatchObject({ kilos: 2000, espesorMicras: null });

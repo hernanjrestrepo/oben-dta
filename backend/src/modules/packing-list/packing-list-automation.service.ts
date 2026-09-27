@@ -14,6 +14,7 @@ import {
   PACKING_LIST_RETRY_INTERVAL_MS,
 } from './packing-list-retry.constants';
 import { PackingListCarteraService, type CarteraDecision } from './packing-list-cartera.service';
+import { origenDatosOben } from '../oben-reports/origen-datos';
 
 /** Lista de distribución que recibe los avisos de órdenes retenidas por cartera (PND). */
 export const PACKING_LIST_CARTERA_DISTRIBUTION_KEY = 'packing_list_cartera';
@@ -190,6 +191,7 @@ export class PackingListAutomationService {
     const isSolefilmes = includedKeys.includes('empaque_solefilmes');
     const [primaryTo, ...restTo] = resolved.to;
     const cc = [...restTo, ...resolved.cc];
+    const origen = origenDatosOben(documentPackage.simulated === true);
 
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
@@ -197,8 +199,8 @@ export class PackingListAutomationService {
       {
         to: primaryTo,
         ...(cc.length ? { cc: cc.join(',') } : {}),
-        subject: `Lista de Empaque — Orden ${numberOrderSales}${isSolefilmes ? ' (Solefilmes)' : ''}`,
-        body: `<p>Adjuntos los documentos de la orden ${numberOrderSales}, generados automáticamente al recibir la aprobación de corte, con datos consultados en vivo al sistema real de Oben.</p>`,
+        subject: `${origen.prefijoAsunto}Lista de Empaque — Orden ${numberOrderSales}${isSolefilmes ? ' (Solefilmes)' : ''}`,
+        body: `<p>Adjuntos los documentos de la orden ${numberOrderSales}, generados automáticamente al recibir la aprobación de corte, ${origen.frase}.</p>`,
         attachments: documentPackage.included.map((r) => ({
           filename: r.filename,
           content: r.buffer.toString('base64'),

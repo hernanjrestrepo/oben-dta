@@ -22,6 +22,8 @@ export interface DocumentPackageResult {
   client: string;
   included: PackageAttachment[];
   failed: PackageFailure[];
+  /** Algún dato vino del simulador de Oben (entorno de pruebas): el correo debe decirlo. */
+  simulated?: boolean;
 }
 
 /**
@@ -96,8 +98,9 @@ export class ObenReportsService {
     const included: PackageAttachment[] = [];
     const failed: PackageFailure[] = [];
     let client = '';
+    const modos = new Set<string>();
 
-    const listaEspecial = await this.buildListaEspecial(numberOrderSales);
+    const listaEspecial = await this.buildListaEspecial(numberOrderSales, modos);
     if (listaEspecial.ok) {
       included.push(listaEspecial.attachment);
       if (!client) client = listaEspecial.client;
@@ -112,7 +115,7 @@ export class ObenReportsService {
     // a que los mismos parámetros funcionan perfecto uno a la vez.
     for (const def of DOCUMENT_PACKAGE_REPORTS) {
       try {
-        const data = await this.fetchReport(def.procedure, numberOrderSales);
+        const data = await this.fetchReport(def.procedure, numberOrderSales, modos);
         const record = data as Record<string, unknown>;
         if (!client) {
           const cliente = String(record.Cliente ?? record.Customer ?? '');
@@ -158,14 +161,14 @@ export class ObenReportsService {
       }
     }
 
-    const hojaCostos = await this.buildHojaCostos(numberOrderSales);
+    const hojaCostos = await this.buildHojaCostos(numberOrderSales, modos);
     if (hojaCostos.ok) {
       included.push(...hojaCostos.attachments);
     } else {
       failed.push(hojaCostos.failure);
     }
 
-    return { client, included, failed };
+    return { client, included, failed, simulated: modos.has('mock') };
   }
 
   /**
@@ -177,6 +180,7 @@ export class ObenReportsService {
    */
   private async buildListaEspecial(
     numberOrderSales: number,
+    modos?: Set<string>,
   ): Promise<{ ok: true; attachment: PackageAttachment; client: string } | { ok: false; failure: PackageFailure }> {
     const label = 'Lista Especial';
     try {
@@ -184,6 +188,7 @@ export class ObenReportsService {
         procedure: 'spPackingListUSA_Paradixe',
         numberOrderSales,
       }, OBEN_QUERY_OPTIONS);
+      if (result.mode) modos?.add(result.mode);
       if (!result.ok) {
         throw new Error(result.error ?? 'No se pudo consultar la lista de empaque en Oben');
       }
@@ -222,6 +227,7 @@ export class ObenReportsService {
    */
   private async buildHojaCostos(
     numberOrderSales: number,
+    modos?: Set<string>,
   ): Promise<{ ok: true; attachments: PackageAttachment[] } | { ok: false; failure: PackageFailure }> {
     const label = 'Hoja de Costos';
     try {
@@ -229,8 +235,12 @@ export class ObenReportsService {
         procedure: 'spChecLinea_Paradixe',
         numberOrderSales,
       }, OBEN_QUERY_OPTIONS);
+      if (lineasResult.mode) modos?.add(lineasResult.mode);
       if (!lineasResult.ok) {
         throw new Error(lineasResult.error ?? 'No se pudieron consultar las líneas de la orden en Oben');
+      }
+      if (lineasResult.data != null && !Array.isArray(lineasResult.data)) {
+        return { ok: false, failure: { key: 'hoja_costos', label, error: 'Oben respondió en un formato inesperado al consultar las líneas de la orden (se esperaba una lista de líneas).' } };
       }
       const lineas = (lineasResult.data as Array<{ Linea: number }> | undefined) ?? [];
       if (lineas.length === 0) {
@@ -328,8 +338,9 @@ export class ObenReportsService {
     }
   }
 
-  private async fetchReport(procedure: string, numberOrderSales: number): Promise<unknown> {
+  private async fetchReport(procedure: string, numberOrderSales: number, modos?: Set<string>): Promise<unknown> {
     const result = await this.hub.call('obenCostOrder', 'query.run', { procedure, numberOrderSales }, OBEN_QUERY_OPTIONS);
+    if (result.mode) modos?.add(result.mode);
     if (!result.ok) {
       throw new Error(result.error ?? 'No se pudo consultar el reporte en Oben');
     }

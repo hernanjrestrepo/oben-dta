@@ -173,7 +173,8 @@ const RE_ANCHO_SUELTO = new RegExp(`${NUM}${SEP}(mm|cm|pulgadas|pulg|in|inch(?:e
 const RE_ESPESOR = new RegExp(`${NUM}${SEP}(µm|μm|um|micras?|micrones|mic|mils?|g/m2|g/m²|gsm|grs?|g)(?![a-z])(?!\\s*(?:kg|kilos?|lbs?|libras?)\\b)`, 'i');
 const RE_PRECIO = new RegExp(`(?:precio(?:\\s+unitario)?|price|unit\\s+price|valor\\s+unitario|p\\.?\\s*unit\\.?)\\s*[:=]?\\s*(usd|us\\$|cop|\\$)?\\s*${NUM}\\s*(usd|cop)?`, 'i');
 const RE_PRECIO_SIMBOLO = new RegExp(`(us\\$|\\$)\\s*${NUM}`, 'i');
-const RE_OC = /(?:orden\s+de\s+compra|purchase\s+order|\bO\.?C\.?|\bP\.?O\.?)\s*(?:n[°º.o]*|no\.?|#|number|num\.?)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{2,})/i;
+// El número debe tener al menos un dígito: en "Orden de compra urgente" no hay número (no se inventa).
+const RE_OC = /(?:orden\s+de\s+compra|purchase\s+order|\bO\.?C\.?|\bP\.?O\.?)\s*(?:n[°º.o]*|no\.?|#|number|num\.?)?\s*[:#-]?\s*((?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{2,})/i;
 const RE_FECHA = /(?:fecha\s+(?:de\s+)?(?:entrega|requerida|requerimiento)|delivery\s+date|required\s+date|need\s+by)\s*[:=-]?\s*(\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i;
 const RE_DIRECCION = /(?:direcci[oó]n\s+de\s+(?:entrega|despacho)|ship\s+to|deliver\s+to|entregar\s+en|lugar\s+de\s+entrega)\s*[:=-]\s*(.+)/i;
 const RE_CLIENTE_FINAL = /(?:cliente\s+final|end\s+customer|final\s+customer|customer)\s*[:\-]\s*([^|/\n]+)/i;

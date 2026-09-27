@@ -266,6 +266,18 @@ describe('ComercialFlujoService — flujo Comercial de punta a punta (reunión 2
   });
 
   describe('Proforma → cubicaje → cliente → aprobación → cartera → activa → despacho', () => {
+    it('la bitácora dice QUIÉN confirmó con nombre y correo (no el ID interno del usuario)', async () => {
+      const w = world();
+      (w.repo as unknown as { manager: unknown }).manager = {
+        findOne: jest.fn(async () => ({ id: 'u1', firstName: 'Ana', lastName: 'Pérez', email: 'ana@oben-simulado.example' })),
+      };
+      let caso = await w.flujo.recibirOc(await ocDemo(), 'correo');
+      caso = await w.flujo.confirmar(caso.id);
+      const detalle = caso.eventos.find((e) => /Proforma .* creada/.test(e.detalle))?.detalle ?? '';
+      expect(detalle).toMatch(/confirmado por Ana Pérez <ana@oben-simulado\.example>/);
+      expect(detalle).not.toMatch(/\bu1\b/);
+    });
+
     it('recorre el ciclo completo en modo supervisado, con cada escritura confirmada por una persona', async () => {
       const w = world();
       let caso = await w.flujo.recibirOc(await ocDemo(), 'correo');

@@ -299,6 +299,29 @@ describe('PackingListAutomationService', () => {
   });
 
   describe('sendCompletePackage', () => {
+    it('con datos del simulador de Oben, el correo lo dice ([SIMULADO] en el asunto) y nunca afirma "sistema real"', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-sim' } });
+      const { service } = makeService(hubCall);
+
+      await service.sendCompletePackage(10982, { ...COMPLETE_PACKAGE, simulated: true } as any, { to: ['ops@oben.com'], cc: [], bcc: [] });
+
+      const args = hubCall.mock.calls.find((c) => c[1] === 'send')![2];
+      expect(args.subject).toMatch(/^\[SIMULADO\] Lista de Empaque — Orden 10982/);
+      expect(args.body).toMatch(/SIMULADOR de Oben/);
+      expect(args.body).not.toMatch(/sistema real/);
+    });
+
+    it('con datos reales, el asunto no lleva [SIMULADO]', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-real' } });
+      const { service } = makeService(hubCall);
+
+      await service.sendCompletePackage(10982, COMPLETE_PACKAGE as any, { to: ['ops@oben.com'], cc: [], bcc: [] });
+
+      const args = hubCall.mock.calls.find((c) => c[1] === 'send')![2];
+      expect(args.subject).toMatch(/^Lista de Empaque — Orden 10982/);
+      expect(args.body).toMatch(/sistema real de Oben/);
+    });
+
     it('si el correo no se pudo enviar, no confirma spApproveComex y devuelve sendFailure en vez de lanzar', async () => {
       const hubCall = jest.fn().mockResolvedValue({ ok: false, error: 'smtp down' });
       const { service, reports } = makeService(hubCall);
