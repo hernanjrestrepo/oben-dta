@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import * as XLSX from 'xlsx';
 
@@ -12,6 +13,8 @@ export class TabularImportDto {
   @IsOptional()
   @IsArray()
   @IsObject({ each: true })
+  // Sin esto, la conversión implícita del ValidationPipe global convierte cada fila en [].
+  @Type(() => Object)
   rows?: Record<string, unknown>[];
 
   /** Archivo .xlsx / .xls / .csv en base64 (se lee la primera hoja). */

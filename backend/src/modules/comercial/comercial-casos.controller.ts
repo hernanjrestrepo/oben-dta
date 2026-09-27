@@ -39,7 +39,7 @@ class AdjuntoDto {
   contentBase64!: string;
 }
 
-class OcManualDto {
+export class OcManualDto {
   /** Remitente (compras del cliente): define de qué cliente es la orden. */
   @IsEmail()
   from!: string;
@@ -116,7 +116,7 @@ class DireccionManualDto {
   pais!: string;
 }
 
-class EditarCasoDto {
+export class EditarCasoDto {
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -179,7 +179,7 @@ class LineaRespuestaDto {
   codigoOben?: string;
 }
 
-class RespuestaManualDto {
+export class RespuestaManualDto {
   @IsIn(['aprueba', 'rechaza', 'modifica'])
   tipo!: 'aprueba' | 'rechaza' | 'modifica';
 
@@ -203,7 +203,7 @@ class MotivoDto {
   motivo!: string;
 }
 
-class ConfigDto {
+export class ConfigDto {
   @IsOptional()
   @IsBoolean()
   habilitado?: boolean;
@@ -227,6 +227,7 @@ class ConfigDto {
   @IsOptional()
   @IsArray()
   @IsObject({ each: true })
+  @Type(() => Object)
   ejemplosOc?: Record<string, unknown>[];
 }
 
