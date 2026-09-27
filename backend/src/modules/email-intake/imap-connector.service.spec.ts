@@ -525,6 +525,80 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
     });
   });
 
+  describe('withWatchdog / reconexión — timers que nunca deben quedar colgados', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('si la operación responde a tiempo, devuelve su valor y NO deja el timer del watchdog armado', async () => {
+      jest.useFakeTimers();
+
+      await expect((service as any).withWatchdog(Promise.resolve('ok'), 'status', 20_000)).resolves.toBe('ok');
+
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('si la operación se cuelga (socket medio muerto), rechaza al vencer el watchdog para forzar la reconexión', async () => {
+      jest.useFakeTimers();
+      const pending = (service as any).withWatchdog(new Promise(() => {}), 'idle', 20_000);
+      const assertion = expect(pending).rejects.toThrow(/watchdog: "idle" sin respuesta tras 20000ms/);
+
+      jest.advanceTimersByTime(20_000);
+
+      await assertion;
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('si la operación FALLA antes del watchdog, propaga ese error y limpia el timer', async () => {
+      jest.useFakeTimers();
+      await expect((service as any).withWatchdog(Promise.reject(new Error('ECONNRESET')), 'status')).rejects.toThrow('ECONNRESET');
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('runForTenant reconecta con backoff exponencial con tope de 5 min, y sale al detenerse', async () => {
+      const entry = { client: null, stopped: false };
+      (service as any).connections.set(TENANT_ID, entry);
+      (service as any).connectAndWatch = jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED'));
+      const delays: number[] = [];
+      (service as any).sleep = jest.fn(async (ms: number) => {
+        delays.push(ms);
+        if (delays.length === 8) entry.stopped = true;
+      });
+
+      await (service as any).runForTenant(TENANT_ID, cfg);
+
+      expect(delays).toEqual([5_000, 10_000, 20_000, 40_000, 80_000, 160_000, 300_000, 300_000]);
+    });
+
+    it('tras una conexión limpia el backoff vuelve a empezar desde 5 s', async () => {
+      const entry = { client: null, stopped: false };
+      (service as any).connections.set(TENANT_ID, entry);
+      (service as any).connectAndWatch = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('caída 1'))
+        .mockRejectedValueOnce(new Error('caída 2'))
+        .mockResolvedValueOnce(undefined) // conexión limpia (MAX_CONNECTION_AGE_MS)
+        .mockRejectedValueOnce(new Error('caída 3'));
+      const delays: number[] = [];
+      (service as any).sleep = jest.fn(async (ms: number) => {
+        delays.push(ms);
+        if (delays.length === 3) entry.stopped = true;
+      });
+
+      await (service as any).runForTenant(TENANT_ID, cfg);
+
+      expect(delays).toEqual([5_000, 10_000, 5_000]);
+    });
+
+    it('onModuleDestroy detiene todos los ciclos y un logout fallido no lanza (el proceso está terminando)', async () => {
+      const entry = { client: { logout: jest.fn().mockRejectedValue(new Error('socket cerrado')) }, stopped: false };
+      (service as any).connections.set(TENANT_ID, entry);
+
+      await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+
+      expect(entry.stopped).toBe(true);
+      expect(entry.client.logout).toHaveBeenCalled();
+    });
+  });
+
   describe('readConfig — no debe autoconectar salvo configuración explícita real+enabled', () => {
     const tenant = (integrationConfig: unknown) => ({ id: TENANT_ID, integrationConfig } as Tenant);
 
