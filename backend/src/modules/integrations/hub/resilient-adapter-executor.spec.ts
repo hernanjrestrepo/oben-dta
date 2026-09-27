@@ -84,20 +84,42 @@ describe('ResilientAdapterExecutor', () => {
   });
 
   it('respeta el timeout configurado sin esperar toda la latencia simulada', async () => {
-    const scenarios = fakeScenarioProvider(() => ({ behavior: 'latency', latencyMs: 2000 }));
-    const adapter = new EmailMockAdapter(scenarios);
-    const { executor } = makeExecutor();
+    // Timers falsos: el `sleep(2000)` del escenario de latencia NO se puede
+    // cancelar (una promesa de JS no se cancela) y antes seguía armado ~1.9 s
+    // después de terminar el test — si este archivo era de los últimos de su
+    // worker, Jest no podía cerrarlo ("A worker process has failed to exit
+    // gracefully", intermitente). Ahora se drena dentro del propio test.
+    jest.useFakeTimers();
+    try {
+      const scenarios = fakeScenarioProvider(() => ({ behavior: 'latency', latencyMs: 2000 }));
+      const adapter = new EmailMockAdapter(scenarios);
+      const inFlight: Array<Promise<unknown>> = [];
+      const execute = adapter.execute.bind(adapter);
+      jest.spyOn(adapter, 'execute').mockImplementation((...args: Parameters<typeof execute>) => {
+        const call = execute(...args);
+        inFlight.push(call);
+        return call;
+      });
+      const { executor } = makeExecutor();
 
-    const started = Date.now();
-    const result = await executor.execute(
-      adapter, 'send', { to: 'a@b.com', subject: 'x' }, CTX,
-      { maxAttempts: 1, timeoutMs: 100 },
-    );
-    const elapsed = Date.now() - started;
+      const pending = executor.execute(
+        adapter, 'send', { to: 'a@b.com', subject: 'x' }, CTX,
+        { maxAttempts: 1, timeoutMs: 100 },
+      );
+      await jest.advanceTimersByTimeAsync(100);
+      const result = await pending;
 
-    expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/timeout/);
-    expect(elapsed).toBeLessThan(1000); // muy por debajo de los 2000ms simulados
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/timeout/);
+      // Respondió a los 100 ms: la latencia simulada de 2000 ms sigue pendiente.
+      expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+      await jest.advanceTimersByTimeAsync(2000);
+      await Promise.all(inFlight);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('circuito medio-abierto: tras el cooldown, deja pasar un intento de prueba', async () => {
