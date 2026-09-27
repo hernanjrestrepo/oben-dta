@@ -61,23 +61,42 @@ class ObenSim {
   }
 }
 
-/** Misma semántica que IdempotencyService real (claim atómico, estados, resultado). */
+/** Misma semántica que IdempotencyService real (claim atómico, estados, resultado, reanudación atómica). */
+type Row = { status: 'processing' | 'completed' | 'failed'; result?: unknown; error?: string; updatedAt: number };
 class FakeIdempotency {
-  rows = new Map<string, { status: 'processing' | 'completed' | 'failed'; result?: unknown; error?: string }>();
+  rows = new Map<string, Row>();
   async claim(_t: string, _e: string, key: string) {
     const ex = this.rows.get(key);
     if (ex) return { claimed: false, existingStatus: ex.status, existingResult: ex.result };
-    this.rows.set(key, { status: 'processing' });
+    this.rows.set(key, { status: 'processing', updatedAt: Date.now() });
     return { claimed: true };
   }
   async saveProgress(_t: string, key: string, result: unknown) {
-    this.rows.get(key)!.result = JSON.parse(JSON.stringify(result));
+    this.touch(key, { result: JSON.parse(JSON.stringify(result)) });
   }
   async markCompleted(_t: string, key: string, result: unknown) {
-    Object.assign(this.rows.get(key)!, { status: 'completed', result: JSON.parse(JSON.stringify(result)) });
+    this.touch(key, { status: 'completed', result: JSON.parse(JSON.stringify(result)) });
   }
   async markFailed(_t: string, key: string, error: string) {
-    Object.assign(this.rows.get(key)!, { status: 'failed', error });
+    this.touch(key, { status: 'failed', error });
+  }
+  async reclaimFailed(_t: string, key: string) {
+    if (this.rows.get(key)?.status !== 'failed') return false;
+    this.touch(key, { status: 'processing', error: undefined });
+    return true;
+  }
+  async reclaimStale(_t: string, key: string, staleBefore: Date) {
+    const row = this.rows.get(key);
+    if (row?.status !== 'processing' || row.updatedAt >= staleBefore.getTime()) return false;
+    this.touch(key, {});
+    return true;
+  }
+  /** Simula una liquidación que quedó en 'processing' porque el proceso murió a mitad. */
+  seedInterrupted(key: string, progress: unknown, minutesAgo: number) {
+    this.rows.set(key, { status: 'processing', result: progress, updatedAt: Date.now() - minutesAgo * 60_000 });
+  }
+  private touch(key: string, patch: Partial<Row>) {
+    Object.assign(this.rows.get(key)!, patch, { updatedAt: Date.now() });
   }
 }
 
@@ -333,6 +352,186 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       sim.failOn('liquidacion.crearEncabezado', 1, 'HTTP 400: NumberPF ya liquidada');
       await expect(service.submit('11271', usaInput(), { confirm: true })).rejects.toThrow(/ya liquidada/);
       expect(sim.details).toHaveLength(0);
+    });
+  });
+
+  describe('reanudación: concurrencia, reinicios y fallos ambiguos', () => {
+    it('dos reanudaciones SIMULTÁNEAS de la misma PF → solo una escribe (antes ambas recreaban lo pendiente)', async () => {
+      const { service, sim } = build();
+      sim.failOn('liquidacion.crearDetalle', 2, 'HTTP 500: Error en el SP');
+      await expect(service.submit('99001', usaInput(), { confirm: true })).rejects.toThrow(BadRequestException);
+
+      const [a, b] = await Promise.allSettled([
+        service.submit('99001', usaInput(), { confirm: true, resume: true }),
+        service.submit('99001', usaInput(), { confirm: true, resume: true }),
+      ]);
+
+      expect([a.status, b.status].sort()).toEqual(['fulfilled', 'rejected']);
+      const rejected = [a, b].find((x) => x.status === 'rejected') as PromiseRejectedResult;
+      expect(rejected.reason).toBeInstanceOf(ConflictException);
+      expect(sim.heads).toHaveLength(1);
+      expect(sim.details.map((d) => d.codSecLineFilm)).toEqual([1, 2]); // la línea 2 una sola vez
+    });
+
+    it('el avance (id del encabezado) se persiste ANTES de crear los detalles, y el fallo queda con lastError/ambiguous', async () => {
+      const { service, sim, idem } = build();
+      sim.failOn('liquidacion.crearDetalle', 1, 'timeout: sin respuesta tras 60000ms');
+
+      await expect(service.submit('11271', usaInput(), { confirm: true })).rejects.toThrow(BadRequestException);
+
+      expect(idem.rows.get('liquidacion:11271')).toMatchObject({
+        status: 'failed',
+        result: { headId: 5000, detailsDone: [], ambiguous: true, lastError: expect.stringContaining('línea 113') },
+      });
+    });
+
+    it('timeout en un detalle que SÍ quedó creado en Oben: detailsDone lo cierra sin duplicarlo', async () => {
+      const { service, sim } = build();
+      sim.failOn('liquidacion.crearDetalle', 2, 'timeout: sin respuesta tras 60000ms');
+      await expect(service.submit('99001', usaInput(), { confirm: true })).rejects.toThrow(BadRequestException);
+      const writesBefore = sim.writes().length;
+
+      const res = await service.submit('99001', usaInput(), {
+        confirm: true,
+        resume: true,
+        acknowledgeAmbiguous: true,
+        detailsDone: [2],
+      });
+
+      expect(res).toMatchObject({ headId: 5000, detailsCreated: 2 });
+      expect(sim.writes()).toHaveLength(writesBefore); // no se llamó a Oben otra vez
+    });
+
+    it('detailsDone con una línea que no es de la PF se rechaza antes de tocar la idempotencia', async () => {
+      const { service, sim, idem } = build();
+      sim.failOn('liquidacion.crearDetalle', 1, 'HTTP 500: Error en el SP');
+      await expect(service.submit('11271', usaInput(), { confirm: true })).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.submit('11271', usaInput(), { confirm: true, resume: true, detailsDone: [999] }),
+      ).rejects.toThrow(/no son de la PF 11271/);
+      expect(idem.rows.get('liquidacion:11271')?.status).toBe('failed');
+    });
+
+    it.each([{ headId: 5000 }, { detailsDone: [113] }])(
+      'en un primer envío (sin resume) %j se rechaza: declararía como existente algo que nunca se creó',
+      async (extra) => {
+        const { service, sim, idem } = build();
+        await expect(service.submit('11271', usaInput(), { confirm: true, ...extra })).rejects.toThrow(/resume:true/);
+        expect(sim.writes()).toHaveLength(0);
+        expect(idem.rows.size).toBe(0);
+      },
+    );
+
+    it('proceso muerto a mitad (reinicio): sin resume+acknowledgeAmbiguous sigue bloqueada, con ellos retoma sin duplicar', async () => {
+      const { service, sim, idem } = build();
+      idem.seedInterrupted('liquidacion:99001', { headId: 5000, detailsDone: [1] }, 30);
+
+      await expect(service.submit('99001', usaInput(), { confirm: true })).rejects.toThrow(/reinicio/);
+      await expect(service.submit('99001', usaInput(), { confirm: true, resume: true })).rejects.toThrow(ConflictException);
+      expect(sim.writes()).toHaveLength(0);
+
+      const res = await service.submit('99001', usaInput(), { confirm: true, resume: true, acknowledgeAmbiguous: true });
+
+      expect(res).toMatchObject({ headId: 5000, detailsCreated: 2 });
+      expect(sim.heads).toHaveLength(0); // el encabezado ya existía
+      expect(sim.details.map((d) => [d.codSecLineFilm, d.codSecInvoiceDataComexHead])).toEqual([[2, 5000]]);
+      expect(idem.rows.get('liquidacion:99001')?.status).toBe('completed');
+    });
+
+    it('una liquidación en processing CON avance reciente no se puede "retomar": podría estar corriendo ahora mismo', async () => {
+      const { service, sim, idem } = build();
+      idem.seedInterrupted('liquidacion:99001', { headId: 5000, detailsDone: [1] }, 1);
+
+      await expect(
+        service.submit('99001', usaInput(), { confirm: true, resume: true, acknowledgeAmbiguous: true }),
+      ).rejects.toThrow(/hubo avance/);
+      expect(sim.writes()).toHaveLength(0);
+    });
+
+    it('timeout en el ENCABEZADO: resume exige acknowledgeAmbiguous; con headId no se crea un segundo encabezado', async () => {
+      const { service, sim } = build();
+      sim.failOn('liquidacion.crearEncabezado', 1, 'timeout: sin respuesta tras 60000ms');
+      await expect(service.submit('11271', usaInput(), { confirm: true })).rejects.toThrow(BadRequestException);
+
+      await expect(service.submit('11271', usaInput(), { confirm: true, resume: true })).rejects.toThrow(/ambiguo/);
+      const res = await service.submit('11271', usaInput(), { confirm: true, resume: true, acknowledgeAmbiguous: true, headId: 7777 });
+
+      expect(res).toMatchObject({ headId: 7777, detailsCreated: 1 });
+      expect(sim.writes().filter((w) => w.op === 'liquidacion.crearEncabezado')).toHaveLength(1); // solo el intento original
+      expect(sim.details[0].codSecInvoiceDataComexHead).toBe(7777);
+    });
+
+    it.each([
+      ['HTTP 504: Gateway Time-out', true],
+      ['HTTP 502: Bad Gateway', true],
+      ['TypeError: fetch failed', true],
+      ['This operation was aborted', true],
+      ['HTTP 500: Error en el SP', false],
+      ['HTTP 400: NumberPF ya liquidada', false],
+      ['circuit_open: demasiados fallos consecutivos', false],
+    ])('error %j → ambiguo=%s', async (error, ambiguous) => {
+      const { service, sim, idem } = build();
+      sim.failOn('liquidacion.crearDetalle', 1, error);
+      await expect(service.submit('11271', usaInput(), { confirm: true })).rejects.toThrow(BadRequestException);
+      expect((idem.rows.get('liquidacion:11271')?.result as { ambiguous: boolean }).ambiguous).toBe(ambiguous);
+    });
+
+    it('una excepción inesperada del hub se trata como ambigua (no se sabe qué llegó a Oben)', async () => {
+      const { service, sim, idem } = build();
+      const original = sim.call.bind(sim);
+      sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) => {
+        if (op === 'liquidacion.crearDetalle') throw new Error('boom');
+        return original(system, op, args, options);
+      };
+
+      await expect(service.submit('11271', usaInput(), { confirm: true })).rejects.toThrow(/boom/);
+      expect(idem.rows.get('liquidacion:11271')).toMatchObject({ status: 'failed', result: { ambiguous: true } });
+    });
+
+    it('una PF ya completada devuelve alreadyDone aunque se pida resume (nunca reescribe)', async () => {
+      const { service, sim } = build();
+      await service.submit('11271', usaInput(), { confirm: true });
+      const before = sim.writes().length;
+
+      const res = await service.submit('11271', usaInput(), { confirm: true, resume: true, acknowledgeAmbiguous: true, headId: 1 });
+
+      expect(res).toMatchObject({ alreadyDone: true, headId: 5000 });
+      expect(sim.writes()).toHaveLength(before);
+    });
+  });
+
+  describe('datos de Oben que no son números reales', () => {
+    it.each([[null], [''], ['abc'], [true]])('Precio=%j → error claro, NUNCA un precio 0', async (precio) => {
+      const { service, sim } = build();
+      const original = sim.call.bind(sim);
+      sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) =>
+        op === 'liquidacion.consultar'
+          ? { ok: true, data: { ...(CHECK['11271'] as object), Detalle: [{ CodSed_LineFilm: 113, TipoPelicula: 'X', Precio: precio, KilosTotales: 10 }] } }
+          : original(system, op, args, options);
+
+      await expect(service.getDraft('11271')).rejects.toThrow(/Línea de liquidación inválida/);
+    });
+
+    it('números que llegan como string se aceptan', async () => {
+      const { service, sim } = build();
+      const original = sim.call.bind(sim);
+      sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) =>
+        op === 'liquidacion.consultar'
+          ? { ok: true, data: { ...(CHECK['11271'] as object), Detalle: [{ CodSed_LineFilm: '113', TipoPelicula: 'X', Precio: '2.827', KilosTotales: '1339.42' }] } }
+          : original(system, op, args, options);
+
+      const draft = await service.getDraft('11271');
+      expect(draft.lines[0]).toMatchObject({ codSecLineFilm: 113, valueFOB: 3786.54 });
+    });
+
+    it('un cargo de USA digitado como texto no cuenta como valor (no se manda "110" a Oben)', async () => {
+      const { service } = build();
+      const draft = await service.getDraft('11271', {
+        header: { ...HEADER_USER, ...USA_CHARGES, inlandFreight: '900' as unknown as number },
+      });
+      expect(draft.missing).toContain('Encabezado (destino USA) — Inland Freight');
+      expect(draft.readyToSubmit).toBe(false);
     });
   });
 

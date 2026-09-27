@@ -86,8 +86,14 @@ export interface LiquidacionSubmitOptions {
   resume?: boolean;
   /** El usuario verificó en Oben el estado de una llamada ambigua (timeout) y asume el riesgo de reintentar. */
   acknowledgeAmbiguous?: boolean;
-  /** Si el encabezado ya existe en Oben pero no pudimos leer su id, se indica a mano. */
+  /** Si el encabezado ya existe en Oben pero no pudimos leer su id, se indica a mano. Solo con `resume`. */
   headId?: number;
+  /**
+   * Líneas (`codSecLineFilm`) cuyo detalle el usuario verificó que YA existe
+   * en Oben tras un fallo ambiguo — no se vuelven a crear (Oben no permite
+   * borrar un duplicado). Solo con `resume`.
+   */
+  detailsDone?: number[];
 }
 
 /** Avance persistido por PF (en idempotency_records.result) — permite no duplicar el encabezado ni los detalles. */

@@ -105,3 +105,43 @@ describe('IdempotencyService.claim / markCompleted / markFailed', () => {
     expect(b.claimed).toBe(true);
   });
 });
+
+describe('IdempotencyService.reclaimFailed / reclaimStale (reanudación atómica)', () => {
+  function withUpdate(affected: number) {
+    const update = jest.fn().mockResolvedValue({ affected });
+    return { service: new IdempotencyService({ update } as never), update };
+  }
+
+  it('reclaimFailed solo toma la fila si sigue en failed (UPDATE condicionado) y limpia el error', async () => {
+    const { service, update } = withUpdate(1);
+
+    await expect(service.reclaimFailed('t1', 'liquidacion:11271')).resolves.toBe(true);
+
+    expect(update).toHaveBeenCalledWith(
+      { tenantId: 't1', key: 'liquidacion:11271', status: IdempotencyStatus.FAILED },
+      { status: IdempotencyStatus.PROCESSING, error: null },
+    );
+  });
+
+  it('reclaimFailed → false si otra solicitud ya la tomó (0 filas afectadas)', async () => {
+    const { service } = withUpdate(0);
+    await expect(service.reclaimFailed('t1', 'k')).resolves.toBe(false);
+  });
+
+  it('reclaimStale solo toma una fila processing SIN avance desde el corte', async () => {
+    const { service, update } = withUpdate(1);
+    const cutoff = new Date('2026-09-27T10:00:00Z');
+
+    await expect(service.reclaimStale('t1', 'k', cutoff)).resolves.toBe(true);
+
+    const [where, patch] = update.mock.calls[0];
+    expect(where).toMatchObject({ tenantId: 't1', key: 'k', status: IdempotencyStatus.PROCESSING });
+    expect(where.updatedAt).toMatchObject({ type: 'lessThan', value: cutoff });
+    expect(patch).toEqual({ status: IdempotencyStatus.PROCESSING });
+  });
+
+  it('reclaimStale → false si hubo avance reciente (liquidación viva)', async () => {
+    const { service } = withUpdate(0);
+    await expect(service.reclaimStale('t1', 'k', new Date())).resolves.toBe(false);
+  });
+});

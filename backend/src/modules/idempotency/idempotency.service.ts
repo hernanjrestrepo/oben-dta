@@ -125,6 +125,34 @@ export class IdempotencyService {
     await this.repo.update({ tenantId, key }, { result: result as object });
   }
 
+  /**
+   * Retoma una clave en 'failed' pasándola a 'processing' de forma atómica
+   * (`UPDATE ... WHERE status='failed'`): si dos reanudaciones llegan a la
+   * vez, solo una ve `true` — la otra no debe ejecutar nada. Ver
+   * LiquidacionService (resume).
+   */
+  async reclaimFailed(tenantId: string, key: string): Promise<boolean> {
+    const res = await this.repo.update(
+      { tenantId, key, status: IdempotencyStatus.FAILED },
+      { status: IdempotencyStatus.PROCESSING, error: null },
+    );
+    return (res.affected ?? 0) > 0;
+  }
+
+  /**
+   * Retoma una clave que quedó en 'processing' sin ningún avance desde
+   * `staleBefore` (el proceso murió a mitad — p. ej. un redeploy). Igual de
+   * atómico que `reclaimFailed`: el UPDATE refresca `updated_at`, así que un
+   * segundo intento concurrente ya no la encuentra vieja.
+   */
+  async reclaimStale(tenantId: string, key: string, staleBefore: Date): Promise<boolean> {
+    const res = await this.repo.update(
+      { tenantId, key, status: IdempotencyStatus.PROCESSING, updatedAt: LessThan(staleBefore) },
+      { status: IdempotencyStatus.PROCESSING },
+    );
+    return (res.affected ?? 0) > 0;
+  }
+
   async markFailed(tenantId: string, key: string, error: string): Promise<void> {
     await this.repo.update(
       { tenantId, key },

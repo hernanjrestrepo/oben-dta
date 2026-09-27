@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsInt, IsObject, IsOptional } from 'class-validator';
+import { IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsPositive } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
@@ -32,7 +32,13 @@ class LiquidacionInputDto {
 
   @IsOptional()
   @IsInt()
+  @IsPositive()
   headId?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  detailsDone?: number[];
 }
 
 /**
@@ -71,6 +77,7 @@ export class LiquidacionController {
         resume: dto.resume,
         acknowledgeAmbiguous: dto.acknowledgeAmbiguous,
         headId: dto.headId,
+        detailsDone: dto.detailsDone,
       },
     );
   }

@@ -28,6 +28,15 @@ const IDEMPOTENCY_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000;
  * no sabemos borrar. Mismo criterio que el envío de correos.
  */
 const WRITE_OPTIONS = { maxAttempts: 1, timeoutMs: 60_000 };
+/**
+ * Una liquidación en 'processing' sin ningún avance guardado en este tiempo
+ * se considera interrumpida (el proceso murió a mitad — p. ej. un redeploy,
+ * que reinicia `dta-backend`). Entre dos guardados de avance solo hay una
+ * escritura (≤ WRITE_OPTIONS.timeoutMs), así que 10 minutos no confunde una
+ * liquidación viva con una muerta. Nunca se retoma sola: exige resume +
+ * acknowledgeAmbiguous (la escritura en curso pudo haber llegado a Oben).
+ */
+const STALE_PROCESSING_MS = 10 * 60_000;
 
 const HEADER_REQUIRED: Array<[keyof LiquidacionHeaderValues, string]> = [
   ['direccion', 'Dirección'],
@@ -64,6 +73,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const isUSA = (pais: string | null) =>
   !!pais && /^(usa|us|u\.s\.a?\.?|united states|estados unidos|eeuu)\b/i.test(pais.trim());
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+/** Número desde la respuesta de Oben: `Number(null)`/`Number('')` darían 0 — un precio o kilos ausente NO es 0. */
+const toNum = (v: unknown): number =>
+  typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
 
 class LiquidacionStepError extends Error {
   constructor(
@@ -110,10 +122,10 @@ export class LiquidacionService {
     if (!pais) missing.push('País de destino: no se pudo resolver desde la orden de venta.');
 
     const baseLines = check.Detalle.map((l) => {
-      const kilos = Number(l.KilosTotales);
-      const precio = Number(l.Precio);
+      const kilos = toNum(l.KilosTotales);
+      const precio = toNum(l.Precio);
       return {
-        codSecLineFilm: Number(l.CodSed_LineFilm),
+        codSecLineFilm: toNum(l.CodSed_LineFilm),
         tipoPelicula: l.TipoPelicula,
         precio,
         kilosTotal: kilos,
@@ -137,7 +149,8 @@ export class LiquidacionService {
     }
     if (esUSA) {
       for (const [key, label] of HEADER_REQUIRED_USA) {
-        if (header[key] === undefined || header[key] === null) {
+        // Son montos: un texto ("110", "") tampoco sirve para enviarlo a Oben.
+        if (!isNum(header[key])) {
           missing.push(`Encabezado (destino USA) — ${label}`);
         }
       }
@@ -190,6 +203,19 @@ export class LiquidacionService {
       return { dryRun: true, numberPF: draft.numberPF, payloads };
     }
 
+    // headId/detailsDone declaran que algo YA existe en Oben: solo tienen
+    // sentido al reanudar una liquidación a medias, nunca en un primer envío.
+    if (!options.resume && (options.headId !== undefined || options.detailsDone !== undefined)) {
+      throw new BadRequestException('headId y detailsDone solo se aceptan al reanudar (resume:true) una liquidación a medias.');
+    }
+    const lineIds = draft.lines.map((l) => l.codSecLineFilm);
+    const foreign = (options.detailsDone ?? []).filter((id) => !lineIds.includes(id));
+    if (foreign.length > 0) {
+      throw new BadRequestException(
+        `detailsDone trae líneas que no son de la PF ${draft.numberPF}: ${foreign.join(', ')} (líneas válidas: ${lineIds.join(', ')}).`,
+      );
+    }
+
     const tenantId = this.ctx.tenantId;
     const key = `liquidacion:${draft.numberPF}`;
     let progress: LiquidacionProgress = { headId: null, detailsDone: [] };
@@ -204,27 +230,51 @@ export class LiquidacionService {
           headId: claim.existingResult?.headId ?? undefined,
         };
       }
-      if (claim.existingStatus === 'processing') {
-        throw new ConflictException(`La PF ${draft.numberPF} ya se está liquidando en este momento.`);
-      }
-      // failed → solo se continúa con resume explícito
       const prev = claim.existingResult ?? { headId: null, detailsDone: [] };
-      if (!options.resume) {
-        throw new ConflictException({
-          message: `La PF ${draft.numberPF} tiene una liquidación a medias. Verifica en Oben y reintenta con resume:true.`,
-          progress: prev,
-        });
+      if (claim.existingStatus === 'processing') {
+        // O está corriendo ahora mismo, o el proceso murió a mitad (reinicio)
+        // y quedaría bloqueada para siempre. Solo se retoma si el usuario lo
+        // pide explícitamente Y no hubo avance en STALE_PROCESSING_MS.
+        if (!options.resume || !options.acknowledgeAmbiguous) {
+          throw new ConflictException({
+            message: `La PF ${draft.numberPF} ya se está liquidando en este momento. Si el proceso se interrumpió (p. ej. un reinicio del servicio), espera ${STALE_PROCESSING_MS / 60_000} minutos, verifica en Oben qué quedó creado y reintenta con resume:true y acknowledgeAmbiguous:true.`,
+            progress: prev,
+          });
+        }
+        const reclaimed = await this.idempotency.reclaimStale(tenantId, key, new Date(Date.now() - STALE_PROCESSING_MS));
+        if (!reclaimed) {
+          throw new ConflictException({
+            message: `La PF ${draft.numberPF} ya se está liquidando en este momento (hubo avance hace menos de ${STALE_PROCESSING_MS / 60_000} minutos).`,
+            progress: prev,
+          });
+        }
+      } else {
+        // failed → solo se continúa con resume explícito
+        if (!options.resume) {
+          throw new ConflictException({
+            message: `La PF ${draft.numberPF} tiene una liquidación a medias. Verifica en Oben y reintenta con resume:true.`,
+            progress: prev,
+          });
+        }
+        if (prev.ambiguous && !options.acknowledgeAmbiguous) {
+          throw new ConflictException({
+            message:
+              'El último fallo fue ambiguo (timeout/red): el registro pudo haberse creado en Oben. Verifica allí y reintenta con acknowledgeAmbiguous:true (y headId si el encabezado ya existe, o detailsDone con las líneas cuyo detalle ya existe).',
+            progress: prev,
+          });
+        }
+        // Atómico: dos reanudaciones simultáneas no pueden correr ambas (cada
+        // una crearía el encabezado/detalles pendientes → duplicados en Oben).
+        if (!(await this.idempotency.reclaimFailed(tenantId, key))) {
+          throw new ConflictException(`Otra solicitud ya está reanudando la PF ${draft.numberPF} en este momento.`);
+        }
       }
-      if (prev.ambiguous && !options.acknowledgeAmbiguous) {
-        throw new ConflictException({
-          message:
-            'El último fallo fue ambiguo (timeout/red): el registro pudo haberse creado en Oben. Verifica allí y reintenta con acknowledgeAmbiguous:true (y headId si el encabezado ya existe).',
-          progress: prev,
-        });
-      }
-      progress = { ...prev, ambiguous: false };
+      progress = { ...prev, detailsDone: [...(prev.detailsDone ?? [])], ambiguous: false };
     }
     if (options.headId !== undefined) progress.headId = options.headId;
+    for (const id of options.detailsDone ?? []) {
+      if (!progress.detailsDone.includes(id)) progress.detailsDone.push(id);
+    }
 
     await this.audit.log({
       workflowName: WORKFLOW_NAME,
@@ -357,7 +407,7 @@ export class LiquidacionService {
       );
     }
     for (const l of d.Detalle) {
-      if (!isNum(Number(l.CodSed_LineFilm)) || !isNum(Number(l.KilosTotales)) || !isNum(Number(l.Precio))) {
+      if (!isNum(toNum(l.CodSed_LineFilm)) || !isNum(toNum(l.KilosTotales)) || !isNum(toNum(l.Precio))) {
         throw new BadRequestException(`Línea de liquidación inválida para la PF ${pf}: ${JSON.stringify(l).slice(0, 200)}`);
       }
     }
@@ -396,8 +446,13 @@ export class LiquidacionService {
     return scan(data);
   }
 
+  /**
+   * ¿Pudo la escritura haber llegado a Oben pese al error? Timeouts/cortes de
+   * red, y también 502/504 de un proxy intermedio (el backend de Oben pudo
+   * haber terminado de procesar aunque el proxy se rindiera).
+   */
   private isAmbiguous(error?: string): boolean {
-    return /timeout|timed out|econnreset|econnrefused|socket|network|fetch failed|abort/i.test(error ?? '');
+    return /timeout|time-out|timed out|econnreset|econnrefused|socket|network|fetch failed|abort|\bHTTP 50[24]\b/i.test(error ?? '');
   }
 
   private isBlank(v: unknown): boolean {
