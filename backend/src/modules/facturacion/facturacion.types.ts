@@ -33,7 +33,8 @@ export interface FacturacionDraft {
   ordenCompra: string | null;
   contenedor: string | null;
   codigoMaterial: string | null;
-  kind: FacturacionKind;
+  /** null = no se puede clasificar: Oben no trajo el país (nunca se asume Exportación ni Nacional). */
+  kind: FacturacionKind | null;
   direccionEntrega: string | null;
   /** De dónde salió la dirección — nunca se adivina; solo se usa si viene del maestro de clientes o la digitó el usuario. */
   direccionFuente: 'maestro_clientes' | 'digitada' | null;

@@ -23,6 +23,11 @@ const WORKFLOW_NAME = 'facturacion';
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const isColombia = (pais: string | null) => !!pais && /^col(ombia)?\b/i.test(pais.trim());
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+/** Número desde la respuesta de Oben: `Number(null)`/`Number('')` darían 0 — un precio o kilos ausente NO es 0. */
+const toNum = (v: unknown): number =>
+  typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+/** ILIKE sin comodines: `%`/`_` en el nombre del cliente no deben emparejar a otro cliente. */
+const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 interface EmpaqueUnificadaHeader {
   Cliente: string;
@@ -70,10 +75,18 @@ export class FacturacionService {
     const proforma = header?.Proforma?.trim() || null;
 
     if (!header) missing.push('Datos del pedido: no se pudo consultar spEmpaqueUnificada_Paradixe en Oben.');
-    if (header && !pais) missing.push('País de destino: la respuesta de Oben no lo trae.');
+    if (header && !pais) {
+      missing.push('País de destino: la respuesta de Oben no lo trae — sin él no se puede clasificar Exportación/Nacional.');
+    }
     if (header && !proforma) missing.push('Proforma: la respuesta de Oben no la trae — sin ella no se pueden traer precios por película.');
 
-    const kind: FacturacionKind = isColombia(pais) ? (input.parcial ? 'nacional_parcial' : 'nacional_completo') : 'exportacion';
+    const kind: FacturacionKind | null = !pais
+      ? null
+      : isColombia(pais)
+        ? input.parcial
+          ? 'nacional_parcial'
+          : 'nacional_completo'
+        : 'exportacion';
 
     let lines: FacturacionLine[] = [];
     if (proforma) {
@@ -82,10 +95,10 @@ export class FacturacionService {
         missing.push(`Precios por película: no se pudo consultar spCheckSettlement_Paradixe para la Proforma ${proforma}.`);
       } else {
         lines = check.Detalle.map((l) => {
-          const precio = Number(l.Precio);
-          const kilosTotal = Number(l.KilosTotales);
+          const precio = toNum(l.Precio);
+          const kilosTotal = toNum(l.KilosTotales);
           return {
-            codSecLineFilm: Number(l.CodSed_LineFilm),
+            codSecLineFilm: toNum(l.CodSed_LineFilm),
             tipoPelicula: l.TipoPelicula,
             precio,
             kilosTotal,
@@ -97,15 +110,26 @@ export class FacturacionService {
 
     let direccionEntrega: string | null = input.direccionEntrega?.trim() || null;
     let direccionFuente: FacturacionDraft['direccionFuente'] = direccionEntrega ? 'digitada' : null;
+    let direccionAmbigua = false;
     if (!direccionEntrega && cliente) {
-      const match = await this.clients.findOne({ where: { tenantId: this.ctx.tenantId, name: ILike(cliente) } });
-      if (match?.address) {
-        direccionEntrega = match.address;
+      // Hasta 2 filas: si el nombre coincide con más de un cliente del maestro,
+      // elegir uno sería adivinar la dirección.
+      const matches = await this.clients.find({
+        where: { tenantId: this.ctx.tenantId, name: ILike(escapeLike(cliente)) },
+        take: 2,
+      });
+      direccionAmbigua = matches.length > 1;
+      if (matches.length === 1 && matches[0].address?.trim()) {
+        direccionEntrega = matches[0].address.trim();
         direccionFuente = 'maestro_clientes';
       }
     }
     if (kind === 'exportacion' && !direccionEntrega) {
-      missing.push('Dirección de entrega: sin fuente de datos confirmada (pendiente por definir con Oben) — requerida para Exportación.');
+      missing.push(
+        direccionAmbigua
+          ? `Dirección de entrega: hay más de un cliente "${cliente}" en el maestro de clientes — no se elige uno a ciegas; digítala.`
+          : 'Dirección de entrega: sin fuente de datos confirmada (pendiente por definir con Oben) — requerida para Exportación.',
+      );
     }
 
     const totalValor = round2(lines.reduce((a, l) => a + l.valorLinea, 0));
@@ -154,8 +178,11 @@ export class FacturacionService {
    */
   async send(numberOrderSales: number, input: FacturacionInput = {}, force = false): Promise<FacturacionSendResult> {
     if (!force) {
+      // Un intento FALLIDO también se audita como 'facturacion_enviada' (con
+      // ok:false): no cuenta como envío — si no, un fallo de SMTP bloqueaba el
+      // reintento con un "ya se envió" falso.
       const events = await this.audit.listForEntity('facturacion', String(numberOrderSales));
-      if (events.some((e) => e.action === 'facturacion_enviada')) {
+      if (events.some((e) => e.action === 'facturacion_enviada' && e.outputData?.ok !== false)) {
         throw new ConflictException(
           `Ya se envió un documento de facturación para la orden ${numberOrderSales}. Usa force:true si de verdad quieres reenviarlo.`,
         );
@@ -229,7 +256,7 @@ export class FacturacionService {
     const d = res.data as Partial<CheckSettlementResponse> | null | undefined;
     if (!d || typeof d !== 'object' || !Array.isArray(d.Detalle) || d.Detalle.length === 0) return null;
     for (const l of d.Detalle) {
-      if (!isNum(Number(l.CodSed_LineFilm)) || !isNum(Number(l.KilosTotales)) || !isNum(Number(l.Precio))) return null;
+      if (!isNum(toNum(l.CodSed_LineFilm)) || !isNum(toNum(l.KilosTotales)) || !isNum(toNum(l.Precio))) return null;
     }
     return d as CheckSettlementResponse;
   }

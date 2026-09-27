@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
-import type { FacturacionDraft } from './facturacion.types';
+import type { FacturacionDraft, FacturacionKind } from './facturacion.types';
 
 const PAGE_MARGIN = 36;
 const PAGE_WIDTH = 612; // letter, points
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
 
-const KIND_LABEL: Record<FacturacionDraft['kind'], string> = {
+const KIND_LABEL: Record<FacturacionKind, string> = {
   exportacion: 'Pedido de Exportación',
   nacional_completo: 'Pedido Nacional — Despacho Completo',
   nacional_parcial: 'Pedido Nacional — Despacho Parcial',
@@ -57,7 +57,7 @@ export class FacturacionPdfService {
       width: CONTENT_WIDTH,
       align: 'center',
     });
-    doc.font('Helvetica').fontSize(9).fillColor('#666666').text(KIND_LABEL[draft.kind], PAGE_MARGIN, doc.y, {
+    doc.font('Helvetica').fontSize(9).fillColor('#666666').text(draft.kind ? KIND_LABEL[draft.kind] : 'Tipo de pedido sin clasificar (falta el país)', PAGE_MARGIN, doc.y, {
       width: CONTENT_WIDTH,
       align: 'center',
     });
