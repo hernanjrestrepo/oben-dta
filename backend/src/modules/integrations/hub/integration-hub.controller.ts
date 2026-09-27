@@ -56,8 +56,13 @@ export class IntegrationHubController {
     return this.hub.capabilities(system as IntegrationSystem);
   }
 
+  /**
+   * Ejecuta CUALQUIER operación de cualquier sistema — incluidas escrituras
+   * reales (email.send, escrituras al ERP de Oben). No puede quedar bajo un
+   * permiso de solo lectura (`integrations.read` lo tiene `tenant.viewer`).
+   */
   @Post('execute')
-  @RequirePermission('integrations.read')
+  @RequirePermission('integrations.update')
   execute(@Body() dto: ExecuteDto) {
     this.assertSystem(dto?.system);
     if (!dto.operation) {

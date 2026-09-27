@@ -37,16 +37,27 @@ describe('PackingListController', () => {
       const result = await controller.getByOrderNumber('10794');
 
       expect(result).toEqual(SAMPLE_DATA);
-      expect(hubCall).toHaveBeenCalledWith('obenCostOrder', 'query.run', {
-        procedure: 'spPackingListUSA_Paradixe',
-        numberOrderSales: 10794,
-      });
+      // Lectura contra la API real de Oben: OBEN_QUERY_OPTIONS (sin reintentos
+      // automáticos — la API no soporta llamadas concurrentes).
+      expect(hubCall).toHaveBeenCalledWith(
+        'obenCostOrder',
+        'query.run',
+        { procedure: 'spPackingListUSA_Paradixe', numberOrderSales: 10794 },
+        { maxAttempts: 1, timeoutMs: 30_000 },
+      );
     });
 
     it('rechaza un numberOrderSales inválido sin llamar al hub', async () => {
       const hubCall = jest.fn();
       const { controller } = makeController(hubCall);
       await expect(controller.getByOrderNumber('abc')).rejects.toThrow(BadRequestException);
+      expect(hubCall).not.toHaveBeenCalled();
+    });
+
+    it('rechaza un número de orden no entero (antes 10794.5 llegaba a Oben)', async () => {
+      const hubCall = jest.fn();
+      const { controller } = makeController(hubCall);
+      await expect(controller.getByOrderNumber('10794.5')).rejects.toThrow(BadRequestException);
       expect(hubCall).not.toHaveBeenCalled();
     });
 

@@ -2,12 +2,15 @@ import { BadRequestException, Body, Controller, Get, Param, Post, Res, UseGuards
 import type { Response } from 'express';
 import { IsEmail, IsOptional } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../security/permissions.guard';
+import { RequirePermission } from '../security/require-permission.decorator';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
 import { ObenReportExcelService } from '../oben-reports/oben-report-excel.service';
+import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 
 class SendPackingListDto {
   // Opcional: si no viene, se resuelve con la lista de distribución asociada
@@ -27,8 +30,12 @@ class SendPackingListDto {
  * para un documento de embarque real sería fabricar información, no
  * automatizarla. Cuando exista un vínculo real entre nuestra Orden y el
  * número de orden de Oben, este mismo endpoint podrá recibirlo automático.
+ *
+ * Consultar exige `orders.read`; enviar (correo real, incluso a una
+ * dirección digitada) exige `orders.update` — nunca basta con estar
+ * autenticado.
  */
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('packing-list')
 export class PackingListController {
   constructor(
@@ -40,6 +47,7 @@ export class PackingListController {
   ) {}
 
   @Get(':numberOrderSales')
+  @RequirePermission('orders.read')
   async getByOrderNumber(@Param('numberOrderSales') numberOrderSales: string) {
     const n = this.parseOrderNumber(numberOrderSales);
     return this.fetchPackingList(n);
@@ -47,6 +55,7 @@ export class PackingListController {
 
   /** Descarga directa del .xlsx — mismos datos que se ven en pantalla, sin pasar por correo. */
   @Get(':numberOrderSales/excel')
+  @RequirePermission('orders.read')
   async downloadExcel(@Param('numberOrderSales') numberOrderSales: string, @Res() res: Response) {
     const n = this.parseOrderNumber(numberOrderSales);
     const data = await this.fetchPackingList(n);
@@ -60,6 +69,7 @@ export class PackingListController {
   }
 
   @Post(':numberOrderSales/send')
+  @RequirePermission('orders.update')
   async sendByEmail(
     @Param('numberOrderSales') numberOrderSales: string,
     @Body() dto: SendPackingListDto,
@@ -129,17 +139,19 @@ export class PackingListController {
 
   private parseOrderNumber(raw: string): number {
     const n = Number(raw);
-    if (!Number.isFinite(n) || n <= 0) {
+    if (!Number.isInteger(n) || n <= 0) {
       throw new BadRequestException('numberOrderSales debe ser un número de orden de Oben válido');
     }
     return n;
   }
 
   private async fetchPackingList(numberOrderSales: number): Promise<unknown> {
-    const result = await this.hub.call('obenCostOrder', 'query.run', {
-      procedure: 'spPackingListUSA_Paradixe',
-      numberOrderSales,
-    });
+    const result = await this.hub.call(
+      'obenCostOrder',
+      'query.run',
+      { procedure: 'spPackingListUSA_Paradixe', numberOrderSales },
+      OBEN_QUERY_OPTIONS,
+    );
     if (!result.ok) {
       throw new BadRequestException(result.error ?? 'No se pudo consultar la lista de empaque en Oben');
     }

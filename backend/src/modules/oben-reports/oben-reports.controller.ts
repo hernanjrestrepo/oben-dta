@@ -2,6 +2,8 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import type { Response } from 'express';
 import { IsEmail, IsOptional } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../security/permissions.guard';
+import { RequirePermission } from '../security/require-permission.decorator';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -25,8 +27,11 @@ class SendReportDto {
  * fabrican. Ver ObenReportsService para qué reportes componen el "conjunto
  * de documentos" y sus formatos (EmpaqueSolefilmes va en PDF con código de
  * barras real, no en Excel).
+ *
+ * Consultar exige `orders.read`; enviar por correo (real, incluso a una
+ * dirección digitada) exige `orders.update`.
  */
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('oben-reports')
 export class ObenReportsController {
   constructor(
@@ -40,6 +45,7 @@ export class ObenReportsController {
   ) {}
 
   @Get()
+  @RequirePermission('orders.read')
   list() {
     return OBEN_REPORTS.map(({ key, label }) => ({ key, label }));
   }
@@ -55,6 +61,7 @@ export class ObenReportsController {
    * ver qué ya podemos resolver solos y qué sigue 100% dependiendo de José.
    */
   @Get('liquidacion-preview/:numberOrderSales')
+  @RequirePermission('orders.read')
   async liquidacionPreview(@Param('numberOrderSales') numberOrderSales: string) {
     const n = this.parseOrderNumber(numberOrderSales);
     const unificadaResult = await this.hub.call('obenCostOrder', 'query.run', {
@@ -81,6 +88,7 @@ export class ObenReportsController {
    * se informa cuál falló en vez de fingir que todo salió bien.
    */
   @Post('package/:numberOrderSales/send')
+  @RequirePermission('orders.update')
   async sendPackage(
     @Param('numberOrderSales') numberOrderSales: string,
     @Body() dto: SendReportDto,
@@ -165,6 +173,7 @@ export class ObenReportsController {
   }
 
   @Get(':key/:numberOrderSales')
+  @RequirePermission('orders.read')
   async getReport(@Param('key') key: string, @Param('numberOrderSales') numberOrderSales: string) {
     const def = this.requireReport(key);
     const n = this.parseOrderNumber(numberOrderSales);
@@ -172,6 +181,7 @@ export class ObenReportsController {
   }
 
   @Get(':key/:numberOrderSales/excel')
+  @RequirePermission('orders.read')
   async downloadExcel(
     @Param('key') key: string,
     @Param('numberOrderSales') numberOrderSales: string,
@@ -193,6 +203,7 @@ export class ObenReportsController {
   }
 
   @Post(':key/:numberOrderSales/send')
+  @RequirePermission('orders.update')
   async sendReport(
     @Param('key') key: string,
     @Param('numberOrderSales') numberOrderSales: string,
@@ -265,7 +276,7 @@ export class ObenReportsController {
 
   private parseOrderNumber(raw: string): number {
     const n = Number(raw);
-    if (!Number.isFinite(n) || n <= 0) {
+    if (!Number.isInteger(n) || n <= 0) {
       throw new BadRequestException('numberOrderSales debe ser un número de orden de Oben válido');
     }
     return n;
