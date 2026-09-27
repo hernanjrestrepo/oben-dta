@@ -29,13 +29,25 @@ const toNum = (v: unknown): number =>
 /** ILIKE sin comodines: `%`/`_` en el nombre del cliente no deben emparejar a otro cliente. */
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
+/**
+ * Texto desde la respuesta de Oben (spEmpaqueUnificada): string o número
+ * (p. ej. una Proforma que llegue como 11271); null/objeto/vacío = ausente.
+ * Antes se hacía `.trim()` directo sobre el dato externo: un número lanzaba
+ * TypeError y el borrador respondía 500 en vez de listar lo que falta.
+ */
+const text = (v: unknown): string | null => {
+  const s = typeof v === 'string' ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : '';
+  return s || null;
+};
+
+/** Campos de spEmpaqueUnificada_Paradixe que usa Facturación, ya normalizados. */
 interface EmpaqueUnificadaHeader {
   Cliente: string;
-  Pais: string;
-  CodigoMaterial?: string;
-  Contenedor?: string;
-  Proforma?: string;
-  OrdenCompra?: string;
+  Pais: string | null;
+  CodigoMaterial: string | null;
+  Contenedor: string | null;
+  Proforma: string | null;
+  OrdenCompra: string | null;
 }
 
 /**
@@ -70,9 +82,9 @@ export class FacturacionService {
     const header = await this.fetchHeader(numberOrderSales);
     const missing: string[] = [];
 
-    const cliente = header?.Cliente?.trim() || '';
-    const pais = header?.Pais?.trim() || null;
-    const proforma = header?.Proforma?.trim() || null;
+    const cliente = header?.Cliente ?? '';
+    const pais = header?.Pais ?? null;
+    const proforma = header?.Proforma ?? null;
 
     if (!header) missing.push('Datos del pedido: no se pudo consultar spEmpaqueUnificada_Paradixe en Oben.');
     if (header && !pais) {
@@ -140,9 +152,9 @@ export class FacturacionService {
       cliente,
       pais,
       proforma,
-      ordenCompra: header?.OrdenCompra?.trim() || null,
-      contenedor: header?.Contenedor?.trim() || null,
-      codigoMaterial: header?.CodigoMaterial?.trim() || null,
+      ordenCompra: header?.OrdenCompra ?? null,
+      contenedor: header?.Contenedor ?? null,
+      codigoMaterial: header?.CodigoMaterial ?? null,
       kind,
       direccionEntrega,
       direccionFuente,
@@ -241,8 +253,16 @@ export class FacturacionService {
     );
     if (!res.ok || !res.data || typeof res.data !== 'object') return null;
     const d = res.data as Record<string, unknown>;
-    if (!d.Cliente) return null;
-    return d as unknown as EmpaqueUnificadaHeader;
+    const cliente = text(d.Cliente);
+    if (!cliente) return null;
+    return {
+      Cliente: cliente,
+      Pais: text(d.Pais),
+      CodigoMaterial: text(d.CodigoMaterial),
+      Contenedor: text(d.Contenedor),
+      Proforma: text(d.Proforma),
+      OrdenCompra: text(d.OrdenCompra),
+    };
   }
 
   private async fetchCheckSettlement(numberPF: string): Promise<CheckSettlementResponse | null> {

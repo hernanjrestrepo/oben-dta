@@ -105,6 +105,24 @@ describe('FacturacionService (borrador de facturación)', () => {
     expect(hub.call).not.toHaveBeenCalledWith(expect.anything(), 'liquidacion.consultar', expect.anything(), expect.anything());
   });
 
+  it('campos de Oben que llegan como número (Proforma 11271, OrdenCompra) no revientan el borrador', async () => {
+    const { service, hub } = makeService({
+      hubResponses: { header: header({ Pais: 'USA', Proforma: 11271, OrdenCompra: 128353, Contenedor: null }), check: CHECK_OK },
+    });
+
+    const draft = await service.getDraft(11086);
+
+    expect(draft).toMatchObject({ proforma: '11271', ordenCompra: '128353', contenedor: null, kind: 'exportacion' });
+    expect(hub.call).toHaveBeenCalledWith('obenCostOrder', 'liquidacion.consultar', { numberPF: '11271' }, expect.anything());
+  });
+
+  it('un Cliente que no es texto (null/objeto) cuenta como respuesta vacía de Oben', async () => {
+    const { service } = makeService({ hubResponses: { header: { ok: true, data: { Cliente: { nombre: 'X' }, Pais: 'USA' } } } });
+    const draft = await service.getDraft(1);
+    expect(draft.cliente).toBe('');
+    expect(draft.missing).toEqual([expect.stringContaining('spEmpaqueUnificada_Paradixe')]);
+  });
+
   describe('clasificación Exportación / Nacional', () => {
     it.each(['COLOMBIA', 'Colombia', '  colombia  ', 'COL'])('país %j → nacional', async (pais) => {
       const { service } = makeService({ hubResponses: { header: header({ Pais: pais }), check: CHECK_OK } });
