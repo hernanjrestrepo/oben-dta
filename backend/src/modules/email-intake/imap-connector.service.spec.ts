@@ -468,23 +468,35 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
 
   describe('connectAndWatch — estabilidad del proceso ante errores de socket', () => {
     it('registra un listener de \'error\' en el cliente IMAP — sin esto, un hipo de red tumba TODO el proceso (bug real encontrado en vivo el 2026-08-26)', async () => {
+      let finishIdle: (() => void) | undefined;
       const fakeClient = {
         on: jest.fn(),
         connect: jest.fn().mockResolvedValue(undefined),
         getMailboxLock: jest.fn().mockResolvedValue({ release: jest.fn() }),
-        idle: jest.fn().mockImplementation(() => new Promise(() => {})), // nunca resuelve — solo probamos el setup
+        // Queda "en IDLE" hasta que el test lo suelte — solo probamos el setup.
+        idle: jest.fn().mockImplementation(() => new Promise<void>((r) => (finishIdle = r))),
         search: jest.fn().mockResolvedValue([]),
         status: jest.fn().mockResolvedValue({ uidNext: undefined }),
         logout: jest.fn().mockResolvedValue(undefined),
       };
       (ImapFlow as unknown as jest.Mock).mockImplementation(() => fakeClient);
 
-      (service as any).connections.set(TENANT_ID, { client: null, stopped: false });
-      void (service as any).connectAndWatch(TENANT_ID, cfg);
+      const entry = { client: null, stopped: false };
+      (service as any).connections.set(TENANT_ID, entry);
+      const loop: Promise<void> = (service as any).connectAndWatch(TENANT_ID, cfg);
 
       await new Promise((r) => setTimeout(r, 0));
 
       expect(fakeClient.on).toHaveBeenCalledWith('error', expect.any(Function));
+
+      // Detener el ciclo y esperarlo: antes quedaba vivo tras el test con el
+      // watchdog de 20 s de `idle` armado — al vencer rechazaba fuera del test
+      // (el spec fallaba al correrlo solo) y colgaba el worker de Jest en la
+      // suite completa ("worker process has failed to exit gracefully").
+      entry.stopped = true;
+      finishIdle?.();
+      await loop;
+      expect(fakeClient.logout).toHaveBeenCalled();
     });
 
     it('el watchdog del sleep de sondeo SUPERA pollIntervalMs (con el default de 20s un pollIntervalMs=30000 forzaba una reconexión completa en cada ciclo — bug real 2026-09-23)', async () => {
