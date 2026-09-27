@@ -19,8 +19,21 @@
   }
 }
 
+/*
+ * Densidad de información: el tamaño base se reduce de 16px a 14px (87.5%),
+ * lo que escala proporcionalmente TODAS las utilidades de Tailwind basadas
+ * en rem (text-sm, text-lg, spacing, etc.) sin tocar cada componente. El
+ * interlineado del body también baja un poco respecto al "normal" del
+ * navegador — pedido explícito de Hernán: más información visible sin
+ * scroll, sin perder legibilidad.
+ */
+html {
+  font-size: 14px;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.4;
 }

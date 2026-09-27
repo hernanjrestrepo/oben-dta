@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Sparkles, X, Send, Loader2 } from 'lucide-react';
+import { X, Send, Loader2 } from 'lucide-react';
+import { OMark } from '@/components/icons/OMark';
 
 interface ChatMessage {
   role: 'user' | 'eva';
@@ -48,7 +49,7 @@ export function EvaWidget() {
           className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-[#F47735] hover:bg-[#E5641F] text-white shadow-lg flex items-center justify-center transition"
           title="Hablar con EVA"
         >
-          <Sparkles className="w-6 h-6" />
+          <OMark className="w-7 h-7" />
         </button>
       )}
 
@@ -57,7 +58,7 @@ export function EvaWidget() {
         <div className="fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-3rem)] h-[32rem] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
           <div className="bg-[#F47735] text-white px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5" />
+              <OMark className="w-5 h-5" />
               <div>
                 <p className="font-semibold text-sm leading-tight">EVA</p>
                 <p className="text-[11px] text-white/70 leading-tight">Asistente de Oben Xmart</p>
