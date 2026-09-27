@@ -229,6 +229,14 @@ describe('PackingListAutomationService', () => {
       );
     });
 
+    it('si cerrar el reintento pendiente falla (BD), el envío ya hecho se sigue reportando como enviado', async () => {
+      const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-2' } });
+      const update = jest.fn().mockRejectedValue(new Error('db caída'));
+      const { service } = makeService(hubCall, undefined, undefined, undefined, { update });
+
+      await expect(service.handleOvApproved(10824)).resolves.toMatchObject({ sent: true, queued: false });
+    });
+
     it('si el envío directo falla, NO cierra ningún reintento pendiente', async () => {
       const hubCall = jest.fn().mockResolvedValue({ ok: false, error: 'smtp down' });
       const { service, retries } = makeService(hubCall);

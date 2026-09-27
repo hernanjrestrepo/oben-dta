@@ -135,11 +135,18 @@ export class PackingListAutomationService {
     }
     // Un disparador anterior de la misma OV pudo haber quedado en cola
     // (incompleto o envío fallido). Este envío ya lo resolvió: si se deja
-    // 'pending', el procesador de reintentos la vuelve a mandar.
-    await this.retries.update(
-      { tenantId: this.ctx.tenantId, numberOrderSales, status: 'pending' },
-      { status: 'completed', lastMissing: null },
-    );
+    // 'pending', el procesador de reintentos la vuelve a mandar. Best effort:
+    // el correo YA salió — un fallo aquí no puede reportar el envío como fallido.
+    try {
+      await this.retries.update(
+        { tenantId: this.ctx.tenantId, numberOrderSales, status: 'pending' },
+        { status: 'completed', lastMissing: null },
+      );
+    } catch (err) {
+      this.logger.error(
+        `Orden ${numberOrderSales}: enviada, pero no se pudo cerrar su reintento pendiente (podría reenviarse): ${(err as Error).message}`,
+      );
+    }
     return result;
   }
 
