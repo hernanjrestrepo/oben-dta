@@ -448,11 +448,43 @@ export class ObenReportExcelService {
   }
 
   /**
-   * Replica "Lista de Empaque Unificada" real de Oben (correo real OV 10931,
-   * ListaEmpaqueUnificada.xls): encabezado Cliente/País/Contenedor/Orden/
-   * Proforma + totales, y una fila por paleta (no por rollo individual, a
-   * diferencia de la Detallada) — nombres de campo confirmados en vivo el
-   * 2026-09-09 vía spEmpaqueUnificada_Paradixe.
+   * Replica "Lista de Empaque Unificada" real de Oben — reescrito el
+   * 2026-09-29 contra el .xls real que Oben venía recibiendo ANTES de este
+   * sistema (adjunto por Maria Escobar/Jorge Restrepo el 2026-09-29,
+   * "LISTAS DE EMPAQUE CLIENTES EXPORTACIÓN // SOLEFILMES": "las listas que
+   * envía el sistema no salen de forma configurada y manejable para los
+   * clientes del exterior... sobre todo para el cliente Solefilmes que es
+   * exigente con su documentación"). Comparado celda por celda (openpyxl)
+   * contra el archivo real, no contra una captura de pantalla. Tres
+   * diferencias reales encontradas y corregidas aquí:
+   *
+   *  1. El archivo real NUNCA mostró el campo "Orden de Venta" suelto — el
+   *     número de orden solo aparece una vez, emparejado con "Código
+   *     Material" (ver grid de abajo). Tampoco mostraba el bloque resumen
+   *     "Total Pallets/Bobinas/Peso Neto/Peso Bruto" arriba de la tabla.
+   *  2. La tabla de paletas va en OTRO ORDEN de columnas (peso antes que
+   *     ancho, código de material al final) y CON ENCABEZADOS BILINGÜES DE
+   *     DOS LÍNEAS (ej. "Peso Neto Kg\nNet Weight Kg"), no en español plano.
+   *  3. Más importante: el archivo real agrupa las paletas por Código de
+   *     Material (mismo ancho de bobina) con una fila SUBTOTAL en negrita al
+   *     cerrar cada grupo — esta pantalla las aplanaba en una sola lista sin
+   *     subtotales, que es justo lo que Maria reportó como "no sale como
+   *     antes" para Solefilmes (ellos validan por grupo de ancho).
+   *
+   * El TOTAL general al final del archivo real desalineaba sus propias
+   * etiquetas Kg/Lb con la columna que rotulaban (defecto del motor Crystal
+   * Reports que generaba el .xls, no algo intencional) — aquí se corrige esa
+   * alineación: mismos números, mismas etiquetas bilingües, cada total bajo
+   * su columna real. El texto del archivo original también traía acentos
+   * corrompidos ("Pa�s", "C�digo") por un problema de codificación del
+   * exportador viejo — se usa aquí el texto correctamente acentuado, ya que
+   * el pedido es que el documento sea legible y manejable para Solefilmes,
+   * no que reproduzca un bug de encoding.
+   *
+   * Los nombres de campo (CodigoPallet, PesoNetoKg, PesoNetoLb, PesoBrutoKg,
+   * PesoBrutoLb, Bobinas, Anchomm, Anchoin, CodigoMaterial) NO cambiaron —
+   * siguen siendo los confirmados en vivo el 2026-09-09 vía
+   * spEmpaqueUnificada_Paradixe; esta reescritura es solo de presentación.
    */
   private buildEmpaqueUnificada(
     ws: ExcelJS.Worksheet,
@@ -461,68 +493,211 @@ export class ObenReportExcelService {
     data: Record<string, unknown>,
   ): number {
     let row = startRow;
-    writePlainLine(ws, row, 9, 'OBEN COLOMBIA S.A.S.', true);
+    writeCenteredLine(ws, row, 9, 'OBEN COLOMBIA S.A.S.', { bold: true, size: 11 });
     row += 1;
-    writePlainLine(ws, row, 9, 'EXPORTACION DE PELICULA / FILM EXPORT');
+    writeCenteredLine(ws, row, 9, 'EXPORTACION DE PELICULA / FILM EXPORT', { bold: true, size: 10 });
     row += 1;
-    writePlainLine(ws, row, 9, 'LISTA DE EMPAQUE (Unificada) / PACKING LIST (Unified)', true);
+    writeCenteredLine(ws, row, 9, 'LISTA DE EMPAQUE  (Unificada) / PACKING LIST  (Unified)', { bold: true, size: 11 });
     row += 2;
-    writeInfoRow(ws, row, 'Orden de Venta', numberOrderSales);
-    row += 2;
-    row = writeBilingualInfoGrid(ws, row, [
-      ['Cliente / Client', data.Cliente, 'País / Country', data.Pais],
-      ['Código Material / Material Code', data.CodigoMaterial, 'Orden / Order', numberOrderSales],
-      ['Contenedor / Container', data.Contenedor, 'Proforma / Document', data.Proforma],
-      ['Fecha / Date', data.Fecha, 'Orden Compra / PO Customer', data.OrdenCompra],
+
+    row = this.writeUnificadaGrid(ws, row, [
+      ['Cliente \nClient', data.Cliente, 'País \nCountry', data.Pais],
+      ['Código Material  Material Code', data.CodigoMaterial, 'Orden \nOrder', numberOrderSales],
+      ['Contenedor  Container', data.Contenedor, 'Proforma Document', data.Proforma],
+      ['Fecha  \nDate', data.Fecha, 'Orden Compra\nPO Customer', data.OrdenCompra],
     ]);
-    row += 1;
-    for (const [key, label] of [
-      ['TotalPallet', 'Total Pallets'],
-      ['TotalBobinas', 'Total Bobinas'],
-      ['TotalPesoNetoKg', 'Total Peso Neto (kg)'],
-      ['TotalPesoBrutoKg', 'Total Peso Bruto (kg)'],
-    ] as const) {
-      if (data[key] !== undefined) {
-        writeInfoRow(ws, row, label, data[key]);
-        row += 1;
-      }
-    }
     row += 1;
 
     const items = (data.Detalle as Row[] | undefined) ?? [];
     if (items.length === 0) {
-      return writeNoDataMessage(ws, row, 10);
+      return writeNoDataMessage(ws, row, 9);
     }
 
     const columns: Array<[string, string]> = [
-      ['CodigoPallet', 'Código Pallet'],
-      ['CodigoMaterial', 'Código Material'],
-      ['Anchomm', 'Ancho (mm)'],
-      ['Anchoin', 'Ancho (in)'],
-      ['Bobinas', 'Bobinas'],
-      ['PesoNetoKg', 'Peso Neto (kg)'],
-      ['PesoNetoLb', 'Peso Neto (lb)'],
-      ['PesoBrutoKg', 'Peso Bruto (kg)'],
-      ['PesoBrutoLb', 'Peso Bruto (lb)'],
+      ['CodigoPallet', 'Código Pallet\nPallet Code'],
+      ['PesoNetoKg', 'Peso Neto Kg\nNet Weight Kg'],
+      ['PesoNetoLb', 'Peso Neto Lb\nNet Weight Lb'],
+      ['PesoBrutoKg', 'Peso Bruto Kg\nGross Weight Kg'],
+      ['PesoBrutoLb', 'Peso Bruto Lb\nGross Weight Lb'],
+      ['Bobinas', 'Bobinas\nRolls'],
+      ['Anchomm', 'Ancho (mm)\nWidth (mm)'],
+      ['Anchoin', 'Ancho (in)\nWidth (in)'],
+      ['CodigoMaterial', 'Código material\nCode Material'],
     ];
+    const decimalCols = new Set(['PesoNetoKg', 'PesoNetoLb', 'PesoBrutoKg', 'PesoBrutoLb']);
+    const integerCols = new Set(['Bobinas', 'Anchomm']);
+    const idxOf = (key: string) => columns.findIndex(([k]) => k === key) + 1;
+
     writeTableHeader(ws, row, columns.map(([, label]) => label));
     row += 1;
-    const totals: Record<string, number> = {};
-    for (const item of items) {
-      writeTableRow(ws, row, columns.map(([key]) => scalar(item[key])));
-      row += 1;
-      for (const key of ['Bobinas', 'PesoNetoKg', 'PesoBrutoKg']) {
-        const v = Number(item[key]);
-        if (Number.isFinite(v)) totals[key] = (totals[key] ?? 0) + v;
+
+    type Sums = { pesoNetoKg: number; pesoNetoLb: number; pesoBrutoKg: number; pesoBrutoLb: number; bobinas: number };
+    const zeroSums = (): Sums => ({ pesoNetoKg: 0, pesoNetoLb: 0, pesoBrutoKg: 0, pesoBrutoLb: 0, bobinas: 0 });
+    const grand = zeroSums();
+    let group = zeroSums();
+    let currentMaterial: string | null = null;
+
+    const flushGroup = () => {
+      if (currentMaterial === null) return;
+      const values = columns.map(([key]) => {
+        switch (key) {
+          case 'CodigoPallet':
+            return 'SUBTOTAL';
+          case 'PesoNetoKg':
+            return this.round2(group.pesoNetoKg);
+          case 'PesoNetoLb':
+            return this.round2(group.pesoNetoLb);
+          case 'PesoBrutoKg':
+            return this.round2(group.pesoBrutoKg);
+          case 'PesoBrutoLb':
+            return this.round2(group.pesoBrutoLb);
+          case 'Bobinas':
+            return group.bobinas;
+          default:
+            return '';
+        }
+      });
+      writeTotalsRow(ws, row, values);
+      for (const [key] of columns) {
+        if (decimalCols.has(key)) ws.getCell(row, idxOf(key)).numFmt = '#,##0.00';
+        else if (integerCols.has(key)) ws.getCell(row, idxOf(key)).numFmt = '0';
       }
+      row += 1;
+      group = zeroSums();
+    };
+
+    // Agrupado por Código de Material (mismo ancho de bobina), con un
+    // SUBTOTAL al cerrar cada grupo — ver nota (3) arriba. Los datos ya
+    // llegan agrupados de Oben (spEmpaqueUnificada_Paradixe), así que no se
+    // reordenan: solo se detecta el cambio de material para cerrar el grupo.
+    for (const item of items) {
+      const material = String(item.CodigoMaterial ?? '');
+      if (currentMaterial !== null && material !== currentMaterial) {
+        flushGroup();
+      }
+      currentMaterial = material;
+
+      writeTableRow(ws, row, columns.map(([key]) => scalar(item[key])));
+      for (const [key] of columns) {
+        if (decimalCols.has(key)) ws.getCell(row, idxOf(key)).numFmt = '#,##0.00';
+        else if (integerCols.has(key)) ws.getCell(row, idxOf(key)).numFmt = '0';
+      }
+      row += 1;
+
+      const netoKg = Number(item.PesoNetoKg) || 0;
+      const netoLb = Number(item.PesoNetoLb) || 0;
+      const brutoKg = Number(item.PesoBrutoKg) || 0;
+      const brutoLb = Number(item.PesoBrutoLb) || 0;
+      const bobinas = Number(item.Bobinas) || 0;
+      group.pesoNetoKg += netoKg;
+      group.pesoNetoLb += netoLb;
+      group.pesoBrutoKg += brutoKg;
+      group.pesoBrutoLb += brutoLb;
+      group.bobinas += bobinas;
+      grand.pesoNetoKg += netoKg;
+      grand.pesoNetoLb += netoLb;
+      grand.pesoBrutoKg += brutoKg;
+      grand.pesoBrutoLb += brutoLb;
+      grand.bobinas += bobinas;
     }
-    const totalRow = columns.map(([key], i) => {
-      if (i === 0) return 'TOTAL';
-      return key in totals ? Math.round(totals[key] * 100) / 100 : '';
-    });
-    writeTotalsRow(ws, row, totalRow);
+    flushGroup();
+
+    // TOTAL general: Pallets + las mismas 5 métricas del archivo real
+    // (Peso Neto/Bruto en Kg y Lb, Bobinas), cada una alineada bajo su
+    // propia columna de la tabla — ver nota sobre el desalineamiento
+    // original en el comentario de arriba. "Pallets" va en la columna 1
+    // (la misma que usan las filas de paleta/SUBTOTAL para su etiqueta) en
+    // vez de una columna aparte: con solo 9 columnas no sobra ninguna libre
+    // sin invadir la de un total de peso (a diferencia del archivo real, que
+    // tenía ~36 columnas de por medio).
+    row += 1;
+    const labelCell = ws.getCell(row, 1);
+    labelCell.value = 'TOTAL\nPallets';
+    labelCell.font = { name: FONT_FAMILY, bold: true, size: 10, color: { argb: BLACK } };
+    labelCell.alignment = { vertical: 'top', wrapText: true };
+    for (const [key, label] of [
+      ['PesoNetoKg', 'Peso Neto Kg\nNet Weight Kg'],
+      ['PesoNetoLb', 'Peso Neto Lb\nNet Weight Lb'],
+      ['PesoBrutoKg', 'Peso Bruto Kg\nGross Weight Kg'],
+      ['PesoBrutoLb', 'Peso Bruto Lb\nGross Weight Lb'],
+      ['Bobinas', 'Bobinas\nRolls'],
+    ] as const) {
+      const cell = ws.getCell(row, idxOf(key));
+      cell.value = label;
+      cell.font = { name: FONT_FAMILY, bold: true, size: 9, color: { argb: BLACK } };
+      cell.alignment = { horizontal: 'center', vertical: 'top', wrapText: true };
+    }
+    row += 1;
+    const palletsCell = ws.getCell(row, 1);
+    palletsCell.value = items.length;
+    palletsCell.font = { name: FONT_FAMILY, bold: true, size: 10, color: { argb: BLACK } };
+    palletsCell.alignment = { horizontal: 'center' };
+    for (const [key, value] of [
+      ['PesoNetoKg', this.round2(grand.pesoNetoKg)],
+      ['PesoNetoLb', this.round2(grand.pesoNetoLb)],
+      ['PesoBrutoKg', this.round2(grand.pesoBrutoKg)],
+      ['PesoBrutoLb', this.round2(grand.pesoBrutoLb)],
+      ['Bobinas', grand.bobinas],
+    ] as const) {
+      const cell = ws.getCell(row, idxOf(key));
+      cell.value = value;
+      cell.font = { name: FONT_FAMILY, bold: true, size: 10, color: { argb: BLACK } };
+      cell.numFmt = key === 'Bobinas' ? '0' : '#,##0.00';
+      cell.alignment = { horizontal: 'center' };
+    }
+    row += 2;
+
+    // Pie del archivo real ("Elaborado por Dpto. Programación / Made by
+    // Dpto Planning").
+    writeCenteredLine(ws, row, 9, 'Elaborado por\nDpto. Programación\n\nMade by Dpto Planning', { size: 10 });
+    ws.getCell(row, 1).alignment = { horizontal: 'center', vertical: 'top', wrapText: true };
     row += 1;
     return row;
+  }
+
+  /**
+   * Cuadrícula de 2 columnas etiqueta/valor bilingüe, específica de "Lista
+   * de Empaque Unificada": a diferencia de `writeBilingualInfoGrid` (usada
+   * por Detallada/Lista Especial, que sigue el estilo "Etiqueta / Label" en
+   * una sola línea), aquí las etiquetas van en DOS LÍNEAS con salto de
+   * línea real ("Cliente \nClient"), tamaño 10 y espaciados exactos —
+   * copiados literalmente del archivo real (incluye espacios dobles como
+   * "Código Material  Material Code", que así vienen en el original). No se
+   * reutiliza el helper compartido a propósito, para no afectar los otros
+   * formatos que si tienen evidencia real de usar el otro estilo.
+   */
+  private writeUnificadaGrid(
+    ws: ExcelJS.Worksheet,
+    startRow: number,
+    rows: Array<[string, unknown, string, unknown]>,
+  ): number {
+    let row = startRow;
+    for (const [leftLabel, leftValue, rightLabel, rightValue] of rows) {
+      ws.mergeCells(row, 1, row, 2);
+      const leftLabelCell = ws.getCell(row, 1);
+      leftLabelCell.value = leftLabel;
+      leftLabelCell.font = { name: FONT_FAMILY, bold: true, size: 10, color: { argb: BLACK } };
+      leftLabelCell.alignment = { vertical: 'top', wrapText: true };
+      const leftValueCell = ws.getCell(row, 3);
+      leftValueCell.value = scalar(leftValue);
+      leftValueCell.font = { name: FONT_FAMILY, bold: false, size: 10, color: { argb: BLACK } };
+
+      ws.mergeCells(row, 5, row, 6);
+      const rightLabelCell = ws.getCell(row, 5);
+      rightLabelCell.value = rightLabel;
+      rightLabelCell.font = { name: FONT_FAMILY, bold: true, size: 10, color: { argb: BLACK } };
+      rightLabelCell.alignment = { vertical: 'top', wrapText: true };
+      const rightValueCell = ws.getCell(row, 7);
+      rightValueCell.value = scalar(rightValue);
+      rightValueCell.font = { name: FONT_FAMILY, bold: false, size: 10, color: { argb: BLACK } };
+      row += 1;
+    }
+    return row;
+  }
+
+  /** Redondeo a 2 decimales para los totales de peso (Kg/Lb) — evita arrastre de error de punto flotante. */
+  private round2(n: number): number {
+    return Math.round(n * 100) / 100;
   }
 
   /**

@@ -139,29 +139,82 @@ describe('ObenReportExcelService', () => {
     });
   });
 
+  // Reescrito el 2026-09-29 contra el .xls REAL que Oben venía recibiendo
+  // antes de este sistema (adjunto por Maria Escobar/Jorge Restrepo,
+  // "LISTAS DE EMPAQUE CLIENTES EXPORTACIÓN // SOLEFILMES": las listas del
+  // sistema nuevo "no salen de forma configurada y manejable... sobre todo
+  // para el cliente Solefilmes que es exigente con su documentación") —
+  // comparado celda por celda con openpyxl contra el archivo real, no contra
+  // una captura de pantalla.
   describe('formato empaque_unificada', () => {
-    it('arma encabezado con totales y una fila por paleta', async () => {
+    it('encabezado bilingüe de 2 líneas, agrupado por Código de Material con SUBTOTAL por grupo y TOTAL general — igual al archivo real', async () => {
       const data = {
         Cliente: 'TRUPAL S.A.',
         Pais: 'PERU',
+        CodigoMaterial: 'SCTN',
         Contenedor: 'CONTENEDOR ESTANDAR DE 40 PIES (1190)',
         Proforma: '10840',
+        OrdenCompra: '400.420',
+        Fecha: '2026-09-29',
+        // Campos de resumen reales de la API — YA NO se muestran como bloque
+        // suelto arriba de la tabla (el archivo real nunca lo hizo así); se
+        // conservan aquí solo para confirmar que el código ya no los pinta.
         TotalPallet: 33,
         TotalBobinas: 52,
+        TotalPesoNetoKg: 999,
+        TotalPesoBrutoKg: 999,
         Detalle: [
-          { CodigoPallet: '26821C0101356200', PesoNetoKg: 491.09, PesoBrutoKg: 527.4, Bobinas: 1, Anchomm: 873, Anchoin: '34-5/16' },
+          { CodigoPallet: 'P1', PesoNetoKg: 500, PesoNetoLb: 1102.31, PesoBrutoKg: 540, PesoBrutoLb: 1190.48, Bobinas: 2, Anchomm: 840, Anchoin: '33-1/16', CodigoMaterial: 'SC---0030TN0840S0760' },
+          { CodigoPallet: 'P2', PesoNetoKg: 505, PesoNetoLb: 1113.44, PesoBrutoKg: 545, PesoBrutoLb: 1201.62, Bobinas: 2, Anchomm: 840, Anchoin: '33-1/16', CodigoMaterial: 'SC---0030TN0840S0760' },
+          { CodigoPallet: 'P3', PesoNetoKg: 600, PesoNetoLb: 1322.77, PesoBrutoKg: 650, PesoBrutoLb: 1433.01, Bobinas: 2, Anchomm: 880, Anchoin: '34-5/8', CodigoMaterial: 'SC---0030TN0880S0760' },
         ],
       };
-      const buffer = await service.build('Lista de Empaque Unificada', 10931, data, 'empaque_unificada');
+      const buffer = await service.build('Lista de Empaque Unificada', 11130, data, 'empaque_unificada');
       const flat = flatten(await readBack(buffer));
 
       expect(flat).toContain('OBEN COLOMBIA S.A.S.');
       expect(flat).toContain('EXPORTACION DE PELICULA / FILM EXPORT');
-      expect(flat).toContain('LISTA DE EMPAQUE (Unificada) / PACKING LIST (Unified)');
-      expect(flat).toContain('Cliente / Client|Cliente / Client|TRUPAL S.A.|País / Country|País / Country|PERU');
-      expect(flat).toContain('Total Pallets|33');
-      expect(flat).toContain('Código Pallet|Código Material');
-      expect(flat).toContain('26821C0101356200');
+      expect(flat).toContain('LISTA DE EMPAQUE  (Unificada) / PACKING LIST  (Unified)');
+
+      // el archivo real NUNCA mostró "Orden de Venta" suelto, ni el bloque
+      // resumen "Total Pallets/Bobinas/..." arriba de la tabla
+      expect(flat).not.toContain('Orden de Venta');
+      expect(flat).not.toContain('Total Pallets');
+      expect(flat).not.toContain('Total Bobinas');
+      expect(flat).not.toContain('999');
+
+      // grid bilingüe de 2 líneas real: Orden va emparejado con Código
+      // Material (no con País), Proforma con Contenedor, Orden Compra con Fecha
+      expect(flat).toContain('Cliente \nClient|Cliente \nClient|TRUPAL S.A.|País \nCountry|País \nCountry|PERU');
+      expect(flat).toContain('Código Material  Material Code|Código Material  Material Code|SCTN|Orden \nOrder|Orden \nOrder|11130');
+      expect(flat).toContain(
+        'Contenedor  Container|Contenedor  Container|CONTENEDOR ESTANDAR DE 40 PIES (1190)|Proforma Document|Proforma Document|10840',
+      );
+      expect(flat).toContain('Fecha  \nDate|Fecha  \nDate|2026-09-29|Orden Compra\nPO Customer|Orden Compra\nPO Customer|400.420');
+
+      // encabezados de tabla bilingües en el orden real: peso antes que
+      // ancho, código de material al final (no justo después del pallet)
+      expect(flat).toContain(
+        'Código Pallet\nPallet Code|Peso Neto Kg\nNet Weight Kg|Peso Neto Lb\nNet Weight Lb|Peso Bruto Kg\nGross Weight Kg|Peso Bruto Lb\nGross Weight Lb|Bobinas\nRolls|Ancho (mm)\nWidth (mm)|Ancho (in)\nWidth (in)|Código material\nCode Material',
+      );
+
+      // SUBTOTAL al cerrar cada grupo de Código de Material (por ancho)
+      expect(flat).toContain('SUBTOTAL|1005|2215.75|1085|2392.1|4');
+      expect(flat).toContain('SUBTOTAL|600|1322.77|650|1433.01|2');
+
+      // TOTAL general: fila de etiquetas y, debajo, 3 paletas + sumas de las 3 líneas
+      expect(flat).toContain(
+        'TOTAL\nPallets|Peso Neto Kg\nNet Weight Kg|Peso Neto Lb\nNet Weight Lb|Peso Bruto Kg\nGross Weight Kg|Peso Bruto Lb\nGross Weight Lb|Bobinas\nRolls',
+      );
+      expect(flat).toContain('3|1605|3538.52|1735|3825.11|6');
+    });
+
+    it('sin Detalle, muestra un mensaje claro en vez de un archivo roto', async () => {
+      const data = { Cliente: 'TRUPAL S.A.', Detalle: [] };
+      const buffer = await service.build('Lista de Empaque Unificada', 1, data, 'empaque_unificada');
+      const flat = flatten(await readBack(buffer));
+
+      expect(flat).toContain('Oben no tiene datos de este reporte para esta orden.');
     });
   });
 
