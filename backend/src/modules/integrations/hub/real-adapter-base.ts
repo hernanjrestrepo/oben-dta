@@ -111,8 +111,9 @@ export abstract class RealAdapterBase extends BaseAdapter {
         throw new Error(`HTTP ${res.status}: ${text.slice(0, 240)}`);
       }
       if (!text) return undefined as unknown as T;
+      let parsed: unknown;
       try {
-        return JSON.parse(text) as T;
+        parsed = JSON.parse(text);
       } catch {
         // Algunas transacciones reales de Oben (ej. spApproveComex_Paradixe,
         // spSettlement_Head/Detail — "Return: Varchar" en su documentación,
@@ -121,6 +122,28 @@ export abstract class RealAdapterBase extends BaseAdapter {
         // 2026-09-11. No es un error: se devuelve el texto tal cual.
         return text as unknown as T;
       }
+      // Oben NUNCA usa el status HTTP para señalar un fallo de negocio —
+      // responde 200 igual, y el resultado real va en el cuerpo. Confirmado
+      // en vivo el 2026-09-30 contra APICrearInvoiceParadixe (José Guzmán):
+      // HTTP 200 con `{"isSuccessful":false,"Code":"500","message":"EL
+      // ARTÍCULO 67511 NO SE ENCUENTRA EN LA ORDEN DE VENTA _ "}`. Sin este
+      // chequeo, un rechazo real de Oben (ej. crearEncabezadoLiquidacion
+      // rechazado) se leería como éxito — silenciosamente. Solo actúa si el
+      // campo está PRESENTE y es `false`; una respuesta sin `isSuccessful`
+      // (ej. spCheckSettlement, que no usa este sobre) sigue igual que antes.
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        (parsed as Record<string, unknown>).isSuccessful === false
+      ) {
+        const body = parsed as Record<string, unknown>;
+        const codeValue = typeof body.Code === 'string' || typeof body.Code === 'number' ? body.Code : undefined;
+        const code = codeValue !== undefined ? ` (Code ${codeValue})` : '';
+        const message = typeof body.message === 'string' ? body.message : JSON.stringify(body).slice(0, 240);
+        throw new Error(`Oben rechazó la operación${code}: ${message}`);
+      }
+      return parsed as T;
     } finally {
       clearTimeout(timeout);
     }

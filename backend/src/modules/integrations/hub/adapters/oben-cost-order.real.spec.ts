@@ -234,6 +234,26 @@ describe('ObenCostOrderRealAdapter (API real de costos de orden de Oben)', () =>
       const result = await adapter.execute('liquidacion.crearEncabezado', { numberPF: 1 }, CTX);
       expect(result.state).toBe('pending_credentials');
     });
+
+    // Oben nunca usa el status HTTP para un fallo de negocio: responde 200
+    // igual y el rechazo va en el cuerpo (confirmado en vivo el 2026-09-30
+    // contra APICrearInvoiceParadixe — misma familia de API, mismo patrón).
+    // Sin esto, un rechazo real de crearEncabezado se leería como éxito.
+    it('un HTTP 200 con isSuccessful:false es un fallo, no un éxito', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ isSuccessful: false, Code: '500', message: 'EL ARTÍCULO 67511 NO SE ENCUENTRA EN LA ORDEN DE VENTA _ ' }),
+      });
+
+      const adapter = makeAdapter();
+      const result = await adapter.execute('liquidacion.crearEncabezado', { numberPF: 10794 }, CTX);
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/Code 500/);
+      expect(result.error).toMatch(/EL ARTÍCULO 67511 NO SE ENCUENTRA/);
+    });
   });
 
   describe('liquidacion.crearDetalle (APICrearDetLiqParadixe)', () => {
