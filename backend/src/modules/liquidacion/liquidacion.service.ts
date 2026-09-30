@@ -7,6 +7,7 @@ import { IdempotencyService } from '../idempotency/idempotency.service';
 import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { LIQUIDACION_VALUE_CALCULATOR, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
+import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
   CheckSettlementResponse,
@@ -18,6 +19,7 @@ import type {
   LiquidacionProgress,
   LiquidacionSubmitOptions,
   LiquidacionSubmitResult,
+  LiquidacionTotalesInput,
 } from './liquidacion.types';
 
 const WORKFLOW_NAME = 'liquidacion';
@@ -119,9 +121,6 @@ export class LiquidacionService {
     const check = await this.fetchCheck(pf);
     const pais = await this.resolvePais(check.OrdenVenta);
     const esUSA = isUSA(pais);
-    const missing: string[] = [];
-
-    if (!pais) missing.push('País de destino: no se pudo resolver desde la orden de venta.');
 
     const baseLines = check.Detalle.map((l) => {
       const kilos = toNum(l.KilosTotales);
@@ -131,47 +130,69 @@ export class LiquidacionService {
         tipoPelicula: l.TipoPelicula,
         precio,
         kilosTotal: kilos,
-        valueFOB: round2(precio * kilos),
+        valueTotal: round2(precio * kilos),
       };
     });
-    const totalFOB = round2(baseLines.reduce((a, l) => a + l.valueFOB, 0));
+    const totalValor = round2(baseLines.reduce((a, l) => a + l.valueTotal, 0));
     const totalKilos = round2(baseLines.reduce((a, l) => a + l.kilosTotal, 0));
+    const envio = { totalValor, totalKilos, kilosPorLinea: baseLines.map((l) => l.kilosTotal) };
+
+    const digitados: LiquidacionTotalesInput = { ...(input.totales ?? {}) };
+    const totales = this.calculator.resolverTotales?.(digitados, envio) ?? digitados;
+    const incoterm = normalizarIncoterm(totales.incoterm);
+
+    const lineMissing: string[] = [];
+    const lines: LiquidacionDraftLine[] = baseLines.map((l, indice) => {
+      const computed = this.calculator.compute({ ...envio, indice, pais, esUSA, incoterm, totales, line: l });
+      const override = input.lines?.[String(l.codSecLineFilm)] ?? {};
+      const values: LiquidacionLineValues = {
+        kilosTotal: l.kilosTotal,
+        valueTotal: l.valueTotal,
+        ...computed,
+        ...override,
+      };
+      const etiqueta = `Línea ${l.codSecLineFilm} (${l.tipoPelicula})`;
+      for (const [key, label] of LINE_REQUIRED) {
+        if (!isNum(values[key])) lineMissing.push(`${etiqueta} — ${label}`);
+      }
+      if (isNum(values.valueFOB) && values.valueFOB < 0) {
+        lineMissing.push(`${etiqueta} — FOB final negativo (${values.valueFOB}): revisa el flete/otros gastos digitados.`);
+      }
+      return { codSecLineFilm: l.codSecLineFilm, tipoPelicula: l.tipoPelicula, precio: l.precio, ...values };
+    });
 
     // Encabezado: lo que digita/confirma el usuario manda; los cargos de USA
-    // se toman del maestro de tarifas solo como valor por defecto.
+    // se toman del maestro de tarifas solo como valor por defecto. Harbor
+    // Maintenance Fee = 0.125% del FOB FINAL (José, 2026-09-30), por eso se
+    // resuelve después de calcular las líneas.
     const header: LiquidacionHeaderValues = { ...(input.header ?? {}) };
     if (esUSA && pais) {
-      const s = await this.rates.resolveSurcharges(this.ctx.tenantId, pais, totalFOB);
+      const fobs = lines.map((l) => l.valueFOB);
+      const fobFinal = fobs.every(isNum) ? round2(fobs.reduce((a, b) => a + b, 0)) : undefined;
+      const s = await this.rates.resolveSurcharges(this.ctx.tenantId, pais, fobFinal);
       header.entryFee ??= s.entryFee;
       header.importerSecurityFiling ??= s.importerSecurityFiling;
       header.harborMaintenanceFee ??= s.harborMaintenanceFee;
     }
+    const headerMissing: string[] = [];
     for (const [key, label] of HEADER_REQUIRED) {
-      if (this.isBlank(header[key])) missing.push(`Encabezado — ${label}`);
+      if (this.isBlank(header[key])) headerMissing.push(`Encabezado — ${label}`);
     }
     if (esUSA) {
       for (const [key, label] of HEADER_REQUIRED_USA) {
         // Son montos: un texto ("110", "") tampoco sirve para enviarlo a Oben.
         if (!isNum(header[key])) {
-          missing.push(`Encabezado (destino USA) — ${label}`);
+          headerMissing.push(`Encabezado (destino USA) — ${label}`);
         }
       }
     }
 
-    const lines: LiquidacionDraftLine[] = baseLines.map((l) => {
-      const computed = this.calculator.compute({ pais, esUSA, header, line: l, totalFOB, totalKilos });
-      const override = input.lines?.[String(l.codSecLineFilm)] ?? {};
-      const values: LiquidacionLineValues = {
-        kilosTotal: l.kilosTotal,
-        valueFOB: l.valueFOB,
-        ...computed,
-        ...override,
-      };
-      for (const [key, label] of LINE_REQUIRED) {
-        if (!isNum(values[key])) missing.push(`Línea ${l.codSecLineFilm} (${l.tipoPelicula}) — ${label}`);
-      }
-      return { codSecLineFilm: l.codSecLineFilm, tipoPelicula: l.tipoPelicula, precio: l.precio, ...values };
-    });
+    const missing = [
+      ...(pais ? [] : ['País de destino: no se pudo resolver desde la orden de venta.']),
+      ...headerMissing,
+      ...this.faltantesDelEnvio(incoterm, totales),
+      ...lineMissing,
+    ];
 
     return {
       numberPF: pf,
@@ -180,12 +201,31 @@ export class LiquidacionService {
       cliente: check.Cliente,
       pais,
       esUSA,
+      incoterm,
       header,
+      totales,
       lines,
       missing,
       readyToSubmit: missing.length === 0,
       simulated: this.calculator.simulated,
+      sinConfirmar: [...(this.calculator.sinConfirmar ?? [])],
     };
+  }
+
+  /** Datos del envío que el Incoterm exige (ver incoterm-rules.ts) y no se digitaron. */
+  private faltantesDelEnvio(incoterm: string | null, t: LiquidacionTotalesInput): string[] {
+    if (!incoterm) return [`Incoterm de la PF (${Object.keys(CONCEPTOS_POR_INCOTERM).join(', ')})`];
+    const conceptos = conceptosDe(incoterm);
+    if (!conceptos) {
+      return [`Incoterm ${incoterm}: Oben no ha definido qué conceptos lleva (solo DAP/DDP, CFR/CPT y FCA/FOB)`];
+    }
+    const out: string[] = [];
+    if (conceptos.includes('flete') && !esMonto(t.flete)) out.push(`Envío (${incoterm}) — Flete total`);
+    if (conceptos.includes('otrosGastos') && !esMonto(t.otrosGastos)) out.push(`Envío (${incoterm}) — Otros gastos totales`);
+    if (conceptos.includes('seguro') && !esFactorPoliza(t.valorPoliza)) {
+      out.push(`Envío (${incoterm}) — Valor de la póliza (divisor del seguro, mayor a 1)`);
+    }
+    return out;
   }
 
   async submit(
@@ -194,14 +234,22 @@ export class LiquidacionService {
     options: LiquidacionSubmitOptions = {},
   ): Promise<LiquidacionSubmitResult> {
     const draft = await this.getDraft(numberPF, input);
-    // Candado: un borrador armado con la fórmula de Incoterm SIMULADA nunca
-    // escribe en el ERP real de Oben — ni primer envío ni reanudación. Se
-    // revisa antes de tocar la idempotencia y antes de cualquier llamada.
+    // Candados: un borrador con datos SIMULADOS, o calculado con partes de la
+    // fórmula que José aún no confirma, nunca escribe en el ERP real de Oben
+    // — ni primer envío ni reanudación. Se revisan antes de tocar la
+    // idempotencia y antes de cualquier llamada.
     if (options.confirm === true && draft.simulated) {
       throw new BadRequestException({
         message:
-          'Esta liquidación usa la fórmula de Incoterm SIMULADA (LIQUIDACION_SIMULATION_MODE): se puede simular sin confirm, pero nunca enviarse a Oben. Falta la fórmula real de José.',
+          'Esta liquidación está SIMULADA (LIQUIDACION_SIMULATION_MODE: datos del envío de ejemplo): se puede simular sin confirm, pero nunca enviarse a Oben.',
         simulated: true,
+      });
+    }
+    if (options.confirm === true && draft.sinConfirmar.length > 0) {
+      throw new BadRequestException({
+        message:
+          'La fórmula de liquidación tiene puntos que José aún no confirma por escrito: se puede simular sin confirm, pero todavía no enviarse a Oben.',
+        sinConfirmar: draft.sinConfirmar,
       });
     }
     if (!draft.readyToSubmit) {
@@ -213,7 +261,7 @@ export class LiquidacionService {
     const payloads = this.buildPayloads(draft);
 
     if (options.confirm !== true) {
-      return { dryRun: true, simulated: draft.simulated, numberPF: draft.numberPF, payloads };
+      return { dryRun: true, simulated: draft.simulated, sinConfirmar: draft.sinConfirmar, numberPF: draft.numberPF, payloads };
     }
 
     // headId/detailsDone declaran que algo YA existe en Oben: solo tienen

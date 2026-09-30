@@ -1,100 +1,196 @@
 import {
+  FORMULA_SIN_CONFIRMAR,
+  IncotermFormulaCalculator,
   LIQUIDACION_SIMULATION_ENV,
-  PendingFormulaCalculator,
+  SIMULATED_INCOTERM_RATES,
   SimulatedIncotermCalculator,
   calculatorFromEnv,
+  prorratear,
   type LiquidacionLineContext,
 } from './liquidacion-value-calculator';
+import type { LiquidacionTotalesInput } from './liquidacion.types';
 
-const USA_HEADER = { inlandFreight: 900, entryFee: 110, importerSecurityFiling: 20, harborMaintenanceFee: 4.73, destinationCharges: 150 };
-const L1 = { codSecLineFilm: 1, tipoPelicula: 'A', precio: 2, kilosTotal: 100, valueFOB: 200 };
-const L2 = { codSecLineFilm: 2, tipoPelicula: 'B', precio: 3, kilosTotal: 200, valueFOB: 600 };
-const usaCtx = (line: typeof L1, header: LiquidacionLineContext['header'] = USA_HEADER): LiquidacionLineContext => ({
-  pais: 'USA',
-  esUSA: true,
-  header,
-  line,
-  totalFOB: 800,
-  totalKilos: 300,
+// PF de 2 líneas, 700 + 300 kg (el ejemplo de José: 70% / 30% del flete).
+const L1 = { codSecLineFilm: 1, tipoPelicula: 'A', precio: 2.55, kilosTotal: 700, valueTotal: 1785 };
+const L2 = { codSecLineFilm: 2, tipoPelicula: 'B', precio: 2.827, kilosTotal: 300, valueTotal: 848.1 };
+const TOTALES: LiquidacionTotalesInput = { flete: 1234.56, otrosGastos: 87.65, valorPoliza: 1.0035 };
+
+const ctx = (indice: 0 | 1, incoterm: string | null, totales: LiquidacionTotalesInput = TOTALES): LiquidacionLineContext => ({
+  pais: 'PERU',
+  esUSA: false,
+  incoterm,
+  totales,
+  line: [L1, L2][indice],
+  indice,
+  kilosPorLinea: [700, 300],
+  totalValor: 2633.1,
+  totalKilos: 1000,
 });
 
 describe('Calculadores de Liquidación', () => {
   describe('selección por entorno (LiquidacionModule)', () => {
-    it(`${LIQUIDACION_SIMULATION_ENV}=true → fórmula SIMULADA`, () => {
+    it(`${LIQUIDACION_SIMULATION_ENV}=true → datos del envío SIMULADOS`, () => {
       const c = calculatorFromEnv({ [LIQUIDACION_SIMULATION_ENV]: 'true' });
       expect(c).toBeInstanceOf(SimulatedIncotermCalculator);
       expect(c.simulated).toBe(true);
     });
 
-    it.each([undefined, '', 'false', '1', 'TRUE'])('%j (producción) → PendingFormulaCalculator, nada simulado', (value) => {
+    it.each([undefined, '', 'false', '1', 'TRUE'])('%j (producción) → fórmula de José, nada simulado', (value) => {
       const c = calculatorFromEnv(value === undefined ? {} : { [LIQUIDACION_SIMULATION_ENV]: value });
-      expect(c).toBeInstanceOf(PendingFormulaCalculator);
+      expect(c).toBeInstanceOf(IncotermFormulaCalculator);
+      expect(c).not.toBeInstanceOf(SimulatedIncotermCalculator);
       expect(c.simulated).toBe(false);
     });
+
+    it('mientras José no confirme el mapeo de campos, la fórmula lo declara (y eso bloquea el envío real)', () => {
+      expect(new IncotermFormulaCalculator().sinConfirmar).toEqual(FORMULA_SIN_CONFIRMAR);
+      expect(FORMULA_SIN_CONFIRMAR.length).toBeGreaterThan(0);
+    });
   });
 
-  it('PendingFormulaCalculator no calcula nada (flete/seguro/otros quedan como faltantes)', () => {
-    expect(new PendingFormulaCalculator().compute()).toEqual({});
+  describe('prorratear (por kilos, a centavos)', () => {
+    it('el ejemplo de José: 1.000 USD entre 700 y 300 kg → 70% / 30%', () => {
+      expect(prorratear(1000, [700, 300])).toEqual([700, 300]);
+    });
+
+    it('la suma cuadra EXACTO con lo digitado (redondear línea por línea daría 87.66)', () => {
+      const partes = prorratear(87.65, [700, 300]);
+      expect(partes).toEqual([61.36, 26.29]); // empate en el residuo (0.5 / 0.5): el centavo va a la primera
+      expect(Math.round(partes.reduce((a, b) => a + b, 0) * 100)).toBe(8765);
+    });
+
+    it('tres partes iguales: el centavo sobrante va a la primera, determinista', () => {
+      expect(prorratear(100, [1, 1, 1])).toEqual([33.34, 33.33, 33.33]);
+    });
+
+    it('una línea de 0 kg no recibe nada', () => {
+      expect(prorratear(50, [0, 10])).toEqual([0, 50]);
+    });
   });
 
-  describe('SimulatedIncotermCalculator (fórmula de EJEMPLO, no la de José)', () => {
+  describe('IncotermFormulaCalculator — fórmula de José (llamada 2026-09-30)', () => {
+    const calc = new IncotermFormulaCalculator();
+
+    it('DAP/DDP: flete + seguro + otros gastos; FOB final = valor total − los tres', () => {
+      for (const incoterm of ['DAP', 'DDP']) {
+        expect(calc.compute(ctx(0, incoterm))).toEqual({
+          valueTotal: 1785, // 2.55 × 700
+          kilosTotalUnit: 2.55,
+          valueFreight: 864.19, // 1234.56 × 70%
+          valueFreightUnit: 1.2345, // 864.19 / 700 = 1.23455… truncado
+          subTotal: 920.81, // 1785 − 864.19
+          valueSure: 3.21, // 920.81 − 920.81 / 1.0035
+          valueSureUnit: 0.0045,
+          expensesOther: 61.36, // 87.65 × 70% = 61.355, reparto sin perder centavos
+          expensesOtherUnit: 0.0876,
+          valueFOB: 856.24, // 1785 − 3.21 − 864.19 − 61.36
+          total: 856.24,
+          totalUnidad: 1.2232,
+        });
+      }
+    });
+
+    it('CFR/CPT: SOLO flete (José, WhatsApp 2026-09-30) — seguro y otros gastos en 0 aunque se digiten', () => {
+      for (const incoterm of ['CFR', 'CPT']) {
+        const v = calc.compute(ctx(1, incoterm));
+        expect(v).toMatchObject({
+          valueFreight: 370.37, // 1234.56 × 30%
+          subTotal: 477.73, // 848.10 − 370.37
+          valueSure: 0,
+          valueSureUnit: 0,
+          expensesOther: 0,
+          expensesOtherUnit: 0,
+          valueFOB: 477.73,
+          total: 477.73,
+          totalUnidad: 1.5924,
+        });
+      }
+    });
+
+    it('CFR no necesita la póliza ni los otros gastos para quedar completo', () => {
+      const v = calc.compute(ctx(0, 'CFR', { flete: 1234.56 }));
+      expect(v.valueFOB).toBe(920.81);
+    });
+
+    it('FCA/FOB: no se pide nada — la mercancía queda igual (FOB = valor total)', () => {
+      for (const incoterm of ['FCA', 'FOB']) {
+        expect(calc.compute(ctx(0, incoterm, {}))).toMatchObject({
+          valueFreight: 0,
+          valueSure: 0,
+          expensesOther: 0,
+          subTotal: 1785,
+          valueFOB: 1785,
+          totalUnidad: 2.55,
+        });
+      }
+    });
+
+    it('sin el flete digitado no calcula flete, subtotal, seguro ni FOB (quedan como faltantes)', () => {
+      const v = calc.compute(ctx(0, 'DAP', { otrosGastos: 87.65, valorPoliza: 1.0035 }));
+      expect(v).toMatchObject({ valueTotal: 1785, expensesOther: 61.36 });
+      for (const k of ['valueFreight', 'subTotal', 'valueSure', 'valueFOB', 'total', 'totalUnidad']) {
+        expect(v).not.toHaveProperty(k);
+      }
+    });
+
+    it.each([[undefined], [1], [0.0035], [-2]])('DAP con Valor de la póliza %j: el seguro NO se calcula (no se inventa)', (valorPoliza) => {
+      const v = calc.compute(ctx(0, 'DAP', { ...TOTALES, valorPoliza }));
+      expect(v.valueFreight).toBe(864.19);
+      expect(v).not.toHaveProperty('valueSure');
+      expect(v).not.toHaveProperty('valueFOB');
+    });
+
+    it('un flete negativo o que no es número no cuenta como digitado', () => {
+      expect(calc.compute(ctx(0, 'CFR', { flete: -5 }))).not.toHaveProperty('valueFreight');
+      expect(calc.compute(ctx(0, 'CFR', { flete: '100' as unknown as number }))).not.toHaveProperty('valueFreight');
+    });
+
+    it.each([[null], ['EXW'], ['CIF']])('Incoterm %j (sin regla de Oben) → no calcula nada', (incoterm) => {
+      expect(calc.compute(ctx(0, incoterm))).toEqual({});
+    });
+
+    it('unitarios con 4 decimales TRUNCADOS, sin ruido de coma flotante', () => {
+      const una = (kilos: number, flete: number) =>
+        calc.compute({ ...ctx(0, 'CFR', { flete }), line: { ...L1, kilosTotal: kilos, valueTotal: 2.55 * kilos }, kilosPorLinea: [kilos], indice: 0, totalKilos: kilos });
+      expect(una(100, 29).valueFreightUnit).toBe(0.29); // 0.29 × 10⁴ = 2899.9999… en binario
+      expect(una(3, 2).valueFreightUnit).toBe(0.6666); // 0.66666…: truncado, no 0.6667
+    });
+
+    it('sin kilos no calcula nada — nunca divide por cero', () => {
+      expect(calc.compute({ ...ctx(0, 'DAP'), totalKilos: 0 })).toEqual({});
+      expect(calc.compute({ ...ctx(0, 'DAP'), line: { ...L1, kilosTotal: 0 } })).toEqual({});
+    });
+  });
+
+  describe('SimulatedIncotermCalculator — misma fórmula, datos del envío de EJEMPLO', () => {
     const calc = new SimulatedIncotermCalculator();
+    const envio = { totalKilos: 5661.2, totalValor: 16134.42, kilosPorLinea: [5661.2] };
 
-    it('destino no-USA (PF 11357 real): flete por kg, seguro sobre FOB+flete, gastos de origen sobre FOB', () => {
+    it('rellena lo que el usuario no digitó con los valores de ejemplo', () => {
+      expect(calc.resolverTotales({}, envio)).toEqual({
+        incoterm: SIMULATED_INCOTERM_RATES.incoterm,
+        flete: 679.34, // 5661.2 kg × 0.12
+        otrosGastos: 161.34, // 1% × 16134.42
+        valorPoliza: SIMULATED_INCOTERM_RATES.valorPoliza,
+      });
+    });
+
+    it('lo digitado se respeta (incluido un 0 explícito)', () => {
+      expect(calc.resolverTotales({ incoterm: 'CFR', flete: 0 }, envio)).toMatchObject({ incoterm: 'CFR', flete: 0 });
+    });
+
+    it('PF 11357 real (2.85 USD × 5661.2 kg) con los datos de ejemplo', () => {
+      const totales = calc.resolverTotales({}, envio);
       const v = calc.compute({
+        ...envio,
+        indice: 0,
         pais: 'COLOMBIA',
         esUSA: false,
-        header: {},
-        line: { codSecLineFilm: 13, tipoPelicula: 'SC---0015TN', precio: 2.85, kilosTotal: 5661.2, valueFOB: 16134.42 },
-        totalFOB: 16134.42,
-        totalKilos: 5661.2,
+        incoterm: 'DAP',
+        totales,
+        line: { codSecLineFilm: 13, tipoPelicula: 'SC---0015TN', precio: 2.85, kilosTotal: 5661.2, valueTotal: 16134.42 },
       });
-
-      expect(v).toEqual({
-        kilosTotalUnit: 1,
-        valueFreight: 679.34, // 5661.2 kg × 0.12
-        valueFreightUnit: 0.12,
-        valueSure: 50.44, // 0.3% × (16134.42 + 679.34)
-        valueSureUnit: 0.0089,
-        subTotal: 16864.2,
-        expensesOther: 161.34, // 1% × FOB
-        expensesOtherUnit: 0.0285,
-        valueTotal: 17025.54,
-        total: 17025.54,
-        totalUnidad: 3.0074,
-      });
-    });
-
-    it('destino USA: Inland Freight se prorratea por kilos y los cargos de destino por FOB, sin perder ni un centavo', () => {
-      const a = calc.compute(usaCtx(L1));
-      const b = calc.compute(usaCtx(L2));
-
-      expect(a.valueFreight).toBe(312); // 100 × 0.12 + 900 × 100/300
-      expect(b.valueFreight).toBe(624); // 200 × 0.12 + 900 × 200/300
-      expect(a.expensesOther).toBe(71.18); // 284.73 × 200/800
-      expect(b.expensesOther).toBe(213.55); // 284.73 × 600/800
-      expect(a.expensesOther! + b.expensesOther!).toBeCloseTo(284.73, 2);
-      expect(a.total).toBe(584.72);
-      expect(b.total).toBe(1441.22);
-    });
-
-    it('si falta un cargo de USA del encabezado, NO inventa "otros gastos" ni el total (quedan como faltantes)', () => {
-      const v = calc.compute(usaCtx(L1, { ...USA_HEADER, destinationCharges: null }));
-      expect(v.valueFreight).toBe(312);
-      expect(v).not.toHaveProperty('expensesOther');
-      expect(v).not.toHaveProperty('total');
-      expect(v).not.toHaveProperty('totalUnidad');
-    });
-
-    it('sin kilos (o datos imposibles) no calcula nada — nunca divide por cero', () => {
-      expect(calc.compute(usaCtx({ ...L1, kilosTotal: 0 }))).toEqual({});
-      expect(calc.compute({ ...usaCtx(L1), totalKilos: 0 })).toEqual({});
-    });
-
-    it('todos los valores que devuelve son números finitos', () => {
-      for (const v of [calc.compute(usaCtx(L1)), calc.compute(usaCtx(L2))]) {
-        for (const n of Object.values(v)) expect(Number.isFinite(n)).toBe(true);
-      }
+      expect(v).toMatchObject({ valueFreight: 679.34, subTotal: 15455.08, valueSure: 53.9, expensesOther: 161.34, valueFOB: 15239.84 });
     });
   });
 });

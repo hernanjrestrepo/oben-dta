@@ -53,8 +53,25 @@ export interface LiquidacionLineValues {
   totalUnidad?: number | null;
 }
 
+/**
+ * Datos del envío que se digitan UNA sola vez (José, llamada del 2026-09-30):
+ * no van a Oben tal cual — alimentan la fórmula por Incoterm, que los
+ * prorratea por kilos entre las líneas.
+ */
+export interface LiquidacionTotalesInput {
+  /** DAP, DDP, CFR, CPT, FCA o FOB. Lo digita el usuario hasta que la "API Fase 1" de José lo traiga por PF. */
+  incoterm?: string | null;
+  /** Flete de todo el envío (USD). */
+  flete?: number | null;
+  /** Otros gastos de todo el envío (USD). */
+  otrosGastos?: number | null;
+  /** "Valor de la póliza": divisor global del seguro (FOB inicial = Subtotal ÷ Valor de la póliza). Aún sin dato de José. */
+  valorPoliza?: number | null;
+}
+
 export interface LiquidacionInput {
   header?: LiquidacionHeaderValues;
+  totales?: LiquidacionTotalesInput;
   /** Sobrescrituras por línea, indexadas por `codSecLineFilm`. */
   lines?: Record<string, LiquidacionLineValues>;
 }
@@ -72,17 +89,27 @@ export interface LiquidacionDraft {
   cliente: string;
   pais: string | null;
   esUSA: boolean;
+  /** Incoterm normalizado (p. ej. "CFR"), o null si no se indicó. */
+  incoterm: string | null;
   header: LiquidacionHeaderValues;
+  /** Los datos del envío con los que se calculó (en modo simulado, incluye los de ejemplo). */
+  totales: LiquidacionTotalesInput;
   lines: LiquidacionDraftLine[];
   /** Todo lo que falta para poder enviar — nada se inventa. */
   missing: string[];
   readyToSubmit: boolean;
   /**
-   * true = flete/seguro/otros gastos salieron de la fórmula de Incoterm
-   * SIMULADA. Un borrador simulado puede simularse (dry-run) pero NUNCA
+   * true = los datos del envío (flete, otros gastos, póliza...) son de
+   * EJEMPLO. Un borrador simulado puede simularse (dry-run) pero NUNCA
    * enviarse a Oben con `confirm:true`.
    */
   simulated: boolean;
+  /**
+   * Partes de la fórmula que son lectura nuestra y José aún no confirmó por
+   * escrito (p. ej. a qué campo de Oben va cada valor). Mismo candado que
+   * `simulated`: con alguna, el borrador se simula pero no se envía.
+   */
+  sinConfirmar: string[];
 }
 
 export interface LiquidacionSubmitOptions {
@@ -116,8 +143,10 @@ export interface LiquidacionSubmitResult {
   /** Solo cuando la liquidación se completó en esta llamada: resultado del correo de cierre (OBEN MAS §1.2). */
   cierre?: CierreEnvioResult;
   dryRun: boolean;
-  /** Solo en dry-run: los payloads se armaron con la fórmula simulada. */
+  /** Solo en dry-run: los payloads se armaron con datos de ejemplo. */
   simulated?: boolean;
+  /** Solo en dry-run: lo que falta que José confirme antes de poder enviar de verdad. */
+  sinConfirmar?: string[];
   alreadyDone?: boolean;
   numberPF: string;
   headId?: number;

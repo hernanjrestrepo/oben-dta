@@ -5,7 +5,7 @@ import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { LiquidacionService } from './liquidacion.service';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
-import type { LiquidacionHeaderValues, LiquidacionLineValues } from './liquidacion.types';
+import type { LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotalesInput } from './liquidacion.types';
 
 export const LIQUIDACION_PERMISSION = 'exportations.liquidate';
 
@@ -13,6 +13,11 @@ class LiquidacionInputDto {
   @IsOptional()
   @IsObject()
   header?: LiquidacionHeaderValues;
+
+  /** Incoterm, flete y otros gastos del envío completo, valor de la póliza. */
+  @IsOptional()
+  @IsObject()
+  totales?: LiquidacionTotalesInput;
 
   @IsOptional()
   @IsObject()
@@ -69,11 +74,11 @@ export class LiquidacionController {
     return this.liquidacion.getDraft(numberPF);
   }
 
-  /** Igual que el borrador pero con los valores que digita el usuario (dirección, puertos, partidas...). */
+  /** Igual que el borrador pero con los valores que digita el usuario (dirección, puertos, partidas, Incoterm, flete...). */
   @Post(':numberPF/draft')
   @RequirePermission(LIQUIDACION_PERMISSION)
   draftWithInput(@Param('numberPF') numberPF: string, @Body() dto: LiquidacionInputDto) {
-    return this.liquidacion.getDraft(numberPF, { header: dto.header, lines: dto.lines });
+    return this.liquidacion.getDraft(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines });
   }
 
   /** Simula por defecto; con `confirm:true` crea encabezado + detalles reales en Oben. */
@@ -82,7 +87,7 @@ export class LiquidacionController {
   submit(@Param('numberPF') numberPF: string, @Body() dto: LiquidacionInputDto) {
     return this.liquidacion.submit(
       numberPF,
-      { header: dto.header, lines: dto.lines },
+      { header: dto.header, totales: dto.totales, lines: dto.lines },
       {
         confirm: dto.confirm,
         resume: dto.resume,

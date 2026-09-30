@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { LiquidacionService } from './liquidacion.service';
 import {
-  PendingFormulaCalculator,
+  IncotermFormulaCalculator,
   SimulatedIncotermCalculator,
   type LiquidacionValueCalculator,
 } from './liquidacion-value-calculator';
@@ -13,10 +13,11 @@ import type { LiquidacionInput } from './liquidacion.types';
  * Los fixtures de spCheckSettlement son las respuestas REALES obtenidas en
  * vivo el 2026-09-23 (PF 10867, 11357 y 11271). Lo que NO es real y está
  * simulado: la respuesta de spSettlement_Head/Detail (nunca se han llamado en
- * vivo — no hay sandbox), y la fórmula por Incoterm (José aún no la ha
- * compartido; aquí un calculador de prueba solo demuestra que el enchufe
- * funciona). Esta suite valida el ORDEN, la idempotencia y el manejo de
- * fallos — no los nombres de campo de las respuestas de escritura de Oben.
+ * vivo — no hay sandbox). La fórmula de José se prueba a fondo en
+ * liquidacion-value-calculator.spec.ts; aquí casi todo usa un calculador de
+ * prueba para ejercitar los envíos. Esta suite valida el ORDEN, la
+ * idempotencia, los candados y el manejo de fallos — no los nombres de campo
+ * de las respuestas de escritura de Oben.
  */
 
 const CHECK: Record<string, unknown> = {
@@ -114,10 +115,11 @@ const testCalculator: LiquidacionValueCalculator = {
   compute: ({ line }) => {
     const r = (n: number) => Math.round(n * 100) / 100;
     const freight = r(line.kilosTotal * 0.1);
-    const sure = r(line.valueFOB * 0.01);
+    const sure = r(line.valueTotal * 0.01);
     const other = 5;
-    const subTotal = r(line.valueFOB + freight + sure + other);
+    const subTotal = r(line.valueTotal + freight + sure + other);
     return {
+      valueFOB: line.valueTotal,
       kilosTotalUnit: 1,
       valueFreight: freight,
       valueFreightUnit: r(freight / line.kilosTotal),
@@ -125,7 +127,6 @@ const testCalculator: LiquidacionValueCalculator = {
       valueSureUnit: r(sure / line.kilosTotal),
       expensesOther: other,
       expensesOtherUnit: r(other / line.kilosTotal),
-      valueTotal: subTotal,
       subTotal,
       total: subTotal,
       totalUnidad: r(subTotal / line.kilosTotal),
@@ -167,11 +168,13 @@ function build(opts: { calculator?: LiquidacionValueCalculator } = {}) {
   return { service, sim, idem, audit, rates, cierre };
 }
 
-const usaInput = (extra: LiquidacionInput = {}): LiquidacionInput => ({ header: { ...HEADER_USER, ...USA_CHARGES }, ...extra });
+/** FCA no exige datos del envío: el calculador de prueba no los usa. */
+const TOTALES_FCA = { incoterm: 'FCA' };
+const usaInput = (extra: LiquidacionInput = {}): LiquidacionInput => ({ header: { ...HEADER_USER, ...USA_CHARGES }, totales: TOTALES_FCA, ...extra });
 
 describe('Liquidación — simulación completa (datos reales de spCheckSettlement, escrituras simuladas)', () => {
   describe('borrador con las respuestas REALES de Oben', () => {
-    it('PF 11271 (USA): deriva kilos y FOB del SP, toma Entry Fee/ISF/Harbor del maestro, y lista lo que falta (nada se inventa)', async () => {
+    it('PF 11271 (USA): deriva kilos y valor total del SP, toma Entry Fee/ISF/Harbor del maestro, y lista lo que falta (nada se inventa)', async () => {
       const { service } = build({ calculator: { simulated: false, compute: () => ({}) } });
       const draft = await service.getDraft('11271');
 
@@ -179,7 +182,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.esUSA).toBe(true);
       expect(draft.cliente).toBe('OBEN US, LLC');
       expect(draft.lines).toHaveLength(1);
-      expect(draft.lines[0]).toMatchObject({ codSecLineFilm: 113, kilosTotal: 1339.42, valueFOB: 3786.54 }); // 2.827 × 1339.42
+      expect(draft.lines[0]).toMatchObject({ codSecLineFilm: 113, kilosTotal: 1339.42, valueTotal: 3786.54 }); // 2.827 × 1339.42
       expect(draft.header).toMatchObject({ entryFee: 110, importerSecurityFiling: 20, harborMaintenanceFee: 4.73 });
       expect(draft.readyToSubmit).toBe(false);
       expect(draft.missing).toEqual(
@@ -189,7 +192,9 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
           'Encabezado — Puerto de embarque',
           'Encabezado (destino USA) — Inland Freight',
           'Encabezado (destino USA) — Destination Charges',
+          'Incoterm de la PF (DAP, DDP, CFR, CPT, FCA, FOB)',
           'Línea 113 (ENA--0012TM) — Valor flete',
+          'Línea 113 (ENA--0012TM) — Valor FOB',
           'Línea 113 (ENA--0012TM) — Total por unidad',
         ]),
       );
@@ -200,15 +205,15 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       const draft = await service.getDraft('11357');
 
       expect(draft.esUSA).toBe(false);
-      expect(draft.lines[0].valueFOB).toBe(16134.42); // 2.85 × 5661.20
+      expect(draft.lines[0].valueTotal).toBe(16134.42); // 2.85 × 5661.20
       expect(rates.resolveSurcharges).not.toHaveBeenCalled();
       expect(draft.missing.some((m) => m.includes('USA'))).toBe(false);
     });
 
-    it('PF 10867 (la ya liquidada de referencia): FOB = 2.55 × 22080.76', async () => {
+    it('PF 10867 (la ya liquidada de referencia): valor total inicial = 2.55 × 22080.76', async () => {
       const { service } = build();
       const draft = await service.getDraft('10867');
-      expect(draft.lines[0].valueFOB).toBe(56305.94);
+      expect(draft.lines[0].valueTotal).toBe(56305.94);
     });
 
     it('respuesta vacía o sin Detalle → error claro, no un borrador inventado', async () => {
@@ -537,7 +542,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
           : original(system, op, args, options);
 
       const draft = await service.getDraft('11271');
-      expect(draft.lines[0]).toMatchObject({ codSecLineFilm: 113, valueFOB: 3786.54 });
+      expect(draft.lines[0]).toMatchObject({ codSecLineFilm: 113, valueTotal: 3786.54 });
     });
 
     it('un cargo de USA digitado como texto no cuenta como valor (no se manda "110" a Oben)', async () => {
@@ -561,7 +566,9 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
 
       expect(draft.readyToSubmit).toBe(true);
       expect(draft.simulated).toBe(true);
-      expect(draft.lines[0]).toMatchObject({ valueFreight: 679.34, valueSure: 50.44, expensesOther: 161.34, total: 17025.54 });
+      // DAP de ejemplo sobre la PF 11357 real (ver liquidacion-value-calculator.spec.ts).
+      expect(draft.incoterm).toBe('DAP');
+      expect(draft.lines[0]).toMatchObject({ valueFreight: 679.34, valueSure: 53.9, expensesOther: 161.34, valueFOB: 15239.84 });
     });
 
     it('USA con cargos del maestro + digitados: también completo y simulado', async () => {
@@ -608,11 +615,82 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       await expect(service.submit('11357', {}, { confirm: true })).rejects.toThrow(/SIMULADA/);
     });
 
-    it('con el calculador de producción (fórmula pendiente) el borrador NO es simulado', async () => {
-      const { service } = build({ calculator: new PendingFormulaCalculator() });
+    it('con el calculador de producción el borrador NO es simulado, y sin datos del envío no está listo', async () => {
+      const { service } = build({ calculator: new IncotermFormulaCalculator() });
       const draft = await service.getDraft('11357', { header: HEADER_CO });
       expect(draft.simulated).toBe(false);
-      expect(draft.readyToSubmit).toBe(false); // flete/seguro/otros siguen faltando
+      expect(draft.readyToSubmit).toBe(false);
+      expect(draft.missing).toContain('Incoterm de la PF (DAP, DDP, CFR, CPT, FCA, FOB)');
+    });
+  });
+
+  describe('fórmula de José a través del servicio (Incoterm, candado sinConfirmar, HMF)', () => {
+    const jose = () => build({ calculator: new IncotermFormulaCalculator() });
+    // PF 99001: 2 líneas (100 kg × 2 USD, 200 kg × 3 USD), destino USA.
+    const cfr = (flete: number) => usaInput({ totales: { incoterm: 'cfr', flete } });
+
+    it('CFR (José: solo flete): con el flete digitado el borrador queda completo, prorrateado por kilos', async () => {
+      const { service } = jose();
+      const draft = await service.getDraft('99001', cfr(300));
+      expect(draft).toMatchObject({ incoterm: 'CFR', readyToSubmit: true, simulated: false, missing: [] });
+      expect(draft.lines.map((l) => [l.valueFreight, l.valueSure, l.expensesOther, l.valueFOB])).toEqual([
+        [100, 0, 0, 100], // 200 − 100
+        [200, 0, 0, 400], // 600 − 200
+      ]);
+    });
+
+    it('USA: Harbor Maintenance Fee se pide sobre el FOB FINAL (100 + 400), no sobre el valor bruto (800)', async () => {
+      const { service, rates } = jose();
+      await service.getDraft('99001', cfr(300));
+      expect(rates.resolveSurcharges).toHaveBeenCalledWith('t1', 'USA', 500);
+    });
+
+    it('sin FOB final calculable, el maestro de tarifas no recibe un FOB inventado', async () => {
+      const { service, rates } = jose();
+      await service.getDraft('99001', usaInput({ totales: {} }));
+      expect(rates.resolveSurcharges).toHaveBeenCalledWith('t1', 'USA', undefined);
+    });
+
+    it.each([
+      [{}, 'Incoterm de la PF (DAP, DDP, CFR, CPT, FCA, FOB)'],
+      [{ incoterm: 'EXW' }, 'Incoterm EXW: Oben no ha definido qué conceptos lleva (solo DAP/DDP, CFR/CPT y FCA/FOB)'],
+      [{ incoterm: 'CPT' }, 'Envío (CPT) — Flete total'],
+      [{ incoterm: 'DDP', flete: 300, otrosGastos: 10 }, 'Envío (DDP) — Valor de la póliza (divisor del seguro, mayor a 1)'],
+      [{ incoterm: 'DAP', flete: 300, valorPoliza: 1.0035 }, 'Envío (DAP) — Otros gastos totales'],
+    ])('datos del envío %j → falta "%s"', async (totales, falta) => {
+      const { service } = jose();
+      const draft = await service.getDraft('99001', usaInput({ totales }));
+      expect(draft.missing).toContain(falta);
+      expect(draft.readyToSubmit).toBe(false);
+    });
+
+    it('un flete mayor que el valor de la mercancía (typo) deja el FOB negativo → bloquea', async () => {
+      const { service } = jose();
+      const draft = await service.getDraft('99001', cfr(3000));
+      expect(draft.missing.some((m) => m.includes('FOB final negativo'))).toBe(true);
+      expect(draft.readyToSubmit).toBe(false);
+    });
+
+    it('dry-run permitido: devuelve los payloads y lo que falta confirmar, sin escribir nada', async () => {
+      const { service, sim, idem } = jose();
+      const res = await service.submit('99001', cfr(300));
+      expect(res).toMatchObject({ dryRun: true, simulated: false });
+      expect(res.sinConfirmar?.length).toBeGreaterThan(0);
+      expect(res.payloads?.details.map((d) => d.valueFreight)).toEqual([100, 200]);
+      // Los datos del envío alimentan la fórmula; no van en el encabezado a Oben.
+      expect(res.payloads?.header).not.toHaveProperty('incoterm');
+      expect(res.payloads?.header).not.toHaveProperty('flete');
+      expect(sim.writes()).toHaveLength(0);
+      expect(idem.rows.size).toBe(0);
+    });
+
+    it('confirm:true se RECHAZA mientras José no confirme el mapeo de campos — antes de la idempotencia o de Oben', async () => {
+      const { service, sim, idem, audit, cierre } = jose();
+      await expect(service.submit('99001', cfr(300), { confirm: true })).rejects.toThrow(/José aún no confirma/);
+      expect(sim.writes()).toHaveLength(0);
+      expect(idem.rows.size).toBe(0);
+      expect(audit.log).not.toHaveBeenCalled();
+      expect(cierre.enviarTrasCompletar).not.toHaveBeenCalled();
     });
   });
 
@@ -674,10 +752,10 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     it('un valor explícito 0 (p. ej. sin seguro) es válido — solo null/ausente cuenta como faltante', async () => {
       const { service } = build({ calculator: { simulated: false, compute: () => ({}) } });
       const line = {
-        kilosTotalUnit: 1, valueTotal: 1, valueFreight: 0, valueFreightUnit: 0, valueSure: 0, valueSureUnit: 0,
+        kilosTotalUnit: 1, valueTotal: 1, valueFOB: 1, valueFreight: 0, valueFreightUnit: 0, valueSure: 0, valueSureUnit: 0,
         expensesOther: 0, expensesOtherUnit: 0, subTotal: 1, total: 1, totalUnidad: 1,
       };
-      const draft = await service.getDraft('11271', { header: { ...HEADER_USER, ...USA_CHARGES }, lines: { '113': line } });
+      const draft = await service.getDraft('11271', usaInput({ lines: { '113': line } }));
       expect(draft.missing).toEqual([]);
       expect(draft.readyToSubmit).toBe(true);
     });

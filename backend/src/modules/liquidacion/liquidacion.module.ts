@@ -27,16 +27,17 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
     LiquidacionService,
     LiquidacionCierreService,
     {
-      // Producción (variable ausente): PendingFormulaCalculator — nada se
-      // calcula hasta que José entregue la fórmula. Dev/demo:
-      // LIQUIDACION_SIMULATION_MODE=true → fórmula SIMULADA, que el servicio
-      // nunca deja llegar a un envío real (ver LiquidacionService.submit).
+      // Producción (variable ausente): IncotermFormulaCalculator — la fórmula
+      // de José con los datos que digita el usuario (sus puntos sin confirmar
+      // bloquean el envío real). Dev/demo: LIQUIDACION_SIMULATION_MODE=true →
+      // misma fórmula con datos del envío de EJEMPLO, que el servicio nunca
+      // deja llegar a un envío real (ver LiquidacionService.submit).
       provide: LIQUIDACION_VALUE_CALCULATOR,
       useFactory: () => {
         const calculator = calculatorFromEnv();
         if (calculator.simulated) {
           new Logger('LiquidacionModule').warn(
-            `${LIQUIDACION_SIMULATION_ENV}=true: Liquidación usa la fórmula de Incoterm SIMULADA — solo simulación; los envíos reales a Oben quedan bloqueados.`,
+            `${LIQUIDACION_SIMULATION_ENV}=true: Liquidación usa datos del envío SIMULADOS — solo simulación; los envíos reales a Oben quedan bloqueados.`,
           );
         }
         return calculator;
