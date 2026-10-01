@@ -21,6 +21,15 @@ import { AdapterMode, AdapterState } from './adapter.types';
  * (DNS rebinding) NO queda cubierto por este chequeo. Cubrirlo requeriría
  * resolver el DNS y validar la IP resuelta antes de conectar.
  */
+/**
+ * Excepciones EXPLÍCITAS (host:puerto exactos) a la red privada. Solo el
+ * servidor de PRUEBAS del ERP de Oben (IIS, alcanzable desde nuestro servidor
+ * por la VPN de Oben): ahí están los procedimientos de Liquidación y
+ * Facturación (decisión de Hernán, 2026-10-01). Cualquier otro destino
+ * privado sigue bloqueado.
+ */
+const PRIVATE_DESTINATIONS_ALLOWED = new Set(['192.168.20.12:9098']);
+
 function assertSafeUrl(rawUrl: string): void {
   let url: URL;
   try {
@@ -29,6 +38,10 @@ function assertSafeUrl(rawUrl: string): void {
     throw new Error(`ssrf_blocked: baseUrl inválida: ${rawUrl}`);
   }
   const host = url.hostname.toLowerCase();
+  if (url.protocol === 'http:' || url.protocol === 'https:') {
+    const port = url.port || (url.protocol === 'https:' ? '443' : '80');
+    if (PRIVATE_DESTINATIONS_ALLOWED.has(`${host}:${port}`)) return;
+  }
 
   if (host === 'localhost' || host === '::1') {
     throw new Error(`ssrf_blocked: destino no permitido para integraciones externas: ${host}`);
@@ -135,10 +148,12 @@ export abstract class RealAdapterBase extends BaseAdapter {
         parsed &&
         typeof parsed === 'object' &&
         !Array.isArray(parsed) &&
-        (parsed as Record<string, unknown>).isSuccessful === false
+        ((parsed as Record<string, unknown>).isSuccessful === false ||
+          String((parsed as Record<string, unknown>).isSuccessful).toLowerCase() === 'false')
       ) {
         const body = parsed as Record<string, unknown>;
-        const codeValue = typeof body.Code === 'string' || typeof body.Code === 'number' ? body.Code : undefined;
+        const rawCode = body.Code ?? body.code;
+        const codeValue = typeof rawCode === 'string' || typeof rawCode === 'number' ? rawCode : undefined;
         const code = codeValue !== undefined ? ` (Code ${codeValue})` : '';
         const message = typeof body.message === 'string' ? body.message : JSON.stringify(body).slice(0, 240);
         throw new Error(`Oben rechazó la operación${code}: ${message}`);

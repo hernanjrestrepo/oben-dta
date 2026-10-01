@@ -7,6 +7,14 @@ export interface ObenCostOrderAdapterConfig extends BaseAdapterConfig {
   baseUrl?: string;
   /** URL de APIConsultaParadixe (endpoint genérico multi-SP, WO-018). */
   consultaUrl?: string;
+  /**
+   * APIConsultaParadixe para las consultas de LIQUIDACIÓN (`target:
+   * 'liquidacion'`). Oben creó los procedimientos nuevos (Incoterms, etc.) en
+   * su servidor de PRUEBAS (192.168.20.12:9098) — Hernán, 2026-10-01: "todas
+   * las APIs de liquidación deben apuntar al .12". Lista de Empaque y reportes
+   * siguen con `consultaUrl` (producción). Sin esta URL se usa `consultaUrl`.
+   */
+  consultaLiquidacionUrl?: string;
   /** URL de APICrearEncLiqParadixe (crea el encabezado de una liquidación). */
   crearEncLiqUrl?: string;
   /** URL de APICrearDetLiqParadixe (crea una línea de detalle de liquidación). */
@@ -168,7 +176,8 @@ export class ObenCostOrderRealAdapter extends RealAdapterBase {
       throw new Error('BUSINESS_ERROR: numberOrderSales requerido');
     }
 
-    return this.httpJson(this.cfg.consultaUrl, { method: 'POST' }, {
+    const url = args.target === 'liquidacion' && this.cfg.consultaLiquidacionUrl ? this.cfg.consultaLiquidacionUrl : this.cfg.consultaUrl;
+    return this.httpJson(url, { method: 'POST' }, {
       Authtoken: this.cfg.authToken!,
       NombreConsulta: procedure,
       NumberOrderSales: String(numberOrderSales),

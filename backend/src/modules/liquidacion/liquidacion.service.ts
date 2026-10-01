@@ -10,6 +10,7 @@ import { LIQUIDACION_VALUE_CALCULATOR, type LiquidacionValueCalculator } from '.
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
 import { defaultsDeOben, type DefaultsDeOben } from './check-settlement-defaults';
 import { SP_PROFORMAS_COMEX, incotermDeProforma } from './incoterm-de-oben';
+import { unwrapCheckSettlement } from './check-settlement-respuesta';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
   CheckSettlementResponse,
@@ -306,7 +307,7 @@ export class LiquidacionService {
       const res = await this.hub.call<unknown>(
         'obenCostOrder',
         'query.run',
-        { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf },
+        { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf, target: 'liquidacion' },
         INCOTERM_QUERY_OPTIONS,
       );
       valor = res.ok ? incotermDeProforma(res.data, pf) : null;
@@ -610,7 +611,7 @@ export class LiquidacionService {
       OBEN_QUERY_OPTIONS,
     );
     if (!res.ok) throw new BadRequestException(res.error ?? 'No se pudo consultar la liquidación en Oben');
-    const d = res.data as Partial<CheckSettlementResponse> | null | undefined;
+    const d = unwrapCheckSettlement(res.data, pf) as Partial<CheckSettlementResponse> | null | undefined;
     if (!d || typeof d !== 'object' || !Array.isArray(d.Detalle) || d.Detalle.length === 0 || !d.Proforma) {
       throw new BadRequestException(
         `Oben no devolvió datos de liquidación para la PF ${pf} (respuesta sin Proforma/Detalle).`,
@@ -630,7 +631,7 @@ export class LiquidacionService {
     const res = await this.hub.call<Record<string, unknown>>(
       'obenCostOrder',
       'query.run',
-      { procedure: 'spEmpaqueUnificada_Paradixe', numberOrderSales: n },
+      { procedure: 'spEmpaqueUnificada_Paradixe', numberOrderSales: n, target: 'liquidacion' },
       OBEN_QUERY_OPTIONS,
     );
     const pais = String((res.ok ? res.data : null)?.Pais ?? '').trim();

@@ -11,6 +11,7 @@ import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import type { CheckSettlementResponse } from '../liquidacion/liquidacion.types';
 import { defaultsDeOben } from '../liquidacion/check-settlement-defaults';
+import { unwrapCheckSettlement } from '../liquidacion/check-settlement-respuesta';
 import type {
   FacturaElectronica,
   FacturacionDocument,
@@ -611,7 +612,7 @@ export class FacturacionService {
       OBEN_QUERY_OPTIONS,
     );
     if (!res.ok) return null;
-    const d = res.data as Partial<CheckSettlementResponse> | null | undefined;
+    const d = unwrapCheckSettlement(res.data, numberPF) as Partial<CheckSettlementResponse> | null | undefined;
     if (!d || typeof d !== 'object' || !Array.isArray(d.Detalle) || d.Detalle.length === 0) return null;
     for (const l of d.Detalle) {
       if (!isNum(toNum(l.CodSed_LineFilm)) || !isNum(toNum(l.KilosTotales)) || !isNum(toNum(l.Precio))) return null;
