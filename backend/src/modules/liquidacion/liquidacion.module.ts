@@ -9,7 +9,7 @@ import { DistributionListsModule } from '../distribution-lists/distribution-list
 import { ObenReportsModule } from '../oben-reports/oben-reports.module';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import { LiquidacionController } from './liquidacion.controller';
-import { LiquidacionService } from './liquidacion.service';
+import { LIQUIDACION_OPCIONES, LiquidacionService } from './liquidacion.service';
 import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFromEnv } from './liquidacion-value-calculator';
 
 @Module({
@@ -25,6 +25,12 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
   controllers: [LiquidacionController],
   providers: [
     LiquidacionService,
+    {
+      // Valores provisionales (partida, HMF, flete en 0) mientras Oben entrega
+      // sus tablas: activos salvo LIQUIDACION_VALORES_PROVISIONALES=false.
+      provide: LIQUIDACION_OPCIONES,
+      useFactory: () => ({ valoresProvisionales: process.env.LIQUIDACION_VALORES_PROVISIONALES !== 'false' }),
+    },
     LiquidacionCierreService,
     {
       // Producción (variable ausente): IncotermFormulaCalculator — la fórmula

@@ -36,6 +36,13 @@ function incotermEn(obj: Record<string, unknown>): string | null {
   return null;
 }
 
+/** País de destino de la proforma en el mismo reporte (campo "Pais", p. ej. "USA"). */
+export function paisDeProforma(data: unknown, numberPF: string): string | null {
+  const pf = parsearProformasComex(data).find((r) => String(r.NroProforma ?? r.Proforma ?? '').trim() === numberPF);
+  const pais = typeof pf?.Pais === 'string' ? pf.Pais.trim() : '';
+  return pais || null;
+}
+
 /**
  * Incoterm de una proforma según Oben: en el registro de la proforma o, si
  * no, en sus órdenes de venta (si todas coinciden). José: "la API trae

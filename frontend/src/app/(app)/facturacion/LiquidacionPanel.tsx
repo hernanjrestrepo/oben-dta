@@ -49,6 +49,7 @@ const ORIGEN: Record<OrigenValor, { label: string; cls: string }> = {
   maestro: { label: 'Maestro de tarifas', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
   calculado: { label: 'Calculado', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
   usuario: { label: 'Digitado', cls: 'bg-gray-50 text-gray-600 border-gray-200' },
+  provisional: { label: 'Provisional', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
 };
 
 function OrigenBadge({ origen }: { origen?: OrigenValor }) {

@@ -28,7 +28,7 @@ export interface CheckSettlementResponse {
 }
 
 /** De dónde salió cada valor del encabezado — se muestra en pantalla, nada queda "de la nada". */
-export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario';
+export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional';
 
 /** Valores del encabezado (spSettlement_Head). Todo opcional en la entrada — lo que falte bloquea el envío. */
 export interface LiquidacionHeaderValues {

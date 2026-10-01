@@ -18,6 +18,16 @@ const PATRONES: Array<[keyof DefaultsDeOben, RegExp]> = [
   ['puertoEmbarque', /^puerto(de)?(embarque|origen|salida)/i],
 ];
 
+/**
+ * País a partir de la dirección de destino que manda Oben: la última parte
+ * ("2144 FRENCH SETTLEMENT RD, Dallas TX 75212, USA" → "USA"). Hernán: "si
+ * tienes la ciudad de destino ya sabes cuál es el país".
+ */
+export function paisDeDireccion(direccion: string | null | undefined): string | null {
+  const ultima = (direccion ?? '').split(',').pop()?.trim() ?? '';
+  return /^[A-Za-zÁÉÍÓÚÑáéíóúñ .]{2,30}$/.test(ultima) ? ultima : null;
+}
+
 export function defaultsDeOben(respuesta: Record<string, unknown> | null | undefined): DefaultsDeOben {
   const out: DefaultsDeOben = {};
   if (!respuesta || typeof respuesta !== 'object') return out;

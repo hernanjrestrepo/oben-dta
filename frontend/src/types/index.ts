@@ -744,7 +744,7 @@ export interface OrdenReciente {
 export type ConceptoLiquidacion = 'flete' | 'seguro' | 'otrosGastos';
 
 /** De dónde salió un valor del encabezado: ERP de Oben, maestro de tarifas, calculado o digitado. */
-export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario';
+export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional';
 
 export interface IncotermRegla {
   codigo: string;

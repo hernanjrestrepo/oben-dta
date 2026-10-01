@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -8,8 +8,8 @@ import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.serv
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { LIQUIDACION_VALUE_CALCULATOR, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
-import { defaultsDeOben, type DefaultsDeOben } from './check-settlement-defaults';
-import { SP_PROFORMAS_COMEX, incotermDeProforma } from './incoterm-de-oben';
+import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-settlement-defaults';
+import { SP_PROFORMAS_COMEX, incotermDeProforma, paisDeProforma } from './incoterm-de-oben';
 import { unwrapCheckSettlement } from './check-settlement-respuesta';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
@@ -53,6 +53,23 @@ const PAIS_ORIGEN = 'Colombia';
 /** El reporte de proformas trae TODAS (~100, ~55 KB): se cachea por PF para no pedirlo en cada tecla. */
 const INCOTERM_CACHE_MS = 10 * 60_000;
 const INCOTERM_QUERY_OPTIONS = { maxAttempts: 1, timeoutMs: 8_000 };
+
+/**
+ * Valores PROVISIONALES mientras Oben entrega sus tablas (Hernán, 2026-10-01):
+ * lo que no tiene fuente no bloquea la liquidación — se llena con esto y se
+ * avisa en pantalla. Lo digitado por el usuario siempre manda.
+ */
+export const LIQUIDACION_OPCIONES = Symbol('LIQUIDACION_OPCIONES');
+export interface LiquidacionOpciones {
+  valoresProvisionales: boolean;
+}
+export const VALORES_PROVISIONALES = {
+  /** Película PET (OPET) — partida de trabajo hasta que llegue la tabla por producto. */
+  partida: '3920.62.00',
+  arancelPct: 10,
+  /** Harbor Maintenance Fee cuando no se puede calcular el 0.125 % del FOB final. */
+  harborMaintenanceFeeUSD: 300,
+} as const;
 
 const HEADER_REQUIRED: Array<[keyof LiquidacionHeaderValues, string]> = [
   ['direccion', 'Dirección'],
@@ -121,7 +138,7 @@ class LiquidacionStepError extends Error {
 @Injectable()
 export class LiquidacionService {
   private readonly logger = new Logger(LiquidacionService.name);
-  private readonly incotermCache = new Map<string, { valor: string | null; hasta: number }>();
+  private readonly proformaCache = new Map<string, { valor: { incoterm: string | null; pais: string | null }; hasta: number }>();
 
   constructor(
     private readonly hub: IntegrationHubService,
@@ -132,12 +149,19 @@ export class LiquidacionService {
     @Inject(LIQUIDACION_VALUE_CALCULATOR)
     private readonly calculator: LiquidacionValueCalculator,
     private readonly cierre: LiquidacionCierreService,
+    @Optional()
+    @Inject(LIQUIDACION_OPCIONES)
+    private readonly opciones: LiquidacionOpciones = { valoresProvisionales: false },
   ) {}
 
   async getDraft(numberPF: string, input: LiquidacionInput = {}): Promise<LiquidacionDraft> {
     const pf = this.parsePF(numberPF);
     const check = await this.fetchCheck(pf);
-    const pais = await this.resolvePais(check.OrdenVenta);
+    // País: Lista de Empaque (producción) → reporte de proformas de Oben → dirección de destino.
+    const pais =
+      (await this.resolvePais(check.OrdenVenta)) ??
+      (await this.proformaDeOben(pf)).pais ??
+      paisDeDireccion(defaultsDeOben(check).direccion);
     const esUSA = isUSA(pais);
 
     const baseLines = check.Detalle.map((l) => {
@@ -159,7 +183,7 @@ export class LiquidacionService {
     // Incoterm: lo escogido por el usuario manda; si no, el que trae Oben para la proforma.
     let incotermOrigen: LiquidacionDraft['incotermOrigen'] = digitados.incoterm ? 'usuario' : null;
     if (!digitados.incoterm) {
-      const deOben = await this.incotermDeOben(pf);
+      const deOben = (await this.proformaDeOben(pf)).incoterm;
       if (deOben) {
         digitados.incoterm = deOben;
         incotermOrigen = 'oben';
@@ -183,6 +207,26 @@ export class LiquidacionService {
       headerOrigen[key] = 'usuario';
     }
 
+    const ajustes: string[] = [];
+    const prov = this.opciones?.valoresProvisionales === true;
+    if (prov && conceptos?.includes('flete') && !esMonto(totales.flete)) {
+      totales = { ...totales, flete: 0 };
+      ajustes.push('Flete marítimo en 0: no está en la tabla de fletes (solo trae el tramo dentro de USA). Digítalo si lo tienes.');
+    }
+    if (prov) {
+      for (const key of ['paNcm', 'paNaladi'] as const) {
+        if (this.isBlank(header[key])) {
+          header[key] = VALORES_PROVISIONALES.partida;
+          headerOrigen[key] = 'provisional';
+        }
+      }
+      if (headerOrigen.paNcm === 'provisional' || headerOrigen.paNaladi === 'provisional') {
+        ajustes.push(
+          `Partida arancelaria PROVISIONAL ${VALORES_PROVISIONALES.partida} (arancel ${VALORES_PROVISIONALES.arancelPct} %) mientras Oben envía la tabla por producto.`,
+        );
+      }
+    }
+
     const calcular = (t: LiquidacionTotalesInput) =>
       this.calcularLineas(baseLines, input.lines, (l, indice) =>
         this.calculator.compute({ ...envio, indice, pais, esUSA, incoterm, totales: t, line: l }),
@@ -192,7 +236,6 @@ export class LiquidacionService {
     // Destination Charges. Si no se puede (faltan cargos), se recalcula sin el 0.
     const otrosPendientesUSA = esUSA && !!conceptos?.includes('otrosGastos') && !isNum(totales.otrosGastos);
     let calculo = calcular(otrosPendientesUSA ? { ...totales, otrosGastos: 0 } : totales);
-    const ajustes: string[] = [];
     const sinConfirmar = [...(this.calculator.sinConfirmar ?? [])];
 
     if (esUSA && pais) {
@@ -224,6 +267,13 @@ export class LiquidacionService {
         if (headerOrigen[key] === 'usuario') continue;
         (header as Record<string, unknown>)[key] = value;
         if (isNum(value)) headerOrigen[key] = 'maestro';
+      }
+      if (prov && !isNum(header.harborMaintenanceFee) && headerOrigen.harborMaintenanceFee !== 'usuario') {
+        header.harborMaintenanceFee = VALORES_PROVISIONALES.harborMaintenanceFeeUSD;
+        headerOrigen.harborMaintenanceFee = 'provisional';
+        ajustes.push(
+          `Harbor Maintenance Fee PROVISIONAL USD ${VALORES_PROVISIONALES.harborMaintenanceFeeUSD}: no se pudo calcular el 0.125 % del FOB final.`,
+        );
       }
 
       // DestinationCharges = Inland Freight + Entry Fee + ISF + Harbor
@@ -295,14 +345,15 @@ export class LiquidacionService {
   }
 
   /**
-   * Incoterm de la proforma según Oben (spCheckSalesOrderComex_Paradixe). Nunca
-   * bloquea el borrador: si Oben no responde o no trae el campo, null.
+   * Incoterm y país de la proforma según Oben (spCheckSalesOrderComex_Paradixe,
+   * servidor de liquidación). Nunca bloquea el borrador: si Oben no responde o
+   * no trae el campo, null. Cacheado por PF.
    */
-  private async incotermDeOben(pf: string): Promise<string | null> {
+  private async proformaDeOben(pf: string): Promise<{ incoterm: string | null; pais: string | null }> {
     const key = `${this.ctx.tenantId}:${pf}`;
-    const cached = this.incotermCache.get(key);
+    const cached = this.proformaCache.get(key);
     if (cached && cached.hasta > Date.now()) return cached.valor;
-    let valor: string | null = null;
+    let valor: { incoterm: string | null; pais: string | null } = { incoterm: null, pais: null };
     try {
       const res = await this.hub.call<unknown>(
         'obenCostOrder',
@@ -310,11 +361,11 @@ export class LiquidacionService {
         { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf, target: 'liquidacion' },
         INCOTERM_QUERY_OPTIONS,
       );
-      valor = res.ok ? incotermDeProforma(res.data, pf) : null;
+      if (res.ok) valor = { incoterm: incotermDeProforma(res.data, pf), pais: paisDeProforma(res.data, pf) };
     } catch {
-      valor = null;
+      /* sin datos de Oben: se sigue sin ellos */
     }
-    this.incotermCache.set(key, { valor, hasta: Date.now() + INCOTERM_CACHE_MS });
+    this.proformaCache.set(key, { valor, hasta: Date.now() + INCOTERM_CACHE_MS });
     return valor;
   }
 
@@ -628,14 +679,19 @@ export class LiquidacionService {
   private async resolvePais(ordenVenta: string): Promise<string | null> {
     const n = Number(ordenVenta);
     if (!Number.isFinite(n) || n <= 0) return null;
-    const res = await this.hub.call<Record<string, unknown>>(
-      'obenCostOrder',
-      'query.run',
-      { procedure: 'spEmpaqueUnificada_Paradixe', numberOrderSales: n, target: 'liquidacion' },
-      OBEN_QUERY_OPTIONS,
-    );
-    const pais = String((res.ok ? res.data : null)?.Pais ?? '').trim();
-    return pais || null;
+    // La Lista de Empaque es un reporte de PRODUCCIÓN (no del servidor de liquidación).
+    try {
+      const res = await this.hub.call<Record<string, unknown>>(
+        'obenCostOrder',
+        'query.run',
+        { procedure: 'spEmpaqueUnificada_Paradixe', numberOrderSales: n },
+        OBEN_QUERY_OPTIONS,
+      );
+      const pais = String((res.ok ? res.data : null)?.Pais ?? '').trim();
+      return pais || null;
+    } catch {
+      return null;
+    }
   }
 
   /** La respuesta de spSettlement_Head aún no se ha visto en vivo: se acepta un número, o un campo tipo CodSec_InvoiceDataComexHead. */

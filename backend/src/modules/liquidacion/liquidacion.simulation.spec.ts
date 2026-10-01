@@ -137,7 +137,7 @@ const testCalculator: LiquidacionValueCalculator = {
 const HEADER_USER = { direccion: '1 Port Rd, Miami FL', puertoArribo: 'Miami', puertoEmbarque: 'Cartagena', paNcm: '3920.20', paNaladi: '3920.20.00', notes: 'prueba' };
 const USA_CHARGES = { inlandFreight: 900, destinationCharges: 150 };
 
-function build(opts: { calculator?: LiquidacionValueCalculator } = {}) {
+function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: boolean } = {}) {
   const sim = new ObenSim();
   const idem = new FakeIdempotency();
   const audit = { log: jest.fn().mockResolvedValue(undefined) };
@@ -165,6 +165,7 @@ function build(opts: { calculator?: LiquidacionValueCalculator } = {}) {
     rates as never,
     opts.calculator ?? testCalculator,
     cierre as never,
+    { valoresProvisionales: !!opts.provisionales },
   );
   return { service, sim, idem, audit, rates, cierre };
 }
@@ -863,6 +864,49 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     });
   });
 
+  describe('valores PROVISIONALES mientras Oben entrega sus tablas (Hernán, 2026-10-01)', () => {
+    const prov = () => build({ calculator: new IncotermFormulaCalculator(), provisionales: true });
+    const HEADER_USA = { ...HEADER_USER, inlandFreight: 1744 };
+    delete (HEADER_USA as Record<string, unknown>).paNcm;
+    delete (HEADER_USA as Record<string, unknown>).paNaladi;
+
+    it('sin flete, partidas ni HMF calculable: se llenan, se avisan y la liquidación queda completa', async () => {
+      const { service, rates } = prov();
+      rates.resolveSurcharges.mockResolvedValue({ entryFee: 110, importerSecurityFiling: 20, harborMaintenanceFee: null, harborMaintenanceFeeFormula: null, destinationCharges: null, missing: [] });
+      const draft = await service.getDraft('11271', { header: HEADER_USA, totales: { incoterm: 'DDP' } });
+
+      expect(draft.header).toMatchObject({ paNcm: '3920.62.00', paNaladi: '3920.62.00', harborMaintenanceFee: 300, destinationCharges: 2174 });
+      expect(draft.headerOrigen).toMatchObject({ paNcm: 'provisional', paNaladi: 'provisional', harborMaintenanceFee: 'provisional' });
+      expect(draft.totales.flete).toBe(0);
+      expect(draft.ajustes).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Flete marítimo en 0'),
+          expect.stringContaining('Partida arancelaria PROVISIONAL 3920.62.00 (arancel 10 %)'),
+          expect.stringContaining('Harbor Maintenance Fee PROVISIONAL USD 300'),
+        ]),
+      );
+      expect(draft.missing).toEqual([]);
+    });
+
+    it('lo digitado manda: flete y partidas del usuario no se tocan; el HMF calculable usa la regla de José', async () => {
+      const { service } = prov();
+      const draft = await service.getDraft('11271', {
+        header: { ...HEADER_USA, paNcm: '3920.62.19', paNaladi: '3920.62.00' },
+        totales: { incoterm: 'DDP', flete: 1200 },
+      });
+      expect(draft.totales.flete).toBe(1200);
+      expect(draft.header).toMatchObject({ paNcm: '3920.62.19', harborMaintenanceFee: 4.73 });
+      expect(draft.headerOrigen).toMatchObject({ paNcm: 'usuario', harborMaintenanceFee: 'maestro' });
+      expect(draft.ajustes.some((a) => a.includes('PROVISIONAL') || a.includes('Flete marítimo en 0'))).toBe(false);
+    });
+
+    it('sin la opción (por defecto en los tests y fuera de producción) nada se llena: siguen como faltantes', async () => {
+      const { service } = build({ calculator: new IncotermFormulaCalculator() });
+      const draft = await service.getDraft('11271', { header: HEADER_USA, totales: { incoterm: 'DDP' } });
+      expect(draft.missing).toEqual(expect.arrayContaining(['Encabezado — Partida arancelaria NCM', 'Envío (DDP) — Flete total']));
+    });
+  });
+
   describe('Incoterm desde el ERP de Oben (spCheckSalesOrderComex_Paradixe)', () => {
     const comexCon = (incoterm: string | null) =>
       `{"NroProforma":"11357","Mercado":"EXPORTACION","Cliente":"X","Pais":"COLOMBIA"${incoterm ? `,"Incoterm":"${incoterm}"` : ''},"OrdenesVenta":[]}`;
@@ -906,6 +950,28 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       await service.getDraft('11357', { header: { direccion: 'x' } });
       expect(comex).toHaveLength(1);
       expect(comex[0].options).toMatchObject({ maxAttempts: 1 });
+    });
+
+    it('país: si la Lista de Empaque no lo trae, se toma del reporte de proformas de Oben', async () => {
+      const { service, sim } = armar(`{"NroProforma":"11357","Pais":"USA","Incoterms":"DDP","OrdenesVenta":[]}`);
+      const original = sim.call.bind(sim);
+      sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) =>
+        op === 'query.run' && args.procedure === 'spEmpaqueUnificada_Paradixe' ? { ok: true, data: {} } : original(system, op, args, options);
+      const draft = await service.getDraft('11357');
+      expect(draft).toMatchObject({ pais: 'USA', esUSA: true, incoterm: 'DDP', incotermOrigen: 'oben' });
+      expect(draft.missing.some((m) => m.startsWith('País de destino'))).toBe(false);
+    });
+
+    it('país: sin Empaque ni reporte, sale de la dirección de destino ("…Dallas TX 75212, USA")', async () => {
+      const { service, sim } = armar(new Error('timeout'));
+      const original = sim.call.bind(sim);
+      sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) => {
+        if (op === 'query.run' && args.procedure === 'spEmpaqueUnificada_Paradixe') return { ok: true, data: {} };
+        if (op === 'liquidacion.consultar') return { ok: true, data: [{ ...(CHECK['11357'] as object), Direccion: ['2144 FRENCH SETTLEMENT RD', 'Dallas TX 75212', 'USA'].join(String.fromCharCode(13, 10)) }] };
+        return original(system, op, args, options);
+      };
+      const draft = await service.getDraft('11357');
+      expect(draft).toMatchObject({ pais: 'USA', esUSA: true });
     });
 
     it('si Oben falla, el borrador sale igual (sin Incoterm), nunca se cae', async () => {
