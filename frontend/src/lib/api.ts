@@ -9,6 +9,8 @@ import {
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
+  FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, OrdenReciente,
+  IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
@@ -207,6 +209,87 @@ class ApiClient {
 
   async downloadPackingListExcel(numberOrderSales: string): Promise<Blob> {
     const { data } = await this.client.get(`/packing-list/${numberOrderSales}/excel`, { responseType: 'blob' });
+    return data;
+  }
+
+  // Liquidación y Facturación (Oben). Cada consulta va en vivo al ERP de Oben
+  // (varias llamadas encadenadas): más margen que el timeout global de 30s.
+  private readonly OBEN_LIVE = { timeout: 90_000 };
+
+  async getOrdenesRecientes(): Promise<OrdenReciente[]> {
+    const { data } = await this.client.get<OrdenReciente[]>('/facturacion/ordenes-recientes');
+    return data;
+  }
+
+  async getFacturacionDraft(numberOrderSales: number, input: FacturacionInput = {}): Promise<FacturacionDraft> {
+    const { data } = await this.client.post<FacturacionDraft>(`/facturacion/${numberOrderSales}/draft`, input, this.OBEN_LIVE);
+    return data;
+  }
+
+  async getFacturacionHistorial(numberOrderSales: number): Promise<FacturacionHistorial> {
+    const { data } = await this.client.get<FacturacionHistorial>(`/facturacion/${numberOrderSales}/historial`);
+    return data;
+  }
+
+  async getFacturacionDestinatarios(): Promise<{ to: string[]; cc: string[] }> {
+    const { data } = await this.client.get<{ to: string[]; cc: string[] }>('/facturacion/destinatarios');
+    return data;
+  }
+
+  async downloadFacturacionPdf(numberOrderSales: number, input: FacturacionInput = {}): Promise<Blob> {
+    try {
+      const { data } = await this.client.post(`/facturacion/${numberOrderSales}/pdf`, input, {
+        ...this.OBEN_LIVE,
+        responseType: 'blob',
+      });
+      return data as Blob;
+    } catch (err) {
+      // Con responseType 'blob' el error del backend también llega como Blob:
+      // se convierte a JSON para que la pantalla muestre el motivo real.
+      const e = err as AxiosError;
+      if (e.response?.data instanceof Blob) {
+        try {
+          e.response.data = JSON.parse(await e.response.data.text()) as unknown;
+        } catch {
+          /* no era JSON: se deja tal cual */
+        }
+      }
+      throw err;
+    }
+  }
+
+  async sendFacturacion(
+    numberOrderSales: number,
+    input: FacturacionInput,
+    options: { to?: string[]; cc?: string[]; force?: boolean } = {},
+  ): Promise<FacturacionSendResult> {
+    const { data } = await this.client.post<FacturacionSendResult>(
+      `/facturacion/${numberOrderSales}/send`,
+      { ...input, ...options },
+      this.OBEN_LIVE,
+    );
+    return data;
+  }
+
+  async getIncoterms(): Promise<IncotermRegla[]> {
+    const { data } = await this.client.get<IncotermRegla[]>('/liquidacion/incoterms');
+    return data;
+  }
+
+  async getLiquidacionDraft(
+    numberPF: string,
+    input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput },
+  ): Promise<LiquidacionDraft> {
+    const { data } = await this.client.post<LiquidacionDraft>(`/liquidacion/${numberPF}/draft`, input, this.OBEN_LIVE);
+    return data;
+  }
+
+  /** Sin `confirm`: solo simula (arma lo que se enviaría a Oben, no escribe nada). */
+  async simulateLiquidacion(
+    numberPF: string,
+    input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput },
+  ): Promise<LiquidacionSimulacion> {
+    const { data } = await this.client.post<LiquidacionSimulacion>(`/liquidacion/${numberPF}/submit`, input, this.OBEN_LIVE);
     return data;
   }
 

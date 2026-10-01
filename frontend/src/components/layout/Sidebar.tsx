@@ -22,6 +22,7 @@ import {
   FileSpreadsheet,
   Briefcase,
   ArrowRightLeft,
+  Receipt,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -34,6 +35,7 @@ const navItems = [
   { href: '/invoices', label: 'Facturas', icon: FileText },
   { href: '/fletes', label: 'Fletes', icon: Truck },
   { href: '/lista-empaque', label: 'Lista de Empaque', icon: Package },
+  { href: '/facturacion', label: 'Liquidación y Facturación', icon: Receipt },
   { href: '/reportes', label: 'Reportes Oben', icon: FileSpreadsheet },
   { href: '/clients', label: 'Clientes', icon: Users },
   { href: '/equivalencias', label: 'Equivalencias', icon: ArrowRightLeft },

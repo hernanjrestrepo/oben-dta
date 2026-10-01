@@ -657,3 +657,164 @@ export interface CarteraHold {
   holdReason: string | null;
   createdAt: string;
 }
+
+// ── Facturación (Oben) — espejo de backend/src/modules/facturacion/facturacion.types.ts ──
+
+export type FacturacionKind = 'exportacion' | 'nacional_completo' | 'nacional_parcial';
+
+export interface FacturacionLine {
+  codSecLineFilm: number;
+  tipoPelicula: string;
+  precio: number;
+  kilosTotal: number;
+  valorLinea: number;
+}
+
+export interface FacturacionInput {
+  direccionEntrega?: string;
+  observaciones?: string;
+  infoComercial?: string;
+  parcial?: boolean;
+}
+
+export interface FacturacionDraft {
+  numberOrderSales: number;
+  cliente: string;
+  pais: string | null;
+  proforma: string | null;
+  ordenCompra: string | null;
+  contenedor: string | null;
+  codigoMaterial: string | null;
+  kind: FacturacionKind | null;
+  direccionEntrega: string | null;
+  direccionFuente: 'maestro_clientes' | 'digitada' | 'oben_erp' | 'oben_plus' | null;
+  observaciones: string | null;
+  infoComercial: string | null;
+  lines: FacturacionLine[];
+  totalValor: number;
+  totalKilos: number;
+  missing: string[];
+  readyToGenerate: boolean;
+  simulated: boolean;
+  simulatedFields: string[];
+}
+
+export interface FacturaElectronica {
+  invoiceNumber: string;
+  cufe: string;
+  status: string;
+  simulated: boolean;
+  emitidaEn: string | null;
+}
+
+export interface FacturacionEnvio {
+  fecha: string;
+  to: string[];
+  cc: string[];
+  ok: boolean;
+  cufe: string | null;
+  cufeSimulado: boolean;
+  error: string | null;
+}
+
+export interface FacturacionHistorial {
+  numberOrderSales: number;
+  envios: FacturacionEnvio[];
+  facturaElectronica: FacturaElectronica | null;
+}
+
+export interface FacturacionSendResult {
+  sent: boolean;
+  to: string[];
+  cc: string[];
+  filename: string;
+  cufe: string;
+  cufeSimulado: boolean;
+  simulated: boolean;
+}
+
+export interface OrdenReciente {
+  numberOrderSales: number;
+  cliente: string | null;
+  fecha: string;
+}
+
+// ── Liquidación de comercio exterior — espejo de backend/src/modules/liquidacion/liquidacion.types.ts ──
+
+export type ConceptoLiquidacion = 'flete' | 'seguro' | 'otrosGastos';
+
+/** De dónde salió un valor del encabezado: ERP de Oben, maestro de tarifas, calculado o digitado. */
+export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario';
+
+export interface IncotermRegla {
+  codigo: string;
+  conceptos: ConceptoLiquidacion[];
+}
+
+export interface LiquidacionHeaderValues {
+  direccion?: string | null;
+  notes?: string | null;
+  paNcm?: string | null;
+  paNaladi?: string | null;
+  description?: string | null;
+  puertoArribo?: string | null;
+  puertoEmbarque?: string | null;
+  inlandFreight?: number | null;
+  entryFee?: number | null;
+  importerSecurityFiling?: number | null;
+  harborMaintenanceFee?: number | null;
+  destinationCharges?: number | null;
+}
+
+export interface LiquidacionTotalesInput {
+  incoterm?: string | null;
+  flete?: number | null;
+  otrosGastos?: number | null;
+  valorPoliza?: number | null;
+}
+
+export interface LiquidacionDraftLine {
+  codSecLineFilm: number;
+  tipoPelicula: string;
+  precio: number;
+  kilosTotal?: number | null;
+  kilosTotalUnit?: number | null;
+  valueFOB?: number | null;
+  valueTotal?: number | null;
+  valueFreight?: number | null;
+  valueFreightUnit?: number | null;
+  valueSure?: number | null;
+  valueSureUnit?: number | null;
+  expensesOther?: number | null;
+  expensesOtherUnit?: number | null;
+  subTotal?: number | null;
+  total?: number | null;
+  totalUnidad?: number | null;
+}
+
+export interface LiquidacionDraft {
+  numberPF: string;
+  ordenVenta: string;
+  ordenCompra: string;
+  cliente: string;
+  pais: string | null;
+  esUSA: boolean;
+  incoterm: string | null;
+  header: LiquidacionHeaderValues;
+  headerOrigen: Partial<Record<keyof LiquidacionHeaderValues, OrigenValor>>;
+  totales: LiquidacionTotalesInput;
+  lines: LiquidacionDraftLine[];
+  ajustes: string[];
+  missing: string[];
+  readyToSubmit: boolean;
+  simulated: boolean;
+  sinConfirmar: string[];
+}
+
+export interface LiquidacionSimulacion {
+  dryRun: boolean;
+  simulated?: boolean;
+  sinConfirmar?: string[];
+  numberPF: string;
+  payloads?: { header: Record<string, unknown>; details: Record<string, unknown>[] };
+}
