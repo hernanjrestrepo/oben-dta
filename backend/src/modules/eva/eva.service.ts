@@ -82,7 +82,7 @@ export class EvaService {
     if (!apiKey) {
       return {
         reply:
-          'EVA no está configurada todavía en este ambiente (falta KIMI_API_KEY). Avisa al equipo técnico.',
+          'MIA no está configurada todavía en este ambiente (falta KIMI_API_KEY). Avisa al equipo técnico.',
       };
     }
 
@@ -111,7 +111,7 @@ export class EvaService {
       .map((p) => `- ${p.sku}: ${p.name} — $${Number(p.price).toLocaleString('es-CO')} COP/kg`)
       .join('\n');
 
-    const systemPrompt = `Eres EVA, la asistente de operaciones de Oben Xmart (plataforma de Oben Group, exportaciones e industria, construida por Paradixe).
+    const systemPrompt = `Eres MIA, la asistente de operaciones de Oben Xmart (plataforma de Oben Group, exportaciones e industria, construida por Paradixe).
 
 Catálogo real activo de productos:
 ${catalogText || '(sin productos activos)'}
@@ -131,12 +131,12 @@ Reglas:
       completion = await this.callKimi(apiKey, messages);
     } catch (err) {
       this.logger.error(`Kimi call failed: ${(err as Error).message}`);
-      return { reply: 'EVA no pudo conectarse al modelo de IA en este momento. Intenta de nuevo en un momento.' };
+      return { reply: 'MIA no pudo conectarse al modelo de IA en este momento. Intenta de nuevo en un momento.' };
     }
 
     const choice = completion?.choices?.[0]?.message;
     if (!choice) {
-      return { reply: 'EVA no obtuvo una respuesta válida del modelo.' };
+      return { reply: 'MIA no obtuvo una respuesta válida del modelo.' };
     }
 
     const toolCall = choice.tool_calls?.[0];
@@ -144,7 +144,7 @@ Reglas:
       return this.executeCrearCotizacion(toolCall);
     }
 
-    return { reply: choice.content || 'EVA no generó una respuesta.' };
+    return { reply: choice.content || 'MIA no generó una respuesta.' };
   }
 
   private async executeCrearCotizacion(toolCall: KimiToolCall): Promise<EvaChatResult> {
@@ -152,7 +152,7 @@ Reglas:
     try {
       args = JSON.parse(toolCall.function.arguments);
     } catch {
-      return { reply: 'EVA intentó generar una cotización pero los datos no llegaron completos. ¿Puedes repetir la solicitud con el correo del cliente y qué producto/cantidad necesita?' };
+      return { reply: 'MIA intentó generar una cotización pero los datos no llegaron completos. ¿Puedes repetir la solicitud con el correo del cliente y qué producto/cantidad necesita?' };
     }
     if (!args.clienteEmail || !args.descripcionPedido) {
       return { reply: 'Para generar la cotización necesito el correo del cliente y qué producto/cantidad pide.' };
@@ -160,7 +160,7 @@ Reglas:
 
     const result = await this.quotesService.processIncomingEmail({
       from: args.clienteEmail,
-      subject: 'Solicitud vía EVA',
+      subject: 'Solicitud vía MIA',
       body: args.descripcionPedido,
     });
 
@@ -176,7 +176,7 @@ Reglas:
     if (result.outcome === 'insufficient_info') {
       return { reply: `Identifiqué al cliente, pero no logré reconocer ningún producto del catálogo real en "${args.descripcionPedido}". ¿Puedes ser más específico con el SKU o nombre del producto?` };
     }
-    return { reply: result.message || 'EVA procesó la solicitud pero el resultado no fue claro.' };
+    return { reply: result.message || 'MIA procesó la solicitud pero el resultado no fue claro.' };
   }
 
   private async callKimi(
