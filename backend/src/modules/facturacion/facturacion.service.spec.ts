@@ -51,6 +51,8 @@ function makeService(overrides: {
     resolveRecipients: jest.fn().mockResolvedValue(overrides.distribution ?? { to: [], cc: [], bcc: [] }),
   } as any;
   const pdf = { build: jest.fn().mockResolvedValue(overrides.pdfBuffer ?? Buffer.from('pdf')) } as any;
+  // El servicio arma la factura con buildFactura({ draft, factura, ... }); se delega en build(draft, factura) para afirmar sobre eso.
+  pdf.buildFactura = jest.fn(async (d: any) => ({ pdf: await pdf.build(d.draft, d.factura), avisos: [] }));
   const matches =
     overrides.clientMatches ??
     (overrides.clientAddress !== undefined && overrides.clientAddress !== null ? [{ address: overrides.clientAddress }] : []);

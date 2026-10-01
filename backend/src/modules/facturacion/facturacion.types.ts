@@ -8,6 +8,16 @@
  */
 export type FacturacionKind = 'exportacion' | 'nacional_completo' | 'nacional_parcial';
 
+/** Lista de Empaque Unificada de la OV (ERP de Oben): totales y kilos por material (SKU), para la factura. */
+export interface FacturacionEmpaque {
+  pallets: number | null;
+  bobinas: number | null;
+  pesoNetoKg: number | null;
+  pesoBrutoKg: number | null;
+  /** Un ítem por código de material (película + ancho + diámetro), ordenado por código. */
+  items: Array<{ codigo: string; kilos: number; bobinas: number }>;
+}
+
 export interface FacturacionLine {
   codSecLineFilm: number;
   tipoPelicula: string;
@@ -46,6 +56,8 @@ export interface FacturacionDraft {
   observaciones: string | null;
   infoComercial: string | null;
   lines: FacturacionLine[];
+  /** null = la Lista de Empaque no trae detalle por material (la factura usa las líneas por película). */
+  empaque?: FacturacionEmpaque | null;
   totalValor: number;
   totalKilos: number;
   /** Todo lo que falta para poder generar el documento — nada se inventa. */
@@ -74,6 +86,8 @@ export interface FacturacionDocument {
   draft: FacturacionDraft;
   filename: string;
   pdf: Buffer;
+  /** Lo que la factura no pudo llenar todavía (sale en blanco, nunca se inventa). */
+  avisos?: string[];
   /** null = todavía no se ha emitido (se emite al enviar, no al descargar). */
   facturaElectronica: FacturaElectronica | null;
 }

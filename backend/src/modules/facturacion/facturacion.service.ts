@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
@@ -24,8 +24,13 @@ import type {
   FacturacionRecipients,
   FacturacionSendResult,
   OrdenReciente,
+  FacturacionEmpaque,
 } from './facturacion.types';
 import { FacturacionPdfService } from './facturacion-pdf.service';
+import { LiquidacionService } from '../liquidacion/liquidacion.service';
+import type { LiquidacionDraft } from '../liquidacion/liquidacion.types';
+import { TrmService } from './trm.service';
+import type { DatosFacturaDian } from './factura-dian/representacion';
 
 const WORKFLOW_NAME = 'facturacion';
 /** Una factura electrónica es permanente: la clave de idempotencia de su emisión no debe expirar nunca en la práctica. */
@@ -65,6 +70,7 @@ interface EmpaqueUnificadaHeader {
   Contenedor: string | null;
   Proforma: string | null;
   OrdenCompra: string | null;
+  empaque: FacturacionEmpaque | null;
 }
 
 /**
@@ -99,6 +105,8 @@ export class FacturacionService {
     @InjectRepository(Client)
     private readonly clients: Repository<Client>,
     private readonly idempotency: IdempotencyService,
+    @Optional() private readonly liquidacion?: LiquidacionService,
+    @Optional() private readonly trm?: TrmService,
   ) {}
 
   async getDraft(numberOrderSales: number, input: FacturacionInput = {}): Promise<FacturacionDraft> {
@@ -204,6 +212,7 @@ export class FacturacionService {
       observaciones: input.observaciones?.trim() || null,
       infoComercial: input.infoComercial?.trim() || null,
       lines,
+      empaque: header?.empaque ?? null,
       totalValor,
       totalKilos,
       missing,
@@ -233,9 +242,9 @@ export class FacturacionService {
     const facturaElectronica = options.emit
       ? await this.emitirFacturaElectronica(draft)
       : await this.facturaElectronicaEmitida(numberOrderSales);
-    const pdf = await this.pdf.build(draft, facturaElectronica);
+    const { pdf, avisos } = await this.pdf.buildFactura({ draft, factura: facturaElectronica, ...(await this.datosFactura(draft, facturaElectronica)) });
     const filename = `Factura_Borrador-OV${numberOrderSales}.pdf`;
-    return { draft, filename, pdf, facturaElectronica };
+    return { draft, filename, pdf, facturaElectronica, avisos };
   }
 
   /**
@@ -275,7 +284,7 @@ export class FacturacionService {
       );
     }
 
-    const { draft, filename, pdf, facturaElectronica } = await this.generateDocument(numberOrderSales, input, { emit: true });
+    const { draft, filename, pdf, facturaElectronica, avisos } = await this.generateDocument(numberOrderSales, input, { emit: true });
     const factura = facturaElectronica!;
     const simulated = draft.simulated || factura.simulated;
     const [primaryTo, ...restTo] = resolved.to;
@@ -288,7 +297,7 @@ export class FacturacionService {
         to: primaryTo,
         ...(cc.length ? { cc: cc.join(',') } : {}),
         subject: `${simulated ? '[SIMULADO] ' : ''}Borrador de Facturación — Orden ${numberOrderSales}`,
-        body: this.emailBody(draft, factura),
+        body: this.emailBody(draft, factura, avisos ?? []),
         attachments: [{ filename, content: pdf.toString('base64'), encoding: 'base64', contentType: 'application/pdf' }],
       },
       { maxAttempts: 1, timeoutMs: 30_000 },
@@ -507,7 +516,7 @@ export class FacturacionService {
   }
 
   /** Correo HTML con estilos en línea (se ve bien en Outlook); todo dato externo va escapado. */
-  private emailBody(draft: FacturacionDraft, factura: FacturaElectronica): string {
+  private emailBody(draft: FacturacionDraft, factura: FacturaElectronica, pendientes: string[] = []): string {
     const esc = (v: unknown) =>
       String(v ?? '—').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
     const money = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -570,6 +579,9 @@ export class FacturacionService {
       '</table>',
       draft.observaciones ? `<p style="font-size:12px;margin:0 0 6px"><strong>Observaciones:</strong> ${esc(draft.observaciones)}</p>` : '',
       draft.infoComercial ? `<p style="font-size:12px;margin:0 0 6px"><strong>Información comercial:</strong> ${esc(draft.infoComercial)}</p>` : '',
+      pendientes.length
+        ? `<p style="font-size:12px;margin:14px 0 4px"><strong>Datos que la factura deja en blanco o provisionales (no se inventan):</strong></p><ul style="font-size:12px;margin:0 0 8px;padding-left:18px">${pendientes.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>`
+        : '',
       '<p style="font-size:11px;color:#9CA3AF;margin-top:18px">Generado automáticamente por Oben Xmart. El PDF adjunto es el documento de apoyo para Facturación/COMEX.</p>',
       '</div>',
     ].join('');
@@ -601,7 +613,51 @@ export class FacturacionService {
       Contenedor: text(d.Contenedor),
       Proforma: text(d.Proforma),
       OrdenCompra: text(d.OrdenCompra),
+      empaque: this.empaqueDe(d),
     };
+  }
+
+  /** Totales y kilos por material de spEmpaqueUnificada (Detalle = un renglón por pallet y material). */
+  private empaqueDe(d: Record<string, unknown>): FacturacionEmpaque | null {
+    const num = (v: unknown) => (isNum(toNum(v)) ? toNum(v) : null);
+    const porCodigo = new Map<string, { kilos: number; bobinas: number }>();
+    for (const fila of Array.isArray(d.Detalle) ? (d.Detalle as Array<Record<string, unknown>>) : []) {
+      const codigo = text(fila?.CodigoMaterial);
+      const kilos = num(fila?.PesoNetoKg);
+      if (!codigo || kilos === null) continue;
+      const acc = porCodigo.get(codigo) ?? { kilos: 0, bobinas: 0 };
+      acc.kilos = round2(acc.kilos + kilos);
+      acc.bobinas += num(fila?.Bobinas) ?? 0;
+      porCodigo.set(codigo, acc);
+    }
+    if (!porCodigo.size) return null;
+    return {
+      pallets: num(d.TotalPallet),
+      bobinas: num(d.TotalBobinas),
+      pesoNetoKg: num(d.TotalPesoNetoKg),
+      pesoBrutoKg: num(d.TotalPesoBrutoKg),
+      items: [...porCodigo.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([codigo, v]) => ({ codigo, ...v })),
+    };
+  }
+
+  /** Lo que la factura necesita además del borrador: liquidación (exportación), TRM y datos del maestro de clientes. */
+  private async datosFactura(draft: FacturacionDraft, factura: FacturaElectronica | null): Promise<Omit<DatosFacturaDian, 'draft' | 'factura'>> {
+    const exportacion = draft.kind === 'exportacion';
+    let liquidacion: LiquidacionDraft | null = null;
+    if (exportacion && draft.proforma && this.liquidacion) {
+      try {
+        liquidacion = await this.liquidacion.getDraft(draft.proforma);
+      } catch (err) {
+        this.logger.warn(`Factura OV ${draft.numberOrderSales}: no se pudo calcular la liquidación de la PF ${draft.proforma}: ${(err as Error).message}`);
+      }
+    }
+    const dia = (factura?.emitidaEn ? new Date(factura.emitidaEn) : new Date()).toISOString().slice(0, 10);
+    const trm = exportacion && this.trm ? await this.trm.vigente(dia) : null;
+    const matches = draft.cliente
+      ? await this.clients.find({ where: { tenantId: this.ctx.tenantId, name: ILike(escapeLike(draft.cliente)) }, take: 2 })
+      : [];
+    const c = matches.length === 1 ? matches[0] : null;
+    return { liquidacion, trm, cliente: c ? { correo: c.email, telefono: c.phone, direccion: c.address } : null };
   }
 
   private async fetchCheckSettlement(numberPF: string): Promise<{ check: CheckSettlementResponse; simulated: boolean } | null> {

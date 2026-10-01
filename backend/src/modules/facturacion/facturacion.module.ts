@@ -12,11 +12,20 @@ import { FacturasParcialesController } from './facturas-parciales.controller';
 import { FacturacionController } from './facturacion.controller';
 import { FacturacionService } from './facturacion.service';
 import { FacturacionPdfService } from './facturacion-pdf.service';
+import { TrmService } from './trm.service';
+import { LiquidacionModule } from '../liquidacion/liquidacion.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Client, Tenant, FacturaParcial]), IntegrationHubModule, AuthModule, DistributionListsModule, IdempotencyModule],
+  imports: [
+    TypeOrmModule.forFeature([Client, Tenant, FacturaParcial]),
+    IntegrationHubModule,
+    AuthModule,
+    DistributionListsModule,
+    IdempotencyModule,
+    LiquidacionModule,
+  ],
   controllers: [FacturacionController, FacturasParcialesController],
-  providers: [FacturacionService, FacturacionPdfService, FacturasParcialesService],
+  providers: [FacturacionService, FacturacionPdfService, TrmService, FacturasParcialesService],
   exports: [FacturacionService, FacturasParcialesService],
 })
 export class FacturacionModule {}
