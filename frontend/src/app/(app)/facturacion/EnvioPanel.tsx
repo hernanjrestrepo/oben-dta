@@ -53,6 +53,7 @@ export function EnvioPanel({
   const [resultado, setResultado] = useState<FacturacionSendResult | null>(null);
   const [error, setError] = useState('');
   const [copiado, setCopiado] = useState(false);
+  const [abriendo, setAbriendo] = useState(false);
 
   useEffect(() => {
     const desdeUltimos = () => {
@@ -97,6 +98,42 @@ export function EnvioPanel({
     }
   }
 
+  /**
+   * Abre el PDF adjunto en una pestaña nueva. La pestaña se abre en el mismo
+   * clic (antes de esperar al servidor): si se abre después del await, el
+   * navegador la bloquea como ventana emergente.
+   */
+  async function abrirAdjunto() {
+    if (abriendo) return;
+    const ventana = window.open('', '_blank');
+    setAbriendo(true);
+    setError('');
+    try {
+      const blob = await api.downloadFacturacionPdf(n, input);
+      const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      if (ventana) ventana.location.href = url;
+      else window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      ventana?.close();
+      setError(extractMessage(err, 'No se pudo abrir el PDF.'));
+    } finally {
+      setAbriendo(false);
+    }
+  }
+
+  const adjunto = (nombre: string, clase = '') => (
+    <button
+      type="button"
+      onClick={() => void abrirAdjunto()}
+      disabled={abriendo}
+      title="Abrir el PDF"
+      className={`inline-flex items-center gap-1.5 text-[#C4521A] hover:underline disabled:opacity-60 disabled:no-underline ${clase}`}
+    >
+      {abriendo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />} {nombre}
+    </button>
+  );
+
   async function copiarCufe(cufe: string) {
     try {
       await navigator.clipboard.writeText(cufe);
@@ -137,8 +174,9 @@ export function EnvioPanel({
               </div>
             </div>
             <div className="rounded-lg bg-white border border-gray-200 px-4 py-3 flex items-center gap-2 text-gray-700">
-              <Paperclip className="w-4 h-4 text-gray-400" /> {resultado.filename}
+              {adjunto(resultado.filename)}
             </div>
+            {error && <p className="text-xs text-red-700">{error}</p>}
           </div>
           <div className="mt-6">
             <button className={btnSecondary} onClick={() => setResultado(null)}>
@@ -183,9 +221,7 @@ export function EnvioPanel({
             <dt className="text-gray-500">Asunto</dt>
             <dd className="text-gray-900">Borrador de Facturación — Orden {n}</dd>
             <dt className="text-gray-500">Adjunto</dt>
-            <dd className="text-gray-900 flex items-center gap-1.5">
-              <Paperclip className="w-3.5 h-3.5 text-gray-400" /> Factura_Borrador-OV{n}.pdf
-            </dd>
+            <dd>{adjunto(`Factura_Borrador-OV${n}.pdf`)}</dd>
             <dt className="text-gray-500">Factura electrónica</dt>
             <dd className="text-gray-900">
               {factura ? (
