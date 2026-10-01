@@ -10,6 +10,7 @@ import {
   DistributionList, DistributionListInput,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
   FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, OrdenReciente,
+  MiaContexto, MiaRespuesta, MiaTurno,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
 } from '@/types';
 
@@ -174,9 +175,10 @@ class ApiClient {
     return data;
   }
 
-  // EVA
-  async evaChat(message: string): Promise<{ reply: string; action?: { type: string; data: unknown } }> {
-    const { data } = await this.client.post('/eva/chat', { message });
+  // MIA (Claude Haiku): reenvía la conversación y la pantalla actual; sus
+  // herramientas consultan Oben en vivo, por eso el timeout es largo.
+  async evaChat(message: string, historial: MiaTurno[] = [], contexto: MiaContexto = {}): Promise<MiaRespuesta> {
+    const { data } = await this.client.post<MiaRespuesta>('/eva/chat', { message, historial, contexto }, { timeout: 180000 });
     return data;
   }
 

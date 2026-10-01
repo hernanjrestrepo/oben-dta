@@ -23,6 +23,7 @@ import {
   Briefcase,
   ArrowRightLeft,
   Receipt,
+  UserCog,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -42,19 +43,22 @@ const navItems = [
   { href: '/distribucion', label: 'Listas de Distribución', icon: Users2 },
 ];
 
-const adminNavItem = { href: '/admin/users', label: 'Administración', icon: ShieldCheck };
+const usersNavItem = { href: '/admin/users', label: 'Usuarios', icon: UserCog };
+const rolesNavItem = { href: '/admin/roles', label: 'Perfiles', icon: ShieldCheck };
 const auditNavItem = { href: '/auditoria', label: 'Auditoría', icon: History };
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const canAdminister = user?.permissions?.includes('users.read');
+  const canManageUsers = user?.permissions?.includes('users.read');
+  const canManageRoles = user?.permissions?.includes('security.read');
   const canViewAudit = user?.permissions?.includes('auditoria.read');
   const items = [
     ...navItems,
     ...(canViewAudit ? [auditNavItem] : []),
-    ...(canAdminister ? [adminNavItem] : []),
+    ...(canManageUsers ? [usersNavItem] : []),
+    ...(canManageRoles ? [rolesNavItem] : []),
   ];
 
   return (
@@ -89,9 +93,7 @@ export function Sidebar() {
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1">
             {items.map((item) => {
-              const isActive = item.href === '/admin/users'
-                ? pathname?.startsWith('/admin')
-                : pathname === item.href || pathname?.startsWith(`${item.href}/`);
+              const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
               const Icon = item.icon;
               return (
                 <Link

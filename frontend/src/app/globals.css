@@ -31,6 +31,22 @@ html {
   font-size: 14px;
 }
 
+/*
+ * Las pantallas son claras (fondos blancos), pero con Windows/macOS en modo
+ * oscuro `--foreground` pasa a #ededed y los campos sin color propio lo
+ * heredaban: letra casi blanca sobre blanco (reporte de Hernán en el chat de
+ * MIA, 2026-10-01). Los campos de formulario siempre van en texto oscuro.
+ */
+input,
+textarea,
+select {
+  color: #111827;
+}
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

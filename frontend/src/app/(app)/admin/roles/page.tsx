@@ -22,7 +22,57 @@ const ACTION_LABELS: Record<string, string> = {
   use: 'Usar',
   approve: 'Aprobar',
   execute: 'Ejecutar',
+  liquidate: 'Liquidar',
+  ingest: 'Cargar',
+  ask: 'Preguntar',
+  cancel: 'Anular',
+  send: 'Enviar',
+  admin: 'Administrar',
+  schedule: 'Programar',
+  mark_paid: 'Marcar pagada',
+  credit_validate: 'Validar crédito',
+  adjust: 'Ajustar',
+  transfer: 'Transferir',
 };
+
+/**
+ * Acciones de solo consulta: ver información sin modificar nada (incluye
+ * usar/preguntarle a la IA). Todo lo demás (crear, editar, enviar, liquidar,
+ * aprobar…) es transaccional.
+ */
+const CONSULTA_ACTIONS = new Set(['read', 'view', 'use', 'ask']);
+const esConsulta = (p: SecurityPermission) => CONSULTA_ACTIONS.has(p.action);
+
+type Nivel = 'ninguno' | 'consulta' | 'transaccional' | 'parcial';
+
+function nivelModulo(perms: SecurityPermission[], elegidos: string[]): Nivel {
+  const tiene = (p: SecurityPermission) => elegidos.includes(p.key);
+  if (!perms.some(tiene)) return 'ninguno';
+  if (perms.every(tiene)) return 'transaccional';
+  const consulta = perms.filter(esConsulta);
+  if (consulta.length > 0 && consulta.every(tiene) && !perms.some((p) => !esConsulta(p) && tiene(p))) return 'consulta';
+  return 'parcial';
+}
+
+/** Resumen del perfil para la lista: solo consulta, transaccional o mixto. */
+function tipoPerfil(role: SecurityRole): { label: string; className: string } {
+  if (role.permissions.length === 0) return { label: 'Sin permisos', className: 'bg-gray-100 text-gray-600' };
+  const transaccional = role.permissions.some((p) => !CONSULTA_ACTIONS.has(p.key.split('.').slice(1).join('.')));
+  return transaccional
+    ? { label: 'Transaccional', className: 'bg-orange-100 text-[#C4521A]' }
+    : { label: 'Consulta', className: 'bg-blue-50 text-blue-700' };
+}
+
+/** "Comercial Consulta" → "tenant.comercial-consulta" (la clave se arma sola). */
+function claveDesdeNombre(nombre: string): string {
+  const slug = nombre
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug ? `tenant.${slug}` : '';
+}
 
 function errMsg(err: unknown, fallback: string) {
   return (err as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
@@ -106,14 +156,26 @@ export default function AdminRolesPage() {
     }));
   }
 
-  function toggleModule(moduleKey: string, checked: boolean) {
-    const moduleKeys = (permsByModule.get(moduleKey) || []).map((p) => p.key);
+  /** Consulta = solo las acciones de ver; Transaccional = todo el módulo; Ninguno = nada. */
+  function setNivel(moduleKey: string, nivel: 'ninguno' | 'consulta' | 'transaccional') {
+    const perms = permsByModule.get(moduleKey) || [];
+    const delModulo = perms.map((p) => p.key);
+    const nuevos =
+      nivel === 'transaccional' ? delModulo : nivel === 'consulta' ? perms.filter(esConsulta).map((p) => p.key) : [];
     setEditForm((f) => ({
       ...f,
-      permissions: checked
-        ? Array.from(new Set([...f.permissions, ...moduleKeys]))
-        : f.permissions.filter((k) => !moduleKeys.includes(k)),
+      permissions: [...f.permissions.filter((k) => !delModulo.includes(k)), ...nuevos],
     }));
+  }
+
+  function setNivelTodos(nivel: 'ninguno' | 'consulta' | 'transaccional') {
+    const todos =
+      nivel === 'transaccional'
+        ? permissions.map((p) => p.key)
+        : nivel === 'consulta'
+          ? permissions.filter(esConsulta).map((p) => p.key)
+          : [];
+    setEditForm((f) => ({ ...f, permissions: todos }));
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -121,9 +183,13 @@ export default function AdminRolesPage() {
     setSaveError('');
     if (isNew) {
       if (!editForm.key.trim() || !editForm.name.trim()) {
-        setSaveError('Clave y nombre son obligatorios');
+        setSaveError('El nombre del perfil es obligatorio');
         return;
       }
+    }
+    if (editForm.permissions.length === 0) {
+      setSaveError('Marca al menos un módulo como Consulta o Transaccional');
+      return;
     }
     try {
       setSaving(true);
@@ -220,7 +286,12 @@ export default function AdminRolesPage() {
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">inactivo</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5">{role.permissions.length} permisos</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${tipoPerfil(role).className}`}>
+                      {tipoPerfil(role).label}
+                    </span>
+                    <span className="text-xs text-gray-500">{role.permissions.length} permisos</span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -242,26 +313,24 @@ export default function AdminRolesPage() {
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {isNew && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Clave *</label>
-                      <input
-                        type="text"
-                        value={editForm.key}
-                        onChange={(e) => setEditForm((f) => ({ ...f, key: e.target.value.trim().toLowerCase() }))}
-                        placeholder="tenant.supervisor"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition font-mono text-sm"
-                      />
-                    </div>
-                  )}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del perfil *</label>
                     <input
                       type="text"
                       value={editForm.name}
-                      onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                      onChange={(e) =>
+                        setEditForm((f) => ({
+                          ...f,
+                          name: e.target.value,
+                          ...(isNew ? { key: claveDesdeNombre(e.target.value) } : {}),
+                        }))
+                      }
+                      placeholder="Ej. Comercial consulta"
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
                     />
+                    {isNew && editForm.key && (
+                      <p className="text-[11px] text-gray-500 mt-1 font-mono">Clave: {editForm.key}</p>
+                    )}
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
@@ -285,35 +354,76 @@ export default function AdminRolesPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Matriz de Permisos</h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <h3 className="text-sm font-semibold text-gray-900">Acceso por módulo</h3>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-500">Marcar todos como:</span>
+                      <button type="button" onClick={() => setNivelTodos('consulta')} className="px-2 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">Consulta</button>
+                      <button type="button" onClick={() => setNivelTodos('transaccional')} className="px-2 py-1 rounded border border-orange-200 bg-orange-50 text-[#C4521A] hover:bg-orange-100">Transaccional</button>
+                      <button type="button" onClick={() => setNivelTodos('ninguno')} className="px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50">Ninguno</button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">
+                    <b>Consulta</b>: solo ve la información. <b>Transaccional</b>: además puede crear, editar, enviar,
+                    aprobar o liquidar en ese módulo. El detalle permite ajustar acción por acción.
+                  </p>
                   <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                    <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
                       <table className="w-full text-sm">
-                        <thead className="sticky top-0 bg-gray-50">
+                        <thead className="sticky top-0 bg-gray-50 z-10">
                           <tr>
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">Módulo</th>
-                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Permisos</th>
+                            <th className="px-3 py-2 text-center font-semibold text-blue-700">Consulta</th>
+                            <th className="px-3 py-2 text-center font-semibold text-[#C4521A]">Transaccional</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Detalle</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {Array.from(permsByModule.entries()).map(([moduleKey, perms]) => {
-                            const allChecked = perms.every((p) => editForm.permissions.includes(p.key));
+                            const nivel = nivelModulo(perms, editForm.permissions);
+                            const tieneConsulta = perms.some(esConsulta);
+                            const tieneTransaccion = perms.some((p) => !esConsulta(p));
+                            const consultaMarcada = perms.filter(esConsulta).some((p) => editForm.permissions.includes(p.key));
                             return (
-                              <tr key={moduleKey}>
-                                <td className="px-4 py-3 align-top">
-                                  <label className="inline-flex items-center gap-2 font-medium text-gray-900">
+                              <tr key={moduleKey} className={nivel === 'ninguno' ? '' : 'bg-orange-50/30'}>
+                                <td className="px-4 py-3 align-top font-medium text-gray-900">
+                                  {moduleLabel(moduleKey)}
+                                  {nivel === 'parcial' && (
+                                    <span className="ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">personalizado</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-3 text-center align-top">
+                                  {tieneConsulta ? (
                                     <input
                                       type="checkbox"
-                                      checked={allChecked}
-                                      onChange={(e) => toggleModule(moduleKey, e.target.checked)}
+                                      aria-label={`Consulta en ${moduleLabel(moduleKey)}`}
+                                      className="w-4 h-4 accent-blue-600"
+                                      checked={consultaMarcada}
+                                      onChange={(e) => setNivel(moduleKey, e.target.checked ? 'consulta' : 'ninguno')}
                                     />
-                                    {moduleLabel(moduleKey)}
-                                  </label>
+                                  ) : (
+                                    <span className="text-gray-300">—</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-3 text-center align-top">
+                                  {tieneTransaccion ? (
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`Transaccional en ${moduleLabel(moduleKey)}`}
+                                      className="w-4 h-4 accent-[#F47735]"
+                                      checked={nivel === 'transaccional'}
+                                      onChange={(e) =>
+                                        setNivel(moduleKey, e.target.checked ? 'transaccional' : tieneConsulta ? 'consulta' : 'ninguno')
+                                      }
+                                    />
+                                  ) : (
+                                    <span className="text-gray-300">—</span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3">
-                                  <div className="flex flex-wrap gap-3">
+                                  <div className="flex flex-wrap gap-x-3 gap-y-1.5">
                                     {perms.map((p) => (
-                                      <label key={p.key} className="inline-flex items-center gap-1.5 text-gray-700">
+                                      <label key={p.key} className="inline-flex items-center gap-1.5 text-xs text-gray-700">
                                         <input
                                           type="checkbox"
                                           checked={editForm.permissions.includes(p.key)}

@@ -107,7 +107,9 @@ describe('Control de acceso — todas las rutas de todos los controllers', () =>
     ['DistributionListsController.create', 'configuracion.update'],
     ['DistributionListsController.associate', 'configuracion.update'],
     ['EquivalencesController.update', 'products.update'],
-    ['EvaController.chat', 'quotes.create'],
+    // EvaController.chat exige solo dashboard.view: su único efecto real
+    // (crear_cotizacion) se verifica dentro de la herramienta con
+    // quotes.create — cubierto en eva.service.spec.ts.
     ['IntegrationHubController.execute', 'integrations.update'],
     ['AuthController.register', 'users.create'],
   ])('%s (efecto real: correo/escritura) exige %s, no un permiso de solo lectura', (id, permission) => {
