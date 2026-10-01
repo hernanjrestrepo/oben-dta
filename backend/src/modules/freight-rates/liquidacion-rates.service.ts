@@ -18,6 +18,26 @@ export interface LiquidacionInlandFreightResult {
   missing: string[];
 }
 
+/** Inland Freight resuelto por la dirección de destino (código postal) contra la tabla de fletes. */
+export interface LiquidacionInlandByAddressResult {
+  inlandFreight: number | null;
+  destinationPort: string | null;
+  destinationAddress: string | null;
+  validUntil: string | null;
+  /** true si la tarifa ya venció (se usa igual, pero se avisa). */
+  vencida: boolean;
+}
+
+/**
+ * Postgres devuelve las columnas `decimal` como TEXTO ("110.0000"): sin esta
+ * conversión la liquidación (que exige números) los trataba como faltantes.
+ */
+const toAmount = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 const ENTRY_FEE_NAME = 'Entry Fee';
 const ISF_NAME = 'Importer Security Filing';
 const HARBOR_FEE_NAME = 'Harbor Maintenance Fee';
@@ -75,7 +95,7 @@ export class LiquidacionRatesService {
     if (!isf) missing.push(`Importer Security Filing: no hay tarifa cargada para "${country}" en el maestro de fletes.`);
     if (!harbor) missing.push(`Harbor Maintenance Fee: no hay tarifa cargada para "${country}" en el maestro de fletes.`);
 
-    let harborMaintenanceFee: number | null = harbor?.rateAmount ?? null;
+    let harborMaintenanceFee: number | null = toAmount(harbor?.rateAmount);
     if (harborMaintenanceFee === null && harbor?.rateFormula) {
       const pct = this.parsePercentFormula(harbor.rateFormula);
       if (pct !== null && fobValue !== undefined) {
@@ -92,8 +112,8 @@ export class LiquidacionRatesService {
     );
 
     return {
-      entryFee: entry?.rateAmount ?? null,
-      importerSecurityFiling: isf?.rateAmount ?? null,
+      entryFee: toAmount(entry?.rateAmount),
+      importerSecurityFiling: toAmount(isf?.rateAmount),
       harborMaintenanceFee,
       harborMaintenanceFeeFormula: harbor?.rateFormula ?? null,
       destinationCharges: null,
@@ -132,7 +152,41 @@ export class LiquidacionRatesService {
         missing: [`Inland Freight: no hay tarifa cargada para "${destinationPort}" (${country}) en el maestro de fletes.`],
       };
     }
-    return { inlandFreight: row.rate40hc, missing: [] };
+    return { inlandFreight: toAmount(row.rate40hc), missing: [] };
+  }
+
+  /**
+   * Inland Freight por la DIRECCIÓN de destino que ya trae Oben
+   * (spCheckSettlement → "Direccion"/"PuertoArribo", p. ej. "... Dallas TX
+   * 75212"): se busca su código postal en la tabla del forwarder
+   * (destination_address "Dallas, TX 75212" → Houston, TX (Port), 40HC).
+   * Sin código postal o sin fila que lo contenga, no se inventa nada.
+   */
+  async resolveInlandByAddress(
+    tenantId: string,
+    country: 'USA' | 'CA',
+    address?: string | null,
+    hoy: Date = new Date(),
+  ): Promise<LiquidacionInlandByAddressResult> {
+    const vacio = { inlandFreight: null, destinationPort: null, destinationAddress: null, validUntil: null, vencida: false };
+    const zips = [...new Set((address ?? '').match(/\b\d{5}\b/g) ?? [])];
+    for (const zip of zips) {
+      const rows = await this.inlandRates.find({
+        where: { tenantId, country, destinationAddress: ILike(`%${zip}%`) },
+        take: 5,
+      });
+      const row = rows.find((r) => toAmount(r.rate40hc) !== null);
+      if (!row) continue;
+      const validUntil = row.validUntil ? String(row.validUntil).slice(0, 10) : null;
+      return {
+        inlandFreight: toAmount(row.rate40hc),
+        destinationPort: row.destinationPort,
+        destinationAddress: row.destinationAddress,
+        validUntil,
+        vencida: !!validUntil && validUntil < hoy.toISOString().slice(0, 10),
+      };
+    }
+    return vacio;
   }
 
   private parsePercentFormula(formula: string): number | null {

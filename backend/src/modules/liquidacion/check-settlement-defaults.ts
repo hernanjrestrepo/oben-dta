@@ -24,7 +24,9 @@ export function defaultsDeOben(respuesta: Record<string, unknown> | null | undef
   for (const [campo, patron] of PATRONES) {
     for (const [k, v] of Object.entries(respuesta)) {
       if (patron.test(k.replace(/[_\s]/g, '')) && typeof v === 'string' && v.trim()) {
-        out[campo] = v.trim();
+        // Oben manda la dirección en varias líneas ("2144 FRENCH SETTLEMENT RD\r\nDallas TX 75212\r\nUSA"):
+        // en un campo de una línea quedaría pegada, así que se une con comas.
+        out[campo] = v.trim().replace(/\s*[\r\n]+\s*/g, ', ');
         break;
       }
     }

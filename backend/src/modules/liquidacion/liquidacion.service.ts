@@ -172,11 +172,30 @@ export class LiquidacionService {
       this.calcularLineas(baseLines, input.lines, (l, indice) =>
         this.calculator.compute({ ...envio, indice, pais, esUSA, incoterm, totales: t, line: l }),
       );
-    let calculo = calcular(totales);
+    // USA con DAP/DDP sin "otros costos destino" digitados: la primera pasada
+    // usa 0 para poder calcular el FOB (y con él el HMF); después se toman de
+    // Destination Charges. Si no se puede (faltan cargos), se recalcula sin el 0.
+    const otrosPendientesUSA = esUSA && !!conceptos?.includes('otrosGastos') && !isNum(totales.otrosGastos);
+    let calculo = calcular(otrosPendientesUSA ? { ...totales, otrosGastos: 0 } : totales);
     const ajustes: string[] = [];
     const sinConfirmar = [...(this.calculator.sinConfirmar ?? [])];
 
     if (esUSA && pais) {
+      // Inland Freight de la tabla de fletes, por el código postal del destino
+      // que trae Oben en Direccion/PuertoArribo (lo digitado manda).
+      if (headerOrigen.inlandFreight !== 'usuario') {
+        const destino = [header.direccion, header.puertoArribo].filter((v): v is string => typeof v === 'string').join(' ');
+        const inland = await this.rates.resolveInlandByAddress(this.ctx.tenantId, 'USA', destino);
+        if (isNum(inland.inlandFreight)) {
+          header.inlandFreight = inland.inlandFreight;
+          headerOrigen.inlandFreight = 'maestro';
+          ajustes.push(
+            `Inland Freight de la tabla de fletes: ${inland.destinationPort} → ${inland.destinationAddress} (contenedor 40'), USD ${inland.inlandFreight.toFixed(2)}.` +
+              (inland.vencida ? ` OJO: esa tarifa venció el ${inland.validUntil} — pedir la actualización al forwarder.` : ''),
+          );
+        }
+      }
+
       // Harbor Maintenance Fee = 0.125% del FOB FINAL (José, 2026-09-30): se
       // resuelve después de calcular las líneas. Los cargos del maestro de
       // tarifas son solo el valor por defecto.
@@ -209,6 +228,8 @@ export class LiquidacionService {
             : `Otros costos destino = Destination Charges (USD ${dc.toFixed(2)} = Inland + Entry + ISF + HMF).`,
         );
         totales = { ...totales, otrosGastos: dc };
+        calculo = calcular(totales);
+      } else if (otrosPendientesUSA) {
         calculo = calcular(totales);
       } else if (isNum(dc) && conceptos && !conceptos.includes('otrosGastos')) {
         sinConfirmar.push(

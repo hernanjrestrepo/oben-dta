@@ -73,6 +73,7 @@ function pipeline(opts: { dianMode?: 'mock' | 'real' } = {}) {
   const idempotency = new FakeIdempotency();
   const rates = {
     resolveSurcharges: jest.fn().mockResolvedValue({ entryFee: 110, importerSecurityFiling: 20, harborMaintenanceFee: 4.73, destinationCharges: null, missing: [] }),
+    resolveInlandByAddress: jest.fn().mockResolvedValue({ inlandFreight: null, destinationPort: null, destinationAddress: null, validUntil: null, vencida: false }),
   };
   const ctx = { tenantId: 't1', userId: 'u1' };
   const distributionLists = { resolveRecipients: jest.fn().mockResolvedValue({ to: ['comex@oben.com'], cc: [], bcc: [] }) };

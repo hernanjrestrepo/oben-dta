@@ -150,6 +150,7 @@ function build(opts: { calculator?: LiquidacionValueCalculator } = {}) {
       destinationCharges: null,
       missing: [],
     }),
+    resolveInlandByAddress: jest.fn().mockResolvedValue({ inlandFreight: null, destinationPort: null, destinationAddress: null, validUntil: null, vencida: false }),
   };
   // Correo de cierre (OBEN MAS §1.2): se prueba a fondo en liquidacion-cierre.service.spec.ts;
   // aquí solo importa CUÁNDO se dispara.
@@ -798,6 +799,67 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
 
       expect(res).toMatchObject({ dryRun: false, headId: 5000, detailsCreated: 1, cierre: { sent: false, error: 'smtp down' } });
       expect(idem.rows.get('liquidacion:11271')?.status).toBe('completed');
+    });
+  });
+
+  describe('OV 11187 / PF 11366 real (OBEN US, Dallas): todo lo de destino sale solo de Oben y de la tabla de fletes', () => {
+    // Respuesta REAL de APILiquidacionParadixe para la PF 11366 (2026-10-01), sobre la línea de la 11271.
+    const OBEN_11366 = {
+      Direccion: '2144 FRENCH SETTLEMENT RD\r\nDallas TX 75212\r\nUSA',
+      PuertoEmbarque: 'CARTAGENA - COLOMBIA',
+      PuertoArribo: 'DALLAS, TX 75212',
+    };
+    const DALLAS = { inlandFreight: 1744, destinationPort: 'Houston, TX (Port)', destinationAddress: 'Dallas, TX 75212', validUntil: '2026-08-31', vencida: true };
+    const armar = () => {
+      const built = build({ calculator: new IncotermFormulaCalculator() });
+      const original = built.sim.call.bind(built.sim);
+      built.sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) =>
+        op === 'liquidacion.consultar' ? { ok: true, data: { ...(CHECK['11271'] as object), ...OBEN_11366 } } : original(system, op, args, options);
+      built.rates.resolveInlandByAddress.mockResolvedValue(DALLAS);
+      return built;
+    };
+    const PARTIDAS = { paNcm: '3920.62.00', paNaladi: '3920.62.00' };
+
+    it('con solo Incoterm, flete y partidas digitados, la liquidación queda COMPLETA', async () => {
+      const { service, rates } = armar();
+      const draft = await service.getDraft('11271', { header: PARTIDAS, totales: { incoterm: 'DAP', flete: 1200 } });
+
+      expect(draft.header).toMatchObject({
+        direccion: '2144 FRENCH SETTLEMENT RD, Dallas TX 75212, USA', // una sola línea
+        puertoEmbarque: 'CARTAGENA - COLOMBIA',
+        puertoArribo: 'DALLAS, TX 75212',
+        inlandFreight: 1744,
+        entryFee: 110,
+        importerSecurityFiling: 20,
+        destinationCharges: 1878.73, // 1744 + 110 + 20 + 4.73
+      });
+      expect(draft.headerOrigen).toMatchObject({ direccion: 'oben', puertoArribo: 'oben', inlandFreight: 'maestro', destinationCharges: 'calculado' });
+      expect(rates.resolveInlandByAddress).toHaveBeenCalledWith('t1', 'USA', expect.stringContaining('75212'));
+      expect(draft.totales.otrosGastos).toBe(1878.73); // otros costos destino = Destination Charges, sin digitarlos
+      expect(draft.ajustes).toEqual([
+        expect.stringContaining('venció el 2026-08-31'),
+        'Otros costos destino = Destination Charges (USD 1878.73 = Inland + Entry + ISF + HMF).',
+      ]);
+      expect(draft.missing).toEqual([]);
+      expect(draft.readyToSubmit).toBe(true);
+    });
+
+    it('un Inland digitado manda sobre la tabla (ni se consulta)', async () => {
+      const { service, rates } = armar();
+      const draft = await service.getDraft('11271', { header: { ...PARTIDAS, inlandFreight: 900 }, totales: { incoterm: 'DAP', flete: 1200 } });
+      expect(draft.header.inlandFreight).toBe(900);
+      expect(draft.headerOrigen.inlandFreight).toBe('usuario');
+      expect(rates.resolveInlandByAddress).not.toHaveBeenCalled();
+    });
+
+    it('sin tarifa Inland para ese destino: otros gastos y Destination Charges quedan como faltantes (no se calcula con 0)', async () => {
+      const { service, rates } = armar();
+      rates.resolveInlandByAddress.mockResolvedValue({ inlandFreight: null, destinationPort: null, destinationAddress: null, validUntil: null, vencida: false });
+      const draft = await service.getDraft('11271', { header: PARTIDAS, totales: { incoterm: 'DAP', flete: 1200 } });
+      expect(draft.missing).toEqual(
+        expect.arrayContaining(['Encabezado (destino USA) — Inland Freight', 'Envío (DAP) — Otros gastos totales']),
+      );
+      expect(draft.lines[0].valueFOB).toBeUndefined();
     });
   });
 
