@@ -81,6 +81,7 @@ import { User } from './entities/user.entity';
 import { WorkflowEvent } from './entities/workflow-event.entity';
 import { EmailIntakeMessage } from './entities/email-intake-message.entity';
 import { FreightInlandRate } from './entities/freight-inland-rate.entity';
+import { FreightOceanRate } from './entities/freight-ocean-rate.entity';
 import { FreightTransloadRate } from './entities/freight-transload-rate.entity';
 import { FreightDestinationSurcharge } from './entities/freight-destination-surcharge.entity';
 import { DistributionList } from './entities/distribution-list.entity';
@@ -155,6 +156,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
           WorkflowEvent,
           EmailIntakeMessage,
           FreightInlandRate,
+          FreightOceanRate,
           FreightTransloadRate,
           FreightDestinationSurcharge,
           DistributionList,

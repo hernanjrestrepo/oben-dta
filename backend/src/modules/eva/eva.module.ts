@@ -7,6 +7,7 @@ import { Client } from '../../entities/client.entity';
 import { Invoice } from '../../entities/invoice.entity';
 import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
+import { FreightOceanRate } from '../../entities/freight-ocean-rate.entity';
 import { EvaController } from './eva.controller';
 import { EvaService, MIA_ANTHROPIC } from './eva.service';
 import { QuotesModule } from '../quotes/quotes.module';
@@ -24,6 +25,7 @@ import { IntegrationHubModule } from '../integrations/hub/integration-hub.module
       Invoice,
       FreightInlandRate,
       FreightDestinationSurcharge,
+      FreightOceanRate,
     ]),
     QuotesModule,
     AuthModule,

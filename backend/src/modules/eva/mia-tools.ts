@@ -133,14 +133,14 @@ export const MIA_TOOLS: Array<{
     tool: {
       name: 'tarifas_flete',
       description:
-        'Tabla de fletes cargada en Oben Xmart (tarifas del forwarder): Inland Freight por destino en USA o Canadá (puerto, dirección, valor contenedor 40HC, tránsito, vigencia) y recargos de destino por país de origen (Entry Fee, Importer Security Filing, Harbor Maintenance Fee). No incluye flete marítimo.',
+        'Tabla de fletes cargada en Oben Xmart (archivo de fletes de Oben): flete marítimo puerto a puerto/rampa (pata 2: origen, destino, forwarder, naviera, tránsito, valor, vigencia), Inland Freight por destino en USA o Canadá (pata 3: puerto, dirección, valor contenedor 40HC, vigencia) y recargos de destino por país de origen (Entry Fee, Importer Security Filing, Harbor Maintenance Fee).',
       input_schema: {
         type: 'object',
         properties: {
           buscar: {
             type: 'string',
             description:
-              'Ciudad, estado, puerto o código postal del destino, p. ej. "Dallas" o "75212".',
+              'Ciudad, estado, puerto o código postal del destino (u origen del flete marítimo), p. ej. "Houston", "Dallas" o "75212".',
           },
           pais: {
             type: 'string',

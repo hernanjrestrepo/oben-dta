@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
 import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
+import { FreightOceanRate } from '../../entities/freight-ocean-rate.entity';
 
 export interface LiquidacionSurchargesResult {
   entryFee: number | null;
@@ -25,6 +26,18 @@ export interface LiquidacionInlandByAddressResult {
   destinationAddress: string | null;
   validUntil: string | null;
   /** true si la tarifa ya venció (se usa igual, pero se avisa). */
+  vencida: boolean;
+}
+
+/** Flete marítimo (pata 2) de la tabla de fletes, por puerto de embarque y puerto/rampa de destino. */
+export interface LiquidacionOceanFreightResult {
+  /** USD por contenedor de 40'. */
+  flete: number | null;
+  origen: string | null;
+  destino: string | null;
+  forwarder: string | null;
+  naviera: string | null;
+  validUntil: string | null;
   vencida: boolean;
 }
 
@@ -63,6 +76,8 @@ export class LiquidacionRatesService {
     private readonly surcharges: Repository<FreightDestinationSurcharge>,
     @InjectRepository(FreightInlandRate)
     private readonly inlandRates: Repository<FreightInlandRate>,
+    @InjectRepository(FreightOceanRate)
+    private readonly oceanRates?: Repository<FreightOceanRate>,
   ) {}
 
   /**
@@ -202,9 +217,67 @@ export class LiquidacionRatesService {
     return vacio;
   }
 
+  /**
+   * Flete marítimo (pata 2) desde el puerto de embarque que trae Oben
+   * ("CARTAGENA - COLOMBIA"). Destino: primero el puerto del que sale el
+   * Inland escogido (`puertoInland`, "Houston, TX (Port)"), para que las patas
+   * 2 y 3 empalmen; si no hay, la ciudad del puerto de arribo de Oben. Solo
+   * contenedor de 40' (igual que el Inland); primero la tarifa vigente y entre
+   * esas la más barata. Sin fila que coincida, no se inventa nada.
+   */
+  async resolveOceanFreight(
+    tenantId: string,
+    puertoEmbarque: unknown,
+    puertoInland: string | null,
+    puertoArribo: unknown,
+    hoy: Date = new Date(),
+  ): Promise<LiquidacionOceanFreightResult> {
+    const vacio = { flete: null, origen: null, destino: null, forwarder: null, naviera: null, validUntil: null, vencida: false };
+    const embarque = ciudadDe(puertoEmbarque);
+    if (!embarque || !this.oceanRates) return vacio;
+    const arribo = ciudadDe(puertoArribo);
+    const destinos = [puertoInland ? ILike(sinComodines(puertoInland)) : null, arribo ? ILike(`${sinComodines(arribo)}%`) : null];
+    const hoyIso = hoy.toISOString().slice(0, 10);
+    const vigente = (r: { validUntil: unknown }) => !r.validUntil || String(r.validUntil).slice(0, 10) >= hoyIso;
+    for (const destinationPort of destinos) {
+      if (!destinationPort) continue;
+      const rows = await this.oceanRates.find({
+        where: { tenantId, origin: ILike(`${sinComodines(embarque)}%`), destinationPort, containerType: ILike('%40%') },
+        take: 200,
+      });
+      const row = rows
+        .filter((r) => toAmount(r.rateTotal) !== null)
+        .sort((a, b) => Number(vigente(b)) - Number(vigente(a)) || (toAmount(a.rateTotal) as number) - (toAmount(b.rateTotal) as number))[0];
+      if (!row) continue;
+      const validUntil = row.validUntil ? String(row.validUntil).slice(0, 10) : null;
+      return {
+        flete: toAmount(row.rateTotal),
+        origen: row.origin,
+        destino: row.destinationPort,
+        forwarder: row.forwarder,
+        naviera: row.shippingLine,
+        validUntil,
+        vencida: !!validUntil && validUntil < hoyIso,
+      };
+    }
+    return vacio;
+  }
+
   private parsePercentFormula(formula: string): number | null {
     const m = formula.match(/([\d.,]+)\s*%/);
     if (!m) return null;
     return parseFloat(m[1].replace(',', '.')) / 100;
   }
+}
+
+/** Ciudad de un puerto como lo escribe Oben: "CARTAGENA - COLOMBIA" → "CARTAGENA"; "DALLAS, TX 75212" → "DALLAS". */
+export function ciudadDe(puerto: unknown): string | null {
+  if (typeof puerto !== 'string') return null;
+  const ciudad = puerto.split(/\s+-\s+|,|\(/)[0].trim();
+  return ciudad.length >= 3 ? ciudad : null;
+}
+
+/** El texto va dentro de un LIKE: sus % y _ se escapan. */
+function sinComodines(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }

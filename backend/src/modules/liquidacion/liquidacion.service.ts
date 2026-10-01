@@ -50,6 +50,8 @@ const STALE_PROCESSING_MS = 10 * 60_000;
  * cargos de importación de USA (Entry Fee, ISF, HMF) se buscan por el origen.
  */
 const PAIS_ORIGEN = 'Colombia';
+/** Carga neta de un contenedor de 40' según el archivo de fletes de Oben (26.000 kg): define cuántos contenedores paga la PF. */
+const NET_PAYLOAD_40_KG = 26_000;
 /** El reporte de proformas trae TODAS (~100, ~55 KB): se cachea por PF para no pedirlo en cada tecla. */
 const INCOTERM_CACHE_MS = 10 * 60_000;
 const INCOTERM_QUERY_OPTIONS = { maxAttempts: 1, timeoutMs: 8_000 };
@@ -209,9 +211,48 @@ export class LiquidacionService {
 
     const ajustes: string[] = [];
     const prov = this.opciones?.valoresProvisionales === true;
-    if (prov && conceptos?.includes('flete') && !esMonto(totales.flete)) {
-      totales = { ...totales, flete: 0 };
-      ajustes.push('Flete marítimo en 0: no está en la tabla de fletes (solo trae el tramo dentro de USA). Digítalo si lo tienes.');
+    const totalesOrigen: LiquidacionDraft['totalesOrigen'] = {};
+    if (esMonto(digitados.flete)) totalesOrigen.flete = 'usuario';
+    if (isNum(digitados.otrosGastos)) totalesOrigen.otrosGastos = 'usuario';
+    // Las tarifas de la tabla de fletes son por contenedor de 40'.
+    const contenedores = Math.max(1, Math.ceil(totalKilos / NET_PAYLOAD_40_KG));
+    const porContenedores = contenedores > 1 ? ` × ${contenedores} contenedores` : '';
+
+    // Inland Freight (pata 3) de la tabla de fletes, por el código postal del
+    // destino que trae Oben en Direccion/PuertoArribo (lo digitado manda). Va
+    // antes del flete marítimo: la pata 2 tiene que llegar al puerto del que
+    // sale el Inland.
+    let puertoInland: string | null = null;
+    if (esUSA && pais && headerOrigen.inlandFreight !== 'usuario') {
+      const destino = [header.direccion, header.puertoArribo].filter((v): v is string => typeof v === 'string').join(' ');
+      const inland = await this.rates.resolveInlandByAddress(this.ctx.tenantId, 'USA', destino);
+      if (isNum(inland.inlandFreight)) {
+        header.inlandFreight = round2(inland.inlandFreight * contenedores);
+        headerOrigen.inlandFreight = 'maestro';
+        puertoInland = inland.destinationPort;
+        ajustes.push(
+          `Inland Freight de la tabla de fletes: ${inland.destinationPort} → ${inland.destinationAddress} (contenedor 40'), USD ${inland.inlandFreight.toFixed(2)}${porContenedores}.` +
+            (inland.vencida ? ` OJO: esa tarifa venció el ${inland.validUntil} — pedir la actualización al forwarder.` : ''),
+        );
+      }
+    }
+
+    // Flete (pata 2, marítimo) de la tabla de fletes; lo digitado manda.
+    if (conceptos?.includes('flete') && !esMonto(totales.flete)) {
+      const mar = await this.rates.resolveOceanFreight?.(this.ctx.tenantId, header.puertoEmbarque, puertoInland, header.puertoArribo);
+      if (mar && isNum(mar.flete)) {
+        totales = { ...totales, flete: round2(mar.flete * contenedores) };
+        totalesOrigen.flete = 'maestro';
+        ajustes.push(
+          `Flete marítimo de la tabla de fletes: ${mar.origen} → ${mar.destino} (${[mar.forwarder, mar.naviera].filter(Boolean).join(' / ')}, contenedor 40'), USD ${mar.flete.toFixed(2)}${porContenedores}.` +
+            (mar.vencida ? ` OJO: esa tarifa venció el ${mar.validUntil} — pedir la actualización a COMEX.` : ''),
+        );
+      } else if (prov) {
+        totales = { ...totales, flete: 0 };
+        totalesOrigen.flete = 'provisional';
+        const ruta = [header.puertoEmbarque, puertoInland ?? header.puertoArribo].filter((v) => typeof v === 'string' && v).join(' → ');
+        ajustes.push(`Flete marítimo en 0: no hay tarifa en la tabla de fletes${ruta ? ` para ${ruta}` : ''}. Pedir la cotización a COMEX o digitarlo.`);
+      }
     }
     if (prov) {
       for (const key of ['paNcm', 'paNaladi'] as const) {
@@ -239,21 +280,6 @@ export class LiquidacionService {
     const sinConfirmar = [...(this.calculator.sinConfirmar ?? [])];
 
     if (esUSA && pais) {
-      // Inland Freight de la tabla de fletes, por el código postal del destino
-      // que trae Oben en Direccion/PuertoArribo (lo digitado manda).
-      if (headerOrigen.inlandFreight !== 'usuario') {
-        const destino = [header.direccion, header.puertoArribo].filter((v): v is string => typeof v === 'string').join(' ');
-        const inland = await this.rates.resolveInlandByAddress(this.ctx.tenantId, 'USA', destino);
-        if (isNum(inland.inlandFreight)) {
-          header.inlandFreight = inland.inlandFreight;
-          headerOrigen.inlandFreight = 'maestro';
-          ajustes.push(
-            `Inland Freight de la tabla de fletes: ${inland.destinationPort} → ${inland.destinationAddress} (contenedor 40'), USD ${inland.inlandFreight.toFixed(2)}.` +
-              (inland.vencida ? ` OJO: esa tarifa venció el ${inland.validUntil} — pedir la actualización al forwarder.` : ''),
-          );
-        }
-      }
-
       // Harbor Maintenance Fee = 0.125% del FOB FINAL (José, 2026-09-30): se
       // resuelve después de calcular las líneas. Los cargos del maestro de
       // tarifas son solo el valor por defecto.
@@ -293,6 +319,7 @@ export class LiquidacionService {
             : `Otros costos destino = Destination Charges (USD ${dc.toFixed(2)} = Inland + Entry + ISF + HMF).`,
         );
         totales = { ...totales, otrosGastos: dc };
+        totalesOrigen.otrosGastos = 'calculado';
         calculo = calcular(totales);
       } else if (otrosPendientesUSA) {
         calculo = calcular(totales);
@@ -335,6 +362,7 @@ export class LiquidacionService {
       header,
       headerOrigen,
       totales,
+      totalesOrigen,
       lines: calculo.lines,
       ajustes,
       missing,

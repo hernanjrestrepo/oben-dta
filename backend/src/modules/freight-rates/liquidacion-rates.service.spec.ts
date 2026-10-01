@@ -1,4 +1,4 @@
-import { LiquidacionRatesService } from './liquidacion-rates.service';
+import { LiquidacionRatesService, ciudadDe } from './liquidacion-rates.service';
 
 const TENANT_ID = 't1';
 
@@ -139,5 +139,67 @@ describe('LiquidacionRatesService (spSettlement_Head — pregunta 9 del document
       expect(result.inlandFreight).toBeNull();
       expect(result.missing[0]).toContain('Puerto Inexistente');
     });
+  });
+});
+
+describe('LiquidacionRatesService.resolveOceanFreight (pata 2 del archivo de fletes de octubre 2026)', () => {
+  /** Simula el ILIKE de TypeORM: % = comodín, sin distinguir mayúsculas. */
+  const like = (op: any) => {
+    const pattern = String(op?.value ?? op?._value ?? '');
+    const re = pattern
+      .replace(/\\([%_])/g, '$1')
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/%/g, '.*');
+    return new RegExp(`^${re}$`, 'i');
+  };
+  const fila = (o: Record<string, unknown>): Record<string, any> => ({
+    tenantId: TENANT_ID, origin: 'Cartagena, Colombia (COCTG) - Port', containerType: "FCL 40'", shippingLine: null, ...o,
+  });
+  const FILAS = [
+    fila({ destinationPort: 'Houston, TX (Port)', forwarder: 'Direct', shippingLine: 'Hapag-Lloyd', rateTotal: '941.00', validUntil: '2026-10-30' }),
+    fila({ destinationPort: 'Houston, TX (Port)', forwarder: 'Direct', shippingLine: 'Maersk', rateTotal: '1350.00', validUntil: '2026-09-30' }),
+    fila({ destinationPort: 'Houston, TX (Port)', forwarder: 'Trading', rateTotal: '900.00', validUntil: '2026-09-30' }),
+    fila({ destinationPort: 'Houston, TX (Port)', forwarder: 'Barato', containerType: "FCL 20'", rateTotal: '500.00', validUntil: null }),
+    fila({ destinationPort: 'Dallas, TX (Ramp)', forwarder: 'Transborder', shippingLine: 'HAPAG LLOYD', rateTotal: '2500.00', validUntil: '2026-09-30' }),
+  ];
+  const servicio = (filas = FILAS) => {
+    const ocean = {
+      find: jest.fn(({ where }: any) =>
+        Promise.resolve(
+          filas.filter(
+            (r) => like(where.origin).test(r.origin) && like(where.destinationPort).test(r.destinationPort) && like(where.containerType).test(r.containerType),
+          ),
+        ),
+      ),
+    } as any;
+    return new LiquidacionRatesService({ find: jest.fn() } as any, { find: jest.fn() } as any, ocean);
+  };
+  const HOY = new Date('2026-10-01');
+
+  it('empalma con el puerto del Inland: Cartagena → Houston, la vigente aunque haya una vencida más barata (y nunca la de 20\')', async () => {
+    const r = await servicio().resolveOceanFreight(TENANT_ID, 'CARTAGENA - COLOMBIA', 'Houston, TX (Port)', 'DALLAS, TX 75212', HOY);
+    expect(r).toEqual({
+      flete: 941, origen: 'Cartagena, Colombia (COCTG) - Port', destino: 'Houston, TX (Port)', forwarder: 'Direct', naviera: 'Hapag-Lloyd', validUntil: '2026-10-30', vencida: false,
+    });
+  });
+
+  it('sin puerto de Inland, usa la ciudad del puerto de arribo de Oben (y avisa si venció)', async () => {
+    const r = await servicio().resolveOceanFreight(TENANT_ID, 'CARTAGENA - COLOMBIA', null, 'DALLAS, TX 75212', HOY);
+    expect(r).toMatchObject({ flete: 2500, destino: 'Dallas, TX (Ramp)', forwarder: 'Transborder', vencida: true });
+  });
+
+  it.each([
+    ['otro puerto de embarque sin tarifas', 'BUENAVENTURA - COLOMBIA'],
+    ['sin puerto de embarque', null],
+  ])('%s → null, no se inventa', async (_caso, embarque) => {
+    expect((await servicio().resolveOceanFreight(TENANT_ID, embarque, 'Houston, TX (Port)', 'DALLAS, TX 75212', HOY)).flete).toBeNull();
+  });
+
+  it('ciudadDe lee los puertos como los escribe Oben', () => {
+    expect(ciudadDe('CARTAGENA - COLOMBIA')).toBe('CARTAGENA');
+    expect(ciudadDe('DALLAS, TX 75212')).toBe('DALLAS');
+    expect(ciudadDe('Houston, TX, United States (USHOU) - Port')).toBe('Houston');
+    expect(ciudadDe('')).toBeNull();
+    expect(ciudadDe(undefined)).toBeNull();
   });
 });

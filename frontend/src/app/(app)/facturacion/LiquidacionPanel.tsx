@@ -243,8 +243,28 @@ export function LiquidacionPanel({
             subtitle="Se digitan una vez para todo el envío y se reparten por kilos entre las líneas."
           />
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Flete total (USD)" hint={regla && !pide('flete') ? `No aplica en ${regla.codigo}` : undefined}>
-              <input value={flete} onChange={(e) => setFlete(e.target.value)} disabled={!!regla && !pide('flete')} inputMode="decimal" placeholder="0,00" className={`${inputCls} w-full disabled:bg-gray-50 disabled:text-gray-400`} />
+            <Field
+              label={
+                <>
+                  Flete total (USD) {!flete.trim() && <OrigenBadge origen={liq?.totalesOrigen?.flete} />}
+                </>
+              }
+              hint={
+                regla && !pide('flete')
+                  ? `No aplica en ${regla.codigo}`
+                  : !flete.trim() && liq?.totalesOrigen?.flete === 'maestro'
+                    ? 'Flete marítimo de la tabla de fletes (ver ajustes). Digita otro valor solo si COMEX cotizó distinto.'
+                    : undefined
+              }
+            >
+              <input
+                value={flete}
+                onChange={(e) => setFlete(e.target.value)}
+                disabled={!!regla && !pide('flete')}
+                inputMode="decimal"
+                placeholder={!flete.trim() && isNum(liq?.totales.flete) ? `${usd(liq!.totales.flete)} (${liq?.totalesOrigen?.flete === 'maestro' ? 'tabla de fletes' : 'provisional'})` : '0,00'}
+                className={`${inputCls} w-full disabled:bg-gray-50 disabled:text-gray-400`}
+              />
             </Field>
             <Field
               label={liq?.esUSA ? 'Otros costos destino (USD)' : 'Otros gastos (USD)'}

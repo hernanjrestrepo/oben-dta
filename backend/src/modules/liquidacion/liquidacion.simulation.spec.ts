@@ -151,6 +151,7 @@ function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: 
       missing: [],
     }),
     resolveInlandByAddress: jest.fn().mockResolvedValue({ inlandFreight: null, destinationPort: null, destinationAddress: null, validUntil: null, vencida: false }),
+    resolveOceanFreight: jest.fn().mockResolvedValue({ flete: null, origen: null, destino: null, forwarder: null, naviera: null, validUntil: null, vencida: false }),
   };
   // Correo de cierre (OBEN MAS §1.2): se prueba a fondo en liquidacion-cierre.service.spec.ts;
   // aquí solo importa CUÁNDO se dispara.
@@ -844,6 +845,48 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       ]);
       expect(draft.missing).toEqual([]);
       expect(draft.readyToSubmit).toBe(true);
+    });
+
+    it('sin flete digitado, el flete marítimo sale de la tabla (pata 2) hasta el puerto del que sale el Inland', async () => {
+      const { service, rates } = armar();
+      rates.resolveOceanFreight.mockResolvedValue({
+        flete: 941, origen: 'Cartagena, Colombia (COCTG) - Port', destino: 'Houston, TX (Port)', forwarder: 'Direct', naviera: 'Hapag-Lloyd', validUntil: '2026-10-30', vencida: false,
+      });
+      const draft = await service.getDraft('11271', { header: PARTIDAS, totales: { incoterm: 'DAP' } });
+      expect(rates.resolveOceanFreight).toHaveBeenCalledWith('t1', 'CARTAGENA - COLOMBIA', 'Houston, TX (Port)', 'DALLAS, TX 75212');
+      expect(draft.totales.flete).toBe(941);
+      expect(draft.totalesOrigen).toEqual({ flete: 'maestro', otrosGastos: 'calculado' });
+      expect(draft.ajustes).toEqual(
+        expect.arrayContaining([
+          "Flete marítimo de la tabla de fletes: Cartagena, Colombia (COCTG) - Port → Houston, TX (Port) (Direct / Hapag-Lloyd, contenedor 40'), USD 941.00.",
+        ]),
+      );
+      expect(draft.lines[0].valueFreight).toBe(941);
+      expect(draft.missing).toEqual([]);
+    });
+
+    it('un flete digitado manda sobre la tabla (ni se consulta)', async () => {
+      const { service, rates } = armar();
+      const draft = await service.getDraft('11271', { header: PARTIDAS, totales: { incoterm: 'DAP', flete: 1200 } });
+      expect(draft.totales.flete).toBe(1200);
+      expect(draft.totalesOrigen.flete).toBe('usuario');
+      expect(rates.resolveOceanFreight).not.toHaveBeenCalled();
+    });
+
+    it("más de 26.000 kg: flete e Inland se cobran por cada contenedor de 40'", async () => {
+      const built = armar();
+      const pesado = { ...(CHECK['11271'] as { Detalle: Array<Record<string, unknown>> }) };
+      pesado.Detalle = pesado.Detalle.map((l) => ({ ...l, KilosTotales: 30000 }));
+      const original = built.sim.call;
+      built.sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) =>
+        op === 'liquidacion.consultar' ? { ok: true, data: { ...pesado, ...OBEN_11366 } } : original(system, op, args, options);
+      built.rates.resolveOceanFreight.mockResolvedValue({ flete: 941, origen: 'Cartagena', destino: 'Houston, TX (Port)', forwarder: 'Direct', naviera: null, validUntil: null, vencida: false });
+      const draft = await built.service.getDraft('11271', { header: PARTIDAS, totales: { incoterm: 'DAP' } });
+      const contenedores = Math.ceil(draft.lines.reduce((a, l) => a + (l.kilosTotal ?? 0), 0) / 26000);
+      expect(contenedores).toBeGreaterThan(1);
+      expect(draft.totales.flete).toBe(941 * contenedores);
+      expect(draft.header.inlandFreight).toBe(1744 * contenedores);
+      expect(draft.ajustes.join(' ')).toContain(`× ${contenedores} contenedores`);
     });
 
     it('un Inland digitado manda sobre la tabla (ni se consulta)', async () => {

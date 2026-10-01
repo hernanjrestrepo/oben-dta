@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
+import { FreightOceanRate } from '../../entities/freight-ocean-rate.entity';
 import { FreightTransloadRate } from '../../entities/freight-transload-rate.entity';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
 import { FreightRateImportService } from './freight-rate-import.service';
@@ -12,6 +13,7 @@ import { AuthModule } from '../auth/auth.module';
   imports: [
     TypeOrmModule.forFeature([
       FreightInlandRate,
+      FreightOceanRate,
       FreightTransloadRate,
       FreightDestinationSurcharge,
     ]),

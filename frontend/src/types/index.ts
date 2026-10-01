@@ -860,6 +860,8 @@ export interface LiquidacionDraft {
   incotermOrigen: 'oben' | 'usuario' | null;
   header: LiquidacionHeaderValues;
   headerOrigen: Partial<Record<keyof LiquidacionHeaderValues, OrigenValor>>;
+  /** Origen del flete y los otros gastos (tabla de fletes, calculado, provisional o digitado). */
+  totalesOrigen?: Partial<Record<'flete' | 'otrosGastos', OrigenValor>>;
   totales: LiquidacionTotalesInput;
   lines: LiquidacionDraftLine[];
   ajustes: string[];

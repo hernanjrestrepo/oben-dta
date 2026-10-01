@@ -109,6 +109,8 @@ export interface LiquidacionDraft {
   lines: LiquidacionDraftLine[];
   /** Origen de cada valor del encabezado (Oben, maestro de tarifas, calculado o digitado). */
   headerOrigen: Partial<Record<keyof LiquidacionHeaderValues, OrigenValor>>;
+  /** Origen del flete y los otros gastos del envío (tabla de fletes, calculado, provisional o digitado). */
+  totalesOrigen: Partial<Record<'flete' | 'otrosGastos', OrigenValor>>;
   /** Ajustes automáticos que hizo la fórmula (p. ej. otros costos destino reemplazados por Destination Charges). */
   ajustes: string[];
   /** Todo lo que falta para poder enviar — nada se inventa. */

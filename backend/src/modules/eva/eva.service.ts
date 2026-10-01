@@ -8,6 +8,7 @@ import { Client } from '../../entities/client.entity';
 import { Invoice } from '../../entities/invoice.entity';
 import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
+import { FreightOceanRate } from '../../entities/freight-ocean-rate.entity';
 import { QuotesService } from '../quotes/quotes.service';
 import { FacturacionService } from '../facturacion/facturacion.service';
 import { LiquidacionService } from '../liquidacion/liquidacion.service';
@@ -110,6 +111,8 @@ export class EvaService {
     private readonly inland: Repository<FreightInlandRate>,
     @InjectRepository(FreightDestinationSurcharge)
     private readonly surcharges: Repository<FreightDestinationSurcharge>,
+    @InjectRepository(FreightOceanRate)
+    private readonly ocean: Repository<FreightOceanRate>,
     private readonly quotesService: QuotesService,
     private readonly facturacion: FacturacionService,
     private readonly liquidacion: LiquidacionService,
@@ -477,7 +480,33 @@ export class EvaService {
           where: { tenantId, country: ILike(sinComodines(origen)) },
         });
         const hoy = new Date().toISOString().slice(0, 10);
+        // Pata 2 (marítimo): por destino (puerto/rampa) si se buscó algo; si no, las más baratas.
+        const mq = this.ocean
+          .createQueryBuilder('o')
+          .where('o.tenantId = :tenantId', { tenantId });
+        if (buscar) {
+          mq.andWhere('(o.destination ILIKE :q OR o.origin ILIKE :q)', {
+            q: `%${sinComodines(buscar)}%`,
+          });
+        }
+        const [maritimo, totalMaritimo] = await mq
+          .orderBy('o.rateTotal', 'ASC')
+          .take(15)
+          .getManyAndCount();
         return {
+          fleteMaritimo: maritimo.map((o) => ({
+            origen: o.origin,
+            destino: o.destination,
+            contenedor: o.containerType,
+            forwarder: o.forwarder,
+            naviera: o.shippingLine,
+            transbordo: o.transitPoints,
+            transitoDias: o.transitDays,
+            valorUSD: Number(o.rateTotal),
+            vigenteHasta: o.validUntil,
+            vencida: !!o.validUntil && o.validUntil < hoy,
+          })),
+          totalCoincidenciasMaritimo: totalMaritimo,
           inlandFreight: inland.map((r) => ({
             pais: r.country,
             forwarder: r.forwarder,
@@ -498,7 +527,7 @@ export class EvaService {
               formula: s.rateFormula,
             })),
           },
-          nota: 'La tabla no incluye flete marítimo.',
+          nota: 'Pata 1 (planta → puerto en Colombia) no se descuenta en la liquidación: queda dentro del valor FOB.',
         };
       }
       case 'consultar_cotizaciones': {
