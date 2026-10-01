@@ -863,6 +863,58 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     });
   });
 
+  describe('Incoterm desde el ERP de Oben (spCheckSalesOrderComex_Paradixe)', () => {
+    const comexCon = (incoterm: string | null) =>
+      `{"NroProforma":"11357","Mercado":"EXPORTACION","Cliente":"X","Pais":"COLOMBIA"${incoterm ? `,"Incoterm":"${incoterm}"` : ''},"OrdenesVenta":[]}`;
+    const armar = (respuesta: unknown) => {
+      const built = build({ calculator: new IncotermFormulaCalculator() });
+      const original = built.sim.call.bind(built.sim);
+      const comex: Array<{ options: unknown }> = [];
+      built.sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) => {
+        if (op !== 'query.run' || args.procedure !== 'spCheckSalesOrderComex_Paradixe') return original(system, op, args, options);
+        comex.push({ options });
+        if (respuesta instanceof Error) throw respuesta;
+        return { ok: true, data: respuesta };
+      };
+      return { ...built, comex };
+    };
+
+    it('si el usuario no escoge, se toma el de Oben y se marca su origen', async () => {
+      const { service } = armar(comexCon('CFR'));
+      const draft = await service.getDraft('11357', { totales: { flete: 100 } });
+      expect(draft).toMatchObject({ incoterm: 'CFR', incotermOrigen: 'oben' });
+      expect(draft.missing.some((m) => m.startsWith('Incoterm'))).toBe(false);
+    });
+
+    it('lo escogido por el usuario manda y ni se consulta a Oben', async () => {
+      const { service, comex } = armar(comexCon('CFR'));
+      const draft = await service.getDraft('11357', { totales: { incoterm: 'FCA' } });
+      expect(draft).toMatchObject({ incoterm: 'FCA', incotermOrigen: 'usuario' });
+      expect(comex).toHaveLength(0);
+    });
+
+    it('hoy Oben no trae el campo: sigue faltando (nada se inventa)', async () => {
+      const { service } = armar(comexCon(null));
+      const draft = await service.getDraft('11357');
+      expect(draft).toMatchObject({ incoterm: null, incotermOrigen: null });
+      expect(draft.missing).toContain('Incoterm de la PF (DAP, DDP, CFR, CPT, FCA, FOB)');
+    });
+
+    it('el reporte (todas las proformas) se pide una sola vez por PF: queda en caché', async () => {
+      const { service, comex } = armar(comexCon('CFR'));
+      await service.getDraft('11357');
+      await service.getDraft('11357', { header: { direccion: 'x' } });
+      expect(comex).toHaveLength(1);
+      expect(comex[0].options).toMatchObject({ maxAttempts: 1 });
+    });
+
+    it('si Oben falla, el borrador sale igual (sin Incoterm), nunca se cae', async () => {
+      const { service } = armar(new Error('timeout'));
+      const draft = await service.getDraft('11357');
+      expect(draft.incoterm).toBeNull();
+    });
+  });
+
   describe('dirección y puertos por defecto desde spCheckSettlement (José, pregunta 9)', () => {
     const conDefaults = (extra: Record<string, unknown>) => {
       const built = build();

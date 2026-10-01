@@ -800,6 +800,7 @@ export interface LiquidacionDraft {
   pais: string | null;
   esUSA: boolean;
   incoterm: string | null;
+  incotermOrigen: 'oben' | 'usuario' | null;
   header: LiquidacionHeaderValues;
   headerOrigen: Partial<Record<keyof LiquidacionHeaderValues, OrigenValor>>;
   totales: LiquidacionTotalesInput;

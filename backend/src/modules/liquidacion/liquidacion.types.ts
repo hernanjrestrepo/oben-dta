@@ -101,6 +101,8 @@ export interface LiquidacionDraft {
   esUSA: boolean;
   /** Incoterm normalizado (p. ej. "CFR"), o null si no se indicó. */
   incoterm: string | null;
+  /** De dónde salió: del ERP de Oben (reporte de proformas) o lo escogió el usuario. */
+  incotermOrigen: 'oben' | 'usuario' | null;
   header: LiquidacionHeaderValues;
   /** Los datos del envío con los que se calculó (en modo simulado, incluye los de ejemplo). */
   totales: LiquidacionTotalesInput;

@@ -9,6 +9,7 @@ import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { LIQUIDACION_VALUE_CALCULATOR, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
 import { defaultsDeOben, type DefaultsDeOben } from './check-settlement-defaults';
+import { SP_PROFORMAS_COMEX, incotermDeProforma } from './incoterm-de-oben';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
   CheckSettlementResponse,
@@ -48,6 +49,9 @@ const STALE_PROCESSING_MS = 10 * 60_000;
  * cargos de importación de USA (Entry Fee, ISF, HMF) se buscan por el origen.
  */
 const PAIS_ORIGEN = 'Colombia';
+/** El reporte de proformas trae TODAS (~100, ~55 KB): se cachea por PF para no pedirlo en cada tecla. */
+const INCOTERM_CACHE_MS = 10 * 60_000;
+const INCOTERM_QUERY_OPTIONS = { maxAttempts: 1, timeoutMs: 8_000 };
 
 const HEADER_REQUIRED: Array<[keyof LiquidacionHeaderValues, string]> = [
   ['direccion', 'Dirección'],
@@ -116,6 +120,7 @@ class LiquidacionStepError extends Error {
 @Injectable()
 export class LiquidacionService {
   private readonly logger = new Logger(LiquidacionService.name);
+  private readonly incotermCache = new Map<string, { valor: string | null; hasta: number }>();
 
   constructor(
     private readonly hub: IntegrationHubService,
@@ -150,6 +155,15 @@ export class LiquidacionService {
     const envio = { totalValor, totalKilos, kilosPorLinea: baseLines.map((l) => l.kilosTotal) };
 
     const digitados: LiquidacionTotalesInput = { ...(input.totales ?? {}) };
+    // Incoterm: lo escogido por el usuario manda; si no, el que trae Oben para la proforma.
+    let incotermOrigen: LiquidacionDraft['incotermOrigen'] = digitados.incoterm ? 'usuario' : null;
+    if (!digitados.incoterm) {
+      const deOben = await this.incotermDeOben(pf);
+      if (deOben) {
+        digitados.incoterm = deOben;
+        incotermOrigen = 'oben';
+      }
+    }
     let totales = this.calculator.resolverTotales?.(digitados, envio) ?? digitados;
     const incoterm = normalizarIncoterm(totales.incoterm);
     const conceptos = conceptosDe(incoterm);
@@ -266,6 +280,7 @@ export class LiquidacionService {
       pais,
       esUSA,
       incoterm,
+      incotermOrigen: incoterm ? incotermOrigen : null,
       header,
       headerOrigen,
       totales,
@@ -276,6 +291,30 @@ export class LiquidacionService {
       simulated: this.calculator.simulated,
       sinConfirmar,
     };
+  }
+
+  /**
+   * Incoterm de la proforma según Oben (spCheckSalesOrderComex_Paradixe). Nunca
+   * bloquea el borrador: si Oben no responde o no trae el campo, null.
+   */
+  private async incotermDeOben(pf: string): Promise<string | null> {
+    const key = `${this.ctx.tenantId}:${pf}`;
+    const cached = this.incotermCache.get(key);
+    if (cached && cached.hasta > Date.now()) return cached.valor;
+    let valor: string | null = null;
+    try {
+      const res = await this.hub.call<unknown>(
+        'obenCostOrder',
+        'query.run',
+        { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf },
+        INCOTERM_QUERY_OPTIONS,
+      );
+      valor = res.ok ? incotermDeProforma(res.data, pf) : null;
+    } catch {
+      valor = null;
+    }
+    this.incotermCache.set(key, { valor, hasta: Date.now() + INCOTERM_CACHE_MS });
+    return valor;
   }
 
   /** Aplica la fórmula a cada línea (con las sobrescrituras del usuario) y lista lo que falta por línea. */

@@ -186,7 +186,10 @@ export function LiquidacionPanel({
     );
   }
 
-  const regla = reglas?.find((r) => r.codigo === incoterm);
+  // Lo escogido manda; si no, el Incoterm que trae Oben para la proforma.
+  const incotermEfectivo = incoterm ?? liq?.incoterm ?? null;
+  const delErp = !incoterm && liq?.incotermOrigen === 'oben';
+  const regla = reglas?.find((r) => r.codigo === incotermEfectivo);
   const pide = (c: ConceptoLiquidacion) => !!regla?.conceptos.includes(c);
   const lines = liq?.lines ?? [];
   const suma = (f: (l: (typeof lines)[number]) => number | null | undefined) =>
@@ -229,7 +232,7 @@ export function LiquidacionPanel({
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {reglas.map((r) => {
-                  const sel = incoterm === r.codigo;
+                  const sel = incotermEfectivo === r.codigo;
                   return (
                     <button
                       key={r.codigo}
@@ -259,7 +262,10 @@ export function LiquidacionPanel({
                 })}
               </div>
             )}
-            <p className="mt-3 text-xs text-gray-600">{descripcion(regla)}</p>
+            <p className="mt-3 text-xs text-gray-600">
+              {delErp && <OrigenBadge origen="oben" />} {delErp ? 'Incoterm tomado del ERP de Oben. ' : ''}
+              {descripcion(regla)}
+            </p>
           </div>
         </Card>
 
