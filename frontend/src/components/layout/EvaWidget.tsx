@@ -31,6 +31,7 @@ export function EvaWidget() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [descargando, setDescargando] = useState<string | null>(null);
+  const [verFoto, setVerFoto] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -100,9 +101,22 @@ export function EvaWidget() {
       {/* Chat panel */}
       {open && (
         <div className="fixed bottom-6 right-6 z-50 w-[26rem] max-w-[calc(100vw-3rem)] h-[36rem] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
+          {verFoto && (
+            <button
+              onClick={() => setVerFoto(false)}
+              title="Cerrar"
+              className="absolute inset-0 z-10 bg-black/70 flex flex-col items-center justify-center p-4"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/mia-completa.jpg" alt="MIA, asistente de Oben Xmart" className="w-full rounded-xl shadow-xl" />
+              <span className="mt-3 text-sm text-white">MIA · Asistente de Oben Xmart</span>
+            </button>
+          )}
           <div className="bg-[#F47735] text-white px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <MiaAvatar className="w-9 h-9 ring-2 ring-white/60" fallback={<OMark className="w-5 h-5" />} />
+              <button onClick={() => setVerFoto(true)} title="Ver foto de MIA" className="rounded-full">
+                <MiaAvatar className="w-9 h-9 ring-2 ring-white/60" fallback={<OMark className="w-5 h-5" />} />
+              </button>
               <div>
                 <p className="font-semibold text-sm leading-tight">MIA</p>
                 <p className="text-[11px] text-white/80 leading-tight">Asistente de Oben Xmart</p>
