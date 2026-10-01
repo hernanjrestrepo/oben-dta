@@ -173,9 +173,22 @@ export class LiquidacionRatesService {
     for (const zip of zips) {
       const rows = await this.inlandRates.find({
         where: { tenantId, country, destinationAddress: ILike(`%${zip}%`) },
-        take: 5,
+        take: 50,
       });
-      const row = rows.find((r) => toAmount(r.rate40hc) !== null);
+      // Varios forwarders para el mismo ZIP (archivo de fletes oct-2026): primero
+      // la tarifa vigente, luego la que sale de PUERTO (la de rampa exige
+      // tren hasta la rampa), y entre esas la más barata.
+      const hoyIso = hoy.toISOString().slice(0, 10);
+      const vigente = (r: { validUntil: unknown }) => !r.validUntil || String(r.validUntil).slice(0, 10) >= hoyIso;
+      const deRampa = (r: { destinationPort: string }) => /ramp/i.test(r.destinationPort ?? '');
+      const row = rows
+        .filter((r) => toAmount(r.rate40hc) !== null)
+        .sort(
+          (a, b) =>
+            Number(vigente(b)) - Number(vigente(a)) ||
+            Number(deRampa(a)) - Number(deRampa(b)) ||
+            (toAmount(a.rate40hc) as number) - (toAmount(b.rate40hc) as number),
+        )[0];
       if (!row) continue;
       const validUntil = row.validUntil ? String(row.validUntil).slice(0, 10) : null;
       return {
