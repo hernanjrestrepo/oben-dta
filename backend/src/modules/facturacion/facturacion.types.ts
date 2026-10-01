@@ -38,10 +38,11 @@ export interface FacturacionDraft {
   direccionEntrega: string | null;
   /**
    * De dónde salió la dirección — nunca se adivina: la digitó el usuario, viene
-   * del maestro de clientes, o de la Proforma en Oben+ (`oben_plus`, hoy
+   * del maestro de clientes, de spCheckSettlement en el ERP de Oben
+   * (`oben_erp`), o de la Proforma en Oben+ (`oben_plus`, hoy
    * SIMULADO: ver `simulatedFields`).
    */
-  direccionFuente: 'maestro_clientes' | 'digitada' | 'oben_plus' | null;
+  direccionFuente: 'maestro_clientes' | 'digitada' | 'oben_erp' | 'oben_plus' | null;
   observaciones: string | null;
   infoComercial: string | null;
   lines: FacturacionLine[];
@@ -75,6 +76,36 @@ export interface FacturacionDocument {
   pdf: Buffer;
   /** null = todavía no se ha emitido (se emite al enviar, no al descargar). */
   facturaElectronica: FacturaElectronica | null;
+}
+
+/** Destinatarios explícitos para un envío; sin ellos se usa la lista de distribución "facturacion". */
+export interface FacturacionRecipients {
+  to?: string[];
+  cc?: string[];
+}
+
+export interface FacturacionEnvio {
+  fecha: string;
+  to: string[];
+  cc: string[];
+  ok: boolean;
+  cufe: string | null;
+  cufeSimulado: boolean;
+  error: string | null;
+}
+
+/** Lo que ya pasó con una orden: envíos (exitosos y fallidos) y la factura electrónica vigente. */
+export interface FacturacionHistorial {
+  numberOrderSales: number;
+  envios: FacturacionEnvio[];
+  facturaElectronica: FacturaElectronica | null;
+}
+
+/** Orden real reciente (su Lista de Empaque ya salió al aprobarse el corte) — atajo para la pantalla. */
+export interface OrdenReciente {
+  numberOrderSales: number;
+  cliente: string | null;
+  fecha: string;
 }
 
 export interface FacturacionSendResult {

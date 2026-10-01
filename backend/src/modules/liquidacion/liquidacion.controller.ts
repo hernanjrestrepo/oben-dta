@@ -5,6 +5,7 @@ import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { LiquidacionService } from './liquidacion.service';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
+import { CONCEPTOS_POR_INCOTERM } from './incoterm-rules';
 import type { LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotalesInput } from './liquidacion.types';
 
 export const LIQUIDACION_PERMISSION = 'exportations.liquidate';
@@ -66,6 +67,13 @@ export class LiquidacionController {
     private readonly liquidacion: LiquidacionService,
     private readonly cierre: LiquidacionCierreService,
   ) {}
+
+  /** Qué conceptos pide cada Incoterm (misma tabla que usa el cálculo) — para la pantalla. */
+  @Get('incoterms')
+  @RequirePermission(LIQUIDACION_PERMISSION)
+  incoterms() {
+    return Object.entries(CONCEPTOS_POR_INCOTERM).map(([codigo, conceptos]) => ({ codigo, conceptos }));
+  }
 
   /** Borrador de solo lectura: consulta spCheckSettlement y muestra qué falta. */
   @Get(':numberPF/draft')

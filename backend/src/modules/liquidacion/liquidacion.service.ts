@@ -8,6 +8,7 @@ import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.serv
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { LIQUIDACION_VALUE_CALCULATOR, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
+import { defaultsDeOben, type DefaultsDeOben } from './check-settlement-defaults';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
   CheckSettlementResponse,
@@ -48,13 +49,17 @@ const HEADER_REQUIRED: Array<[keyof LiquidacionHeaderValues, string]> = [
   ['paNcm', 'Partida arancelaria NCM'],
   ['paNaladi', 'Partida arancelaria NALADI'],
 ];
-/** Solo cuando el destino es USA (José, 2026-09): vienen de la API de cargos que Oben aún debe crear. */
+/**
+ * Solo cuando el destino es USA (José, 2026-09): Inland/Entry/ISF/HMF salen del
+ * archivo de tarifas de María (maestro) o los digita el usuario; Destination
+ * Charges es su suma (José, 2026-09-30).
+ */
 const HEADER_REQUIRED_USA: Array<[keyof LiquidacionHeaderValues, string]> = [
   ['inlandFreight', 'Inland Freight'],
   ['entryFee', 'Entry Fee'],
   ['importerSecurityFiling', 'Importer Security Filing'],
   ['harborMaintenanceFee', 'Harbor Maintenance Fee'],
-  ['destinationCharges', 'Destination Charges'],
+  ['destinationCharges', 'Destination Charges (Inland + Entry + ISF + HMF)'],
 ];
 const LINE_REQUIRED: Array<[keyof LiquidacionLineValues, string]> = [
   ['kilosTotal', 'Kilos total'],
@@ -138,42 +143,73 @@ export class LiquidacionService {
     const envio = { totalValor, totalKilos, kilosPorLinea: baseLines.map((l) => l.kilosTotal) };
 
     const digitados: LiquidacionTotalesInput = { ...(input.totales ?? {}) };
-    const totales = this.calculator.resolverTotales?.(digitados, envio) ?? digitados;
+    let totales = this.calculator.resolverTotales?.(digitados, envio) ?? digitados;
     const incoterm = normalizarIncoterm(totales.incoterm);
+    const conceptos = conceptosDe(incoterm);
 
-    const lineMissing: string[] = [];
-    const lines: LiquidacionDraftLine[] = baseLines.map((l, indice) => {
-      const computed = this.calculator.compute({ ...envio, indice, pais, esUSA, incoterm, totales, line: l });
-      const override = input.lines?.[String(l.codSecLineFilm)] ?? {};
-      const values: LiquidacionLineValues = {
-        kilosTotal: l.kilosTotal,
-        valueTotal: l.valueTotal,
-        ...computed,
-        ...override,
-      };
-      const etiqueta = `Línea ${l.codSecLineFilm} (${l.tipoPelicula})`;
-      for (const [key, label] of LINE_REQUIRED) {
-        if (!isNum(values[key])) lineMissing.push(`${etiqueta} — ${label}`);
-      }
-      if (isNum(values.valueFOB) && values.valueFOB < 0) {
-        lineMissing.push(`${etiqueta} — FOB final negativo (${values.valueFOB}): revisa el flete/otros gastos digitados.`);
-      }
-      return { codSecLineFilm: l.codSecLineFilm, tipoPelicula: l.tipoPelicula, precio: l.precio, ...values };
-    });
-
-    // Encabezado: lo que digita/confirma el usuario manda; los cargos de USA
-    // se toman del maestro de tarifas solo como valor por defecto. Harbor
-    // Maintenance Fee = 0.125% del FOB FINAL (José, 2026-09-30), por eso se
-    // resuelve después de calcular las líneas.
-    const header: LiquidacionHeaderValues = { ...(input.header ?? {}) };
-    if (esUSA && pais) {
-      const fobs = lines.map((l) => l.valueFOB);
-      const fobFinal = fobs.every(isNum) ? round2(fobs.reduce((a, b) => a + b, 0)) : undefined;
-      const s = await this.rates.resolveSurcharges(this.ctx.tenantId, pais, fobFinal);
-      header.entryFee ??= s.entryFee;
-      header.importerSecurityFiling ??= s.importerSecurityFiling;
-      header.harborMaintenanceFee ??= s.harborMaintenanceFee;
+    // Encabezado: dirección y puertos vienen por defecto de spCheckSettlement
+    // (José, pregunta 9); lo que digita/confirma el usuario manda.
+    const header: LiquidacionHeaderValues = {};
+    const headerOrigen: LiquidacionDraft['headerOrigen'] = {};
+    for (const [key, value] of Object.entries(defaultsDeOben(check)) as Array<[keyof DefaultsDeOben, string]>) {
+      header[key] = value;
+      headerOrigen[key] = 'oben';
     }
+    for (const [key, value] of Object.entries(input.header ?? {}) as Array<[keyof LiquidacionHeaderValues, unknown]>) {
+      if (this.isBlank(value)) continue;
+      (header as Record<string, unknown>)[key] = value;
+      headerOrigen[key] = 'usuario';
+    }
+
+    const calcular = (t: LiquidacionTotalesInput) =>
+      this.calcularLineas(baseLines, input.lines, (l, indice) =>
+        this.calculator.compute({ ...envio, indice, pais, esUSA, incoterm, totales: t, line: l }),
+      );
+    let calculo = calcular(totales);
+    const ajustes: string[] = [];
+    const sinConfirmar = [...(this.calculator.sinConfirmar ?? [])];
+
+    if (esUSA && pais) {
+      // Harbor Maintenance Fee = 0.125% del FOB FINAL (José, 2026-09-30): se
+      // resuelve después de calcular las líneas. Los cargos del maestro de
+      // tarifas son solo el valor por defecto.
+      const s = await this.rates.resolveSurcharges(this.ctx.tenantId, pais, this.sumaFOB(calculo.lines));
+      const delMaestro: Array<[keyof LiquidacionHeaderValues, number | null]> = [
+        ['entryFee', s.entryFee],
+        ['importerSecurityFiling', s.importerSecurityFiling],
+        ['harborMaintenanceFee', s.harborMaintenanceFee],
+      ];
+      for (const [key, value] of delMaestro) {
+        if (headerOrigen[key] === 'usuario') continue;
+        (header as Record<string, unknown>)[key] = value;
+        if (isNum(value)) headerOrigen[key] = 'maestro';
+      }
+
+      // DestinationCharges = Inland Freight + Entry Fee + ISF + Harbor
+      // Maintenance Fee (José, 2026-09-30) — siempre calculado.
+      const cargos = [header.inlandFreight, header.entryFee, header.importerSecurityFiling, header.harborMaintenanceFee];
+      const dc = cargos.every(isNum) ? round2(cargos.reduce((a, b) => a + b, 0)) : null;
+      header.destinationCharges = dc;
+      headerOrigen.destinationCharges = 'calculado';
+
+      // Esa suma tiene que ser igual a los OTROS COSTOS DESTINO; si no, se
+      // reemplazan por Destination Charges y se recalculan otros gastos por
+      // unidad, precio final y FOB final (una sola pasada, como el sistema de Oben).
+      if (isNum(dc) && conceptos?.includes('otrosGastos') && totales.otrosGastos !== dc) {
+        ajustes.push(
+          isNum(totales.otrosGastos)
+            ? `Otros costos destino digitados (USD ${totales.otrosGastos.toFixed(2)}) ≠ Destination Charges (USD ${dc.toFixed(2)} = Inland + Entry + ISF + HMF): se reemplazaron y se recalcularon otros gastos por unidad, precio final y FOB final.`
+            : `Otros costos destino = Destination Charges (USD ${dc.toFixed(2)} = Inland + Entry + ISF + HMF).`,
+        );
+        totales = { ...totales, otrosGastos: dc };
+        calculo = calcular(totales);
+      } else if (isNum(dc) && conceptos && !conceptos.includes('otrosGastos')) {
+        sinConfirmar.push(
+          `Destino USA con ${incoterm} (no lleva otros gastos): Destination Charges (USD ${dc.toFixed(2)}) va en el encabezado pero no se descuenta de la mercancía — confirmar con José.`,
+        );
+      }
+    }
+
     const headerMissing: string[] = [];
     for (const [key, label] of HEADER_REQUIRED) {
       if (this.isBlank(header[key])) headerMissing.push(`Encabezado — ${label}`);
@@ -191,7 +227,7 @@ export class LiquidacionService {
       ...(pais ? [] : ['País de destino: no se pudo resolver desde la orden de venta.']),
       ...headerMissing,
       ...this.faltantesDelEnvio(incoterm, totales),
-      ...lineMissing,
+      ...calculo.missing,
     ];
 
     return {
@@ -203,13 +239,47 @@ export class LiquidacionService {
       esUSA,
       incoterm,
       header,
+      headerOrigen,
       totales,
-      lines,
+      lines: calculo.lines,
+      ajustes,
       missing,
       readyToSubmit: missing.length === 0,
       simulated: this.calculator.simulated,
-      sinConfirmar: [...(this.calculator.sinConfirmar ?? [])],
+      sinConfirmar,
     };
+  }
+
+  /** Aplica la fórmula a cada línea (con las sobrescrituras del usuario) y lista lo que falta por línea. */
+  private calcularLineas(
+    baseLines: Array<{ codSecLineFilm: number; tipoPelicula: string; precio: number; kilosTotal: number; valueTotal: number }>,
+    overrides: LiquidacionInput['lines'],
+    compute: (l: (typeof baseLines)[number], indice: number) => LiquidacionLineValues,
+  ): { lines: LiquidacionDraftLine[]; missing: string[] } {
+    const missing: string[] = [];
+    const lines = baseLines.map((l, indice) => {
+      const values: LiquidacionLineValues = {
+        kilosTotal: l.kilosTotal,
+        valueTotal: l.valueTotal,
+        ...compute(l, indice),
+        ...(overrides?.[String(l.codSecLineFilm)] ?? {}),
+      };
+      const etiqueta = `Línea ${l.codSecLineFilm} (${l.tipoPelicula})`;
+      for (const [key, label] of LINE_REQUIRED) {
+        if (!isNum(values[key])) missing.push(`${etiqueta} — ${label}`);
+      }
+      if (isNum(values.valueFOB) && values.valueFOB < 0) {
+        missing.push(`${etiqueta} — FOB final negativo (${values.valueFOB}): revisa el flete/otros gastos digitados.`);
+      }
+      return { codSecLineFilm: l.codSecLineFilm, tipoPelicula: l.tipoPelicula, precio: l.precio, ...values };
+    });
+    return { lines, missing };
+  }
+
+  /** Suma del FOB final de la PF, o undefined si alguna línea aún no lo tiene (nunca un FOB inventado). */
+  private sumaFOB(lines: LiquidacionDraftLine[]): number | undefined {
+    const fobs = lines.map((l) => l.valueFOB);
+    return fobs.every(isNum) ? round2(fobs.reduce((a, b) => a + b, 0)) : undefined;
   }
 
   /** Datos del envío que el Incoterm exige (ver incoterm-rules.ts) y no se digitaron. */

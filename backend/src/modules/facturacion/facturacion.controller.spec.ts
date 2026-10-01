@@ -14,7 +14,7 @@ import { FacturacionController } from './facturacion.controller';
 describe('FacturacionController — control de acceso', () => {
   const proto = FacturacionController.prototype as unknown as Record<string, unknown>;
   const routes = Object.getOwnPropertyNames(proto).filter(
-    (n) => n !== 'constructor' && n !== 'parseOrderNumber' && typeof proto[n] === 'function',
+    (n) => n !== 'constructor' && n !== 'parseOrderNumber' && n !== 'sendPdf' && typeof proto[n] === 'function',
   );
 
   it('usa JwtAuthGuard y PermissionsGuard a nivel de clase', () => {
@@ -22,17 +22,29 @@ describe('FacturacionController — control de acceso', () => {
     expect(guards).toEqual(expect.arrayContaining([JwtAuthGuard, PermissionsGuard]));
   });
 
-  it('tiene exactamente las 4 rutas esperadas', () => {
-    expect(routes.sort()).toEqual(['downloadPdf', 'draft', 'draftWithInput', 'send']);
+  it('tiene exactamente las 8 rutas esperadas', () => {
+    expect(routes.sort()).toEqual([
+      'destinatarios',
+      'downloadPdf',
+      'downloadPdfWithInput',
+      'draft',
+      'draftWithInput',
+      'historial',
+      'ordenesRecientes',
+      'send',
+    ]);
   });
 
-  it.each(['draft', 'draftWithInput', 'downloadPdf'])('la ruta %s exige invoices.read', (name) => {
+  it.each(['draft', 'draftWithInput', 'downloadPdf', 'downloadPdfWithInput', 'historial', 'destinatarios', 'ordenesRecientes'])(
+    'la ruta %s exige invoices.read',
+    (name) => {
     const req = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto[name] as object) as {
       permissions: string[];
       mode: string;
     };
     expect(req).toEqual({ permissions: ['invoices.read'], mode: 'all' });
-  });
+    },
+  );
 
   it('la ruta send exige invoices.send (dispara un correo real)', () => {
     const req = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto.send as object) as {

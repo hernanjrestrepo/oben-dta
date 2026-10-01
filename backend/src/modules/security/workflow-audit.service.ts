@@ -64,6 +64,15 @@ export class WorkflowAuditService {
     });
   }
 
+  /** Los eventos más recientes de una acción (p. ej. las órdenes cuya Lista de Empaque salió). */
+  async listByAction(action: string, limit = 100): Promise<WorkflowEvent[]> {
+    return this.events.find({
+      where: { tenantId: this.ctx.tenantId, action },
+      order: { createdAt: 'DESC' },
+      take: limit,
+    });
+  }
+
   async listForEntity(
     entityType: string,
     entityId: string,

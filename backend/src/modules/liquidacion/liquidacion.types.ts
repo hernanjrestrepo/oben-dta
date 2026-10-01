@@ -18,7 +18,17 @@ export interface CheckSettlementResponse {
   OrdenCompra: string;
   Cliente: string;
   Detalle: CheckSettlementLine[];
+  /**
+   * José (respuesta a la pregunta 9): Dirección, Puerto de arribo y Puerto de
+   * embarque vienen POR DEFECTO de este SP y el usuario los puede modificar.
+   * En la verificación del 2026-09-23 aún no venían; se leen con tolerancia
+   * al nombre exacto del campo (ver LiquidacionService.defaultsDeOben).
+   */
+  [campo: string]: unknown;
 }
+
+/** De dónde salió cada valor del encabezado — se muestra en pantalla, nada queda "de la nada". */
+export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario';
 
 /** Valores del encabezado (spSettlement_Head). Todo opcional en la entrada — lo que falte bloquea el envío. */
 export interface LiquidacionHeaderValues {
@@ -65,7 +75,7 @@ export interface LiquidacionTotalesInput {
   flete?: number | null;
   /** Otros gastos de todo el envío (USD). */
   otrosGastos?: number | null;
-  /** "Valor de la póliza": divisor global del seguro (FOB inicial = Subtotal ÷ Valor de la póliza). Aún sin dato de José. */
+  /** "Valor de la póliza": divisor global del seguro (FOB inicial = Subtotal ÷ Valor de la póliza). Vigente: 1.00053 (José, 2026-09-30); puede variar en el año. */
   valorPoliza?: number | null;
 }
 
@@ -95,6 +105,10 @@ export interface LiquidacionDraft {
   /** Los datos del envío con los que se calculó (en modo simulado, incluye los de ejemplo). */
   totales: LiquidacionTotalesInput;
   lines: LiquidacionDraftLine[];
+  /** Origen de cada valor del encabezado (Oben, maestro de tarifas, calculado o digitado). */
+  headerOrigen: Partial<Record<keyof LiquidacionHeaderValues, OrigenValor>>;
+  /** Ajustes automáticos que hizo la fórmula (p. ej. otros costos destino reemplazados por Destination Charges). */
+  ajustes: string[];
   /** Todo lo que falta para poder enviar — nada se inventa. */
   missing: string[];
   readyToSubmit: boolean;

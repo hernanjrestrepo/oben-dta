@@ -10,14 +10,19 @@ import { DistributionListsService } from '../distribution-lists/distribution-lis
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import type { CheckSettlementResponse } from '../liquidacion/liquidacion.types';
+import { defaultsDeOben } from '../liquidacion/check-settlement-defaults';
 import type {
   FacturaElectronica,
   FacturacionDocument,
   FacturacionDraft,
+  FacturacionEnvio,
+  FacturacionHistorial,
   FacturacionInput,
   FacturacionKind,
   FacturacionLine,
+  FacturacionRecipients,
   FacturacionSendResult,
+  OrdenReciente,
 } from './facturacion.types';
 import { FacturacionPdfService } from './facturacion-pdf.service';
 
@@ -119,8 +124,10 @@ export class FacturacionService {
 
     const simulatedFields: string[] = header?.simulated ? ['pedido'] : [];
     let lines: FacturacionLine[] = [];
+    let direccionDeOben: string | undefined;
     if (proforma) {
       const fetched = await this.fetchCheckSettlement(proforma);
+      direccionDeOben = defaultsDeOben(fetched?.check).direccion;
       const check = fetched?.check;
       if (fetched?.simulated) simulatedFields.push('precios');
       if (!check) {
@@ -156,8 +163,14 @@ export class FacturacionService {
         direccionFuente = 'maestro_clientes';
       }
     }
+    if (!direccionEntrega && direccionDeOben) {
+      // Tercera fuente: spCheckSettlement (José, pregunta 9: la dirección viene por defecto de ese SP).
+      direccionEntrega = direccionDeOben;
+      direccionFuente = 'oben_erp';
+      if (simulatedFields.includes('precios')) simulatedFields.push('direccionEntrega');
+    }
     if (!direccionEntrega && kind === 'exportacion' && proforma) {
-      // Tercera fuente: la Proforma en Oben+ (hoy SIMULADA — queda marcada).
+      // Cuarta fuente: la Proforma en Oben+ (hoy SIMULADA — queda marcada).
       const plus = await this.fetchObenPlusAddress(proforma);
       if (plus) {
         direccionEntrega = plus.direccion;
@@ -231,7 +244,12 @@ export class FacturacionService {
    * pida `force:true` — mismo criterio de "nunca duplicar sin querer" que el
    * resto del sistema.
    */
-  async send(numberOrderSales: number, input: FacturacionInput = {}, force = false): Promise<FacturacionSendResult> {
+  async send(
+    numberOrderSales: number,
+    input: FacturacionInput = {},
+    force = false,
+    recipients: FacturacionRecipients = {},
+  ): Promise<FacturacionSendResult> {
     if (!force) {
       // Un intento FALLIDO también se audita como 'facturacion_enviada' (con
       // ok:false): no cuenta como envío — si no, un fallo de SMTP bloqueaba el
@@ -244,7 +262,12 @@ export class FacturacionService {
       }
     }
 
-    const resolved = await this.distributionLists.resolveRecipients('document', 'facturacion');
+    // Destinatarios explícitos (los que se ven y editan en pantalla) mandan;
+    // sin ellos, la lista de distribución "facturacion".
+    const explicitTo = this.cleanEmails(recipients.to);
+    const resolved = explicitTo.length
+      ? { to: explicitTo, cc: this.cleanEmails(recipients.cc).filter((e) => !explicitTo.includes(e)) }
+      : await this.distributionLists.resolveRecipients('document', 'facturacion');
     if (resolved.to.length === 0) {
       throw new BadRequestException(
         'No hay ninguna lista de distribución asociada a "facturacion" — configúrala en Listas de Distribución.',
@@ -306,10 +329,13 @@ export class FacturacionService {
    */
   private async emitirFacturaElectronica(draft: FacturacionDraft): Promise<FacturaElectronica> {
     const tenantId = this.ctx.tenantId;
-    const key = `facturacion:dian:${draft.numberOrderSales}`;
-
     // Candado: jamás una factura electrónica REAL con datos simulados.
     const { mode } = await this.hub.capabilities('dian');
+    // La clave lleva el modo: un CUFE del simulador (demo/pruebas) NUNCA debe
+    // quedar como "la factura ya emitida" de esa orden cuando se conecte el
+    // proveedor real — antes la clave era solo la orden, y una emisión
+    // simulada bloqueaba para siempre la emisión real de esa misma OV.
+    const key = `facturacion:dian:${mode}:${draft.numberOrderSales}`;
     if (mode === 'real' && draft.simulated) {
       throw new BadRequestException({
         message: `No se emite una factura electrónica real con datos SIMULADOS (${draft.simulatedFields.join(', ')}). Digita esos datos o espera la fuente real.`,
@@ -393,10 +419,20 @@ export class FacturacionService {
     return factura;
   }
 
-  /** Emisión previa (si la hubo), para mostrarla al descargar el PDF sin emitir nada. */
-  private async facturaElectronicaEmitida(numberOrderSales: number): Promise<FacturaElectronica | null> {
-    const events = await this.audit.listForEntity('facturacion', String(numberOrderSales));
-    const last = [...events].reverse().find((e) => e.action === 'facturacion_dian_emitida');
+  /**
+   * Emisión previa (si la hubo), para mostrarla al descargar el PDF sin emitir
+   * nada. Con el proveedor DIAN real, una emisión SIMULADA previa no cuenta:
+   * no es la factura de esa orden.
+   */
+  private async facturaElectronicaEmitida(
+    numberOrderSales: number,
+    events?: Array<{ action: string; outputData?: Record<string, unknown> | null }>,
+  ): Promise<FacturaElectronica | null> {
+    const { mode } = await this.hub.capabilities('dian');
+    const all = events ?? (await this.audit.listForEntity('facturacion', String(numberOrderSales)));
+    const last = [...all]
+      .reverse()
+      .find((e) => e.action === 'facturacion_dian_emitida' && (mode !== 'real' || e.outputData?.simulated === false));
     const o = last?.outputData;
     const cufe = text(o?.cufe);
     if (!o || !cufe) return null;
@@ -409,21 +445,133 @@ export class FacturacionService {
     };
   }
 
+  /** Envíos previos de la orden (exitosos y fallidos) y la factura electrónica vigente. */
+  async historial(numberOrderSales: number): Promise<FacturacionHistorial> {
+    const events = await this.audit.listForEntity('facturacion', String(numberOrderSales));
+    const envios: FacturacionEnvio[] = events
+      .filter((e) => e.action === 'facturacion_enviada')
+      .map((e) => {
+        const o = e.outputData ?? {};
+        return {
+          fecha: new Date(e.createdAt).toISOString(),
+          to: this.asEmails(o.to),
+          cc: this.asEmails(o.cc),
+          ok: o.ok !== false,
+          cufe: text(o.cufe),
+          cufeSimulado: o.cufeSimulado !== false,
+          error: e.reason ?? null,
+        };
+      })
+      .reverse();
+    return {
+      numberOrderSales,
+      envios,
+      facturaElectronica: await this.facturaElectronicaEmitida(numberOrderSales, events),
+    };
+  }
+
+  /** Destinatarios que tendría un envío si no se indican otros (lista de distribución "facturacion"). */
+  async destinatarios(): Promise<{ to: string[]; cc: string[] }> {
+    const r = await this.distributionLists.resolveRecipients('document', 'facturacion');
+    return { to: r.to, cc: r.cc };
+  }
+
+  /**
+   * Órdenes reales recientes: las que ya recibieron su Lista de Empaque al
+   * aprobarse el corte (evento de packing-list-automation). Sin duplicados,
+   * la más reciente primero.
+   */
+  async ordenesRecientes(limit = 12): Promise<OrdenReciente[]> {
+    const events = await this.audit.listByAction('ov_approved_lista_empaque_enviada', 200);
+    const seen = new Set<number>();
+    const out: OrdenReciente[] = [];
+    for (const e of events) {
+      const n = Number(e.entityId);
+      if (!Number.isInteger(n) || n <= 0 || seen.has(n) || e.outputData?.ok === false) continue;
+      seen.add(n);
+      out.push({ numberOrderSales: n, cliente: text(e.outputData?.cliente), fecha: new Date(e.createdAt).toISOString() });
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
+  private asEmails(v: unknown): string[] {
+    if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string');
+    return typeof v === 'string' && v ? [v] : [];
+  }
+
+  /** Correos sin espacios, en minúscula y sin repetidos. */
+  private cleanEmails(list?: string[]): string[] {
+    return [...new Set((list ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  }
+
+  /** Correo HTML con estilos en línea (se ve bien en Outlook); todo dato externo va escapado. */
   private emailBody(draft: FacturacionDraft, factura: FacturaElectronica): string {
+    const esc = (v: unknown) =>
+      String(v ?? '—').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+    const money = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const simulatedData = draft.simulated || factura.simulated;
-    const parts = [
-      `<p>Adjunto el borrador de facturación de la orden ${draft.numberOrderSales} (${draft.cliente}), armado con datos reales del sistema de Oben${simulatedData ? ' y los datos SIMULADOS que se indican abajo' : ''}, para revisión de Facturación/COMEX.</p>`,
-      factura.simulated
-        ? `<p><strong>CUFE SIMULADO — pendiente de proveedor DIAN real:</strong> ${factura.cufe}. Este documento no tiene validez fiscal.</p>`
-        : `<p>Factura electrónica ${factura.invoiceNumber} — CUFE ${factura.cufe}.</p>`,
-    ];
+    const tipo: Record<FacturacionKind, string> = {
+      exportacion: 'Pedido de exportación',
+      nacional_completo: 'Pedido nacional — despacho completo',
+      nacional_parcial: 'Pedido nacional — despacho parcial',
+    };
+
+    const avisos: string[] = [];
+    if (factura.simulated) {
+      avisos.push(`<strong>CUFE SIMULADO — pendiente de proveedor DIAN real:</strong> ${esc(factura.cufe)}. Este documento no tiene validez fiscal.`);
+    }
     if (draft.simulatedFields.includes('direccionEntrega')) {
-      parts.push(`<p><strong>Dirección de entrega SIMULADA (Oben+ aún sin API real):</strong> ${draft.direccionEntrega}</p>`);
+      avisos.push(`<strong>Dirección de entrega SIMULADA (Oben+ aún sin API real):</strong> ${esc(draft.direccionEntrega)}`);
     }
     if (draft.simulatedFields.includes('pedido') || draft.simulatedFields.includes('precios')) {
-      parts.push('<p><strong>Datos del pedido y precios SIMULADOS</strong> (el sistema de Oben está en modo simulador en este entorno).</p>');
+      avisos.push('<strong>Datos del pedido y precios SIMULADOS</strong> (el sistema de Oben está en modo simulador en este entorno).');
     }
-    return parts.join('');
+
+    const td = 'padding:7px 12px;border-bottom:1px solid #F3F4F6';
+    const fila = (label: string, value: string, destacado = false) =>
+      `<tr><td style="${td};color:#6B7280;font-size:12px;width:38%">${label}</td>` +
+      `<td style="${td};font-size:13px;${destacado ? 'font-weight:bold;color:#C4521A' : 'color:#1F2937'}">${value}</td></tr>`;
+    const lineas = draft.lines
+      .map(
+        (l) =>
+          `<tr><td style="${td};font-size:12px">${esc(l.tipoPelicula)}</td>` +
+          `<td style="${td};font-size:12px;text-align:right">${money(l.kilosTotal)}</td>` +
+          `<td style="${td};font-size:12px;text-align:right">${esc(l.precio)}</td>` +
+          `<td style="${td};font-size:12px;text-align:right">${money(l.valorLinea)}</td></tr>`,
+      )
+      .join('');
+    const th = 'padding:7px 12px;font-size:12px';
+
+    return [
+      '<div style="font-family:Segoe UI,Arial,sans-serif;color:#1F2937;max-width:640px">',
+      '<div style="height:4px;background:#F47735"></div>',
+      `<h2 style="margin:18px 0 2px;font-size:19px">Borrador de facturación — Orden ${draft.numberOrderSales}</h2>`,
+      `<p style="margin:0 0 14px;color:#F47735;font-size:13px;font-weight:bold">${draft.kind ? tipo[draft.kind] : 'Pedido'} · ${esc(draft.cliente)}</p>`,
+      avisos.length
+        ? `<div style="margin:0 0 14px;padding:10px 14px;border:1px solid #FCA5A5;background:#FEF2F2;color:#B91C1C;font-size:12px">${avisos.map((a) => `<p style="margin:3px 0">${a}</p>`).join('')}</div>`
+        : '',
+      `<p style="font-size:13px;margin:0 0 14px">Adjunto el borrador de facturación de la orden ${draft.numberOrderSales} (${esc(draft.cliente)}), armado con datos reales del sistema de Oben${simulatedData ? ' y los datos SIMULADOS que se indican arriba' : ''}, para revisión de Facturación/COMEX.</p>`,
+      '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;border:1px solid #E5E7EB;margin-bottom:14px">',
+      fila('Cliente', esc(draft.cliente)),
+      fila('País', esc(draft.pais)),
+      fila('Proforma', esc(draft.proforma)),
+      fila('Orden de compra', esc(draft.ordenCompra)),
+      fila('Contenedor', esc(draft.contenedor)),
+      fila('Dirección de entrega', esc(draft.direccionEntrega)),
+      fila('Total kilos', money(draft.totalKilos)),
+      fila('Total valor (USD)', money(draft.totalValor), true),
+      factura.simulated ? '' : fila('Factura electrónica', `${esc(factura.invoiceNumber)} — CUFE ${esc(factura.cufe)}`),
+      '</table>',
+      '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin-bottom:14px">',
+      `<tr style="background:#F47735;color:#FFFFFF"><th style="${th};text-align:left">Tipo de película</th><th style="${th};text-align:right">Kilos</th><th style="${th};text-align:right">Precio USD/kg</th><th style="${th};text-align:right">Valor USD</th></tr>`,
+      lineas,
+      '</table>',
+      draft.observaciones ? `<p style="font-size:12px;margin:0 0 6px"><strong>Observaciones:</strong> ${esc(draft.observaciones)}</p>` : '',
+      draft.infoComercial ? `<p style="font-size:12px;margin:0 0 6px"><strong>Información comercial:</strong> ${esc(draft.infoComercial)}</p>` : '',
+      '<p style="font-size:11px;color:#9CA3AF;margin-top:18px">Generado automáticamente por Oben Xmart. El PDF adjunto es el documento de apoyo para Facturación/COMEX.</p>',
+      '</div>',
+    ].join('');
   }
 
   private async fetchObenPlusAddress(numberPF: string): Promise<{ direccion: string; simulated: boolean } | null> {

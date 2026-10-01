@@ -5,7 +5,9 @@ const TENANT_ID = 't1';
 
 function makeService(overrides: {
   hubResponses?: Record<string, unknown>;
-  auditEvents?: Array<{ action: string; outputData?: Record<string, unknown> | null }>;
+  auditEvents?: Array<{ action: string; outputData?: Record<string, unknown> | null; createdAt?: Date; reason?: string | null }>;
+  /** Eventos que devuelve audit.listByAction (órdenes recientes). */
+  actionEvents?: Array<{ entityId: string; outputData?: Record<string, unknown> | null; createdAt: Date }>;
   distribution?: { to: string[]; cc: string[]; bcc: string[] };
   clientAddress?: string | null;
   /** Filas del maestro de clientes que coinciden por nombre (tiene prioridad sobre clientAddress). */
@@ -43,6 +45,7 @@ function makeService(overrides: {
   const audit = {
     log: jest.fn().mockResolvedValue(undefined),
     listForEntity: jest.fn().mockResolvedValue(overrides.auditEvents ?? []),
+    listByAction: jest.fn().mockResolvedValue(overrides.actionEvents ?? []),
   } as any;
   const distributionLists = {
     resolveRecipients: jest.fn().mockResolvedValue(overrides.distribution ?? { to: [], cc: [], bcc: [] }),
@@ -456,6 +459,29 @@ describe('FacturacionService (borrador de facturación)', () => {
       );
     });
   });
+  describe('dirección de entrega desde spCheckSettlement (ERP de Oben, José pregunta 9)', () => {
+    it('sin dirección digitada ni en el maestro, la toma del ERP (fuente real) antes que de Oben+ simulado', async () => {
+      const { service, hub } = makeService({
+        hubResponses: {
+          header: HEADER_EXPORT,
+          check: { ok: true, data: { ...CHECK_OK.data, Direccion: '1 Port Rd, Miami FL' } },
+          obenPlus: OBEN_PLUS_OK,
+        },
+      });
+      const draft = await service.getDraft(11086);
+      expect(draft).toMatchObject({ direccionEntrega: '1 Port Rd, Miami FL', direccionFuente: 'oben_erp', readyToGenerate: true, simulated: false });
+      expect(hub.call.mock.calls.some((c: unknown[]) => c[1] === 'proforma.status')).toBe(false);
+    });
+
+    it('el maestro de clientes sigue teniendo prioridad sobre el ERP', async () => {
+      const { service } = makeService({
+        hubResponses: { header: HEADER_EXPORT, check: { ok: true, data: { ...CHECK_OK.data, Direccion: 'ERP' } } },
+        clientAddress: 'Maestro',
+      });
+      expect((await service.getDraft(11086)).direccionFuente).toBe('maestro_clientes');
+    });
+  });
+
   describe('dirección de entrega desde Oben+ (fuente SIMULADA, rotulada)', () => {
     it('exportación sin dirección digitada ni en el maestro → la toma de la Proforma en Oben+ y la marca como simulada', async () => {
       const { service, hub } = makeService({ hubResponses: { header: HEADER_EXPORT, check: CHECK_OK, obenPlus: OBEN_PLUS_OK } });
@@ -583,7 +609,7 @@ describe('FacturacionService (borrador de facturación)', () => {
       });
       await expect(rechazo.service.send(10758)).rejects.toThrow(/NIT inválido/);
       expect(sendCalls(rechazo.hub)).toHaveLength(0);
-      expect(idempotency.rows.get('facturacion:dian:10758')).toMatchObject({ status: 'failed', result: { ambiguous: false } });
+      expect(idempotency.rows.get('facturacion:dian:mock:10758')).toMatchObject({ status: 'failed', result: { ambiguous: false } });
 
       const ok = makeService({ hubResponses: { header: HEADER_NACIONAL, check: CHECK_OK }, distribution: COMEX, idempotency });
       await expect(ok.service.send(10758)).resolves.toMatchObject({ cufe: 'cufe-sim-123' });
@@ -625,12 +651,12 @@ describe('FacturacionService (borrador de facturación)', () => {
       });
       await expect(service.send(10758)).rejects.toThrow(/no trae CUFE/);
       expect(sendCalls(hub)).toHaveLength(0);
-      expect(idempotency.rows.get('facturacion:dian:10758')?.result).toMatchObject({ ambiguous: true });
+      expect(idempotency.rows.get('facturacion:dian:mock:10758')?.result).toMatchObject({ ambiguous: true });
     });
 
     it('si la emisión de esa orden está en curso en otra solicitud → Conflict, sin llamar a DIAN', async () => {
       const idempotency = new FakeIdempotency();
-      idempotency.rows.set('facturacion:dian:10758', { status: 'processing' });
+      idempotency.rows.set('facturacion:dian:mock:10758', { status: 'processing' });
       const { service, hub } = makeService({ hubResponses: { header: HEADER_NACIONAL, check: CHECK_OK }, distribution: COMEX, idempotency });
       await expect(service.send(10758)).rejects.toThrow(ConflictException);
       expect(dianCalls(hub)).toHaveLength(0);
@@ -663,6 +689,110 @@ describe('FacturacionService (borrador de facturación)', () => {
       const [email] = sendCalls(hub);
       expect(email[2].subject).toBe('Borrador de Facturación — Orden 10758');
       expect(email[2].body).not.toMatch(/SIMULAD/);
+    });
+
+    it('un CUFE SIMULADO nunca queda como la factura de la orden cuando se conecta el proveedor REAL', async () => {
+      // Antes la clave de idempotencia era solo la orden: una emisión del
+      // simulador (p. ej. en un demo) se devolvía para siempre, también con DIAN real.
+      const idempotency = new FakeIdempotency();
+      const base = { hubResponses: { header: HEADER_NACIONAL, check: CHECK_OK }, distribution: COMEX, idempotency };
+      const demo = await makeService(base).service.send(10758);
+      expect(demo).toMatchObject({ cufe: 'cufe-sim-123', cufeSimulado: true });
+
+      const real = makeService({
+        ...base,
+        dianMode: 'real',
+        hubResponses: {
+          ...base.hubResponses,
+          dian: { ok: true, mode: 'real', data: { invoiceNumber: 'OV10758', cufe: 'cufe-REAL-9', status: 'ACEPTADA' } },
+        },
+      });
+      const res = await real.service.send(10758, {}, true);
+
+      expect(dianCalls(real.hub)).toHaveLength(1);
+      expect(res).toMatchObject({ cufe: 'cufe-REAL-9', cufeSimulado: false });
+      expect([...idempotency.rows.keys()].sort()).toEqual(['facturacion:dian:mock:10758', 'facturacion:dian:real:10758']);
+    });
+
+    it('con DIAN real, el PDF descargado no muestra una emisión SIMULADA previa como si fuera la factura', async () => {
+      const { service } = makeService({
+        hubResponses: { header: HEADER_NACIONAL, check: CHECK_OK },
+        dianMode: 'real',
+        auditEvents: [{ action: 'facturacion_dian_emitida', outputData: { cufe: 'abc', simulated: true } }],
+      });
+      expect((await service.generateDocument(10758)).facturaElectronica).toBeNull();
+    });
+  });
+
+  describe('destinatarios explícitos (los que se ven en pantalla)', () => {
+    const COMEX = { to: ['comex@oben.com'], cc: [], bcc: [] };
+
+    it('mandan sobre la lista de distribución: primero en "para", el resto en copia, sin repetidos', async () => {
+      const { service, hub, distributionLists } = makeService({
+        hubResponses: { header: HEADER_NACIONAL, check: CHECK_OK },
+        distribution: COMEX,
+      });
+
+      const res = await service.send(10758, {}, false, {
+        to: [' JorgeRestrepo@obengroup.com', 'joseguzman@obengroup.com', 'jorgerestrepo@obengroup.com'],
+        cc: ['ceo@paradixe.xyz', 'joseguzman@obengroup.com'],
+      });
+
+      expect(distributionLists.resolveRecipients).not.toHaveBeenCalled();
+      const [email] = sendCalls(hub);
+      expect(email[2].to).toBe('jorgerestrepo@obengroup.com');
+      expect(email[2].cc).toBe('joseguzman@obengroup.com,ceo@paradixe.xyz');
+      expect(res).toMatchObject({ to: ['jorgerestrepo@obengroup.com'], cc: ['joseguzman@obengroup.com', 'ceo@paradixe.xyz'] });
+    });
+
+    it('una lista vacía cuenta como "no indicados": usa la lista de distribución', async () => {
+      const { service, hub } = makeService({ hubResponses: { header: HEADER_NACIONAL, check: CHECK_OK }, distribution: COMEX });
+      await service.send(10758, {}, false, { to: ['  '] });
+      expect(sendCalls(hub)[0][2].to).toBe('comex@oben.com');
+    });
+
+    it('destinatarios() expone la lista "facturacion" para precargar la pantalla', async () => {
+      const { service } = makeService({ distribution: { to: ['a@oben.com'], cc: ['b@oben.com'], bcc: ['oculto@oben.com'] } });
+      expect(await service.destinatarios()).toEqual({ to: ['a@oben.com'], cc: ['b@oben.com'] });
+    });
+  });
+
+  describe('historial y órdenes recientes', () => {
+    it('historial: envíos (el más reciente primero, incluidos los fallidos) y la factura vigente', async () => {
+      const { service } = makeService({
+        auditEvents: [
+          { action: 'facturacion_enviada', createdAt: new Date('2026-09-30T10:00:00Z'), reason: 'smtp down', outputData: { to: 'a@oben.com', cc: [], ok: false, cufe: 'c1', cufeSimulado: true } },
+          { action: 'facturacion_dian_emitida', createdAt: new Date('2026-09-30T10:00:00Z'), outputData: { invoiceNumber: 'OV1', cufe: 'c1', status: 'ACEPTADA', simulated: true } },
+          { action: 'facturacion_enviada', createdAt: new Date('2026-09-30T11:00:00Z'), outputData: { to: 'a@oben.com', cc: ['b@oben.com'], ok: true, cufe: 'c1', cufeSimulado: true } },
+        ],
+      });
+
+      const h = await service.historial(1);
+
+      expect(h.envios).toEqual([
+        { fecha: '2026-09-30T11:00:00.000Z', to: ['a@oben.com'], cc: ['b@oben.com'], ok: true, cufe: 'c1', cufeSimulado: true, error: null },
+        { fecha: '2026-09-30T10:00:00.000Z', to: ['a@oben.com'], cc: [], ok: false, cufe: 'c1', cufeSimulado: true, error: 'smtp down' },
+      ]);
+      expect(h.facturaElectronica).toMatchObject({ cufe: 'c1', simulated: true });
+    });
+
+    it('órdenes recientes: sin repetidos, sin envíos fallidos, la más reciente primero', async () => {
+      const at = (h: string) => new Date(`2026-09-30T${h}:00:00Z`);
+      const { service, audit } = makeService({
+        actionEvents: [
+          { entityId: '11147', createdAt: at('12'), outputData: { cliente: 'OBEN DISTRIBUIDORA COLOMBIA LTDA', ok: true } },
+          { entityId: '11200', createdAt: at('11'), outputData: { cliente: 'FALLIDA', ok: false } },
+          { entityId: '11147', createdAt: at('10'), outputData: { cliente: 'OBEN DISTRIBUIDORA COLOMBIA LTDA', ok: true } },
+          { entityId: '10983', createdAt: at('09'), outputData: { cliente: 'OBEN US, LLC' } },
+          { entityId: 'basura', createdAt: at('08'), outputData: {} },
+        ],
+      });
+
+      expect(await service.ordenesRecientes()).toEqual([
+        { numberOrderSales: 11147, cliente: 'OBEN DISTRIBUIDORA COLOMBIA LTDA', fecha: '2026-09-30T12:00:00.000Z' },
+        { numberOrderSales: 10983, cliente: 'OBEN US, LLC', fecha: '2026-09-30T09:00:00.000Z' },
+      ]);
+      expect(audit.listByAction).toHaveBeenCalledWith('ov_approved_lista_empaque_enviada', 200);
     });
   });
 });

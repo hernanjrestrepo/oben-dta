@@ -2,7 +2,9 @@ import {
   FORMULA_SIN_CONFIRMAR,
   IncotermFormulaCalculator,
   LIQUIDACION_SIMULATION_ENV,
+  LIQUIDACION_VALOR_POLIZA_ENV,
   SIMULATED_INCOTERM_RATES,
+  VALOR_POLIZA_VIGENTE,
   SimulatedIncotermCalculator,
   calculatorFromEnv,
   prorratear,
@@ -42,9 +44,17 @@ describe('Calculadores de Liquidación', () => {
       expect(c.simulated).toBe(false);
     });
 
-    it('mientras José no confirme el mapeo de campos, la fórmula lo declara (y eso bloquea el envío real)', () => {
+    it('mientras quede algo sin validar con Oben, la fórmula lo declara (y eso bloquea el envío real)', () => {
       expect(new IncotermFormulaCalculator().sinConfirmar).toEqual(FORMULA_SIN_CONFIRMAR);
       expect(FORMULA_SIN_CONFIRMAR.length).toBeGreaterThan(0);
+    });
+
+    it(`Valor de la póliza vigente ${VALOR_POLIZA_VIGENTE} (José) por defecto; ${LIQUIDACION_VALOR_POLIZA_ENV} lo cambia sin tocar código`, () => {
+      expect((calculatorFromEnv({}) as IncotermFormulaCalculator).valorPolizaVigente).toBe(1.00053);
+      expect((calculatorFromEnv({ [LIQUIDACION_VALOR_POLIZA_ENV]: '1.0007' }) as IncotermFormulaCalculator).valorPolizaVigente).toBe(1.0007);
+      for (const invalido of ['abc', '0.0005', '1', '']) {
+        expect((calculatorFromEnv({ [LIQUIDACION_VALOR_POLIZA_ENV]: invalido }) as IncotermFormulaCalculator).valorPolizaVigente).toBe(1.00053);
+      }
     });
   });
 
@@ -71,11 +81,18 @@ describe('Calculadores de Liquidación', () => {
   describe('IncotermFormulaCalculator — fórmula de José (llamada 2026-09-30)', () => {
     const calc = new IncotermFormulaCalculator();
 
+    it('la póliza es global: si no se digita, se usa la vigente; la digitada manda', () => {
+      const envio = { totalKilos: 1000, totalValor: 2633.1, kilosPorLinea: [700, 300] };
+      expect(calc.resolverTotales({ incoterm: 'DAP' }, envio)).toEqual({ incoterm: 'DAP', valorPoliza: 1.00053 });
+      expect(calc.resolverTotales({ valorPoliza: 1.001 }, envio).valorPoliza).toBe(1.001);
+    });
+
     it('DAP/DDP: flete + seguro + otros gastos; FOB final = valor total − los tres', () => {
       for (const incoterm of ['DAP', 'DDP']) {
         expect(calc.compute(ctx(0, incoterm))).toEqual({
           valueTotal: 1785, // 2.55 × 700
-          kilosTotalUnit: 2.55,
+          // Precio final (José): 2.55 − 1.2345 − 0.0045 − 0.0876
+          kilosTotalUnit: 1.2234,
           valueFreight: 864.19, // 1234.56 × 70%
           valueFreightUnit: 1.2345, // 864.19 / 700 = 1.23455… truncado
           subTotal: 920.81, // 1785 − 864.19
@@ -84,8 +101,9 @@ describe('Calculadores de Liquidación', () => {
           expensesOther: 61.36, // 87.65 × 70% = 61.355, reparto sin perder centavos
           expensesOtherUnit: 0.0876,
           valueFOB: 856.24, // 1785 − 3.21 − 864.19 − 61.36
-          total: 856.24,
-          totalUnidad: 1.2232,
+          // José (2026-09-30): Total y TotalUnidad se mandan en 0.
+          total: 0,
+          totalUnidad: 0,
         });
       }
     });
@@ -101,8 +119,9 @@ describe('Calculadores de Liquidación', () => {
           expensesOther: 0,
           expensesOtherUnit: 0,
           valueFOB: 477.73,
-          total: 477.73,
-          totalUnidad: 1.5924,
+          kilosTotalUnit: 1.5925, // 2.827 − 1.2345
+          total: 0,
+          totalUnidad: 0,
         });
       }
     });
@@ -120,7 +139,8 @@ describe('Calculadores de Liquidación', () => {
           expensesOther: 0,
           subTotal: 1785,
           valueFOB: 1785,
-          totalUnidad: 2.55,
+          kilosTotalUnit: 2.55, // sin deducciones, el precio final es el negociado
+          totalUnidad: 0,
         });
       }
     });
@@ -128,7 +148,7 @@ describe('Calculadores de Liquidación', () => {
     it('sin el flete digitado no calcula flete, subtotal, seguro ni FOB (quedan como faltantes)', () => {
       const v = calc.compute(ctx(0, 'DAP', { otrosGastos: 87.65, valorPoliza: 1.0035 }));
       expect(v).toMatchObject({ valueTotal: 1785, expensesOther: 61.36 });
-      for (const k of ['valueFreight', 'subTotal', 'valueSure', 'valueFOB', 'total', 'totalUnidad']) {
+      for (const k of ['valueFreight', 'subTotal', 'valueSure', 'valueFOB', 'kilosTotalUnit']) {
         expect(v).not.toHaveProperty(k);
       }
     });
@@ -171,7 +191,7 @@ describe('Calculadores de Liquidación', () => {
         incoterm: SIMULATED_INCOTERM_RATES.incoterm,
         flete: 679.34, // 5661.2 kg × 0.12
         otrosGastos: 161.34, // 1% × 16134.42
-        valorPoliza: SIMULATED_INCOTERM_RATES.valorPoliza,
+        valorPoliza: VALOR_POLIZA_VIGENTE, // la póliza es un dato real (José), no de ejemplo
       });
     });
 
@@ -190,7 +210,8 @@ describe('Calculadores de Liquidación', () => {
         totales,
         line: { codSecLineFilm: 13, tipoPelicula: 'SC---0015TN', precio: 2.85, kilosTotal: 5661.2, valueTotal: 16134.42 },
       });
-      expect(v).toMatchObject({ valueFreight: 679.34, subTotal: 15455.08, valueSure: 53.9, expensesOther: 161.34, valueFOB: 15239.84 });
+      // seguro = 15455.08 − 15455.08 / 1.00053
+      expect(v).toMatchObject({ valueFreight: 679.34, subTotal: 15455.08, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15285.55 });
     });
   });
 });
