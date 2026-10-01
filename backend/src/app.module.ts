@@ -28,6 +28,8 @@ import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.
 import { EmailIntakeModule } from './modules/email-intake/email-intake.module';
 import { FreightRatesModule } from './modules/freight-rates/freight-rates.module';
 import { DistributionListsModule } from './modules/distribution-lists/distribution-lists.module';
+import { EnvioManualModule } from './modules/envio-manual/envio-manual.module';
+import { FormatosModule } from './modules/formatos/formatos.module';
 import { EquivalencesModule } from './modules/equivalences/equivalences.module';
 import { FacturacionModule } from './modules/facturacion/facturacion.module';
 import { ComercialModule } from './modules/comercial/comercial.module';
@@ -36,6 +38,8 @@ import { ComercialModule } from './modules/comercial/comercial.module';
 import { Client } from './entities/client.entity';
 import { ObenPlusSimProforma } from './entities/oben-plus-sim-proforma.entity';
 import { ComercialCase } from './entities/comercial-case.entity';
+import { FormatoEnvio } from './entities/formato-envio.entity';
+import { FacturaParcial } from './entities/factura-parcial.entity';
 import { Tenant } from './entities/tenant.entity';
 import { ModuleCatalog } from './entities/module-catalog.entity';
 import { Permission } from './entities/permission.entity';
@@ -160,6 +164,8 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
           ClientProductEquivalence,
           ObenPlusSimProforma,
           ComercialCase,
+          FormatoEnvio,
+          FacturaParcial,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') === 'development',
@@ -186,6 +192,8 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
     EvaModule,
     PackingListModule,
     DistributionListsModule,
+    EnvioManualModule,
+    FormatosModule,
     ObenReportsModule,
     LiquidacionModule,
     EquivalencesModule,

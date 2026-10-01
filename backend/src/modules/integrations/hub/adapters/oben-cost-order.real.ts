@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { RealAdapterBase } from '../real-adapter-base';
 import { AdapterCapability, BaseAdapterConfig } from '../adapter.types';
 
+/** APICrearInvoiceParadixe en el servidor de PRUEBAS de Oben (José, 2026-09-30). */
+export const CREAR_INVOICE_URL_PRUEBAS = 'http://192.168.20.12:9098/api/External/APICrearInvoiceParadixe';
+
 export interface ObenCostOrderAdapterConfig extends BaseAdapterConfig {
   /** URL de APICostOrderParadixe (costo de orden de venta por línea). */
   baseUrl?: string;
@@ -21,6 +24,8 @@ export interface ObenCostOrderAdapterConfig extends BaseAdapterConfig {
   crearDetLiqUrl?: string;
   /** URL de APILiquidacionParadixe (consulta/dispara la liquidación por NumberPF). */
   liquidacionUrl?: string;
+  /** URL de APICrearInvoiceParadixe (crea la factura en OBEN MAS). Por defecto, el servidor de PRUEBAS de Oben. */
+  crearInvoiceUrl?: string;
   authToken?: string;
 }
 
@@ -115,6 +120,11 @@ export class ObenCostOrderRealAdapter extends RealAdapterBase {
         method: 'read',
         description: 'Consulta/dispara la liquidación de un NumberPF (API real Oben)',
       },
+      {
+        operation: 'factura.crear',
+        method: 'write',
+        description: 'Crea la factura de una proforma en OBEN MAS, completa o parcial por número de distribución (API real Oben)',
+      },
     ];
   }
 
@@ -136,7 +146,33 @@ export class ObenCostOrderRealAdapter extends RealAdapterBase {
         this.crearDetalleLiquidacion(args),
       'liquidacion.consultar': (args: Record<string, unknown>) =>
         this.consultarLiquidacion(args),
+      'factura.crear': (args: Record<string, unknown>) => this.crearFactura(args),
     };
+  }
+
+  /**
+   * APICrearInvoiceParadixe (José Guzmán, reunión del 2026-10-01, 53:51):
+   * "pide 2 parámetros, el número de la proforma y el número de
+   * distribución. Cuando el número de distribución va vacío es un pedido
+   * completo; cuando tiene datos es una factura parcial." Mismo estilo que el
+   * resto de APIs de Oben: parámetros como headers, respuesta
+   * `{isSuccessful, Code, message}` (un rechazo llega con HTTP 200 y lo
+   * convierte en error `httpJson`).
+   */
+  private async crearFactura(args: Record<string, unknown>): Promise<unknown> {
+    this.assertConfigured();
+    const pf = typeof args.numberPF === 'number' || typeof args.numberPF === 'string' ? String(args.numberPF).trim() : '';
+    if (!/^\d+$/.test(pf)) throw new Error('BUSINESS_ERROR: numberPF requerido (numérico)');
+    const dist =
+      args.numberDistribucion === undefined || args.numberDistribucion === null
+        ? ''
+        : String(args.numberDistribucion as string | number).trim();
+    if (dist && !/^\d+$/.test(dist)) throw new Error('BUSINESS_ERROR: numberDistribucion debe ser numérico o vacío');
+    return this.httpJson(this.cfg.crearInvoiceUrl ?? CREAR_INVOICE_URL_PRUEBAS, { method: 'POST' }, {
+      Authtoken: this.cfg.authToken!,
+      NumberPF: pf,
+      NumberDistribucion: dist,
+    });
   }
 
   private async getCostOrder(

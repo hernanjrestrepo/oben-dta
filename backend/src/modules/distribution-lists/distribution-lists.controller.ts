@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import {
   AssociateDistributionListDto,
   CreateDistributionListDto,
   UpdateDistributionListDto,
+  UpdateRecipientsDto,
 } from './dto/distribution-list.dto';
 import type { DistributionEntityType } from '../../entities/distribution-list-association.entity';
 
@@ -42,10 +44,28 @@ export class DistributionListsController {
     return this.service.create(dto);
   }
 
+  /**
+   * Administración ve todas; un dueño (WO-026), aunque no tenga permiso de
+   * configuración, ve solo las suyas — el filtro lo hace el servicio.
+   */
   @Get()
-  @RequirePermission('configuracion.read')
+  @RequirePermission('dashboard.view')
   findAll() {
-    return this.service.findAll();
+    return this.service.visibles();
+  }
+
+  /** Qué documentos y reportes se pueden asociar a una lista y cuáles se envían a mano. */
+  @Get('catalogo')
+  @RequirePermission('dashboard.view')
+  catalogo() {
+    return this.service.catalogo();
+  }
+
+  /** El dueño de la lista (o administración) cambia sus destinatarios; queda auditado. */
+  @Put(':id/destinatarios')
+  @RequirePermission('dashboard.view')
+  actualizarDestinatarios(@Param('id') id: string, @Body() dto: UpdateRecipientsDto) {
+    return this.service.actualizarDestinatarios(id, dto.recipients);
   }
 
   @Get('lookup')

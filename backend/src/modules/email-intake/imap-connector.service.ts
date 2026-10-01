@@ -25,6 +25,7 @@ import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.servic
 import { FreightRateImportService } from '../freight-rates/freight-rate-import.service';
 import { PackingListAutomationService } from '../packing-list/packing-list-automation.service';
 import { ComercialFlujoService } from '../comercial/comercial-flujo.service';
+import { FacturasParcialesService, parsearCorreoFacturaParcial } from '../facturacion/facturas-parciales.service';
 
 /**
  * Asunto exacto y estable del correo automático que envía Oben al aprobar el
@@ -665,6 +666,41 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
           : result.queued
             ? `${numberOrderSales}:en_cola_reintento`
             : `${numberOrderSales}:${result.included.join('+')}`;
+        await this.finalizeMessage(tenantId, messageId, {
+          classificationCategory: category,
+          classificationConfidence: confidence,
+          classificationProvider: provider,
+          status,
+          resultRef,
+          errorMessage,
+          movedToFolder: cfg.processedFolder ?? 'Procesados',
+        });
+        await this.markSeenAndMove(client, msg.uid, cfg, cfg.processedFolder ?? 'Procesados');
+        return;
+      }
+
+      // Factura parcial (WO-023): "Proforma <PF> - Facturar Parcial" que manda
+      // el sistema de Oben al cerrar un parcial en Distribución.
+      let parcial: ReturnType<typeof parsearCorreoFacturaParcial> = null;
+      let errorParcial: string | null = null;
+      try {
+        parcial = parsearCorreoFacturaParcial(subject, body);
+      } catch (e) {
+        errorParcial = (e as Error).message;
+      }
+      if (parcial || errorParcial) {
+        category = 'factura_parcial';
+        confidence = 1;
+        provider = 'rules';
+        if (parcial) {
+          const fila = await this.callRequestScoped(tenantId, FacturasParcialesService, (svc) =>
+            svc.registrarDesdeCorreo({ from, subject, body, messageId }),
+          );
+          resultRef = `${fila.numberPF}:${fila.numeroDistribucion}:${fila.estado}`;
+        } else {
+          status = 'failed';
+          errorMessage = errorParcial;
+        }
         await this.finalizeMessage(tenantId, messageId, {
           classificationCategory: category,
           classificationConfidence: confidence,

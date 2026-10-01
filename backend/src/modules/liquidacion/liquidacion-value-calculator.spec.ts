@@ -165,8 +165,24 @@ describe('Calculadores de Liquidación', () => {
       expect(calc.compute(ctx(0, 'CFR', { flete: '100' as unknown as number }))).not.toHaveProperty('valueFreight');
     });
 
-    it.each([[null], ['EXW'], ['CIF']])('Incoterm %j (sin regla de Oben) → no calcula nada', (incoterm) => {
+    it.each([[null], ['XYZ']])('Incoterm %j (ausente o no es Incoterm 2020) → no calcula nada', (incoterm) => {
       expect(calc.compute(ctx(0, incoterm))).toEqual({});
+    });
+
+    it('CIF lleva flete y seguro, sin otros gastos', () => {
+      const v = calc.compute(ctx(0, 'CIF', { flete: 300, valorPoliza: 1.00053 }));
+      expect(v.valueFreight).toBeGreaterThan(0);
+      expect(v.valueSure).toBeGreaterThan(0);
+      expect(v.expensesOther ?? 0).toBe(0);
+    });
+
+    it('EXW y FAS no llevan flete, seguro ni otros', () => {
+      for (const inc of ['EXW', 'FAS']) {
+        const v = calc.compute(ctx(0, inc, { flete: 300, otrosGastos: 50 }));
+        expect(v.valueFreight ?? 0).toBe(0);
+        expect(v.valueSure ?? 0).toBe(0);
+        expect(v.expensesOther ?? 0).toBe(0);
+      }
     });
 
     it('unitarios con 4 decimales TRUNCADOS, sin ruido de coma flotante', () => {

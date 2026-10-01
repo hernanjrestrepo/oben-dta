@@ -518,10 +518,15 @@ export interface DistributionListAssociationView {
   entityKey: string;
 }
 
+export type DisparadorLista = 'automatico' | 'manual';
+
 export interface DistributionList {
   id: string;
   name: string;
   description: string | null;
+  /** Usuarios dueños: editan destinatarios y disparan "Enviar ahora" (WO-026). */
+  ownerUserIds: string[];
+  disparador: DisparadorLista;
   recipients: DistributionListRecipientView[];
   associations: DistributionListAssociationView[];
   createdAt: string;
@@ -532,6 +537,58 @@ export interface DistributionListInput {
   name: string;
   description?: string;
   recipients: { email: string; name?: string; role: DistributionRecipientRole }[];
+  ownerUserIds?: string[];
+  disparador?: DisparadorLista;
+}
+
+/** Lo que Oben Xmart envía por correo y se puede asociar a una lista. */
+export interface EnvioCatalogo {
+  clave: string;
+  label: string;
+  descripcion: string;
+  grupo: string;
+  /** Se puede disparar con "Enviar ahora" (pide la OV). */
+  manual: boolean;
+}
+
+export interface EnvioManualResultado {
+  enviado: true;
+  lista: string;
+  documento: string;
+  ov: number;
+  para: string[];
+  copia: string[];
+  adjuntos: string[];
+  noIncluidos: string[];
+}
+
+/** Formato de correo editable (WO-027). */
+export interface FormatoEnvio {
+  clave: string;
+  label: string;
+  grupo: string;
+  asunto: string;
+  cuerpo: string;
+  porDefecto: { asunto: string; cuerpo: string };
+  personalizado: boolean;
+  variables: Array<{ nombre: string; descripcion: string }>;
+  actualizado: string | null;
+}
+
+/** Solicitud de factura parcial (WO-023). */
+export type EstadoFacturaParcial = 'pendiente' | 'facturando' | 'facturada' | 'rechazada' | 'revisar';
+export interface FacturaParcial {
+  id: string;
+  numberPF: string;
+  numeroDistribucion: string;
+  origen: 'correo' | 'manual';
+  remitente: string | null;
+  estado: EstadoFacturaParcial;
+  respuesta: unknown;
+  error: string | null;
+  modo: string | null;
+  facturadaAt: string | null;
+  createdAt: string;
 }
 
 

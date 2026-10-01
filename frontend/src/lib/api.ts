@@ -7,7 +7,7 @@ import {
   TenantFeatureFlag, TenantSubscription, TenantUser, UpdateOrderStatusDto, UpdateRoleDto,
   UpdateTenantUserDto, User, WorkflowEvent,
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
-  DistributionList, DistributionListInput,
+  DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
   FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, OrdenReciente,
   MiaContexto, MiaRespuesta, MiaTurno,
@@ -448,6 +448,60 @@ class ApiClient {
   async dissociateDistributionList(id: string, associationId: string): Promise<void> {
     await this.client.delete(`/distribution-lists/${id}/associations/${associationId}`);
   }
+  async getEnviosCatalogo(): Promise<EnvioCatalogo[]> {
+    const { data } = await this.client.get<EnvioCatalogo[]>('/distribution-lists/catalogo');
+    return data;
+  }
+
+  /** El dueño de la lista (o administración) reemplaza sus destinatarios. */
+  async updateDistributionRecipients(id: string, recipients: DistributionListInput['recipients']): Promise<DistributionList> {
+    const { data } = await this.client.put<DistributionList>(`/distribution-lists/${id}/destinatarios`, { recipients });
+    return data;
+  }
+
+  /** "Enviar ahora": un documento de la lista para una OV, solo a sus destinatarios. */
+  async enviarDistributionList(id: string, clave: string, ov: number): Promise<EnvioManualResultado> {
+    const { data } = await this.client.post<EnvioManualResultado>(`/distribution-lists/${id}/enviar`, { clave, ov }, { timeout: 180000 });
+    return data;
+  }
+
+  // Formatos de correo (WO-027)
+  async getFormatos(): Promise<FormatoEnvio[]> {
+    const { data } = await this.client.get<FormatoEnvio[]>('/formatos');
+    return data;
+  }
+
+  async saveFormato(clave: string, asunto: string, cuerpo: string): Promise<FormatoEnvio> {
+    const { data } = await this.client.put<FormatoEnvio>(`/formatos/${clave}`, { asunto, cuerpo });
+    return data;
+  }
+
+  async resetFormato(clave: string): Promise<FormatoEnvio> {
+    const { data } = await this.client.delete<FormatoEnvio>(`/formatos/${clave}`);
+    return data;
+  }
+
+  async previewFormato(clave: string, asunto: string, cuerpo: string): Promise<{ asunto: string; cuerpoHtml: string }> {
+    const { data } = await this.client.post<{ asunto: string; cuerpoHtml: string }>(`/formatos/${clave}/vista-previa`, { asunto, cuerpo });
+    return data;
+  }
+
+  // Facturas parciales (WO-023)
+  async getFacturasParciales(): Promise<FacturaParcial[]> {
+    const { data } = await this.client.get<FacturaParcial[]>('/facturacion/parciales');
+    return data;
+  }
+
+  async registrarFacturaParcial(numberPF: string, numeroDistribucion: string): Promise<FacturaParcial> {
+    const { data } = await this.client.post<FacturaParcial>('/facturacion/parciales', { numberPF, numeroDistribucion });
+    return data;
+  }
+
+  async facturarParcial(id: string, confirmoQueNoExiste = false): Promise<FacturaParcial> {
+    const { data } = await this.client.post<FacturaParcial>(`/facturacion/parciales/${id}/facturar`, { confirmoQueNoExiste }, { timeout: 120000 });
+    return data;
+  }
+
 
   // Reportes reales de Oben (Consumo ME/MP, Empaque Unificada/Detallada, Check Línea, etc.)
   async getObenReportTypes(): Promise<{ key: string; label: string }[]> {

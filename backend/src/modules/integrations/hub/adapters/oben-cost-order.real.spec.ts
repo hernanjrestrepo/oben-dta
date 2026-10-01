@@ -51,6 +51,34 @@ describe('ObenCostOrderRealAdapter (API real de costos de orden de Oben)', () =>
     );
   });
 
+  it('factura.crear: POST al servidor de pruebas con Authtoken, NumberPF y NumberDistribucion (vacío = completa)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ isSuccessful: true, Code: '200', message: 'OK' }),
+    });
+    const adapter = makeAdapter();
+    const parcial = await adapter.execute('factura.crear', { numberPF: '10770', numberDistribucion: '11023' }, CTX);
+    expect(parcial.ok).toBe(true);
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://192.168.20.12:9098/api/External/APICrearInvoiceParadixe',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authtoken: '00000000-0000-0000-0000-000000000000', NumberPF: '10770', NumberDistribucion: '11023' }),
+      }),
+    );
+    await adapter.execute('factura.crear', { numberPF: 10770 }, CTX);
+    expect((global.fetch as jest.Mock).mock.calls[1][1].headers).toMatchObject({ NumberPF: '10770', NumberDistribucion: '' });
+  });
+
+  it('factura.crear no llama a Oben con una proforma o distribución no numérica', async () => {
+    global.fetch = jest.fn();
+    const adapter = makeAdapter();
+    expect((await adapter.execute('factura.crear', { numberPF: 'abc' }, CTX)).ok).toBe(false);
+    expect((await adapter.execute('factura.crear', { numberPF: '10770', numberDistribucion: '11 023;x' }, CTX)).ok).toBe(false);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('rechaza sin llamar a fetch si falta numberOrderSales o linea', async () => {
     global.fetch = jest.fn();
     const adapter = makeAdapter();

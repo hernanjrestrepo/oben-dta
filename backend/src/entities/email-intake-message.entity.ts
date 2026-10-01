@@ -15,6 +15,7 @@ export type EmailIntakeRoute =
   | 'freight_rates'
   | 'packing_list_trigger'
   | 'comercial_respuesta'
+  | 'factura_parcial'
   | 'unknown';
 
 export type EmailIntakeStatus = 'processing' | 'processed' | 'failed' | 'skipped';

@@ -406,7 +406,7 @@ export class LiquidacionService {
     if (!incoterm) return [`Incoterm de la PF (${Object.keys(CONCEPTOS_POR_INCOTERM).join(', ')})`];
     const conceptos = conceptosDe(incoterm);
     if (!conceptos) {
-      return [`Incoterm ${incoterm}: Oben no ha definido qué conceptos lleva (solo DAP/DDP, CFR/CPT y FCA/FOB)`];
+      return [`Incoterm ${incoterm}: no es un Incoterm 2020 (${Object.keys(CONCEPTOS_POR_INCOTERM).join(', ')})`];
     }
     const out: string[] = [];
     if (conceptos.includes('flete') && !esMonto(t.flete)) out.push(`Envío (${incoterm}) — Flete total`);

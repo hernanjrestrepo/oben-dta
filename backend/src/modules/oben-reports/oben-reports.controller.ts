@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Optional, Param, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { IsEmail, IsOptional } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -14,6 +14,7 @@ import { ObenReportsService, OBEN_QUERY_OPTIONS } from './oben-reports.service';
 import { OBEN_REPORTS, findObenReport } from './oben-report-registry';
 import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.service';
 import { origenDatosOben } from './origen-datos';
+import { FormatosService, renderEnvio } from '../formatos/formatos.service';
 
 class SendReportDto {
   @IsOptional()
@@ -43,6 +44,7 @@ export class ObenReportsController {
     private readonly excel: ObenReportExcelService,
     private readonly reports: ObenReportsService,
     private readonly liquidacionRates: LiquidacionRatesService,
+    @Optional() private readonly formatos?: FormatosService,
   ) {}
 
   @Get()
@@ -121,14 +123,15 @@ export class ObenReportsController {
       : '';
     const origen = origenDatosOben((await this.hub.capabilities('obenCostOrder')).mode === 'mock');
 
+    const correo = await renderEnvio(this.formatos, 'document_package', { ov: n, origen: origen.frase }, origen.prefijoAsunto !== '');
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
       'send',
       {
         to,
         ...(cc.length ? { cc: cc.join(',') } : {}),
-        subject: `${origen.prefijoAsunto}Conjunto de documentos — Orden ${n}`,
-        body: `<p>Adjunto el conjunto de documentos de la orden ${n}, ${origen.frase}.</p><ul>${includedListHtml}</ul>${failedListHtml}`,
+        subject: `${origen.prefijoAsunto}${correo.asunto}`,
+        body: `${correo.cuerpoHtml}<ul>${includedListHtml}</ul>${failedListHtml}`,
         attachments: included.map((r) => ({
           filename: r.filename,
           content: r.buffer.toString('base64'),
@@ -237,14 +240,15 @@ export class ObenReportsController {
 
     const filename = `${def.label.replace(/\s+/g, '_')}-OV${n}.xlsx`;
     const origen = origenDatosOben((await this.hub.capabilities('obenCostOrder')).mode === 'mock');
+    const correo = await renderEnvio(this.formatos, def.key, { ov: n, reporte: def.label, origen: origen.frase }, origen.prefijoAsunto !== '');
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
       'send',
       {
         to,
         ...(cc.length ? { cc: cc.join(',') } : {}),
-        subject: `${origen.prefijoAsunto}${def.label} — Orden ${n}`,
-        body: `<p>Adjunto el reporte "${def.label}" de la orden ${n}, ${origen.frase}.</p>`,
+        subject: `${origen.prefijoAsunto}${correo.asunto}`,
+        body: correo.cuerpoHtml,
         attachments: [
           {
             filename,

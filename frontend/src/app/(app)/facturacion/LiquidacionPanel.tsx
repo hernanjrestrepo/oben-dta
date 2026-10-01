@@ -12,7 +12,8 @@ import type {
   LiquidacionSimulacion,
   OrigenValor,
 } from '@/types';
-import { AlertCircle, ArrowRight, Calculator, Check, FlaskConical, Loader2, Lock, Ship, Sparkles, X } from 'lucide-react';
+import { IncotermGuia } from './IncotermGuia';
+import { AlertCircle, ArrowRight, Calculator, FlaskConical, Loader2, Lock, Ship, Sparkles, X } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -41,7 +42,6 @@ export interface LiquidacionEstado {
   incoterm: string | null;
 }
 
-const CONCEPTOS: ConceptoLiquidacion[] = ['flete', 'seguro', 'otrosGastos'];
 const CONCEPTO_LABEL: Record<ConceptoLiquidacion, string> = { flete: 'Flete', seguro: 'Seguro', otrosGastos: 'Otros' };
 
 const ORIGEN: Record<OrigenValor, { label: string; cls: string }> = {
@@ -61,7 +61,7 @@ function OrigenBadge({ origen }: { origen?: OrigenValor }) {
 function descripcion(regla: IncotermRegla | undefined): string {
   if (!regla) return 'Escoge el Incoterm de la proforma: define qué valores se liquidan.';
   if (regla.conceptos.length === 0) return `${regla.codigo}: no se pide flete, seguro ni otros gastos — la mercancía se liquida tal cual.`;
-  if (regla.conceptos.length === 1 && regla.conceptos[0] === 'flete') return `${regla.codigo}: solo se pide el flete (confirmado por José el 30-sep).`;
+  if (regla.conceptos.length === 1 && regla.conceptos[0] === 'flete') return `${regla.codigo}: solo se pide el flete.`;
   return `${regla.codigo}: se piden ${regla.conceptos.map((c) => (c === 'otrosGastos' ? 'otros gastos' : CONCEPTO_LABEL[c].toLowerCase())).join(', ')}.`;
 }
 
@@ -214,61 +214,27 @@ export function LiquidacionPanel({
   ];
 
   return (
+    <div className="space-y-5">
+      <Card>
+        <CardHeader
+          icon={<Ship className="w-4 h-4 text-[#F47735]" />}
+          title="1 · Incoterm de la proforma"
+          subtitle="Qué incluye y hasta dónde va (Incoterms 2020). Define qué se liquida."
+        />
+        <div className="p-4">
+          <IncotermGuia
+            reglas={reglas}
+            seleccionado={incotermEfectivo}
+            delErp={delErp}
+            onSeleccionar={(c) => setIncoterm(c === incoterm ? null : c)}
+          />
+          <p className="mt-3 text-xs text-gray-600">{descripcion(regla)}</p>
+        </div>
+      </Card>
+
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
       {/* ── Datos ── */}
       <div className="xl:col-span-5 space-y-5">
-        <Card>
-          <CardHeader
-            icon={<Ship className="w-4 h-4 text-[#F47735]" />}
-            title="1 · Incoterm de la proforma"
-            subtitle="Define qué se liquida. Tabla confirmada por José (30-sep)."
-          />
-          <div className="p-4">
-            {!reglas ? (
-              <div className="grid grid-cols-3 gap-2">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-16 rounded-lg bg-gray-100 animate-pulse" />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {reglas.map((r) => {
-                  const sel = incotermEfectivo === r.codigo;
-                  return (
-                    <button
-                      key={r.codigo}
-                      onClick={() => setIncoterm(sel ? null : r.codigo)}
-                      className={`text-left rounded-lg border p-2.5 transition ${
-                        sel ? 'border-[#F47735] bg-orange-50 ring-2 ring-[#F47735]/25' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold tracking-wider text-gray-900">{r.codigo}</span>
-                        {sel && <Check className="w-4 h-4 text-[#F47735]" />}
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {CONCEPTOS.map((c) => (
-                          <span
-                            key={c}
-                            className={`px-1.5 py-px rounded text-[10px] font-medium ${
-                              r.conceptos.includes(c) ? 'bg-[#F47735]/10 text-[#C4521A]' : 'bg-gray-100 text-gray-400 line-through'
-                            }`}
-                          >
-                            {CONCEPTO_LABEL[c]}
-                          </span>
-                        ))}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <p className="mt-3 text-xs text-gray-600">
-              {delErp && <OrigenBadge origen="oben" />} {delErp ? 'Incoterm tomado del ERP de Oben. ' : ''}
-              {descripcion(regla)}
-            </p>
-          </div>
-        </Card>
 
         <Card>
           <CardHeader
@@ -566,6 +532,7 @@ export function LiquidacionPanel({
           </Card>
         )}
       </div>
+    </div>
     </div>
   );
 }

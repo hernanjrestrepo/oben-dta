@@ -1,20 +1,30 @@
 export type ConceptoLiquidacion = 'flete' | 'seguro' | 'otrosGastos';
 
 /**
- * Qué conceptos pide la liquidación según el Incoterm — José Guzmán, llamada
- * del 2026-09-30 (DAP/DDP y FCA/FOB) y WhatsApp del mismo día para CFR/CPT:
- * "solo se pide FLETE" (en la llamada lo había dicho de dos formas).
+ * Qué conceptos pide la liquidación según el Incoterm (los 11 de Incoterms
+ * 2020 de la ICC, en su orden oficial).
  *
- * Un Incoterm que no esté aquí (EXW, CIF, CIP, DPU...) no tiene regla
- * definida por Oben: bloquea la liquidación en vez de suponer una.
+ * - Confirmados por José Guzmán (llamada y WhatsApp del 2026-09-30):
+ *   DAP/DDP flete + seguro + otros; CFR/CPT solo flete; FCA/FOB nada.
+ * - Resto según la norma (reunión del 2026-10-01: "son estándares a nivel
+ *   mundial, nadie tiene que meterle mano"): EXW y FAS como FCA/FOB (el
+ *   vendedor no paga transporte principal); CIF/CIP como CFR/CPT más el
+ *   seguro, que la norma les exige; DPU como DAP (además descarga en destino).
+ *
+ * Un código que no sea un Incoterm 2020 bloquea la liquidación en vez de suponer.
  */
 export const CONCEPTOS_POR_INCOTERM: Readonly<Record<string, readonly ConceptoLiquidacion[]>> = {
-  DAP: ['flete', 'seguro', 'otrosGastos'],
-  DDP: ['flete', 'seguro', 'otrosGastos'],
-  CFR: ['flete'],
-  CPT: ['flete'],
+  EXW: [],
   FCA: [],
+  FAS: [],
   FOB: [],
+  CFR: ['flete'],
+  CIF: ['flete', 'seguro'],
+  CPT: ['flete'],
+  CIP: ['flete', 'seguro'],
+  DAP: ['flete', 'seguro', 'otrosGastos'],
+  DPU: ['flete', 'seguro', 'otrosGastos'],
+  DDP: ['flete', 'seguro', 'otrosGastos'],
 };
 
 /** " cfr Callao" → "CFR". */

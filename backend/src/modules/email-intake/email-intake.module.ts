@@ -1,3 +1,4 @@
+import { FacturacionModule } from '../facturacion/facturacion.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Tenant } from '../../entities/tenant.entity';
@@ -28,6 +29,7 @@ import { ComercialModule } from '../comercial/comercial.module';
     FreightRatesModule,
     PackingListModule,
     ComercialModule,
+    FacturacionModule,
   ],
   providers: [ImapConnectorService],
   exports: [ImapConnectorService],

@@ -52,6 +52,11 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
         method: 'read',
         description: 'Consulta la liquidación de una Proforma (spCheckSettlement) — mock',
       },
+      {
+        operation: 'factura.crear',
+        method: 'write',
+        description: 'Crea la factura de una proforma (APICrearInvoiceParadixe) — mock, no factura nada real',
+      },
     ];
   }
 
@@ -65,6 +70,12 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
       'liquidacion.crearEncabezado': this.wrap((args) => this.crearEncabezado(args), 'liquidacion.crearEncabezado'),
       'liquidacion.crearDetalle': this.wrap((args) => this.crearDetalle(args), 'liquidacion.crearDetalle'),
       'liquidacion.consultar': this.wrap((args) => this.consultarLiquidacion(args), 'liquidacion.consultar'),
+      'factura.crear': this.wrap(async (args) => {
+        const pf = String((args.numberPF as string | number | undefined) ?? '');
+        if (!/^\d+$/.test(pf)) throw new Error('BUSINESS_ERROR: numberPF requerido (numérico)');
+        const dist = String((args.numberDistribucion as string | number | undefined) ?? '');
+        return { isSuccessful: true, Code: '200', message: `SIMULADO: factura ${dist ? `parcial (distribución ${dist})` : 'completa'} de la PF ${pf}` };
+      }, 'factura.crear'),
     };
   }
 

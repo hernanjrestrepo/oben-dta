@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
@@ -15,6 +15,7 @@ import {
 } from './packing-list-retry.constants';
 import { PackingListCarteraService, type CarteraDecision } from './packing-list-cartera.service';
 import { origenDatosOben } from '../oben-reports/origen-datos';
+import { FormatosService, renderEnvio } from '../formatos/formatos.service';
 
 /** Lista de distribución que recibe los avisos de órdenes retenidas por cartera (PND). */
 export const PACKING_LIST_CARTERA_DISTRIBUTION_KEY = 'packing_list_cartera';
@@ -82,6 +83,7 @@ export class PackingListAutomationService {
     @InjectRepository(PackingListPendingRetry)
     private readonly retries: Repository<PackingListPendingRetry>,
     private readonly cartera: PackingListCarteraService,
+    @Optional() private readonly formatos?: FormatosService,
   ) {}
 
   async handleOvApproved(numberOrderSales: number): Promise<HandleOvApprovedResult> {
@@ -193,14 +195,21 @@ export class PackingListAutomationService {
     const cc = [...restTo, ...resolved.cc];
     const origen = origenDatosOben(documentPackage.simulated === true);
 
+    // Asunto y cuerpo editables en Formatos (WO-027); por defecto, el texto de siempre.
+    const correo = await renderEnvio(
+      this.formatos,
+      'packing_list',
+      { ov: numberOrderSales, cliente, sufijo: isSolefilmes ? ' (Solefilmes)' : '', origen: origen.frase },
+      documentPackage.simulated === true,
+    );
     const sendResult = await this.hub.call<{ id: string }>(
       'email',
       'send',
       {
         to: primaryTo,
         ...(cc.length ? { cc: cc.join(',') } : {}),
-        subject: `${origen.prefijoAsunto}Lista de Empaque — Orden ${numberOrderSales}${isSolefilmes ? ' (Solefilmes)' : ''}`,
-        body: `<p>Adjuntos los documentos de la orden ${numberOrderSales}, generados automáticamente al recibir la aprobación de corte, ${origen.frase}.</p>`,
+        subject: `${origen.prefijoAsunto}${correo.asunto}`,
+        body: correo.cuerpoHtml,
         attachments: documentPackage.included.map((r) => ({
           filename: r.filename,
           content: r.buffer.toString('base64'),

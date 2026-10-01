@@ -21,21 +21,21 @@ producción (`10.50.30.10`) el mismo 2026-10-01.
 
 ## Pendiente → Work Orders
 
-| WO | Tema | Prioridad | Bloqueado por |
+| WO | Tema | Estado | Depende de |
 |---|---|---|---|
-| [WO-019](WO-019-maestro-partidas-arancelarias.md) | Maestro de partidas arancelarias (NCM / NALADI) por referencia | P1 | Cuadro de María Escobar (Jorge lo pide) |
-| [WO-020](WO-020-fletes-completos-y-actualizacion.md) | Fletes completos (marítimo, gastos portuarios EE. UU.) y actualización automática | P1 | Archivo completo de María Escobar |
-| [WO-021](WO-021-liquidacion-envio-real-y-cuadre.md) | Liquidación: envío real al servidor de pruebas y cuadre contra liquidaciones de Oben | P1 | Sesión con María para cuadrar casos |
-| [WO-022](WO-022-factura-en-oben-mas.md) | Crear la factura en OBEN MAS (`APICrearInvoiceParadixe`) — 3 escenarios | P1 | Request completo + caso de prueba de José |
-| [WO-023](WO-023-facturas-parciales.md) | Facturas parciales por correo (proforma + número de distribución) | P1 | Número de distribución de prueba (José) |
-| [WO-024](WO-024-borrador-factura-formato-oben.md) | Borrador de factura idéntico al formato de Oben + correo a COMEX con detalle de liquidación | P2 | Facturas de ejemplo de Oben |
-| [WO-025](WO-025-incoterms-completos.md) | Incoterms 2020 completos (maestro estándar) | P2 | Confirmación de conceptos CIF/CIP/DPU (José) |
-| [WO-026](WO-026-dueños-listas-distribucion.md) | Dueños por lista de distribución / tipo de reporte | P2 | — |
-| [WO-027](WO-027-edicion-reportes-y-formatos.md) | Módulo de edición de reportes y formatos | P3 | Alcance por definir con José |
-| [WO-028](WO-028-perfiles-y-ux-menu.md) | Taller de perfiles y reorganización del menú | P2 | Sesión con José |
-| [WO-029](WO-029-mia-analitica-gerencial.md) | MIA analítica para gerencia (rangos de fecha, país, gráficas) | P3 | Datos históricos del ERP por API |
-| [WO-030](WO-030-modulo-comercial.md) | Módulo Comercial: APIs de Oben y demo con comercial | P1 | APIs comerciales y data maestra (José, "esta semana") |
-| [WO-031](WO-031-dominio-y-acceso-red-oben.md) | Dominio corporativo y acceso desde la red de Oben | P2 | IT de Oben |
+| [WO-019](WO-019-maestro-partidas-arancelarias.md) | Maestro de partidas arancelarias (NCM / NALADI) por referencia | En espera | Que Oben entregue el cuadro |
+| [WO-020](WO-020-fletes-completos-y-actualizacion.md) | Fletes completos (marítimo, gastos portuarios EE. UU.) y actualización automática | En espera | Que Oben entregue el archivo |
+| [WO-021](WO-021-liquidacion-envio-real-y-cuadre.md) | Liquidación: envío real y cuadre | Cerrada (Hernán, 2026-10-01) | — |
+| [WO-022](WO-022-factura-en-oben-mas.md) | Factura en OBEN MAS | Cerrada (Hernán, 2026-10-01) | — |
+| [WO-023](WO-023-facturas-parciales.md) | Facturas parciales por correo (proforma + número de distribución) | Construida 2026-10-01 | Primera factura de prueba (clic en pantalla) |
+| [WO-024](WO-024-borrador-factura-formato-oben.md) | Borrador de factura idéntico al formato de Oben + correo a COMEX | En espera | Facturas de ejemplo de Oben |
+| [WO-025](WO-025-incoterms-completos.md) | Incoterms 2020 completos con guía visual | Construida 2026-10-01 | — |
+| [WO-026](WO-026-dueños-listas-distribucion.md) | Listas: dueños, disparador y qué se envía (+ Enviar ahora) | Construida 2026-10-01 | — |
+| [WO-027](WO-027-edicion-reportes-y-formatos.md) | Formatos de correo editables (asunto y texto) | Construida 2026-10-01 (v1) | — |
+| [WO-028](WO-028-perfiles-y-ux-menu.md) | Menú agrupado por función (perfiles ya hechos) | Construida 2026-10-01 | — |
+| [WO-029](WO-029-mia-analitica-gerencial.md) | MIA analítica para gerencia | En espera | Faltan datos que MIA aún no puede consultar |
+| [WO-030](WO-030-modulo-comercial.md) | Módulo Comercial: APIs de Oben y demo | En espera | APIs comerciales de José |
+| [WO-031](WO-031-dominio-y-acceso-red-oben.md) | Dominio corporativo y acceso desde la red de Oben | En espera | Que Oben defina |
 
 Entrega acordada: comercial lista esta semana; entrega formal lunes 5 o martes
 6 de octubre. Los detalles de forma ("el colorcito") van después de la

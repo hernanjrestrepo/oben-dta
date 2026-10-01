@@ -89,3 +89,22 @@ describe('DistributionListsService', () => {
     });
   });
 });
+
+describe('DistributionListsService — disparador manual (WO-026)', () => {
+  it('una lista con disparador "manual" no recibe los envíos automáticos', async () => {
+    const lists = { find: jest.fn(async () => [{ id: 'manual-1' }]) };
+    const recipients = { find: jest.fn(async () => [{ email: 'auto@oben.com', role: 'to', distributionListId: 'auto-1' }]) };
+    const associations = {
+      find: jest.fn(async () => [
+        { distributionListId: 'auto-1' },
+        { distributionListId: 'manual-1' },
+      ]),
+    };
+    const ctx = { tenantId: 't1' };
+    const service = new DistributionListsService(lists as any, recipients as any, associations as any, ctx as any);
+    const r = await service.resolveRecipients('document', 'packing_list');
+    expect(r.to).toEqual(['auto@oben.com']);
+    const where = (recipients.find.mock.calls[0] as any)[0].where;
+    expect(where).toEqual([{ distributionListId: 'auto-1', tenantId: 't1' }]);
+  });
+});

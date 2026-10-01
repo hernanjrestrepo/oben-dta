@@ -1,0 +1,104 @@
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { FacturasParcialesService, parsearCorreoFacturaParcial } from './facturas-parciales.service';
+
+// Correo REAL que llegó al buzón de pedidos el 2026-10-01 (ejemplo de José).
+const ASUNTO = 'Proforma 10770 - Facturar Parcial';
+const CUERPO = 'Numero de Proforma: 10770 - Numero de Distribucion: 11023';
+
+describe('parsearCorreoFacturaParcial', () => {
+  it('lee el correo real de Oben', () => {
+    expect(parsearCorreoFacturaParcial(ASUNTO, CUERPO)).toEqual({ numberPF: '10770', numeroDistribucion: '11023' });
+  });
+
+  it('tolera reenvíos, tildes y saltos de línea', () => {
+    expect(parsearCorreoFacturaParcial('RV: Proforma 10770 - Facturar Parcial', 'Número de Proforma: 10770\nNúmero de Distribución: 11023')).toEqual({
+      numberPF: '10770',
+      numeroDistribucion: '11023',
+    });
+  });
+
+  it('otros correos no son facturas parciales', () => {
+    expect(parsearCorreoFacturaParcial('OV 11187 aprobada en corte', CUERPO)).toBeNull();
+  });
+
+  it('asunto de parcial sin número de distribución, o con PF distinta en el cuerpo: error, nunca adivina', () => {
+    expect(() => parsearCorreoFacturaParcial(ASUNTO, 'Numero de Proforma: 10770')).toThrow(BadRequestException);
+    expect(() => parsearCorreoFacturaParcial(ASUNTO, 'Numero de Proforma: 99999 - Numero de Distribucion: 11023')).toThrow(/asunto dice Proforma 10770/);
+  });
+});
+
+function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; auto?: boolean } = {}) {
+  const filas: Array<Record<string, unknown>> = [];
+  const coincide = (f: Record<string, unknown>, w: Record<string, unknown>) =>
+    Object.entries(w).every(([k, v]) => {
+      const val = v as { _type?: string; _value?: unknown[] };
+      return val && val._type === 'in' ? (val._value ?? []).includes(f[k]) : f[k] === v;
+    });
+  const repo = {
+    findOne: jest.fn(async ({ where }: { where: Record<string, unknown> }) => filas.find((f) => coincide(f, where)) ?? null),
+    find: jest.fn(async () => filas),
+    create: jest.fn((x: Record<string, unknown>) => ({ ...x })),
+    save: jest.fn(async (x: Record<string, unknown>) => {
+      const f = { id: `id${filas.length + 1}`, ...x };
+      filas.push(f);
+      return f;
+    }),
+    update: jest.fn(async (where: Record<string, unknown>, cambios: Record<string, unknown>) => {
+      const f = filas.find((x) => coincide(x, where));
+      if (f) Object.assign(f, cambios);
+      return { affected: f ? 1 : 0 };
+    }),
+  };
+  const tenants = { findOne: jest.fn(async () => ({ settings: { facturacion: { parcialAutomatica: opts.auto === true } } })) };
+  const ctx = { tenantId: 't1', userId: 'u1' };
+  const hub = { call: jest.fn(async () => ({ mode: 'real', ...(opts.hub ?? { ok: true, data: { isSuccessful: true, Code: '200' } }) })) };
+  const audit = { log: jest.fn() };
+  const svc = new FacturasParcialesService(repo as never, tenants as never, ctx as never, hub as never, audit as never);
+  return { svc, hub, filas, audit };
+}
+
+describe('FacturasParcialesService (WO-023)', () => {
+  const correo = { from: 'notif.app.co@obengroup.com', subject: ASUNTO, body: CUERPO, messageId: '<m1>' };
+
+  it('el correo queda registrado y, por defecto, espera el clic (no factura solo)', async () => {
+    const { svc, hub } = build();
+    const f = await svc.registrarDesdeCorreo(correo);
+    expect(f).toMatchObject({ numberPF: '10770', numeroDistribucion: '11023', estado: 'pendiente', origen: 'correo' });
+    expect(hub.call).not.toHaveBeenCalled();
+  });
+
+  it('con parcialAutomatica factura al llegar el correo con NumberPF + NumberDistribucion', async () => {
+    const { svc, hub } = build({ auto: true });
+    const f = await svc.registrarDesdeCorreo(correo);
+    expect(hub.call).toHaveBeenCalledWith('obenCostOrder', 'factura.crear', { numberPF: '10770', numberDistribucion: '11023' }, expect.anything());
+    expect(f.estado).toBe('facturada');
+  });
+
+  it('un remitente fuera de @obengroup.com no puede pedir una factura', async () => {
+    const { svc } = build();
+    await expect(svc.registrarDesdeCorreo({ ...correo, from: 'alguien@gmail.com' })).rejects.toThrow(/obengroup\.com/);
+  });
+
+  it('el mismo parcial dos veces es una sola solicitud y una sola factura', async () => {
+    const { svc, hub, filas } = build();
+    const a = await svc.registrarDesdeCorreo(correo);
+    const b = await svc.registrarManual('10770', '11023');
+    expect(b.id).toBe(a.id);
+    expect(filas).toHaveLength(1);
+    await svc.facturar(a.id);
+    await svc.facturar(a.id);
+    expect(hub.call).toHaveBeenCalledTimes(1);
+  });
+
+  it('Oben rechaza → "rechazada" (se puede reintentar); timeout → "revisar" (exige confirmar antes)', async () => {
+    const r1 = build({ hub: { ok: false, error: 'Oben rechazó la operación (Code 500): EL ARTÍCULO 67511 NO SE ENCUENTRA' } });
+    const f1 = await r1.svc.registrarManual('10770', '11023');
+    expect((await r1.svc.facturar(f1.id)).estado).toBe('rechazada');
+
+    const r2 = build({ hub: { ok: false, error: 'timeout after 60000ms' } });
+    const f2 = await r2.svc.registrarManual('10770', '11023');
+    expect((await r2.svc.facturar(f2.id)).estado).toBe('revisar');
+    await expect(r2.svc.facturar(f2.id)).rejects.toBeInstanceOf(ConflictException);
+    expect(r2.hub.call).toHaveBeenCalledTimes(1);
+  });
+});

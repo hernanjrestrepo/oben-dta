@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DistributionList } from '../../entities/distribution-list.entity';
@@ -11,8 +11,13 @@ import { TenantContext } from '../../common/tenant/tenant-context.service';
 import {
   AssociateDistributionListDto,
   CreateDistributionListDto,
+  RecipientDto,
   UpdateDistributionListDto,
 } from './dto/distribution-list.dto';
+import { AuthorizationService } from '../security/authorization.service';
+import { WorkflowAuditService } from '../security/workflow-audit.service';
+import { WorkflowEventType } from '../../entities/workflow-event.entity';
+import { ENVIOS_CATALOGO } from './envios-catalogo';
 
 export interface ResolvedRecipients {
   to: string[];
@@ -30,7 +35,63 @@ export class DistributionListsService {
     @InjectRepository(DistributionListAssociation)
     private readonly associations: Repository<DistributionListAssociation>,
     private readonly ctx: TenantContext,
+    @Optional() private readonly authz?: AuthorizationService,
+    @Optional() private readonly audit?: WorkflowAuditService,
   ) {}
+
+  /** Qué se puede enviar y asociar a una lista (WO-026). */
+  catalogo() {
+    return ENVIOS_CATALOGO.map(({ clave, label, descripcion, grupo, manual }) => ({ clave, label, descripcion, grupo, manual }));
+  }
+
+  private async tienePermiso(permiso: string): Promise<boolean> {
+    const userId = this.ctx.userId;
+    if (!userId || !this.authz) return false;
+    const d = await this.authz.can({
+      subject: { userId, tenantId: this.ctx.tenantIdOrNull, isSuperAdmin: this.ctx.isSuperAdmin },
+      permission: permiso,
+      context: { route: '/distribution-lists', method: 'GET' },
+    });
+    return d.effect === 'allow';
+  }
+
+  /**
+   * Administración (`configuracion.update`) o un dueño de la lista. Devuelve
+   * la lista; si no puede gestionarla, 403 — nunca se revela otra lista.
+   */
+  async asegurarGestion(id: string): Promise<DistributionList> {
+    const list = await this.findOne(id);
+    if (await this.tienePermiso('configuracion.update')) return list;
+    const userId = this.ctx.userId;
+    if (userId && (list.ownerUserIds ?? []).includes(userId)) return list;
+    throw new ForbiddenException('Solo administración o un dueño de esta lista pueden gestionarla.');
+  }
+
+  /** Administración ve todas; un usuario sin permiso de configuración solo las listas de las que es dueño. */
+  async visibles(): Promise<DistributionList[]> {
+    const todas = await this.findAll();
+    if (await this.tienePermiso('configuracion.read')) return todas;
+    const userId = this.ctx.userId;
+    return userId ? todas.filter((l) => (l.ownerUserIds ?? []).includes(userId)) : [];
+  }
+
+  /** Un dueño (o administración) reemplaza los destinatarios; queda en auditoría quién y qué cambió. */
+  async actualizarDestinatarios(id: string, recipients: RecipientDto[]): Promise<DistributionList> {
+    const list = await this.asegurarGestion(id);
+    const antes = list.recipients.map((r) => `${r.role}:${r.email}`);
+    const actualizada = await this.update(id, { recipients });
+    await this.audit?.log({
+      workflowName: 'distribution-lists',
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: 'lista_destinatarios_actualizados',
+      entityType: 'distribution_list',
+      entityId: id,
+      actorId: this.ctx.userId,
+      inputData: { lista: list.name, antes },
+      outputData: { despues: recipients.map((r) => `${r.role}:${r.email}`) },
+    });
+    return actualizada;
+  }
 
   private tenantWhere<T extends object>(where: T): T & { tenantId: string } {
     return { ...where, tenantId: this.ctx.tenantId };
@@ -71,6 +132,8 @@ export class DistributionListsService {
     const list = await this.findOne(id);
     if (dto.name !== undefined) list.name = dto.name;
     if (dto.description !== undefined) list.description = dto.description;
+    if (dto.ownerUserIds !== undefined) list.ownerUserIds = [...new Set(dto.ownerUserIds)];
+    if (dto.disparador !== undefined) list.disparador = dto.disparador;
     if (dto.recipients !== undefined) {
       await this.recipients.delete(this.tenantWhere({ distributionListId: id }));
       list.recipients = dto.recipients.map((r) =>
@@ -130,7 +193,12 @@ export class DistributionListsService {
     });
     if (assocs.length === 0) return { to: [], cc: [], bcc: [] };
 
-    const listIds = [...new Set(assocs.map((a) => a.distributionListId))];
+    // Las listas con disparador 'manual' solo reciben con "Enviar ahora" (WO-026).
+    const manuales = new Set(
+      ((await this.lists.find({ where: this.tenantWhere({ disparador: 'manual' as const }) })) ?? []).map((l) => l.id),
+    );
+    const listIds = [...new Set(assocs.map((a) => a.distributionListId))].filter((id) => !manuales.has(id));
+    if (listIds.length === 0) return { to: [], cc: [], bcc: [] };
     const recipients = await this.recipients.find({
       where: listIds.map((distributionListId) =>
         this.tenantWhere({ distributionListId }),

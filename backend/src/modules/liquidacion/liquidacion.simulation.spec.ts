@@ -197,7 +197,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
           'Encabezado — Puerto de embarque',
           'Encabezado (destino USA) — Inland Freight',
           'Encabezado (destino USA) — Destination Charges (Inland + Entry + ISF + HMF)',
-          'Incoterm de la PF (DAP, DDP, CFR, CPT, FCA, FOB)',
+          'Incoterm de la PF (EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP)',
           'Línea 113 (ENA--0012TM) — Valor flete',
           'Línea 113 (ENA--0012TM) — Valor FOB',
           'Línea 113 (ENA--0012TM) — Total por unidad',
@@ -625,7 +625,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       const draft = await service.getDraft('11357', { header: HEADER_CO });
       expect(draft.simulated).toBe(false);
       expect(draft.readyToSubmit).toBe(false);
-      expect(draft.missing).toContain('Incoterm de la PF (DAP, DDP, CFR, CPT, FCA, FOB)');
+      expect(draft.missing).toContain('Incoterm de la PF (EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP)');
     });
   });
 
@@ -658,8 +658,9 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     });
 
     it.each([
-      [{}, 'Incoterm de la PF (DAP, DDP, CFR, CPT, FCA, FOB)'],
-      [{ incoterm: 'EXW' }, 'Incoterm EXW: Oben no ha definido qué conceptos lleva (solo DAP/DDP, CFR/CPT y FCA/FOB)'],
+      [{}, 'Incoterm de la PF (EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP)'],
+      [{ incoterm: 'XYZ' }, 'Incoterm XYZ: no es un Incoterm 2020 (EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP)'],
+      [{ incoterm: 'CIF', flete: 300, valorPoliza: 1 }, 'Envío (CIF) — Valor de la póliza (divisor del seguro, mayor a 1)'],
       [{ incoterm: 'CPT' }, 'Envío (CPT) — Flete total'],
       // La póliza vigente (1.00053) se usa por defecto; una digitada inválida no.
       [{ incoterm: 'DDP', flete: 300, otrosGastos: 10, valorPoliza: 1 }, 'Envío (DDP) — Valor de la póliza (divisor del seguro, mayor a 1)'],
@@ -941,7 +942,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       const { service } = armar(comexCon(null));
       const draft = await service.getDraft('11357');
       expect(draft).toMatchObject({ incoterm: null, incotermOrigen: null });
-      expect(draft.missing).toContain('Incoterm de la PF (DAP, DDP, CFR, CPT, FCA, FOB)');
+      expect(draft.missing).toContain('Incoterm de la PF (EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP)');
     });
 
     it('el reporte (todas las proformas) se pide una sola vez por PF: queda en caché', async () => {
