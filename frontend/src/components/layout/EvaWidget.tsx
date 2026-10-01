@@ -32,9 +32,7 @@ export function EvaWidget() {
   const [messages, setMessages] = useState<ChatMessage[]>([SALUDO]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [descargando, setDescargando] = useState<string | null>(null);
-  const [verFoto, setVerFoto] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [descargando, setDescargando] = useState<string | null>(null);  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -89,77 +87,51 @@ export function EvaWidget() {
 
   return (
     <>
-      {/* Botón flotante: foto grande + nombre, encima de la firma "made by Paradixe". */}
+      {/* Botón flotante: solo la "O" de Oben, encima de la firma "made by Paradixe". */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-12 right-5 z-50 w-[150px] rounded-2xl overflow-hidden bg-[#F47735] hover:bg-[#E5641F] text-white shadow-2xl ring-2 ring-white transition hover:scale-[1.03]"
+          className="fixed bottom-12 right-5 z-50 w-14 h-14 rounded-full bg-[#F47735] hover:bg-[#E5641F] text-white shadow-lg ring-2 ring-white flex items-center justify-center transition hover:scale-105"
           title="Hablar con MIA"
+          aria-label="Hablar con MIA"
         >
-          {/* Busto: se ve el polo naranja con el logo de Oben. */}
-          <span className="block w-[150px] h-[150px] bg-white/20">
-            <MiaAvatar
-              src="/mia-busto.jpg"
-              shape="rounded-none"
-              className="w-[150px] h-[150px]"
-              fallback={<span className="w-full h-full flex items-center justify-center"><OMark className="w-12 h-12" /></span>}
-            />
-          </span>
-          <span className="block px-3 py-2 text-left leading-tight">
-            <span className="block text-lg font-bold tracking-wide">MIA</span>
-            <span className="block text-[11px] text-white/90">¿En qué te ayudo?</span>
-          </span>
+          <OMark className="w-7 h-7" />
         </button>
       )}
 
-      {/* Chat panel */}
+      {/* Chat panel (sin banner: la foto con su nombre abre la conversación). */}
       {open && (
         <div className="fixed bottom-12 right-5 z-50 w-[27rem] max-w-[calc(100vw-2.5rem)] h-[42rem] max-h-[calc(100vh-5rem)] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
-          {verFoto && (
+          <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
             <button
-              onClick={() => setVerFoto(false)}
-              title="Cerrar"
-              className="absolute inset-0 z-10 bg-black/70 flex flex-col items-center justify-center p-4"
+              onClick={() => setMessages([SALUDO])}
+              disabled={loading}
+              className="w-8 h-8 rounded-full bg-white/90 shadow ring-1 ring-black/5 text-gray-600 hover:text-[#C4521A] flex items-center justify-center disabled:opacity-50"
+              title="Nueva conversación"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/mia-completa.jpg" alt="MIA, asistente de Oben Xmart" className="w-full rounded-xl shadow-xl" />
-              <span className="mt-3 text-sm text-white">MIA · Asistente de Oben Xmart</span>
+              <RotateCcw className="w-4 h-4" />
             </button>
-          )}
-          <div className="bg-[#F47735] text-white px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <button onClick={() => setVerFoto(true)} title="Ver foto de MIA" className="rounded-full">
-                <MiaAvatar className="w-12 h-12 ring-2 ring-white/80" fallback={<OMark className="w-6 h-6" />} />
-              </button>
-              <div>
-                <p className="font-semibold text-sm leading-tight">MIA</p>
-                <p className="text-[11px] text-white/80 leading-tight">Asistente de Oben Xmart</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setMessages([SALUDO])}
-                disabled={loading}
-                className="text-white/80 hover:text-white disabled:opacity-50"
-                title="Nueva conversación"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-              <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white" title="Cerrar">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            <button
+              onClick={() => setOpen(false)}
+              className="w-8 h-8 rounded-full bg-white/90 shadow ring-1 ring-black/5 text-gray-600 hover:text-[#C4521A] flex items-center justify-center"
+              title="Cerrar"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-4 pt-12 space-y-3 bg-gray-50">
+            {/* Foto con su nombre: solo al empezar; se oculta en cuanto avanza la conversación. */}
             {messages.length === 1 && (
-              <div className="flex justify-center">
-                <MiaAvatar
-                  src="/mia-completa.jpg"
-                  shape="rounded-2xl"
-                  className="w-[15rem] h-auto shadow-md ring-1 ring-black/5"
-                  fallback={null}
-                />
+              <div className="flex justify-center -mt-8">
+                <div className="relative w-[15rem] rounded-2xl overflow-hidden shadow-md ring-1 ring-black/5 bg-orange-50">
+                  <MiaAvatar src="/mia-completa.jpg" shape="rounded-none" className="w-full h-auto block" fallback={null} />
+                  {/* El nombre va debajo de la foto (no encima) para no tapar el logo del polo. */}
+                  <div className="px-4 py-2.5 bg-[#F47735] text-white">
+                    <p className="text-xl font-bold tracking-wide leading-none">MIA</p>
+                    <p className="text-xs text-white/90 mt-1">Asistente de Oben Xmart</p>
+                  </div>
+                </div>
               </div>
             )}
             {messages.map((m, i) => (
