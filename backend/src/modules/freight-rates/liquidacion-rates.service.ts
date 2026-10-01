@@ -46,10 +46,11 @@ export class LiquidacionRatesService {
   ) {}
 
   /**
-   * `country` es el mismo texto que ya trae el campo real "Pais" de
-   * spEmpaqueUnificada_Paradixe/spEmpaqueDetallada_Paradixe (ej. "PERU",
-   * "COLOMBIA") — coincide (salvo mayúsculas) con los encabezados de país de
-   * la hoja "Destination Surcharges" del Excel real de Oben.
+   * `country` es el país de ORIGEN de la ruta hacia USA: la hoja
+   * "Destination Surcharges" del forwarder trae los cargos de importación de
+   * USA (Entry Fee, ISF, HMF…) por país de origen (Brazil, Colombia, El
+   * Salvador, Peru — verificado en prod el 2026-10-01; no hay fila "USA").
+   * Para Oben Colombia, LiquidacionService pasa "Colombia".
    *
    * `fobValue`, si se conoce, permite calcular Harbor Maintenance Fee cuando
    * la tarifa viene como fórmula ("0.125% del FOB") en vez de monto fijo —

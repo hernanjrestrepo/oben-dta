@@ -41,6 +41,13 @@ const WRITE_OPTIONS = { maxAttempts: 1, timeoutMs: 60_000 };
  * acknowledgeAmbiguous (la escritura en curso pudo haber llegado a Oben).
  */
 const STALE_PROCESSING_MS = 10 * 60_000;
+/**
+ * País de ORIGEN de los despachos de Oben Colombia (planta de Galapa). La hoja
+ * "Destination Surcharges" del forwarder de USA viene por país de origen de la
+ * ruta hacia USA (Brazil, Colombia, El Salvador, Peru) — no hay fila "USA": los
+ * cargos de importación de USA (Entry Fee, ISF, HMF) se buscan por el origen.
+ */
+const PAIS_ORIGEN = 'Colombia';
 
 const HEADER_REQUIRED: Array<[keyof LiquidacionHeaderValues, string]> = [
   ['direccion', 'Dirección'],
@@ -173,7 +180,7 @@ export class LiquidacionService {
       // Harbor Maintenance Fee = 0.125% del FOB FINAL (José, 2026-09-30): se
       // resuelve después de calcular las líneas. Los cargos del maestro de
       // tarifas son solo el valor por defecto.
-      const s = await this.rates.resolveSurcharges(this.ctx.tenantId, pais, this.sumaFOB(calculo.lines));
+      const s = await this.rates.resolveSurcharges(this.ctx.tenantId, PAIS_ORIGEN, this.sumaFOB(calculo.lines));
       const delMaestro: Array<[keyof LiquidacionHeaderValues, number | null]> = [
         ['entryFee', s.entryFee],
         ['importerSecurityFiling', s.importerSecurityFiling],

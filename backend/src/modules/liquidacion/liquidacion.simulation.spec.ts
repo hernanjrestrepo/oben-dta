@@ -645,13 +645,14 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     it('USA: Harbor Maintenance Fee se pide sobre el FOB FINAL (100 + 400), no sobre el valor bruto (800)', async () => {
       const { service, rates } = jose();
       await service.getDraft('99001', cfr(300));
-      expect(rates.resolveSurcharges).toHaveBeenCalledWith('t1', 'USA', 500);
+      // La hoja del forwarder viene por país de ORIGEN de la ruta a USA (no hay fila "USA").
+      expect(rates.resolveSurcharges).toHaveBeenCalledWith('t1', 'Colombia', 500);
     });
 
     it('sin FOB final calculable, el maestro de tarifas no recibe un FOB inventado', async () => {
       const { service, rates } = jose();
       await service.getDraft('99001', usaInput({ totales: {} }));
-      expect(rates.resolveSurcharges).toHaveBeenCalledWith('t1', 'USA', undefined);
+      expect(rates.resolveSurcharges).toHaveBeenCalledWith('t1', 'Colombia', undefined);
     });
 
     it.each([
