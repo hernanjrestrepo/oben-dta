@@ -6,6 +6,8 @@ import { api } from '@/lib/api';
 import type { MiaAccion, MiaTurno } from '@/types';
 import { X, Send, Loader2, Download, ArrowRight, RotateCcw } from 'lucide-react';
 import { OMark } from '@/components/icons/OMark';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ChatMessage {
   role: 'user' | 'eva';
@@ -87,20 +89,32 @@ export function EvaWidget() {
 
   return (
     <>
-      {/* Floating bubble */}
+      {/* Botón flotante: foto grande + nombre, encima de la firma "made by Paradixe". */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-[#F47735] hover:bg-[#E5641F] text-white shadow-lg flex items-center justify-center transition"
+          className="fixed bottom-12 right-5 z-50 w-[150px] rounded-2xl overflow-hidden bg-[#F47735] hover:bg-[#E5641F] text-white shadow-2xl ring-2 ring-white transition hover:scale-[1.03]"
           title="Hablar con MIA"
         >
-          <MiaAvatar className="w-14 h-14" fallback={<OMark className="w-7 h-7" />} />
+          {/* Busto: se ve el polo naranja con el logo de Oben. */}
+          <span className="block w-[150px] h-[150px] bg-white/20">
+            <MiaAvatar
+              src="/mia-busto.jpg"
+              shape="rounded-none"
+              className="w-[150px] h-[150px]"
+              fallback={<span className="w-full h-full flex items-center justify-center"><OMark className="w-12 h-12" /></span>}
+            />
+          </span>
+          <span className="block px-3 py-2 text-left leading-tight">
+            <span className="block text-lg font-bold tracking-wide">MIA</span>
+            <span className="block text-[11px] text-white/90">¿En qué te ayudo?</span>
+          </span>
         </button>
       )}
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-6 right-6 z-50 w-[26rem] max-w-[calc(100vw-3rem)] h-[36rem] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
+        <div className="fixed bottom-12 right-5 z-50 w-[27rem] max-w-[calc(100vw-2.5rem)] h-[42rem] max-h-[calc(100vh-5rem)] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
           {verFoto && (
             <button
               onClick={() => setVerFoto(false)}
@@ -115,7 +129,7 @@ export function EvaWidget() {
           <div className="bg-[#F47735] text-white px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button onClick={() => setVerFoto(true)} title="Ver foto de MIA" className="rounded-full">
-                <MiaAvatar className="w-9 h-9 ring-2 ring-white/60" fallback={<OMark className="w-5 h-5" />} />
+                <MiaAvatar className="w-12 h-12 ring-2 ring-white/80" fallback={<OMark className="w-6 h-6" />} />
               </button>
               <div>
                 <p className="font-semibold text-sm leading-tight">MIA</p>
@@ -138,15 +152,27 @@ export function EvaWidget() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+            {messages.length === 1 && (
+              <div className="flex justify-center">
+                <MiaAvatar
+                  src="/mia-completa.jpg"
+                  shape="rounded-2xl"
+                  className="w-[15rem] h-auto shadow-md ring-1 ring-black/5"
+                  fallback={null}
+                />
+              </div>
+            )}
             {messages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <div
-                  className={`max-w-[88%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
-                    m.role === 'user' ? 'bg-[#F47735] text-white' : 'bg-white text-gray-800 border border-gray-200'
-                  }`}
-                >
-                  {m.text}
-                </div>
+                {m.role === 'user' ? (
+                  <div className="max-w-[88%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap bg-[#F47735] text-white">
+                    {m.text}
+                  </div>
+                ) : (
+                  <div className="max-w-[92%] rounded-xl px-3 py-2 text-sm bg-white text-gray-800 border border-gray-200 break-words">
+                    <MiaMarkdown text={m.text} />
+                  </div>
+                )}
                 {m.acciones && m.acciones.length > 0 && (
                   <div className="mt-1.5 flex flex-col gap-1.5 max-w-[88%]">
                     {m.acciones.map((a, j) => (
@@ -222,6 +248,47 @@ export function EvaWidget() {
   );
 }
 
+/**
+ * Las respuestas de MIA vienen en Markdown (negritas, listas, tablas): se
+ * renderizan en vez de mostrar los asteriscos. react-markdown no interpreta
+ * HTML crudo, así que el texto del modelo nunca inyecta marcado.
+ */
+const MD_COMPONENTS: Components = {
+  p: ({ children }) => <p className="my-1.5 first:mt-0 last:mb-0 leading-relaxed">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+  ul: ({ children }) => <ul className="my-1.5 pl-4 list-disc space-y-0.5 marker:text-[#F47735]">{children}</ul>,
+  ol: ({ children }) => <ol className="my-1.5 pl-5 list-decimal space-y-0.5 marker:text-gray-500">{children}</ol>,
+  li: ({ children }) => <li className="leading-snug">{children}</li>,
+  h1: ({ children }) => <p className="mt-2 mb-1 first:mt-0 font-bold text-gray-900">{children}</p>,
+  h2: ({ children }) => <p className="mt-2 mb-1 first:mt-0 font-bold text-gray-900">{children}</p>,
+  h3: ({ children }) => <p className="mt-2 mb-1 first:mt-0 font-semibold text-gray-900">{children}</p>,
+  h4: ({ children }) => <p className="mt-2 mb-1 first:mt-0 font-semibold text-gray-900">{children}</p>,
+  a: ({ children, href }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#C4521A] underline">
+      {children}
+    </a>
+  ),
+  code: ({ children }) => <code className="px-1 py-0.5 rounded bg-gray-100 text-[0.85em] font-mono">{children}</code>,
+  pre: ({ children }) => <pre className="my-1.5 p-2 rounded bg-gray-100 overflow-x-auto text-xs">{children}</pre>,
+  hr: () => <hr className="my-2 border-gray-200" />,
+  blockquote: ({ children }) => <blockquote className="my-1.5 pl-2 border-l-2 border-[#F47735]/50 text-gray-600">{children}</blockquote>,
+  table: ({ children }) => (
+    <div className="my-1.5 overflow-x-auto">
+      <table className="w-full text-xs border-collapse">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => <th className="px-2 py-1 text-left font-semibold bg-orange-50 border border-gray-200">{children}</th>,
+  td: ({ children }) => <td className="px-2 py-1 border border-gray-200 align-top">{children}</td>,
+};
+
+function MiaMarkdown({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  );
+}
+
 /** Motivo legible de un error de descarga (con responseType 'blob' el JSON del backend llega como Blob). */
 async function motivo(err: unknown): Promise<string> {
   const data = (err as { response?: { data?: unknown } })?.response?.data;
@@ -241,11 +308,21 @@ async function motivo(err: unknown): Promise<string> {
  * Foto de MIA (`public/mia.jpg`). Mientras el archivo no exista se muestra el
  * símbolo de Oben — la ventana nunca queda con una imagen rota.
  */
-function MiaAvatar({ className = '', fallback }: { className?: string; fallback: React.ReactNode }) {
+function MiaAvatar({
+  className = '',
+  fallback,
+  src = '/mia.jpg',
+  shape = 'rounded-full',
+}: {
+  className?: string;
+  fallback: React.ReactNode;
+  src?: string;
+  shape?: string;
+}) {
   const [ok, setOk] = useState(true);
   if (!ok) return <>{fallback}</>;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/mia.jpg" alt="MIA" onError={() => setOk(false)} className={`rounded-full object-cover ${className}`} />
+    <img src={src} alt="MIA" onError={() => setOk(false)} className={`${shape} object-cover ${className}`} />
   );
 }

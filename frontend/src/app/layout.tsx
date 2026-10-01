@@ -5,6 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { useAuthStore } from '@/store/auth';
 import { LicenseGate } from '@/components/LicenseGate';
+import { ParadixeFirma } from '@/components/ParadixeFirma';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,6 +45,7 @@ export default function RootLayout({
         <AuthInitializer>
           <LicenseGate>{children}</LicenseGate>
         </AuthInitializer>
+        <ParadixeFirma />
       </body>
     </html>
   );

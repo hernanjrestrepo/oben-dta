@@ -94,7 +94,7 @@ export function Sidebar() {
           {/* min-h-0 + overflow: con 17 opciones el menú no cabe en pantallas
               de laptop y las últimas (Usuarios, Perfiles) quedaban fuera de
               la ventana sin forma de llegar a ellas (reporte 2026-10-01). */}
-          <nav className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-0.5">
+          <nav className="sidebar-scroll flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-0.5">
             {items.map((item) => {
               const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
               const Icon = item.icon;
@@ -132,9 +132,14 @@ export function Sidebar() {
               <LogOut className="w-5 h-5" />
               <span>Cerrar Sesión</span>
             </button>
-            <p className="mt-3 px-2 text-[10px] text-white/40 text-center">
+            <a
+              href="https://www.paradixe.xyz/"
+              target="_blank"
+              rel="noopener"
+              className="block mt-3 px-2 text-[10px] text-white/60 text-center hover:text-white transition"
+            >
               Oben Xmart by Paradixe
-            </p>
+            </a>
           </div>
         </div>
       </aside>

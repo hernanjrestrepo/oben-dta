@@ -47,6 +47,12 @@ textarea::placeholder {
   color: #6b7280;
 }
 
+/* Scroll del menú lateral: delgado y blanco translúcido sobre el naranja. */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.45) transparent;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
