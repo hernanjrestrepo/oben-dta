@@ -99,7 +99,8 @@ describe('FacturacionPdfService — formato de la factura electrónica de Oben (
     expect(text).toContain(squash('ENA--0012TM0902S0760'));
     expect(text).toContain(squash('1.7137'));
     expect(text).toContain(squash('PF 11366  OV  11187'));
-    expect(text).toContain(squash('PA NCM: 3920.20.19 PELICULA DE POLIPROPILENO'));
+    // ENA no tiene tipo confirmado y 3920.20.19 es BOPP *o* BOPP metalizado: no se adivina la descripción.
+    expect(text).toContain(squash('PA NCM: 3920.20.19 PA NALADI'));
     expect(text).toContain(squash('TOTAL FLETE / FREIGHT: US$ 941.00'));
     expect(text).toContain(squash('OTROS GASTOS / OTHER EXPENSES'));
     expect(text).toContain(squash('TIPO DE CAMBIO / EXCHANGE RATE: 3341.23'));
@@ -108,6 +109,13 @@ describe('FacturacionPdfService — formato de la factura electrónica de Oben (
     expect(text).toContain(squash('BORRADOR'));
     // Como FastReport: observaciones+subtotal y valor en letras+neto van enteros, cada uno donde quepa (la FEXP3190 los lleva a las páginas 8 y 9).
     expect(paginas).toBe(3);
+  });
+
+  it('con materiales SC (OPP Seal Film) la descripción de la partida sale de la tabla de Oben', async () => {
+    const sc = { ...DRAFT, lines: [{ ...DRAFT.lines[0], tipoPelicula: 'SC---0030TN' }], empaque: { ...DRAFT.empaque!, items: [{ codigo: 'SC---0030TN0405S0760', kilos: 2453.3, bobinas: 7 }] } };
+    const liq = { ...LIQ, lines: [{ tipoPelicula: 'SC---0030TN', kilosTotalUnit: 1.7137, valueSure: 3.18 }] } as unknown as LiquidacionDraft;
+    const { text } = await pdfDe(sc, null, liq);
+    expect(text).toContain(squash('PA NCM: 3920.20.19 PELICULA DE POLIPROPILENO BIORIENTADO // 3920.20.19 BIORIENTED POLYPROPYLENE FILM'));
   });
 
   it('con CUFE simulado: rótulo "sin validez fiscal" y marca de agua SIMULADO', async () => {

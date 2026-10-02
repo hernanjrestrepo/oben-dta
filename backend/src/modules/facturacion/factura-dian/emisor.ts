@@ -51,15 +51,6 @@ export const TEXTO_LEGAL_NACIONAL = [
   'AL COMPRADOR.',
 ];
 
-/**
- * Descripción de la partida arancelaria (NCM) que va en las observaciones de
- * exportación, en español // inglés. Solo las que ya vimos en facturas reales
- * de Oben; una partida desconocida va sin descripción (no se inventa).
- */
-export const DESCRIPCION_PARTIDA: Array<{ prefijo: string; es: string; en: string }> = [
-  { prefijo: '3920.20', es: 'PELICULA DE POLIPROPILENO  BIORIENTADO', en: 'BIORIENTED POLYPROPYLENE  FILM' },
-];
-
 /** Nombre comercial por familia de película (código de Oben), visto en facturas reales. */
 export const FAMILIA_PELICULA: Record<string, string> = {
   SC: 'OPP SEAL FILM',

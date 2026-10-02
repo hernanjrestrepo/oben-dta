@@ -11,6 +11,7 @@ import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normaliza
 import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-settlement-defaults';
 import { SP_PROFORMAS_COMEX, incotermDeProforma, paisDeProforma } from './incoterm-de-oben';
 import { unwrapCheckSettlement } from './check-settlement-respuesta';
+import { partidaComun } from './partidas-arancelarias';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
   CheckSettlementResponse,
@@ -253,6 +254,25 @@ export class LiquidacionService {
         const ruta = [header.puertoEmbarque, puertoInland ?? header.puertoArribo].filter((v) => typeof v === 'string' && v).join(' → ');
         ajustes.push(`Flete marítimo en 0: no hay tarifa en la tabla de fletes${ruta ? ` para ${ruta}` : ''}. Pedir la cotización a COMEX o digitarlo.`);
       }
+    }
+    // Partida arancelaria por tipo de película (tabla de Oben, 2026-10-02); lo digitado manda.
+    const { partida, sinPartida, mezcla } = partidaComun(baseLines.map((l) => l.tipoPelicula));
+    if (partida) {
+      if (this.isBlank(header.paNcm)) {
+        header.paNcm = partida.ncm;
+        headerOrigen.paNcm = 'maestro';
+      }
+      if (this.isBlank(header.paNaladi) && partida.naladi) {
+        header.paNaladi = partida.naladi;
+        headerOrigen.paNaladi = 'maestro';
+      }
+      if (headerOrigen.paNcm === 'maestro') {
+        ajustes.push(`Partida arancelaria de la tabla de Oben: ${partida.ncm} — ${partida.descripcionEs}.`);
+      }
+    } else if (mezcla) {
+      ajustes.push('La PF mezcla películas de partidas distintas: el encabezado lleva una sola partida, digítala (o separa la liquidación).');
+    } else if (sinPartida.length) {
+      ajustes.push(`Sin partida en la tabla de Oben para: ${[...new Set(sinPartida)].join(', ')} (falta decir a qué tipo de película pertenece su familia).`);
     }
     if (prov) {
       for (const key of ['paNcm', 'paNaladi'] as const) {

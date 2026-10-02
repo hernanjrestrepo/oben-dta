@@ -1,6 +1,7 @@
 import type { FacturaElectronica, FacturacionDraft } from '../facturacion.types';
 import type { LiquidacionDraft } from '../../liquidacion/liquidacion.types';
-import { DESCRIPCION_PARTIDA, EMISOR_OBEN, FAMILIA_PELICULA, RESOLUCIONES_DIAN } from './emisor';
+import { EMISOR_OBEN, FAMILIA_PELICULA, RESOLUCIONES_DIAN } from './emisor';
+import { PARTIDAS, partidaComun, type PartidaArancelaria } from '../../liquidacion/partidas-arancelarias';
 import { valorEnLetras, valueInWords } from './letras';
 import type { FacturaDian, FacturaDianLinea, TipoFacturaDian } from './factura-dian.types';
 
@@ -65,6 +66,19 @@ export function descripcionMaterial(codigo: string): string {
   const [, familia, micras, tipo, ancho, diametro] = m;
   const nombre = FAMILIA_PELICULA[familia];
   return `${nombre ? `${nombre} ` : ''}${familia}${Number(micras)} ${tipo} X ${Number(ancho)} MM Diámetro ${Number(diametro)}`;
+}
+
+/**
+ * Descripción de la partida para las observaciones. Primero la de los
+ * materiales (BOPP y BOPP metalizado comparten 3920.20.19 pero se describen
+ * distinto); si no se sabe el tipo, solo cuando la partida identifica UN tipo.
+ */
+export function descripcionPartida(ncm: string | null, codigos: string[]): PartidaArancelaria | null {
+  if (!ncm) return null;
+  const porMaterial = partidaComun(codigos).partida;
+  if (porMaterial && porMaterial.ncm === ncm) return porMaterial;
+  const candidatas = Object.values(PARTIDAS).filter((p) => p.ncm === ncm);
+  return candidatas.length === 1 ? candidatas[0] : null;
 }
 
 /** "2144 FRENCH SETTLEMENT RD, Dallas TX 75212, USA" → "Dallas" (la ciudad, sin estado ni código postal). */
@@ -172,7 +186,7 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
 
   const observaciones: string[] = [];
   if (exportacion) {
-    const desc = ncm ? DESCRIPCION_PARTIDA.find((d) => ncm.startsWith(d.prefijo)) : undefined;
+    const desc = descripcionPartida(ncm, lineas.map((l) => l.codigo));
     const e = draft.empaque;
     observaciones.push(
       `PF ${draft.proforma ?? ''}  OV  ${draft.numberOrderSales}`,
@@ -182,7 +196,7 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
       `PESO BRUTO / GROSS WEIGHT: ${e?.pesoBrutoKg ?? ''} KG`,
       `PALETAS / PALLETS: ${e?.pallets ?? ''}`,
       `BOBINAS / ROLLS: ${e?.bobinas ?? ''}`,
-      `PA NCM: ${ncm ?? ''}${desc ? ` ${desc.es} // ${ncm} ${desc.en}` : ''}`,
+      `PA NCM: ${ncm ?? ''}${desc ? ` ${desc.descripcionEs} // ${ncm} ${desc.descripcionEn}` : ''}`,
       `PA NALADI: ${naladi ?? ''} `,
       `TOTAL FOB: US$ ${enUS(subtotal)}`,
       `TOTAL FLETE / FREIGHT: US$ ${enUS(flete)}`,

@@ -137,6 +137,9 @@ const testCalculator: LiquidacionValueCalculator = {
 const HEADER_USER = { direccion: '1 Port Rd, Miami FL', puertoArribo: 'Miami', puertoEmbarque: 'Cartagena', paNcm: '3920.20', paNaladi: '3920.20.00', notes: 'prueba' };
 const USA_CHARGES = { inlandFreight: 900, destinationCharges: 150 };
 
+/** El aviso de "sin partida" (familia ENA sin tipo confirmado) es ajeno a lo que prueban los ajustes de tarifas. */
+const deTarifas = (a: string) => !a.startsWith('Sin partida en la tabla');
+
 function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: boolean } = {}) {
   const sim = new ObenSim();
   const idem = new FakeIdempotency();
@@ -214,6 +217,24 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.lines[0].valueTotal).toBe(16134.42); // 2.85 × 5661.20
       expect(rates.resolveSurcharges).not.toHaveBeenCalled();
       expect(draft.missing.some((m) => m.includes('USA'))).toBe(false);
+    });
+
+    it('la partida sale de la película (SC = BOPP: 3920.20.19 / NALADI 3920.20.10) y lo digitado manda', async () => {
+      const { service } = build({ calculator: new IncotermFormulaCalculator() });
+      const auto = await service.getDraft('10867');
+      expect(auto.header).toMatchObject({ paNcm: '3920.20.19', paNaladi: '3920.20.10' });
+      expect(auto.headerOrigen).toMatchObject({ paNcm: 'maestro', paNaladi: 'maestro' });
+      expect(auto.ajustes).toContain('Partida arancelaria de la tabla de Oben: 3920.20.19 — PELICULA DE POLIPROPILENO BIORIENTADO.');
+      const digitada = await service.getDraft('10867', { header: { paNcm: '3920.20.99' } });
+      expect(digitada.header.paNcm).toBe('3920.20.99');
+      expect(digitada.headerOrigen.paNcm).toBe('usuario');
+    });
+
+    it('familia sin tipo confirmado (ENA): no se adivina, queda la partida provisional y se avisa', async () => {
+      const { service } = build({ calculator: new IncotermFormulaCalculator(), provisionales: true });
+      const d = await service.getDraft('11271');
+      expect(d.headerOrigen.paNcm).toBe('provisional');
+      expect(d.ajustes.some((a) => a.startsWith('Sin partida en la tabla de Oben para: ENA--0012TM'))).toBe(true);
     });
 
     it('PF 10867 (la ya liquidada de referencia): valor total inicial = 2.55 × 22080.76', async () => {
@@ -683,7 +704,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       const { service } = jose();
       const draft = await service.getDraft('99001', usaInput({ totales: { incoterm: 'DAP', flete: 300 } }));
       expect(draft.totales.otrosGastos).toBe(1034.73);
-      expect(draft.ajustes).toEqual(['Otros costos destino = Destination Charges (USD 1034.73 = Inland + Entry + ISF + HMF).']);
+      expect(draft.ajustes.filter(deTarifas)).toEqual(['Otros costos destino = Destination Charges (USD 1034.73 = Inland + Entry + ISF + HMF).']);
     });
 
     it('un flete mayor que el valor de la mercancía (typo) deja el FOB negativo → bloquea', async () => {
@@ -718,7 +739,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       const draft = await service.getDraft('99001', usaInput({ totales: { incoterm: 'DAP', flete: 300, otrosGastos: 50 } }));
 
       expect(draft.totales.otrosGastos).toBe(1034.73);
-      expect(draft.ajustes).toEqual([expect.stringContaining('USD 50.00) ≠ Destination Charges (USD 1034.73')]);
+      expect(draft.ajustes.filter(deTarifas)).toEqual([expect.stringContaining('USD 50.00) ≠ Destination Charges (USD 1034.73')]);
       const otros = draft.lines.map((l) => l.expensesOther!);
       expect(Math.round(otros.reduce((a, b) => a + b, 0) * 100)).toBe(103473); // 1034.73 repartido por kilos
       expect(draft.lines[0]).toMatchObject({ expensesOther: 344.91, expensesOtherUnit: 3.4491 });
@@ -730,7 +751,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     it('USA con DAP: si ya cuadran, no hay ajuste', async () => {
       const { service } = jose();
       const draft = await service.getDraft('99001', usaInput({ totales: { incoterm: 'DAP', flete: 300, otrosGastos: 1034.73 } }));
-      expect(draft.ajustes).toEqual([]);
+      expect(draft.ajustes.filter(deTarifas)).toEqual([]);
       expect(draft.totales.otrosGastos).toBe(1034.73);
     });
 
@@ -839,7 +860,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.headerOrigen).toMatchObject({ direccion: 'oben', puertoArribo: 'oben', inlandFreight: 'maestro', destinationCharges: 'calculado' });
       expect(rates.resolveInlandByAddress).toHaveBeenCalledWith('t1', 'USA', expect.stringContaining('75212'));
       expect(draft.totales.otrosGastos).toBe(1878.73); // otros costos destino = Destination Charges, sin digitarlos
-      expect(draft.ajustes).toEqual([
+      expect(draft.ajustes.filter(deTarifas)).toEqual([
         expect.stringContaining('venció el 2026-08-31'),
         'Otros costos destino = Destination Charges (USD 1878.73 = Inland + Entry + ISF + HMF).',
       ]);
@@ -856,7 +877,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(rates.resolveOceanFreight).toHaveBeenCalledWith('t1', 'CARTAGENA - COLOMBIA', 'Houston, TX (Port)', 'DALLAS, TX 75212');
       expect(draft.totales.flete).toBe(941);
       expect(draft.totalesOrigen).toEqual({ flete: 'maestro', otrosGastos: 'calculado' });
-      expect(draft.ajustes).toEqual(
+      expect(draft.ajustes.filter(deTarifas)).toEqual(
         expect.arrayContaining([
           "Flete marítimo de la tabla de fletes: Cartagena, Colombia (COCTG) - Port → Houston, TX (Port) (Direct / Hapag-Lloyd, contenedor 40'), USD 941.00.",
         ]),
@@ -922,7 +943,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.header).toMatchObject({ paNcm: '3920.62.00', paNaladi: '3920.62.00', harborMaintenanceFee: 300, destinationCharges: 2174 });
       expect(draft.headerOrigen).toMatchObject({ paNcm: 'provisional', paNaladi: 'provisional', harborMaintenanceFee: 'provisional' });
       expect(draft.totales.flete).toBe(0);
-      expect(draft.ajustes).toEqual(
+      expect(draft.ajustes.filter(deTarifas)).toEqual(
         expect.arrayContaining([
           expect.stringContaining('Flete marítimo en 0'),
           expect.stringContaining('Partida arancelaria PROVISIONAL 3920.62.00 (arancel 10 %)'),
