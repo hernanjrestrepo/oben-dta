@@ -17,6 +17,12 @@ export interface PartidaArancelaria {
   descripcionEn: string;
 }
 
+/**
+ * Respuesta de Jorge (2026-10-05): estos 4 son TODOS los tipos de película que
+ * Colombia hace, y una PF puede mezclarlos (el encabezado de la liquidación
+ * lleva una sola partida). Las descripciones oficiales de la factura son las
+ * de la tabla de abajo; lo único que cambia por país son las observaciones.
+ */
 export const PARTIDAS: Record<TipoPelicula, PartidaArancelaria> = {
   bopp: {
     tipo: 'bopp',
@@ -59,6 +65,17 @@ export const PARTIDAS: Record<TipoPelicula, PartidaArancelaria> = {
 export const FAMILIA_A_TIPO: Record<string, TipoPelicula> = {
   SC: 'bopp',
 };
+
+/**
+ * Arancel de importación en destino (Jorge, 2026-10-05): en destino NO se paga
+ * arancel, salvo en EE. UU., donde es 12,5 %. Solo es informativo: la
+ * liquidación no lo suma. Sigue sin confirmarse sobre qué base se calcula, si
+ * aplica a todas las películas y si solo cuenta con DDP.
+ */
+export const ARANCEL_USA_PCT = 12.5;
+export function arancelDestinoPct(esUSA: boolean): number {
+  return esUSA ? ARANCEL_USA_PCT : 0;
+}
 
 /** Familia de un código de material ("SC---0030TN0405S0760" → "SC"); null si no tiene el formato de Oben. */
 export function familiaDe(codigo: string): string | null {

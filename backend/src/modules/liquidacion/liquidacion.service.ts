@@ -11,7 +11,7 @@ import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normaliza
 import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-settlement-defaults';
 import { SP_PROFORMAS_COMEX, incotermDeProforma, paisDeProforma } from './incoterm-de-oben';
 import { unwrapCheckSettlement } from './check-settlement-respuesta';
-import { partidaComun } from './partidas-arancelarias';
+import { ARANCEL_USA_PCT, partidaComun } from './partidas-arancelarias';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
   CheckSettlementResponse,
@@ -69,7 +69,6 @@ export interface LiquidacionOpciones {
 export const VALORES_PROVISIONALES = {
   /** Película PET (OPET) — partida de trabajo hasta que llegue la tabla por producto. */
   partida: '3920.62.00',
-  arancelPct: 10,
   /** Harbor Maintenance Fee cuando no se puede calcular el 0.125 % del FOB final. */
   harborMaintenanceFeeUSD: 300,
 } as const;
@@ -270,9 +269,20 @@ export class LiquidacionService {
         ajustes.push(`Partida arancelaria de la tabla de Oben: ${partida.ncm} — ${partida.descripcionEs}.`);
       }
     } else if (mezcla) {
-      ajustes.push('La PF mezcla películas de partidas distintas: el encabezado lleva una sola partida, digítala (o separa la liquidación).');
+      ajustes.push(
+        'La PF mezcla películas de partidas distintas (Jorge confirmó que puede pasar): el encabezado lleva una sola partida, digítala (o separa la liquidación). Falta confirmar con Oben cuál va.',
+      );
     } else if (sinPartida.length) {
-      ajustes.push(`Sin partida en la tabla de Oben para: ${[...new Set(sinPartida)].join(', ')} (falta decir a qué tipo de película pertenece su familia).`);
+      ajustes.push(
+        `Sin partida en la tabla de Oben para: ${[...new Set(sinPartida)].join(', ')} (falta decir a cuál de los 4 tipos de película — BOPP, BOPP metalizado, PET o PET termoencogible — pertenece su familia).`,
+      );
+    }
+    // Arancel de importación (Jorge, 2026-10-05): en destino no se paga, salvo EE. UU. (12,5 %).
+    // Solo se informa: no entra en la liquidación hasta confirmar su base.
+    if (esUSA) {
+      ajustes.push(
+        `Arancel de importación EE. UU.: ${ARANCEL_USA_PCT} % (Jorge, 5-oct). No entra en la liquidación: falta confirmar sobre qué base se calcula, si aplica a todas las películas y si solo cuenta con DDP.`,
+      );
     }
     if (prov) {
       for (const key of ['paNcm', 'paNaladi'] as const) {
@@ -283,7 +293,7 @@ export class LiquidacionService {
       }
       if (headerOrigen.paNcm === 'provisional' || headerOrigen.paNaladi === 'provisional') {
         ajustes.push(
-          `Partida arancelaria PROVISIONAL ${VALORES_PROVISIONALES.partida} (arancel ${VALORES_PROVISIONALES.arancelPct} %) mientras Oben envía la tabla por producto.`,
+          `Partida arancelaria PROVISIONAL ${VALORES_PROVISIONALES.partida} mientras Oben confirma a qué tipo de película pertenece cada familia.`,
         );
       }
     }

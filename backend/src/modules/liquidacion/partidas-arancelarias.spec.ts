@@ -1,4 +1,4 @@
-import { PARTIDAS, familiaDe, partidaComun, partidaDe } from './partidas-arancelarias';
+import { ARANCEL_USA_PCT, PARTIDAS, arancelDestinoPct, familiaDe, partidaComun, partidaDe } from './partidas-arancelarias';
 
 describe('partidas arancelarias de Oben (2026-10-02)', () => {
   it('las 4 referencias entregadas por Oben', () => {
@@ -23,6 +23,18 @@ describe('partidas arancelarias de Oben (2026-10-02)', () => {
 
   it('una familia sin tipo confirmado (ENA) no se adivina', () => {
     expect(partidaDe('ENA--0012TM0902S0760')).toBeNull();
+  });
+
+  it('descripciones oficiales de la factura (Jorge, 5-oct): las tres que dio coinciden con la tabla', () => {
+    expect(PARTIDAS.bopp).toMatchObject({ descripcionEs: 'PELICULA DE POLIPROPILENO BIORIENTADO', descripcionEn: 'BIORIENTED POLYPROPYLENE FILM' });
+    expect(PARTIDAS.pet).toMatchObject({ descripcionEs: 'PELICULA DE POLIETILENO TEREFTALATO', descripcionEn: 'POLYETHYLENE-TEREPHTHALATE BIORIENTED FILM' });
+    expect(PARTIDAS.pet_termoencogible).toMatchObject({ descripcionEs: 'PELICULA DE COPOLIESTER TERMOCONTRAIBLE', descripcionEn: 'POLYESTER FILM, HEAT-SHRINKABLE' });
+  });
+
+  it('arancel de importación (Jorge, 5-oct): 0 en destino, 12,5 % solo EE. UU.', () => {
+    expect(arancelDestinoPct(false)).toBe(0);
+    expect(arancelDestinoPct(true)).toBe(12.5);
+    expect(ARANCEL_USA_PCT).toBe(12.5);
   });
 
   it('partida común: todas las líneas iguales; mezcla o desconocidas → ninguna', () => {

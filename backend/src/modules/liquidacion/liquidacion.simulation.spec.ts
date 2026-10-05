@@ -138,7 +138,7 @@ const HEADER_USER = { direccion: '1 Port Rd, Miami FL', puertoArribo: 'Miami', p
 const USA_CHARGES = { inlandFreight: 900, destinationCharges: 150 };
 
 /** El aviso de "sin partida" (familia ENA sin tipo confirmado) es ajeno a lo que prueban los ajustes de tarifas. */
-const deTarifas = (a: string) => !a.startsWith('Sin partida en la tabla');
+const deTarifas = (a: string) => !a.startsWith('Sin partida en la tabla') && !a.startsWith('Arancel de importación');
 
 function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: boolean } = {}) {
   const sim = new ObenSim();
@@ -946,11 +946,24 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.ajustes.filter(deTarifas)).toEqual(
         expect.arrayContaining([
           expect.stringContaining('Flete marítimo en 0'),
-          expect.stringContaining('Partida arancelaria PROVISIONAL 3920.62.00 (arancel 10 %)'),
+          expect.stringContaining('Partida arancelaria PROVISIONAL 3920.62.00 mientras'),
           expect.stringContaining('Harbor Maintenance Fee PROVISIONAL USD 300'),
         ]),
       );
+      expect(draft.ajustes.some((a) => a.includes('arancel 10'))).toBe(false);
       expect(draft.missing).toEqual([]);
+    });
+
+    it('arancel de importación (Jorge, 5-oct): en EE. UU. se informa 12,5 % y no entra en el cálculo', async () => {
+      const { service, rates } = prov();
+      rates.resolveSurcharges.mockResolvedValue({ entryFee: 110, importerSecurityFiling: 20, harborMaintenanceFee: null, harborMaintenanceFeeFormula: null, destinationCharges: null, missing: [] });
+      const base = await service.getDraft('11271', { header: HEADER_USA, totales: { incoterm: 'DDP' } });
+
+      expect(base.esUSA).toBe(true);
+      expect(base.ajustes).toContain(
+        'Arancel de importación EE. UU.: 12.5 % (Jorge, 5-oct). No entra en la liquidación: falta confirmar sobre qué base se calcula, si aplica a todas las películas y si solo cuenta con DDP.',
+      );
+      expect(base.sinConfirmar.some((s) => s.includes('Arancel'))).toBe(false);
     });
 
     it('lo digitado manda: flete y partidas del usuario no se tocan; el HMF calculable usa la regla de José', async () => {
