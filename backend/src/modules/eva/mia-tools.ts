@@ -1,4 +1,4 @@
-import type Anthropic from '@anthropic-ai/sdk';
+import type { MiaHerramienta } from './mia-llm';
 import { OBEN_REPORTS } from '../oben-reports/oben-report-registry';
 import { LIQUIDACION_PERMISSION } from '../liquidacion/liquidacion.controller';
 
@@ -44,7 +44,7 @@ const ov = {
  */
 export const MIA_TOOLS: Array<{
   permiso: string | null;
-  tool: Anthropic.Tool;
+  tool: MiaHerramienta;
 }> = [
   {
     permiso: 'invoices.read',

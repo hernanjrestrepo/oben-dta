@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import Anthropic from '@anthropic-ai/sdk';
 import { Product } from '../../entities/product.entity';
 import { Quote } from '../../entities/quote.entity';
 import { Client } from '../../entities/client.entity';
@@ -9,7 +8,8 @@ import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
 import { FreightOceanRate } from '../../entities/freight-ocean-rate.entity';
 import { EvaController } from './eva.controller';
-import { EvaService, MIA_ANTHROPIC } from './eva.service';
+import { EvaService } from './eva.service';
+import { MIA_LLM, OllamaNubeLlm } from './mia-llm';
 import { QuotesModule } from '../quotes/quotes.module';
 import { AuthModule } from '../auth/auth.module';
 import { FacturacionModule } from '../facturacion/facturacion.module';
@@ -37,16 +37,9 @@ import { IntegrationHubModule } from '../integrations/hub/integration-hub.module
   providers: [
     EvaService,
     {
-      // Sin ANTHROPIC_API_KEY MIA responde que no está configurada (nunca se cae el backend).
-      provide: MIA_ANTHROPIC,
-      useFactory: () =>
-        process.env.ANTHROPIC_API_KEY
-          ? new Anthropic({
-              apiKey: process.env.ANTHROPIC_API_KEY,
-              timeout: 60_000,
-              maxRetries: 2,
-            })
-          : null,
+      // Sin OLLAMA_API_KEY MIA responde que no está configurada (nunca se cae el backend).
+      provide: MIA_LLM,
+      useFactory: () => (process.env.OLLAMA_API_KEY ? new OllamaNubeLlm(process.env.OLLAMA_API_KEY) : null),
     },
   ],
 })

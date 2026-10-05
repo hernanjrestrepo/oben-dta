@@ -1,7 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, ILike, Repository } from 'typeorm';
-import Anthropic from '@anthropic-ai/sdk';
 import { Product } from '../../entities/product.entity';
 import { Quote } from '../../entities/quote.entity';
 import { Client } from '../../entities/client.entity';
@@ -28,11 +27,9 @@ import {
 
 const WORKFLOW_NAME = 'eva-assistant';
 
-/** Claude Haiku 4.5 (pedido de Hernán, 2026-10-01): rápido y barato para un asistente de consulta. */
-export const MIA_MODEL = 'claude-haiku-4-5';
-/** Cliente de Anthropic (null si falta ANTHROPIC_API_KEY); inyectable para pruebas. */
-export const MIA_ANTHROPIC = Symbol('MIA_ANTHROPIC');
-export type MiaAnthropicClient = Pick<Anthropic, 'messages'>;
+import { MIA_LLM, MIA_MODEL, MiaLlmError, type MiaLlm, type MiaMensaje } from './mia-llm';
+
+export { MIA_MODEL };
 
 /** Vueltas máximas de herramientas por pregunta (cada vuelta = una llamada al modelo). */
 const MAX_VUELTAS = 6;
@@ -90,7 +87,7 @@ Formato: tu respuesta se muestra en un chat pequeño que interpreta Markdown. Us
 Responde breve y directo, como una colega experta. Fechas y horas en hora de Colombia, tal como vienen de las herramientas.`;
 
 /**
- * MIA: asistente de Oben Xmart sobre Claude Haiku (Anthropic) con
+ * MIA: asistente de Oben Xmart sobre la nube de Ollama (ver mia-llm.ts) con
  * herramientas de consulta reales. Cada herramienta exige el mismo permiso
  * que su pantalla/endpoint equivalente, así que MIA nunca le muestra a un
  * usuario lo que su rol no le deja ver. Las acciones con efecto fuera del
@@ -121,8 +118,8 @@ export class EvaService {
     private readonly ctx: TenantContext,
     private readonly audit: WorkflowAuditService,
     @Optional()
-    @Inject(MIA_ANTHROPIC)
-    private readonly anthropic: MiaAnthropicClient | null = null,
+    @Inject(MIA_LLM)
+    private readonly llm: MiaLlm | null = null,
   ) {}
 
   async chat(
@@ -132,9 +129,9 @@ export class EvaService {
   ): Promise<EvaChatResult> {
     const herramientas: Array<{ nombre: string; input: unknown; ok: boolean }> =
       [];
-    const result = this.anthropic
+    const result = this.llm
       ? await this.conversar(
-          this.anthropic,
+          this.llm,
           message,
           historial,
           contexto,
@@ -142,7 +139,7 @@ export class EvaService {
         )
       : {
           reply:
-            'MIA no está configurada todavía en este ambiente (falta ANTHROPIC_API_KEY). Avisa al equipo técnico.',
+            'MIA no está configurada todavía en este ambiente (falta OLLAMA_API_KEY). Avisa al equipo técnico.',
         };
 
     // Auditoría de TODA interacción: qué se le pidió, qué herramientas usó y
@@ -167,67 +164,50 @@ export class EvaService {
   }
 
   private async conversar(
-    client: MiaAnthropicClient,
+    llm: MiaLlm,
     message: string,
     historial: MiaTurno[],
     contexto: MiaContexto,
     herramientas: Array<{ nombre: string; input: unknown; ok: boolean }>,
   ): Promise<EvaChatResult> {
-    const messages: Anthropic.MessageParam[] = [
+    const messages: MiaMensaje[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
       ...this.historialComoMensajes(historial),
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: message },
-          { type: 'text', text: this.contextoTexto(contexto) },
-        ],
-      },
+      { role: 'user', content: `${message}\n\n${this.contextoTexto(contexto)}` },
     ];
     const acciones: MiaAccion[] = [];
 
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
-      let resp: Anthropic.Message;
+      let resp: Awaited<ReturnType<MiaLlm['completar']>>;
       try {
-        resp = await client.messages.create({
-          model: MIA_MODEL,
-          max_tokens: 16000,
-          system: [
-            {
-              type: 'text',
-              text: SYSTEM_PROMPT,
-              cache_control: { type: 'ephemeral' },
-            },
-          ],
-          tools: MIA_TOOLS.map((t) => t.tool),
+        resp = await llm.completar(
           messages,
-        });
+          MIA_TOOLS.map((t) => t.tool),
+        );
       } catch (err) {
         return { reply: this.mensajeError(err), acciones };
       }
 
-      if (resp.stop_reason === 'refusal') {
-        return { reply: 'No puedo ayudarte con esa solicitud.', acciones };
-      }
-      const texto = resp.content
-        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-        .map((b) => b.text)
-        .join('\n')
-        .trim();
-      const llamadas = resp.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
-      );
-      if (resp.stop_reason !== 'tool_use' || llamadas.length === 0) {
-        const cortada =
-          resp.stop_reason === 'max_tokens'
-            ? '\n\n(La respuesta quedó incompleta por su longitud; pídeme la parte que falta.)'
-            : '';
+      const { texto, llamadas } = resp;
+      if (llamadas.length === 0) {
+        const cortada = resp.cortada
+          ? '\n\n(La respuesta quedó incompleta por su longitud; pídeme la parte que falta.)'
+          : '';
         return {
           reply: (texto || 'No tengo una respuesta para eso.') + cortada,
           acciones,
         };
       }
 
-      messages.push({ role: 'assistant', content: resp.content });
+      messages.push({
+        role: 'assistant',
+        content: texto,
+        tool_calls: llamadas.map((l) => ({
+          id: l.id,
+          type: 'function' as const,
+          function: { name: l.name, arguments: JSON.stringify(l.input ?? {}) },
+        })),
+      });
       // En paralelo, pero los botones quedan en el orden en que el modelo pidió las herramientas.
       const porLlamada = llamadas.map(() => [] as MiaAccion[]);
       const resultados = await Promise.all(
@@ -245,15 +225,13 @@ export class EvaService {
       const final = resultados.find((r) => r.final)?.final;
       if (final) return { ...final, acciones };
 
-      messages.push({
-        role: 'user',
-        content: llamadas.map((l, i) => ({
-          type: 'tool_result' as const,
-          tool_use_id: l.id,
-          content: resultados[i].contenido,
-          ...(resultados[i].error ? { is_error: true } : {}),
-        })),
-      });
+      llamadas.forEach((l, i) =>
+        messages.push({
+          role: 'tool',
+          tool_call_id: l.id,
+          content: resultados[i].error ? `ERROR: ${resultados[i].contenido}` : resultados[i].contenido,
+        }),
+      );
     }
     return {
       reply:
@@ -265,16 +243,15 @@ export class EvaService {
   /** Turnos previos como mensajes de la API: siempre empieza por el usuario (el saludo inicial de MIA se omite). */
   private historialComoMensajes(
     historial: MiaTurno[],
-  ): Anthropic.MessageParam[] {
+  ): MiaMensaje[] {
     const turnos = historial
       .filter((t) => t.texto?.trim())
       .slice(-MAX_HISTORIAL);
     const primero = turnos.findIndex((t) => t.rol === 'usuario');
     if (primero < 0) return [];
-    return turnos.slice(primero).map((t) => ({
-      role: t.rol === 'usuario' ? 'user' : 'assistant',
-      content: t.texto,
-    }));
+    return turnos
+      .slice(primero)
+      .map((t): MiaMensaje => ({ role: t.rol === 'usuario' ? 'user' : 'assistant', content: t.texto }));
   }
 
   private contextoTexto(contexto: MiaContexto): string {
@@ -288,21 +265,13 @@ export class EvaService {
   }
 
   private mensajeError(err: unknown): string {
-    const status = err instanceof Anthropic.APIError ? Number(err.status) : undefined;
-    this.logger.error(
-      `Anthropic falló (${status ?? 'sin status'}): ${(err as Error).message}`,
-    );
-    if (
-      err instanceof Anthropic.AuthenticationError ||
-      err instanceof Anthropic.PermissionDeniedError
-    ) {
-      return 'MIA no pudo autenticarse con Anthropic (la clave de API no es válida o no tiene acceso). Avisa al equipo técnico.';
+    const status = err instanceof MiaLlmError ? err.status : undefined;
+    this.logger.error(`El modelo de MIA falló (${status ?? 'sin status'}): ${(err as Error).message}`);
+    if (status === 401 || status === 402 || status === 403) {
+      return 'MIA no pudo autenticarse con el servicio de IA (clave o plan). Avisa al equipo técnico.';
     }
-    if (err instanceof Anthropic.RateLimitError) {
+    if (status === 429) {
       return 'MIA está recibiendo demasiadas consultas en este momento. Intenta de nuevo en unos segundos.';
-    }
-    if (err instanceof Anthropic.BadRequestError) {
-      return 'Anthropic rechazó la consulta de MIA (puede ser saldo insuficiente en la cuenta). Avisa al equipo técnico.';
     }
     return 'MIA no pudo conectarse al modelo de IA en este momento. Intenta de nuevo en un momento.';
   }

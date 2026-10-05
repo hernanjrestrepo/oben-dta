@@ -1,48 +1,34 @@
-import type Anthropic from '@anthropic-ai/sdk';
-import { EvaService, MIA_MODEL, MiaAnthropicClient } from './eva.service';
+import { EvaService, MIA_MODEL } from './eva.service';
+import type { MiaLlm, MiaMensaje, MiaRespuestaLlm } from './mia-llm';
 
 const T = 'tenant-1';
 
-function respuesta(content: unknown[], stop_reason: string): Anthropic.Message {
+function respuesta(content: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>, stop: string): MiaRespuestaLlm {
   return {
-    id: 'msg',
-    type: 'message',
-    role: 'assistant',
-    model: MIA_MODEL,
-    content,
-    stop_reason,
-    stop_sequence: null,
-    usage: {},
-  } as unknown as Anthropic.Message;
+    texto: content.filter((c) => c.type === 'text').map((c) => c.text).join(' '),
+    llamadas: content.filter((c) => c.type === 'tool_use').map((c) => ({ id: c.id!, name: c.name!, input: c.input })),
+    cortada: stop === 'max_tokens',
+  };
 }
-const usar = (name: string, input: unknown, id = `tu_${name}`) => ({
-  type: 'tool_use',
-  id,
-  name,
-  input,
-});
+const usar = (name: string, input: unknown, id = `tu_${name}`) => ({ type: 'tool_use', id, name, input });
 const texto = (text: string) => ({ type: 'text', text });
 
 function build(
   opts: {
-    respuestas?: Anthropic.Message[];
+    respuestas?: MiaRespuestaLlm[];
     permitir?: (p: string) => boolean;
     sinCliente?: boolean;
   } = {},
 ) {
-  const pedidos: Anthropic.MessageCreateParamsNonStreaming[] = [];
+  const pedidos: MiaMensaje[][] = [];
   const cola = [...(opts.respuestas ?? [])];
-  const client: MiaAnthropicClient = {
-    messages: {
-      create: jest.fn(
-        async (params: Anthropic.MessageCreateParamsNonStreaming) => {
-          pedidos.push(structuredClone(params));
-          const r = cola.shift();
-          if (!r) throw new Error('sin más respuestas');
-          return r;
-        },
-      ),
-    } as unknown as Anthropic['messages'],
+  const client: MiaLlm & { completar: jest.Mock } = {
+    completar: jest.fn(async (mensajes: MiaMensaje[]) => {
+      pedidos.push(structuredClone(mensajes));
+      const r = cola.shift();
+      if (!r) throw new Error('sin más respuestas');
+      return r;
+    }),
   };
   const audit = {
     log: jest.fn(),
@@ -105,11 +91,11 @@ function build(
   return { svc, pedidos, client, audit, authz, quotesService };
 }
 
-describe('EvaService (MIA sobre Claude Haiku)', () => {
+describe('EvaService (MIA sobre la nube de Ollama)', () => {
   it('sin ANTHROPIC_API_KEY responde que no está configurada (y audita)', async () => {
     const { svc, audit } = build({ sinCliente: true });
     const r = await svc.chat('hola');
-    expect(r.reply).toMatch(/ANTHROPIC_API_KEY/);
+    expect(r.reply).toMatch(/OLLAMA_API_KEY/);
     expect(audit.log).toHaveBeenCalled();
   });
 
@@ -125,12 +111,12 @@ describe('EvaService (MIA sobre Claude Haiku)', () => {
     });
     const r = await svc.chat('¿cuándo fue la última factura?');
     expect(r.reply).toBe('La última factura fue la OV 11187.');
-    expect(pedidos[0].model).toBe('claude-haiku-4-5');
-    const resultado = (
-      pedidos[1].messages.at(-1)!.content as Anthropic.ToolResultBlockParam[]
-    )[0];
-    expect(resultado.tool_use_id).toBe('tu_ultimas_facturas');
-    expect(resultado.is_error).toBeUndefined();
+    expect(MIA_MODEL).toBe('gemma4:31b');
+    expect(pedidos[0][0].role).toBe('system');
+    const resultado = pedidos[1].at(-1) as { role: string; tool_call_id: string; content: string };
+    expect(resultado.role).toBe('tool');
+    expect(resultado.tool_call_id).toBe('tu_ultimas_facturas');
+    expect(resultado.content).not.toMatch(/^ERROR/);
     expect(String(resultado.content)).toContain('11187');
     expect(String(resultado.content)).toContain('jose@oben.co');
   });
@@ -144,10 +130,8 @@ describe('EvaService (MIA sobre Claude Haiku)', () => {
       ],
     });
     await svc.chat('última factura');
-    const resultado = (
-      pedidos[1].messages.at(-1)!.content as Anthropic.ToolResultBlockParam[]
-    )[0];
-    expect(resultado.is_error).toBe(true);
+    const resultado = pedidos[1].at(-1) as { content: string };
+    expect(resultado.content).toMatch(/^ERROR/);
     expect(String(resultado.content)).toContain('invoices.read');
     expect(audit.listByAction).not.toHaveBeenCalled();
   });
@@ -197,7 +181,7 @@ describe('EvaService (MIA sobre Claude Haiku)', () => {
     });
     const r = await svc.chat('cotiza 500 kg de BOPP para compras@acme.com');
     expect(quotesService.processIncomingEmail).toHaveBeenCalledTimes(1);
-    expect(client.messages.create).toHaveBeenCalledTimes(1);
+    expect(client.completar).toHaveBeenCalledTimes(1);
     expect(r.reply).toContain('COT-9');
     expect(r.action?.type).toBe('quote_created');
   });
@@ -220,10 +204,8 @@ describe('EvaService (MIA sobre Claude Haiku)', () => {
     });
     const r = await svc.chat('cotiza 500 kg de BOPP para compras@acme.com');
     expect(quotesService.processIncomingEmail).not.toHaveBeenCalled();
-    const resultado = (
-      pedidos[1].messages.at(-1)!.content as Anthropic.ToolResultBlockParam[]
-    )[0];
-    expect(resultado.is_error).toBe(true);
+    const resultado = pedidos[1].at(-1) as { content: string };
+    expect(resultado.content).toMatch(/^ERROR/);
     expect(String(resultado.content)).toContain('quotes.create');
     expect(r.action).toBeUndefined();
   });
@@ -241,12 +223,11 @@ describe('EvaService (MIA sobre Claude Haiku)', () => {
       ],
       { ruta: '/facturacion', ov: 11187 },
     );
-    const msgs = pedidos[0].messages;
-    expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
-    expect(msgs[0].content).toBe('última factura');
-    const ultimo = msgs[2].content as Anthropic.TextBlockParam[];
-    expect(ultimo[0].text).toBe('¿y la anterior?');
-    expect(ultimo[1].text).toContain('OV cargada en pantalla: 11187');
+    const msgs = pedidos[0];
+    expect(msgs.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
+    expect(msgs[1].content).toBe('última factura');
+    expect(msgs[3].content).toContain('¿y la anterior?');
+    expect(msgs[3].content).toContain('OV cargada en pantalla: 11187');
   });
 
   it('si Anthropic falla responde un mensaje claro en vez de romperse', async () => {
