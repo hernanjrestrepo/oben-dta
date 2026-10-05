@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(git check-ignore *)",
-      "Bash(awk -F'len:' '{print $1 \"len=\" length\\($2\\)}')"
+      "Bash(awk -F'len:' '{print $1 \"len=\" length\\($2\\)}')",
+      "Bash(ssh paradixexyz@10.50.30.10 'U=$\\(docker exec dta-postgres printenv POSTGRES_USER\\); D=$\\(docker exec dta-postgres printenv POSTGRES_DB\\); docker exec dta-postgres psql -U $U -d $D -c \"update packing_list_pending_retries set status='\\\\''escalated'\\\\'' where status='\\\\''pending'\\\\'' and number_order_sales in \\(11050,10902\\) returning number_order_sales, status;\" -c \"select status, count\\(*\\) from packing_list_pending_retries group by status;\" 2>&1 | grep -v WARNING')"
     ]
   }
 }
