@@ -298,6 +298,15 @@ class ApiClient {
     return data;
   }
 
+  /** COMEX aprueba los valores que ve en pantalla; sin aprobación vigente no se envía a Oben. */
+  async approveLiquidacion(
+    numberPF: string,
+    input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput },
+  ): Promise<LiquidacionDraft> {
+    const { data } = await this.client.post<LiquidacionDraft>(`/liquidacion/${numberPF}/approve`, input, this.OBEN_LIVE);
+    return data;
+  }
+
   // Lista de Empaque retenida por cartera (regla PND)
   async getCarteraHolds(): Promise<CarteraHold[]> {
     const { data } = await this.client.get<CarteraHold[]>('/packing-list/cartera/retenciones');

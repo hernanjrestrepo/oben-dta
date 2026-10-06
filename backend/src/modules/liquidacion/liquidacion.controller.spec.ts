@@ -3,7 +3,7 @@ import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { REQUIRE_PERMISSION_KEY } from '../security/require-permission.decorator';
-import { LIQUIDACION_PERMISSION, LiquidacionController } from './liquidacion.controller';
+import { LIQUIDACION_APROBAR_PERMISSION, LIQUIDACION_PERMISSION, LiquidacionController } from './liquidacion.controller';
 
 /**
  * Liquidación crea registros reales en el ERP de Oben (con confirm:true) y
@@ -25,8 +25,14 @@ describe('LiquidacionController — control de acceso', () => {
     expect(LIQUIDACION_PERMISSION).toBe('exportations.liquidate');
   });
 
-  it('tiene exactamente las 6 rutas esperadas (incoterms, draft GET/POST, submit, vista previa y envío del correo de cierre)', () => {
-    expect(routes.sort()).toEqual(['cierreEnviar', 'cierrePreview', 'draft', 'draftWithInput', 'incoterms', 'submit']);
+  it('tiene exactamente las 7 rutas esperadas (incoterms, draft GET/POST, aprobar, submit, vista previa y envío del correo de cierre)', () => {
+    expect(routes.sort()).toEqual(['approve', 'cierreEnviar', 'cierrePreview', 'draft', 'draftWithInput', 'incoterms', 'submit']);
+  });
+
+  it('aprobar exige exportations.approve (COMEX), distinto de liquidar', () => {
+    expect(LIQUIDACION_APROBAR_PERMISSION).toBe('exportations.approve');
+    const req = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto['approve'] as object) as { permissions: string[]; mode: string };
+    expect(req).toEqual({ permissions: ['exportations.approve'], mode: 'all' });
   });
 
   it.each(['incoterms', 'draft', 'draftWithInput', 'submit', 'cierrePreview', 'cierreEnviar'])('la ruta %s exige exportations.liquidate', (name) => {

@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { createHash } from 'crypto';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { LiquidacionAprobacion } from '../../entities/liquidacion-aprobacion.entity';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -65,6 +69,8 @@ const INCOTERM_QUERY_OPTIONS = { maxAttempts: 1, timeoutMs: 8_000 };
 export const LIQUIDACION_OPCIONES = Symbol('LIQUIDACION_OPCIONES');
 export interface LiquidacionOpciones {
   valoresProvisionales: boolean;
+  /** COMEX debe aprobar la liquidación antes de enviarla a Oben (decisión de Hernán, 6-oct). El módulo lo deja siempre en true. */
+  requiereAprobacion?: boolean;
 }
 export const VALORES_PROVISIONALES = {
   /** Película PET (OPET) — partida de trabajo hasta que llegue la tabla por producto. */
@@ -154,9 +160,21 @@ export class LiquidacionService {
     @Optional()
     @Inject(LIQUIDACION_OPCIONES)
     private readonly opciones: LiquidacionOpciones = { valoresProvisionales: false },
+    @Optional()
+    @InjectRepository(LiquidacionAprobacion)
+    private readonly aprobaciones?: Repository<LiquidacionAprobacion>,
   ) {}
 
+  /** Borrador + estado de la aprobación de COMEX (si la PF ya está lista para aprobarse). */
   async getDraft(numberPF: string, input: LiquidacionInput = {}): Promise<LiquidacionDraft> {
+    const draft = await this.armarDraft(numberPF, input);
+    if (draft.readyToSubmit && !draft.simulated) {
+      draft.aprobacion = await this.estadoAprobacion(draft);
+    }
+    return draft;
+  }
+
+  private async armarDraft(numberPF: string, input: LiquidacionInput = {}): Promise<LiquidacionDraft> {
     const pf = this.parsePF(numberPF);
     const check = await this.fetchCheck(pf);
     // País: Lista de Empaque (producción) → reporte de proformas de Oben → dirección de destino.
@@ -165,6 +183,12 @@ export class LiquidacionService {
       (await this.proformaDeOben(pf)).pais ??
       paisDeDireccion(defaultsDeOben(check).direccion);
     const esUSA = isUSA(pais);
+
+    // Partida arancelaria de Colombia por SKU (campo Parida de spCheckSettlement, 6-oct).
+    const paridas = check.Detalle.map((l) => String(l.Parida ?? '').trim());
+    const paridasDistintas = [...new Set(paridas.filter(Boolean))];
+    const paridaComun = paridasDistintas.length === 1 && paridas.every(Boolean) ? paridasDistintas[0] : null;
+    const paridaMezcla = paridasDistintas.length > 1;
 
     const baseLines = check.Detalle.map((l) => {
       const kilos = toNum(l.KilosTotales);
@@ -256,8 +280,22 @@ export class LiquidacionService {
     }
     // Partida arancelaria por tipo de película (tabla de Oben, 2026-10-02); lo digitado manda.
     const { partida, sinPartida, mezcla } = partidaComun(baseLines.map((l) => l.tipoPelicula));
-    if (partida) {
+    // COMEX (María Escobar, 6-oct): en el encabezado va la partida arancelaria de COLOMBIA (la que Oben
+    // entrega por SKU en `Parida`); el NCM/NALADI de destino depende del país y no va en Pa_Ncm.
+    if (paridaComun) {
       if (this.isBlank(header.paNcm)) {
+        header.paNcm = paridaComun;
+        headerOrigen.paNcm = 'oben';
+        ajustes.push(`Partida arancelaria de Colombia (Parida del SKU, según Oben): ${paridaComun}.`);
+      }
+    } else if (paridaMezcla) {
+      ajustes.push(
+        `La PF mezcla SKU con partidas distintas (${paridasDistintas.join(', ')}): el encabezado lleva una sola partida, digítala (o separa la liquidación).`,
+      );
+    }
+    if (partida) {
+      // Sin Parida de Oben, la tabla por tipo de película sigue siendo el respaldo del NCM.
+      if (!paridaComun && !paridaMezcla && this.isBlank(header.paNcm)) {
         header.paNcm = partida.ncm;
         headerOrigen.paNcm = 'maestro';
       }
@@ -268,11 +306,11 @@ export class LiquidacionService {
       if (headerOrigen.paNcm === 'maestro') {
         ajustes.push(`Partida arancelaria de la tabla de Oben: ${partida.ncm} — ${partida.descripcionEs}.`);
       }
-    } else if (mezcla) {
+    } else if (mezcla && !paridaComun && !paridaMezcla) {
       ajustes.push(
-        'La PF mezcla películas de partidas distintas (Jorge confirmó que puede pasar): el encabezado lleva una sola partida, digítala (o separa la liquidación). Falta confirmar con Oben cuál va.',
+        'La PF mezcla películas de partidas distintas (Jorge confirmó que puede pasar): el encabezado lleva una sola partida, digítala (o separa la liquidación).',
       );
-    } else if (sinPartida.length) {
+    } else if (sinPartida.length && !paridaComun && !paridaMezcla) {
       ajustes.push(
         `Sin partida en la tabla de Oben para: ${[...new Set(sinPartida)].join(', ')} (falta decir a cuál de los 4 tipos de película — BOPP, BOPP metalizado, PET o PET termoencogible — pertenece su familia).`,
       );
@@ -293,7 +331,7 @@ export class LiquidacionService {
       }
       if (headerOrigen.paNcm === 'provisional' || headerOrigen.paNaladi === 'provisional') {
         ajustes.push(
-          `Partida arancelaria PROVISIONAL ${VALORES_PROVISIONALES.partida} mientras Oben confirma a qué tipo de película pertenece cada familia.`,
+          `Partida arancelaria PROVISIONAL ${VALORES_PROVISIONALES.partida}: Oben no entregó la partida (Parida) de estos SKU.`,
         );
       }
     }
@@ -397,6 +435,7 @@ export class LiquidacionService {
       ajustes,
       missing,
       readyToSubmit: missing.length === 0,
+      aprobacion: null,
       simulated: this.calculator.simulated,
       sinConfirmar,
     };
@@ -480,26 +519,30 @@ export class LiquidacionService {
     input: LiquidacionInput,
     options: LiquidacionSubmitOptions = {},
   ): Promise<LiquidacionSubmitResult> {
-    const draft = await this.getDraft(numberPF, input);
+    const draft = await this.armarDraft(numberPF, input);
     // Candados: un borrador con datos SIMULADOS, o calculado con partes de la
     // fórmula que José aún no confirma, nunca escribe en el ERP real de Oben
     // — ni primer envío ni reanudación. Se revisan antes de tocar la
     // idempotencia y antes de cualquier llamada.
-    if (options.confirm === true && draft.simulated) {
-      throw new BadRequestException({
-        message:
-          'Esta liquidación está SIMULADA (LIQUIDACION_SIMULATION_MODE: datos del envío de ejemplo): se puede simular sin confirm, pero nunca enviarse a Oben.',
-        simulated: true,
-      });
-    }
-    if (options.confirm === true && draft.sinConfirmar.length > 0) {
-      throw new BadRequestException({
-        message:
-          'La fórmula de liquidación tiene puntos que José aún no confirma por escrito: se puede simular sin confirm, pero todavía no enviarse a Oben.',
-        sinConfirmar: draft.sinConfirmar,
-      });
-    }
-    if (!draft.readyToSubmit) {
+    if (options.confirm === true) {
+      this.validarEnviable(draft);
+      // COMEX aprueba antes de enviar (Hernán, 6-oct): la aprobación es de estos valores exactos.
+      if (this.opciones.requiereAprobacion) {
+        const est = await this.estadoAprobacion(draft);
+        if (!est.existe) {
+          throw new ForbiddenException({
+            message: 'La liquidación debe aprobarla COMEX antes de enviarse a Oben.',
+            requiereAprobacion: true,
+          });
+        }
+        if (!est.vigente) {
+          throw new ForbiddenException({
+            message: 'La liquidación cambió después de que COMEX la aprobó: debe aprobarse de nuevo antes de enviarse a Oben.',
+            requiereAprobacion: true,
+          });
+        }
+      }
+    } else if (!draft.readyToSubmit) {
       throw new BadRequestException({
         message: 'La liquidación no se puede enviar todavía: faltan datos (no se inventan).',
         missing: draft.missing,
@@ -689,6 +732,83 @@ export class LiquidacionService {
       detailsCreated: progress.detailsDone.length,
       cierre,
     };
+  }
+
+  /** Huella de lo que se enviaría a Oben (encabezado + líneas): la aprobación de COMEX vale solo para esta. */
+  private huella(draft: LiquidacionDraft): string {
+    const orden = (v: unknown): unknown =>
+      v && typeof v === 'object' && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, orden(x)]))
+        : Array.isArray(v)
+          ? v.map(orden)
+          : v;
+    return createHash('sha256').update(JSON.stringify(orden(this.buildPayloads(draft)))).digest('hex');
+  }
+
+  private async estadoAprobacion(draft: LiquidacionDraft): Promise<import('./liquidacion.types').AprobacionEstado> {
+    const fila = await this.aprobaciones?.findOne({ where: { tenantId: this.ctx.tenantId, numberPF: draft.numberPF } });
+    if (!fila) return { existe: false, vigente: false, por: null, en: null };
+    return {
+      existe: true,
+      vigente: fila.huella === this.huella(draft),
+      por: fila.aprobadoPorNombre ?? null,
+      en: fila.updatedAt ? new Date(fila.updatedAt).toISOString() : null,
+    };
+  }
+
+  /** Las mismas condiciones para enviar a Oben y para aprobar: nada simulado, nada sin confirmar, nada faltante. */
+  private validarEnviable(draft: LiquidacionDraft): void {
+    if (draft.simulated) {
+      throw new BadRequestException({
+        message:
+          'Esta liquidación está SIMULADA (LIQUIDACION_SIMULATION_MODE: datos del envío de ejemplo): se puede simular sin confirm, pero nunca enviarse a Oben.',
+        simulated: true,
+      });
+    }
+    if (draft.sinConfirmar.length > 0) {
+      throw new BadRequestException({
+        message:
+          'La fórmula de liquidación tiene puntos que José aún no confirma por escrito: se puede simular sin confirm, pero todavía no enviarse a Oben.',
+        sinConfirmar: draft.sinConfirmar,
+      });
+    }
+    if (!draft.readyToSubmit) {
+      throw new BadRequestException({
+        message: 'La liquidación no se puede enviar todavía: faltan datos (no se inventan).',
+        missing: draft.missing,
+      });
+    }
+  }
+
+  /**
+   * COMEX aprueba los valores que se ven AHORA. Exige `exportations.approve`
+   * (lo verifica el controlador). Si después cambia cualquier valor, la
+   * aprobación deja de valer y hay que aprobar de nuevo.
+   */
+  async aprobar(numberPF: string, input: LiquidacionInput, aprobador: { nombre: string | null }): Promise<LiquidacionDraft> {
+    if (!this.aprobaciones) throw new BadRequestException('La aprobación de COMEX no está disponible en este ambiente.');
+    const draft = await this.armarDraft(numberPF, input);
+    this.validarEnviable(draft);
+    const tenantId = this.ctx.tenantId;
+    const fila =
+      (await this.aprobaciones.findOne({ where: { tenantId, numberPF: draft.numberPF } })) ??
+      this.aprobaciones.create({ tenantId, numberPF: draft.numberPF });
+    fila.huella = this.huella(draft);
+    fila.aprobadoPor = this.ctx.userId ?? null;
+    fila.aprobadoPorNombre = aprobador.nombre;
+    await this.aprobaciones.save(fila);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: 'liquidacion_aprobada_comex',
+      entityType: 'liquidacion',
+      entityId: draft.numberPF,
+      actorId: this.ctx.userId,
+      inputData: { aprobador: aprobador.nombre },
+      outputData: { huella: fila.huella, lines: draft.lines.length, header: draft.header },
+    });
+    draft.aprobacion = await this.estadoAprobacion(draft);
+    return draft;
   }
 
   private buildPayloads(draft: LiquidacionDraft) {

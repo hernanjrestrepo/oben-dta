@@ -867,6 +867,8 @@ export interface LiquidacionDraft {
   ajustes: string[];
   missing: string[];
   readyToSubmit: boolean;
+  /** Aprobación de COMEX (obligatoria para enviar a Oben); null si la PF aún no está lista para aprobarse. */
+  aprobacion?: { existe: boolean; vigente: boolean; por: string | null; en: string | null } | null;
   simulated: boolean;
   sinConfirmar: string[];
 }

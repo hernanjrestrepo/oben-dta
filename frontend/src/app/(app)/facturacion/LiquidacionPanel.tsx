@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
+import { useAuthStore } from '@/store/auth';
 import type {
   ConceptoLiquidacion,
   FacturacionDraft,
@@ -13,7 +14,7 @@ import type {
   OrigenValor,
 } from '@/types';
 import { IncotermGuia } from './IncotermGuia';
-import { AlertCircle, ArrowRight, Calculator, FlaskConical, Loader2, Lock, Ship, Sparkles, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, BadgeCheck, Calculator, FlaskConical, Loader2, Lock, Ship, Sparkles, X } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -164,6 +165,22 @@ export function LiquidacionPanel({
     return () => clearTimeout(t);
   }, [pf, payload]);
 
+  const puedeAprobar = !!useAuthStore.getState().user?.permissions?.includes('exportations.approve');
+  const [aprobando, setAprobando] = useState(false);
+
+  async function aprobar() {
+    if (!pf) return;
+    try {
+      setAprobando(true);
+      setError('');
+      setLiq(await api.approveLiquidacion(pf, payload));
+    } catch (err) {
+      setError(extractMessage(err, 'No se pudo aprobar la liquidación.'));
+    } finally {
+      setAprobando(false);
+    }
+  }
+
   async function simular() {
     if (!pf) return;
     try {
@@ -211,6 +228,7 @@ export function LiquidacionPanel({
     ...(faltantes.visibles.length ? [`Faltan ${faltantes.visibles.length} datos`] : []),
     ...(liq?.sinConfirmar.length ? ['Pendiente de validar con Oben'] : []),
     ...(liq?.simulated ? ['Datos del envío simulados'] : []),
+    ...(liq?.readyToSubmit && !liq.aprobacion?.vigente ? ['Falta la aprobación de COMEX'] : []),
   ];
 
   return (
@@ -502,6 +520,16 @@ export function LiquidacionPanel({
                 {simulando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
                 Simular envío a Oben
               </button>
+              {liq.aprobacion?.vigente ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
+                  <BadgeCheck className="w-4 h-4" /> Aprobada por COMEX{liq.aprobacion.por ? ` · ${liq.aprobacion.por}` : ''}
+                </span>
+              ) : puedeAprobar ? (
+                <button className={btnSecondary} onClick={() => void aprobar()} disabled={aprobando || !liq.readyToSubmit || liq.simulated || liq.sinConfirmar.length > 0} title={liq.aprobacion?.existe ? 'Cambió algo desde la última aprobación: hay que aprobarla de nuevo' : 'COMEX aprueba estos valores antes de enviarlos a Oben'}>
+                  {aprobando ? <Loader2 className="w-4 h-4 animate-spin" /> : <BadgeCheck className="w-4 h-4" />}
+                  {liq.aprobacion?.existe ? 'Aprobar de nuevo (COMEX)' : 'Aprobar liquidación (COMEX)'}
+                </button>
+              ) : null}
               <button className={`${btnSecondary} cursor-not-allowed`} disabled title={bloqueos.join(' · ') || 'Se habilita al validar con Oben'}>
                 <Lock className="w-4 h-4" /> Enviar al ERP de Oben
               </button>

@@ -1,6 +1,7 @@
 import { Logger, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ComercialCase } from '../../entities/comercial-case.entity';
+import { LiquidacionAprobacion } from '../../entities/liquidacion-aprobacion.entity';
 import { IntegrationHubModule } from '../integrations/hub/integration-hub.module';
 import { AuthModule } from '../auth/auth.module';
 import { FreightRatesModule } from '../freight-rates/freight-rates.module';
@@ -14,7 +15,7 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ComercialCase]),
+    TypeOrmModule.forFeature([ComercialCase, LiquidacionAprobacion]),
     IntegrationHubModule,
     AuthModule,
     FreightRatesModule,
@@ -29,7 +30,8 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
       // Valores provisionales (partida, HMF, flete en 0) mientras Oben entrega
       // sus tablas: activos salvo LIQUIDACION_VALORES_PROVISIONALES=false.
       provide: LIQUIDACION_OPCIONES,
-      useFactory: () => ({ valoresProvisionales: process.env.LIQUIDACION_VALORES_PROVISIONALES !== 'false' }),
+      // requiereAprobacion: COMEX aprueba antes de enviar (Hernán, 6-oct) — no se desactiva por variable de entorno.
+      useFactory: () => ({ valoresProvisionales: process.env.LIQUIDACION_VALORES_PROVISIONALES !== 'false', requiereAprobacion: true }),
     },
     LiquidacionCierreService,
     {

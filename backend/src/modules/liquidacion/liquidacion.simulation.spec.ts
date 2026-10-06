@@ -140,7 +140,7 @@ const USA_CHARGES = { inlandFreight: 900, destinationCharges: 150 };
 /** El aviso de "sin partida" (familia ENA sin tipo confirmado) es ajeno a lo que prueban los ajustes de tarifas. */
 const deTarifas = (a: string) => !a.startsWith('Sin partida en la tabla') && !a.startsWith('Arancel de importación');
 
-function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: boolean } = {}) {
+function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: boolean; requiereAprobacion?: boolean } = {}) {
   const sim = new ObenSim();
   const idem = new FakeIdempotency();
   const audit = { log: jest.fn().mockResolvedValue(undefined) };
@@ -161,6 +161,16 @@ function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: 
   const cierre = {
     enviarTrasCompletar: jest.fn(async (numberPF: string) => ({ sent: true, numberPF, to: ['comex@oben.com'], cc: [], adjuntos: [], simulated: false })),
   };
+  // Aprobaciones de COMEX en memoria (misma semántica que el repositorio: una por PF).
+  const filasAprob: Array<Record<string, unknown>> = [];
+  const aprobaciones = {
+    findOne: jest.fn(async ({ where }: { where: { numberPF: string } }) => filasAprob.find((f) => f.numberPF === where.numberPF) ?? null),
+    create: jest.fn((x: Record<string, unknown>) => ({ updatedAt: new Date(), ...x })),
+    save: jest.fn(async (x: Record<string, unknown>) => {
+      if (!filasAprob.includes(x)) filasAprob.push(x);
+      return x;
+    }),
+  };
   const service = new LiquidacionService(
     sim as never,
     { tenantId: 't1', userId: 'u1' } as never,
@@ -169,9 +179,10 @@ function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: 
     rates as never,
     opts.calculator ?? testCalculator,
     cierre as never,
-    { valoresProvisionales: !!opts.provisionales },
+    { valoresProvisionales: !!opts.provisionales, requiereAprobacion: !!opts.requiereAprobacion },
+    aprobaciones as never,
   );
-  return { service, sim, idem, audit, rates, cierre };
+  return { service, sim, idem, audit, rates, cierre, aprobaciones };
 }
 
 /**
@@ -946,7 +957,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.ajustes.filter(deTarifas)).toEqual(
         expect.arrayContaining([
           expect.stringContaining('Flete marítimo en 0'),
-          expect.stringContaining('Partida arancelaria PROVISIONAL 3920.62.00 mientras'),
+          expect.stringContaining('Partida arancelaria PROVISIONAL 3920.62.00'),
           expect.stringContaining('Harbor Maintenance Fee PROVISIONAL USD 300'),
         ]),
       );
@@ -1108,5 +1119,79 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.missing).toEqual([]);
       expect(draft.readyToSubmit).toBe(true);
     });
+  });
+});
+
+describe('Partida arancelaria de Colombia desde Parida (COMEX, 6-oct)', () => {
+  const con = (parida: Array<string | null>) => {
+    const sim = build({ calculator: { simulated: false, compute: () => ({}) } });
+    const base = CHECK['99001'] as { Detalle: Array<Record<string, unknown>> };
+    CHECK['99002'] = { ...base, Proforma: '99002', Detalle: base.Detalle.map((l, i) => ({ ...l, ...(parida[i] ? { Parida: parida[i] } : {}) })) };
+    return sim.service;
+  };
+
+  it('todas las líneas con la misma Parida → Pa_Ncm = esa partida (origen Oben), no la de nuestra tabla', async () => {
+    const draft = await con(['39.20.10.90', '39.20.10.90']).getDraft('99002');
+    expect(draft.header.paNcm).toBe('39.20.10.90');
+    expect(draft.headerOrigen.paNcm).toBe('oben');
+    expect(draft.ajustes.join(' ')).toContain('Partida arancelaria de Colombia');
+  });
+
+  it('SKU con Parida distintas → no escoge: avisa y no inventa', async () => {
+    const draft = await con(['39.20.10.90', '3920.62.00.90']).getDraft('99002');
+    expect(draft.header.paNcm).toBeUndefined();
+    expect(draft.ajustes.join(' ')).toContain('mezcla SKU con partidas distintas');
+  });
+
+  it('lo que digita el usuario manda sobre la Parida', async () => {
+    const draft = await con(['39.20.10.90', '39.20.10.90']).getDraft('99002', { header: { paNcm: '3920.20.99' } });
+    expect(draft.header.paNcm).toBe('3920.20.99');
+    expect(draft.headerOrigen.paNcm).toBe('usuario');
+  });
+});
+
+describe('COMEX aprueba la liquidación antes de enviarla a Oben (Hernán, 6-oct)', () => {
+  const comex = { nombre: 'María Escobar' };
+
+  it('sin aprobación el envío real se rechaza (403) y no escribe nada en Oben', async () => {
+    const { service, sim } = build({ requiereAprobacion: true });
+    await expect(service.submit('99001', usaInput(), { confirm: true })).rejects.toThrow(/COMEX/);
+    expect(sim.heads).toHaveLength(0);
+  });
+
+  it('aprobada, el envío sale; el borrador muestra la aprobación vigente', async () => {
+    const { service, sim } = build({ requiereAprobacion: true });
+    const aprobado = await service.aprobar('99001', usaInput(), comex);
+    expect(aprobado.aprobacion).toMatchObject({ existe: true, vigente: true, por: 'María Escobar' });
+    const res = await service.submit('99001', usaInput(), { confirm: true });
+    expect(res.dryRun).toBe(false);
+    expect(sim.heads).toHaveLength(1);
+  });
+
+  it('si cambia cualquier valor después de aprobar, la aprobación deja de valer', async () => {
+    const { service, sim } = build({ requiereAprobacion: true });
+    await service.aprobar('99001', usaInput(), comex);
+    const cambiado = usaInput({ header: { ...HEADER_USER, ...USA_CHARGES, notes: 'otra observación' } });
+    await expect(service.submit('99001', cambiado, { confirm: true })).rejects.toThrow(/cambió después/);
+    expect(sim.heads).toHaveLength(0);
+    const d = await service.getDraft('99001', cambiado);
+    expect(d.aprobacion).toMatchObject({ existe: true, vigente: false });
+  });
+
+  it('no se puede aprobar lo que no está listo para enviar (faltan datos)', async () => {
+    const { service } = build({ requiereAprobacion: true });
+    await expect(service.aprobar('11271', {}, comex)).rejects.toThrow(BadRequestException);
+  });
+
+  it('simular (sin confirm) no exige aprobación', async () => {
+    const { service } = build({ requiereAprobacion: true });
+    const r = await service.submit('99001', usaInput());
+    expect(r.dryRun).toBe(true);
+  });
+
+  it('la aprobación queda en la auditoría', async () => {
+    const { service, audit } = build({ requiereAprobacion: true });
+    await service.aprobar('99001', usaInput(), comex);
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'liquidacion_aprobada_comex', entityId: '99001' }));
   });
 });

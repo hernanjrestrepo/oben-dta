@@ -10,6 +10,9 @@ export interface CheckSettlementLine {
   TipoPelicula: string;
   Precio: number;
   KilosTotales: number;
+  /** Partida arancelaria de Colombia del SKU (José agregó Parida y TipoMaterial, 6-oct). */
+  Parida?: string | null;
+  TipoMaterial?: string | null;
 }
 
 export interface CheckSettlementResponse {
@@ -86,6 +89,15 @@ export interface LiquidacionInput {
   lines?: Record<string, LiquidacionLineValues>;
 }
 
+export interface AprobacionEstado {
+  /** Hay una aprobación guardada para esta PF. */
+  existe: boolean;
+  /** La aprobación corresponde a EXACTAMENTE los valores actuales (si algo cambió, hay que volver a aprobar). */
+  vigente: boolean;
+  por: string | null;
+  en: string | null;
+}
+
 export interface LiquidacionDraftLine extends LiquidacionLineValues {
   codSecLineFilm: number;
   tipoPelicula: string;
@@ -116,6 +128,8 @@ export interface LiquidacionDraft {
   /** Todo lo que falta para poder enviar — nada se inventa. */
   missing: string[];
   readyToSubmit: boolean;
+  /** Aprobación de COMEX (obligatoria para enviar a Oben): null si la PF aún no está lista para aprobarse. */
+  aprobacion: AprobacionEstado | null;
   /**
    * true = los datos del envío (flete, otros gastos, póliza...) son de
    * EJEMPLO. Un borrador simulado puede simularse (dry-run) pero NUNCA

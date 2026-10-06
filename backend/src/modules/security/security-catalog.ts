@@ -285,6 +285,12 @@ const EXTRA_PERMISSIONS: SeedPermission[] = [
     name: 'liquidar exportación',
   },
   {
+    key: 'exportations.approve',
+    moduleKey: 'exportations',
+    action: 'approve',
+    name: 'aprobar liquidación (COMEX)',
+  },
+  {
     key: 'dashboard.view',
     moduleKey: 'dashboard',
     action: 'view',

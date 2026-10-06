@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsPositive } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
@@ -9,6 +9,8 @@ import { CONCEPTOS_POR_INCOTERM } from './incoterm-rules';
 import type { LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotalesInput } from './liquidacion.types';
 
 export const LIQUIDACION_PERMISSION = 'exportations.liquidate';
+/** Aprobar la liquidación (COMEX): exigido para enviarla a Oben. */
+export const LIQUIDACION_APROBAR_PERMISSION = 'exportations.approve';
 
 class LiquidacionInputDto {
   @IsOptional()
@@ -87,6 +89,22 @@ export class LiquidacionController {
   @RequirePermission(LIQUIDACION_PERMISSION)
   draftWithInput(@Param('numberPF') numberPF: string, @Body() dto: LiquidacionInputDto) {
     return this.liquidacion.getDraft(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines });
+  }
+
+  /**
+   * COMEX aprueba los valores que ve en pantalla. Sin esta aprobación (vigente
+   * para esos mismos valores) el envío real a Oben se rechaza.
+   */
+  @Post(':numberPF/approve')
+  @RequirePermission(LIQUIDACION_APROBAR_PERMISSION)
+  approve(
+    @Param('numberPF') numberPF: string,
+    @Body() dto: LiquidacionInputDto,
+    @Req() req: { user?: { email?: string; firstName?: string; lastName?: string } },
+  ) {
+    const u = req.user ?? {};
+    const nombre = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || null;
+    return this.liquidacion.aprobar(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines }, { nombre });
   }
 
   /** Simula por defecto; con `confirm:true` crea encabezado + detalles reales en Oben. */
