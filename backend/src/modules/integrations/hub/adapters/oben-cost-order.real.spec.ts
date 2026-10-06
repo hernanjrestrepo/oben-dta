@@ -51,7 +51,7 @@ describe('ObenCostOrderRealAdapter (API real de costos de orden de Oben)', () =>
     );
   });
 
-  it('factura.crear: POST al servidor de pruebas con Authtoken, NumberPF y NumberDistribucion (vacío = completa)', async () => {
+  it('factura.crear: POST a producción (api.obengroup.co) con Authtoken, NumberPF y NumberDistribucion (vacío = completa)', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -61,7 +61,7 @@ describe('ObenCostOrderRealAdapter (API real de costos de orden de Oben)', () =>
     const parcial = await adapter.execute('factura.crear', { numberPF: '10770', numberDistribucion: '11023' }, CTX);
     expect(parcial.ok).toBe(true);
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://192.168.20.12:9098/api/External/APICrearInvoiceParadixe',
+      'https://api.obengroup.co/api/External/APICrearInvoiceParadixe',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ Authtoken: '00000000-0000-0000-0000-000000000000', NumberPF: '10770', NumberDistribucion: '11023' }),

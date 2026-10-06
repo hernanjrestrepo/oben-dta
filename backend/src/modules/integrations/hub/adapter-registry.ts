@@ -142,6 +142,7 @@ export class AdapterRegistry {
         crearEncLiqUrl: cfg.crearEncLiqUrl as string | undefined,
         crearDetLiqUrl: cfg.crearDetLiqUrl as string | undefined,
         liquidacionUrl: cfg.liquidacionUrl as string | undefined,
+        crearInvoiceUrl: cfg.crearInvoiceUrl as string | undefined,
         authToken: cfg.authToken as string | undefined,
         // Encontrado en vivo el 2026-09-14: el timeout del fetch real
         // (RealAdapterBase.httpJson) por defecto es 15s — MENOR que los 30s

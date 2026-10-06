@@ -2,8 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { RealAdapterBase } from '../real-adapter-base';
 import { AdapterCapability, BaseAdapterConfig } from '../adapter.types';
 
-/** APICrearInvoiceParadixe en el servidor de PRUEBAS de Oben (José, 2026-09-30). */
-export const CREAR_INVOICE_URL_PRUEBAS = 'http://192.168.20.12:9098/api/External/APICrearInvoiceParadixe';
+/**
+ * APICrearInvoiceParadixe en PRODUCCIÓN: José (2026-10-06) pidió cambiar de
+ * 192.168.20.12:9098 a api.obengroup.co porque la facturación nacional (Colombia,
+ * completa y parcial) entró en vivo ese día; exportación todavía no. Esto crea
+ * facturas REALES. El servidor de pruebas sigue disponible con `crearInvoiceUrl`.
+ */
+export const CREAR_INVOICE_URL = 'https://api.obengroup.co/api/External/APICrearInvoiceParadixe';
 
 export interface ObenCostOrderAdapterConfig extends BaseAdapterConfig {
   /** URL de APICostOrderParadixe (costo de orden de venta por línea). */
@@ -24,7 +29,7 @@ export interface ObenCostOrderAdapterConfig extends BaseAdapterConfig {
   crearDetLiqUrl?: string;
   /** URL de APILiquidacionParadixe (consulta/dispara la liquidación por NumberPF). */
   liquidacionUrl?: string;
-  /** URL de APICrearInvoiceParadixe (crea la factura en OBEN MAS). Por defecto, el servidor de PRUEBAS de Oben. */
+  /** URL de APICrearInvoiceParadixe (crea la factura en OBEN MAS). Por defecto, producción (api.obengroup.co). */
   crearInvoiceUrl?: string;
   authToken?: string;
 }
@@ -168,7 +173,7 @@ export class ObenCostOrderRealAdapter extends RealAdapterBase {
         ? ''
         : String(args.numberDistribucion as string | number).trim();
     if (dist && !/^\d+$/.test(dist)) throw new Error('BUSINESS_ERROR: numberDistribucion debe ser numérico o vacío');
-    return this.httpJson(this.cfg.crearInvoiceUrl ?? CREAR_INVOICE_URL_PRUEBAS, { method: 'POST' }, {
+    return this.httpJson(this.cfg.crearInvoiceUrl ?? CREAR_INVOICE_URL, { method: 'POST' }, {
       Authtoken: this.cfg.authToken!,
       NumberPF: pf,
       NumberDistribucion: dist,
