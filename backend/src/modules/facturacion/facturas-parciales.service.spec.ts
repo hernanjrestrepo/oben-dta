@@ -95,6 +95,10 @@ describe('FacturasParcialesService (WO-023)', () => {
     const f1 = await r1.svc.registrarManual('10770', '11023');
     expect((await r1.svc.facturar(f1.id)).estado).toBe('rechazada');
 
+    const r3 = build({ hub: { ok: false, error: 'HTTP 400: {"isSuccessful":"False","code":"400","message":"No se pudo crear la factura de venta"}' } });
+    const f3 = await r3.svc.registrarManual('10770', '11023');
+    expect((await r3.svc.facturar(f3.id)).estado).toBe('rechazada'); // rechazo HTTP 4xx de Oben: reintentable
+
     const r2 = build({ hub: { ok: false, error: 'timeout after 60000ms' } });
     const f2 = await r2.svc.registrarManual('10770', '11023');
     expect((await r2.svc.facturar(f2.id)).estado).toBe('revisar');

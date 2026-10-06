@@ -113,7 +113,8 @@ export class FacturasParcialesService {
       { numberPF: fila.numberPF, numberDistribucion: fila.numeroDistribucion },
       { maxAttempts: 1, timeoutMs: 60_000 },
     );
-    const rechazo = !r.ok && /^Oben rechazó la operación/.test(r.error ?? '');
+    // Oben contesta un rechazo de negocio con HTTP 200+isSuccessful=false o con HTTP 4xx (visto el 2026-10-06: 400 "No se pudo crear la factura de venta"): en ambos casos NO se creó nada y es seguro reintentar.
+    const rechazo = !r.ok && /^(Oben rechazó la operación|HTTP 4\d\d:)/.test(r.error ?? '');
     const errorCliente = !r.ok && /BUSINESS_ERROR|pending_credentials|ssrf_blocked/.test(r.error ?? '');
     const estado: EstadoFacturaParcial = r.ok ? 'facturada' : rechazo || errorCliente ? 'rechazada' : 'revisar';
     await this.repo.update(
