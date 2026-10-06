@@ -595,7 +595,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.simulated).toBe(true);
       // DAP de ejemplo sobre la PF 11357 real (ver liquidacion-value-calculator.spec.ts).
       expect(draft.incoterm).toBe('DAP');
-      expect(draft.lines[0]).toMatchObject({ valueFreight: 679.34, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15285.55 });
+      expect(draft.lines[0]).toMatchObject({ valueFreight: 679.34, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15286.94 });
     });
 
     it('USA con cargos del maestro + digitados: también completo y simulado', async () => {

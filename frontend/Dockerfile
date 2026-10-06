@@ -5,8 +5,8 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Accept backend URL at build time
-ARG NEXT_PUBLIC_BACKEND_URL
-ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+ARG BACKEND_INTERNAL_URL=http://backend:3004
+ENV BACKEND_INTERNAL_URL=${BACKEND_INTERNAL_URL}
 
 # Copy package files
 COPY package*.json ./

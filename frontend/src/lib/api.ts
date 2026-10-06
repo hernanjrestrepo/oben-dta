@@ -14,7 +14,10 @@ import {
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
 } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3004';
+// Misma dirección desde la que se abrió la app (Next la reenvía al backend, ver
+// next.config.ts): funciona desde cualquier equipo de la red sin túnel y sin
+// grabar una IP en el bundle.
+const API_BASE_URL = '/api';
 
 class ApiClient {
   private client: AxiosInstance;

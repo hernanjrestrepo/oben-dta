@@ -29,6 +29,8 @@ const ctx = (indice: 0 | 1, incoterm: string | null, totales: LiquidacionTotales
   totalKilos: 1000,
 });
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 describe('Calculadores de Liquidación', () => {
   describe('selección por entorno (LiquidacionModule)', () => {
     it(`${LIQUIDACION_SIMULATION_ENV}=true → datos del envío SIMULADOS`, () => {
@@ -44,9 +46,9 @@ describe('Calculadores de Liquidación', () => {
       expect(c.simulated).toBe(false);
     });
 
-    it('mientras quede algo sin validar con Oben, la fórmula lo declara (y eso bloquea el envío real)', () => {
+    it('José confirmó por escrito el redondeo y el FOB (2026-10-06): ya no queda nada sin confirmar', () => {
       expect(new IncotermFormulaCalculator().sinConfirmar).toEqual(FORMULA_SIN_CONFIRMAR);
-      expect(FORMULA_SIN_CONFIRMAR.length).toBeGreaterThan(0);
+      expect(FORMULA_SIN_CONFIRMAR).toEqual([]);
     });
 
     it(`Valor de la póliza vigente ${VALOR_POLIZA_VIGENTE} (José) por defecto; ${LIQUIDACION_VALOR_POLIZA_ENV} lo cambia sin tocar código`, () => {
@@ -69,8 +71,8 @@ describe('Calculadores de Liquidación', () => {
       expect(Math.round(partes.reduce((a, b) => a + b, 0) * 100)).toBe(8765);
     });
 
-    it('tres partes iguales: el centavo sobrante va a la primera, determinista', () => {
-      expect(prorratear(100, [1, 1, 1])).toEqual([33.34, 33.33, 33.33]);
+    it('tres partes iguales: el centavo sobrante va al ÚLTIMO ítem (José, 2026-10-06)', () => {
+      expect(prorratear(100, [1, 1, 1])).toEqual([33.33, 33.33, 33.34]);
     });
 
     it('una línea de 0 kg no recibe nada', () => {
@@ -100,7 +102,7 @@ describe('Calculadores de Liquidación', () => {
           valueSureUnit: 0.0045,
           expensesOther: 61.36, // 87.65 × 70% = 61.355, reparto sin perder centavos
           expensesOtherUnit: 0.0876,
-          valueFOB: 856.24, // 1785 − 3.21 − 864.19 − 61.36
+          valueFOB: 856.38, // 1785 − 3.21 − 864.19 − 61.36
           // José (2026-09-30): Total y TotalUnidad se mandan en 0.
           total: 0,
           totalUnidad: 0,
@@ -118,7 +120,7 @@ describe('Calculadores de Liquidación', () => {
           valueSureUnit: 0,
           expensesOther: 0,
           expensesOtherUnit: 0,
-          valueFOB: 477.73,
+          valueFOB: 477.75,
           kilosTotalUnit: 1.5925, // 2.827 − 1.2345
           total: 0,
           totalUnidad: 0,
@@ -126,9 +128,25 @@ describe('Calculadores de Liquidación', () => {
       }
     });
 
+    it('PF 10867 REAL de OBEN MAS (CFR, flete 752): cuadra con la pantalla de Oben centavo por centavo', () => {
+      const v = calc.compute({
+        pais: 'BRASIL',
+        esUSA: false,
+        incoterm: 'CFR',
+        totales: { flete: 752 },
+        line: { codSecLineFilm: 6, tipoPelicula: 'SC---0020TN', precio: 2.55, kilosTotal: 22080.76, valueTotal: 56305.94 },
+        indice: 0,
+        kilosPorLinea: [22080.76],
+        totalValor: 56305.94,
+        totalKilos: 22080.76,
+      } as never);
+      expect(v).toMatchObject({ valueTotal: 56305.94, valueFreight: 752, valueFreightUnit: 0.034, kilosTotalUnit: 2.516, valueFOB: 55555.19 });
+      expect(round2((v.valueFOB as number) + (v.valueFreight as number))).toBe(56307.19); // "Total" de la factura de Oben
+    });
+
     it('CFR no necesita la póliza ni los otros gastos para quedar completo', () => {
       const v = calc.compute(ctx(0, 'CFR', { flete: 1234.56 }));
-      expect(v.valueFOB).toBe(920.81);
+      expect(v.valueFOB).toBe(920.85);
     });
 
     it('FCA/FOB: no se pide nada — la mercancía queda igual (FOB = valor total)', () => {
@@ -227,7 +245,7 @@ describe('Calculadores de Liquidación', () => {
         line: { codSecLineFilm: 13, tipoPelicula: 'SC---0015TN', precio: 2.85, kilosTotal: 5661.2, valueTotal: 16134.42 },
       });
       // seguro = 15455.08 − 15455.08 / 1.00053
-      expect(v).toMatchObject({ valueFreight: 679.34, subTotal: 15455.08, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15285.55 });
+      expect(v).toMatchObject({ valueFreight: 679.34, subTotal: 15455.08, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15286.94 });
     });
   });
 });

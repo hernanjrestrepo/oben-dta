@@ -4,8 +4,10 @@ export type ConceptoLiquidacion = 'flete' | 'seguro' | 'otrosGastos';
  * Qué conceptos pide la liquidación según el Incoterm (los 11 de Incoterms
  * 2020 de la ICC, en su orden oficial).
  *
- * - Confirmados por José Guzmán (llamada y WhatsApp del 2026-09-30):
- *   DAP/DDP flete + seguro + otros; CFR/CPT solo flete; FCA/FOB nada.
+ * - Confirmados por José Guzmán (llamada y WhatsApp del 2026-09-30, y por
+ *   escrito el 2026-10-06): DAP/DDP flete + seguro + otros; CFR/CPT solo
+ *   flete; CIF/CIP flete + seguro; EXW/FCA/FOB nada. José NO nombró FAS ni
+ *   DPU ("no es DPU, es DDP"): siguen sin confirmar.
  * - Resto según la norma (reunión del 2026-10-01: "son estándares a nivel
  *   mundial, nadie tiene que meterle mano"): EXW y FAS como FCA/FOB (el
  *   vendedor no paga transporte principal); CIF/CIP como CFR/CPT más el

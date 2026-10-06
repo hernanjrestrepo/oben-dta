@@ -63,16 +63,11 @@ const trunc4 = (n: number) => Math.floor(Number((n * 10_000).toFixed(6))) / 10_0
 export function prorratear(total: number, pesos: readonly number[]): number[] {
   const centavos = Math.round(total * 100);
   const suma = pesos.reduce((a, b) => a + b, 0);
-  const exactos = pesos.map((p) => (centavos * p) / suma);
-  const base = exactos.map((e) => Math.floor(e + 1e-9));
-  let resto = centavos - base.reduce((a, b) => a + b, 0);
-  const porResiduo = exactos.map((e, i) => ({ i, r: e - base[i] })).sort((a, b) => b.r - a.r || a.i - b.i);
-  for (const { i } of porResiduo) {
-    if (resto <= 0) break;
-    base[i] += 1;
-    resto -= 1;
-  }
-  return base.map((c) => c / 100);
+  // José (2026-10-06): la diferencia de centavos se ajusta en el ÚLTIMO ítem.
+  const partes = pesos.map((p) => Math.round((centavos * p) / suma));
+  const ultimo = partes.length - 1;
+  partes[ultimo] = centavos - partes.slice(0, ultimo).reduce((a, b) => a + b, 0);
+  return partes.map((c) => c / 100);
 }
 
 /**
@@ -81,10 +76,7 @@ export function prorratear(total: number, pesos: readonly number[]): number[] {
  * esté vacía, ninguna liquidación se envía a Oben (Oben no permite borrar lo
  * creado): se habilita al cuadrar una PF contra una liquidación real de Oben.
  */
-export const FORMULA_SIN_CONFIRMAR = [
-  'Montos por línea (flete, seguro, otros gastos, FOB final) a 2 decimales, con el reparto por kilos sin perder centavos: José solo definió los unitarios (4 decimales, truncados). Validar contra una liquidación real (p. ej. la PF 10867).',
-  'ValueFOB = valor total − flete − seguro − otros gastos; José dijo que también puede calcularse con el precio final × kilos (difieren en centavos).',
-] as const;
+export const FORMULA_SIN_CONFIRMAR: readonly string[] = [];
 
 /**
  * Fórmula de Liquidación de José Guzmán (llamada del 2026-09-30), por línea:
@@ -93,7 +85,8 @@ export const FORMULA_SIN_CONFIRMAR = [
  *    kilos (700 kg de 1.000 → 70%).
  *  - Subtotal = valor total − flete de la línea.
  *  - Seguro: FOB inicial = Subtotal ÷ Valor de la póliza; seguro = Subtotal − FOB inicial.
- *  - FOB final = valor total − seguro − flete − otros gastos.
+ *  - FOB final = precio final × kilos (José, 2026-10-06).
+ *  - Diferencias de centavos al repartir: se ajusta el último ítem (José, 2026-10-06).
  *  - Cada unitario = valor de la línea ÷ kilos de la línea, 4 decimales truncados.
  *  - KilosTotalUnit = precio final = precio − unitarios de flete, seguro y otros.
  *  - Total y TotalUnidad se envían en 0 (José, 2026-09-30).
@@ -134,10 +127,12 @@ export class IncotermFormulaCalculator implements LiquidacionValueCalculator {
     if (seguro !== undefined) Object.assign(values, { valueSure: seguro, valueSureUnit: trunc4(seguro / kilos) });
     if (otros !== undefined) Object.assign(values, { expensesOther: otros, expensesOtherUnit: trunc4(otros / kilos) });
     if (flete !== undefined && seguro !== undefined && otros !== undefined) {
+      const precioFinal = round4(line.precio - values.valueFreightUnit! - values.valueSureUnit! - values.expensesOtherUnit!);
       Object.assign(values, {
-        valueFOB: round2(valueTotal - seguro - flete - otros),
         // KilosTotalUnit = precio final: precio negociado − flete, seguro y otros gastos por unidad (José).
-        kilosTotalUnit: round4(line.precio - values.valueFreightUnit! - values.valueSureUnit! - values.expensesOtherUnit!),
+        kilosTotalUnit: precioFinal,
+        // FOB final = precio final × kilos (José, 2026-10-06; cuadra con la PF 10867 de OBEN MAS).
+        valueFOB: round2(precioFinal * kilos),
       });
     }
     return values;

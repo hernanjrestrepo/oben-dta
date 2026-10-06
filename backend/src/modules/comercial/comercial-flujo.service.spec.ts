@@ -344,10 +344,10 @@ describe('ComercialFlujoService — flujo Comercial de punta a punta (reunión 2
 
       // Producción cambia la fecha comprometida → aviso a Customer Service.
       caso = await w.tick(caso.id);
-      await w.sim('sim.cambiarEntrega', 'SIM-95001', { fecha: '2026-11-02' });
+      await w.sim('sim.cambiarEntrega', 'SIM-95001', { fecha: '2031-11-02' });
       caso = await w.tick(caso.id);
-      expect(caso.entregaComprometida).toBe('2026-11-02');
-      expect(caso.eventos.at(-1)?.detalle).toMatch(/entrega comprometida cambió: .* → 2026-11-02/);
+      expect(caso.entregaComprometida).toBe('2031-11-02');
+      expect(caso.eventos.at(-1)?.detalle).toMatch(/entrega comprometida cambió: .* → 2031-11-02/);
       expect(w.emails.at(-1)!.subject).toMatch(/Cambio de fecha de entrega/);
 
       // Sale la Lista de Empaque de la OV → caso cerrado.

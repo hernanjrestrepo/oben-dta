@@ -31,11 +31,15 @@ async function bootstrap() {
     process.env.FRONTEND_URL || 'http://localhost:3000',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    ...(process.env.CORS_EXTRA_ORIGINS ?? '').split(',').map((o) => o.trim()),
   ].filter(Boolean);
+  // La app llama a /api en el mismo host con el que se abrió y Next reenvía el
+  // header Origin: se aceptan los orígenes de la red interna (IPs privadas).
+  const redInterna = /^https?:\/\/(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.includes(origin) || redInterna.test(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS blocked: ${origin}`));
