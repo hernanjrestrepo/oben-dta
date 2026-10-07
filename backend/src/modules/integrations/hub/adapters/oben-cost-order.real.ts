@@ -8,7 +8,7 @@ import { AdapterCapability, BaseAdapterConfig } from '../adapter.types';
  * completa y parcial) entró en vivo ese día; exportación todavía no. Esto crea
  * facturas REALES. El servidor de pruebas sigue disponible con `crearInvoiceUrl`.
  */
-export const CREAR_INVOICE_URL = 'https://api.obengroup.co/api/External/APICrearInvoiceParadixe';
+export const CREAR_INVOICE_URL = 'http://192.168.20.12:9096/api/External/APICrearInvoiceParadixe'; // API externa (José, 2026-10-07; api.obengroup.co no confirmó bien las facturas)
 
 export interface ObenCostOrderAdapterConfig extends BaseAdapterConfig {
   /** URL de APICostOrderParadixe (costo de orden de venta por línea). */

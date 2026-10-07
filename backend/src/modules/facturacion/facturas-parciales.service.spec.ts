@@ -65,6 +65,7 @@ function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; au
   };
   const audit = { log: jest.fn() };
   const svc = new FacturasParcialesService(repo as never, tenants as never, ctx as never, hub as never, audit as never);
+  svc.esperaVerificacionMs = 0;
   return { svc, hub, filas, audit };
 }
 
@@ -114,7 +115,7 @@ describe('FacturasParcialesService (WO-023)', () => {
     const f2 = await r2.svc.registrarManual('10770', '11023');
     expect((await r2.svc.facturar(f2.id)).estado).toBe('revisar');
     await expect(r2.svc.facturar(f2.id)).rejects.toBeInstanceOf(ConflictException);
-    expect(crearCalls(r2.hub)).toBe(1);
+    expect(crearCalls(r2.hub)).toBe(2); // 1 intento + 1 de verificación (sigue sin aclararse)
   });
 
   it('un HTTP exitoso SIN confirmación explícita de Oben NO es factura creada: queda en "revisar" y no se reintenta a ciegas', async () => {
@@ -125,7 +126,7 @@ describe('FacturasParcialesService (WO-023)', () => {
       expect(r.estado).toBe('revisar');
       expect(r.error).toMatch(/sin confirmación de éxito/);
       await expect(svc.facturar(f.id)).rejects.toBeInstanceOf(ConflictException);
-      expect(crearCalls(hub)).toBe(1);
+      expect(crearCalls(hub)).toBe(2); // 1 intento + 1 de verificación; sigue sin confirmación → 'revisar'
     }
   });
 });
@@ -194,5 +195,27 @@ describe('Factura AUTOMÁTICA de pedidos nacionales (Hernán, 7-oct)', () => {
   it('respuesta sin confirmación de Oben → "revisar", nunca "facturada"', async () => {
     const { svc } = build({ hub: { ok: true, data: { message: 'An error has occurred.' } } });
     expect((await svc.facturarOvNacional(11339)).estado).toBe('revisar');
+  });
+
+  it('Oben factura pero responde error genérico / se cuelga: el sistema VERIFICA solo; si Oben dice que ya estaba facturada → "facturada"', async () => {
+    const { svc, hub } = build();
+    let n = 0;
+    hub.call.mockImplementation(async (_s: string, op: string, args: { procedure?: string }) => {
+      if (op === 'query.run' && args?.procedure === 'spEmpaqueUnificada_Paradixe') return { ok: true, mode: 'real', data: { Pais: 'COLOMBIA', Proforma: '11547' } };
+      if (op === 'query.run') return { ok: true, mode: 'real', data: [{ NroProforma: '11250', Mercado: 'NACIONAL' }] };
+      n += 1;
+      return n === 1 ? { ok: true, mode: 'real', data: { message: 'An error has occurred.' } } : { ok: false, mode: 'real', error: 'Oben rechazó la operación (Code 500): EL ARTÍCULO 5512 NO SE ENCUENTRA EN LA ORDEN DE VENTA _ ' };
+    });
+    const f = await svc.registrarManual('11250', '11084');
+    const r = await svc.facturar(f.id);
+    expect(r.estado).toBe('facturada');
+    expect(crearCalls(hub)).toBe(2);
+  });
+
+  it('si la verificación tampoco aclara (otro timeout), queda en "revisar"', async () => {
+    const { svc, hub } = build({ hub: { ok: false, error: 'This operation was aborted' } });
+    const f = await svc.registrarManual('11250', '11084');
+    expect((await svc.facturar(f.id)).estado).toBe('revisar');
+    expect(crearCalls(hub)).toBe(2);
   });
 });

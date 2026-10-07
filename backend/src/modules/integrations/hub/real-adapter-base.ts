@@ -28,7 +28,7 @@ import { AdapterMode, AdapterState } from './adapter.types';
  * Facturación (decisión de Hernán, 2026-10-01). Cualquier otro destino
  * privado sigue bloqueado.
  */
-const PRIVATE_DESTINATIONS_ALLOWED = new Set(['192.168.20.12:9098']);
+const PRIVATE_DESTINATIONS_ALLOWED = new Set(['192.168.20.12:9098', '192.168.20.12:9096']); // 9096 = API externa de factura (José, 2026-10-07)
 
 function assertSafeUrl(rawUrl: string): void {
   let url: URL;

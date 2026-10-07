@@ -20,6 +20,9 @@ const CUERPO_RE = /N[uú]mero\s+de\s+Proforma\s*:\s*(\d+)[\s\S]*?N[uú]mero\s+de
 /** Solo correos internos de Oben pueden pedir una factura. */
 const DOMINIO_OBEN = 'obengroup.com';
 
+/** Rechazos de Oben que significan "esta factura YA existe": la proforma figura Facturada o sus artículos ya se cerraron. */
+const YA_FACTURADA = /NO SE ENCUENTRA EN LA ORDEN DE VENTA|se encuentra en estado:\s*Facturada/i;
+
 /** true solo si Oben confirma el éxito: `isSuccessful` verdadero o `Code` 200 (mayúsculas/minúsculas y texto/número indistintos). */
 export function confirmaExito(data: unknown): boolean {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
@@ -60,6 +63,8 @@ export function parsearCorreoFacturaParcial(asunto: string, cuerpo: string): Sol
 @Injectable()
 export class FacturasParcialesService {
   private readonly logger = new Logger(FacturasParcialesService.name);
+  /** Espera antes de la llamada de verificación (las pruebas la ponen en 0). */
+  esperaVerificacionMs = 3_000;
 
   constructor(
     @InjectRepository(FacturaParcial) private readonly repo: Repository<FacturaParcial>,
@@ -127,18 +132,28 @@ export class FacturasParcialesService {
     const claim = await this.repo.update({ id, tenantId, estado: In(desde) }, { estado: 'facturando', error: null });
     if (!claim.affected) throw new ConflictException('Otra persona está facturando esta solicitud en este momento.');
 
-    const r = await this.hub.call<unknown>(
-      'obenCostOrder',
-      'factura.crear',
-      { numberPF: fila.numberPF, numberDistribucion: fila.numeroDistribucion },
-      { maxAttempts: 1, timeoutMs: 60_000 },
-    );
+    const pedir = () =>
+      this.hub.call<unknown>('obenCostOrder', 'factura.crear', { numberPF: fila.numberPF, numberDistribucion: fila.numeroDistribucion }, { maxAttempts: 1, timeoutMs: 90_000 });
+    let r = await pedir();
     // Oben contesta un rechazo de negocio con HTTP 200+isSuccessful=false o con HTTP 4xx (visto el 2026-10-06: 400 "No se pudo crear la factura de venta"): en ambos casos NO se creó nada y es seguro reintentar.
-    const rechazo = !r.ok && /^(Oben rechazó la operación|HTTP 4\d\d:)/.test(r.error ?? '');
-    const errorCliente = !r.ok && /BUSINESS_ERROR|pending_credentials|ssrf_blocked/.test(r.error ?? '');
-    // Éxito = confirmación EXPLÍCITA de Oben (isSuccessful true o Code 200). Un HTTP exitoso con otro cuerpo
-    // (visto el 2026-10-07: {"message":"An error has occurred."}) no prueba que se facturó: queda en 'revisar'.
-    const confirmada = r.ok && confirmaExito(r.data);
+    const esRechazo = (x: typeof r) => !x.ok && /^(Oben rechazó la operación|HTTP 4\d\d:)/.test(x.error ?? '');
+    const esErrorCliente = (x: typeof r) => !x.ok && /BUSINESS_ERROR|pending_credentials|ssrf_blocked/.test(x.error ?? '');
+    // Éxito = confirmación EXPLÍCITA de Oben (isSuccessful true o Code 200).
+    const esExito = (x: typeof r) => x.ok && confirmaExito(x.data);
+    let yaFacturada = !r.ok && YA_FACTURADA.test(r.error ?? '');
+    // Visto el 2026-10-07: Oben a veces FACTURA y aun así responde {"message":"An error has occurred."} o se demora
+    // más del tiempo de espera. Como Oben cierra los artículos al facturar, repetir la llamada es seguro: si ya
+    // estaba facturada la rechaza ("el artículo X no se encuentra en la orden de venta"); si no, la crea.
+    let verificada = false;
+    if (!esExito(r) && !yaFacturada && !esErrorCliente(r) && (r.ok || !esRechazo(r))) {
+      await new Promise((res) => setTimeout(res, this.esperaVerificacionMs));
+      r = await pedir();
+      verificada = true;
+      yaFacturada = !r.ok && YA_FACTURADA.test(r.error ?? '');
+    }
+    const rechazo = esRechazo(r);
+    const errorCliente = esErrorCliente(r);
+    const confirmada = esExito(r) || yaFacturada;
     const estado: EstadoFacturaParcial = confirmada ? 'facturada' : r.ok || (!rechazo && !errorCliente) ? 'revisar' : 'rechazada';
     const errorTexto = confirmada
       ? null
@@ -149,7 +164,7 @@ export class FacturasParcialesService {
       { id, tenantId },
       {
         estado,
-        respuesta: (r.ok ? r.data : null) as never,
+        respuesta: (r.ok ? r.data : yaFacturada ? { yaFacturada: true, verificada, detalle: r.error } : null) as never,
         error: errorTexto,
         modo: r.mode ?? null,
         facturadoPor: this.ctx.userId ?? null,
