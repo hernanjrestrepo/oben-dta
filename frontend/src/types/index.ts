@@ -10,6 +10,8 @@ export interface User {
   tenantSlug?: string | null;
   isSuperAdmin?: boolean;
   permissions?: string[];
+  /** Entró con una contraseña temporal: debe cambiarla antes de usar el sistema. */
+  mustChangePassword?: boolean;
 }
 
 export interface IntegrationStatus {
@@ -380,6 +382,7 @@ export interface TenantUser {
   email: string;
   isActive: boolean;
   isLocked: boolean;
+  mustChangePassword?: boolean;
   createdAt: string;
   roles: string[];
 }

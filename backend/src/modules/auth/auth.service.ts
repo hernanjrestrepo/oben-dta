@@ -36,6 +36,8 @@ export interface AuthResponse {
     tenantSlug: string | null;
     isSuperAdmin: boolean;
     permissions: string[];
+    /** Entró con una contraseña temporal: debe cambiarla antes de usar el sistema. */
+    mustChangePassword: boolean;
   };
   license: {
     valid: boolean;
@@ -218,6 +220,32 @@ export class AuthService {
     return { message: 'Sesión cerrada exitosamente' };
   }
 
+  /**
+   * El usuario cambia SU contraseña (exige la actual). Apaga la obligación de
+   * cambiarla, invalida los refresh tokens anteriores y devuelve una sesión
+   * nueva sin la marca de contraseña temporal.
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<AuthResponse> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || !user.isActive) throw new UnauthorizedException('Usuario no válido');
+    this.assertNotLocked(user);
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      await this.registerFailedAttempt(user);
+      throw new UnauthorizedException('La contraseña actual no es correcta');
+    }
+    if (currentPassword === newPassword) {
+      throw new BadRequestException('La nueva contraseña debe ser distinta de la actual');
+    }
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    user.mustChangePassword = false;
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = null;
+    user.tokenVersion += 1;
+    await this.userRepository.save(user);
+    const tenant = user.tenantId ? await this.tenantRepository.findOne({ where: { id: user.tenantId } }) : null;
+    return this.generateTokens(user, tenant);
+  }
+
   async validateUser(userId: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { id: userId } });
   }
@@ -259,6 +287,8 @@ export class AuthService {
       tenantSlug: tenant?.slug ?? null,
       isSuperAdmin: user.isSuperAdmin,
       ver: user.tokenVersion,
+      // PermissionsGuard bloquea las rutas de negocio mientras sea true.
+      ...(user.mustChangePassword ? { mustChangePassword: true } : {}),
     };
   }
 
@@ -277,6 +307,7 @@ export class AuthService {
       tenantSlug: tenant?.slug ?? null,
       isSuperAdmin: user.isSuperAdmin,
       permissions,
+      mustChangePassword: !!user.mustChangePassword,
     };
   }
 

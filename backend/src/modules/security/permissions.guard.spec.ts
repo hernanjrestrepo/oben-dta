@@ -43,6 +43,14 @@ describe('PermissionsGuard', () => {
     );
   });
 
+  it('contraseña temporal pendiente (mustChangePassword en el token) → forbidden aunque tenga el permiso', async () => {
+    (reflector.getAllAndOverride as jest.Mock).mockReturnValue({ permissions: ['clients.read'], mode: 'all' });
+    can.mockResolvedValue({ effect: 'allow', reason: 'x' });
+    const req = { user: { sub: 'u1', tenantId: 't1', isSuperAdmin: false, mustChangePassword: true } };
+    await expect(guard.canActivate(makeExecCtx(req))).rejects.toThrow(/cambiar su contraseña temporal/);
+    expect(can).not.toHaveBeenCalled();
+  });
+
   it('modo all: todos los permisos deben ser allow', async () => {
     (reflector.getAllAndOverride as jest.Mock).mockReturnValue({
       permissions: ['clients.read', 'clients.update'],

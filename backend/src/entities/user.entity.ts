@@ -67,6 +67,10 @@ export class User {
   @Column({ name: 'token_version', default: 0 })
   tokenVersion: number;
 
+  /** true = entra con una contraseña temporal (creada o restablecida por un administrador) y debe cambiarla antes de usar el sistema. */
+  @Column({ name: 'must_change_password', default: false })
+  mustChangePassword: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

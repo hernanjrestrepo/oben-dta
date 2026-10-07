@@ -43,7 +43,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const req = context.switchToHttp().getRequest<{
-      user?: { sub: string; tenantId: string | null; isSuperAdmin: boolean };
+      user?: { sub: string; tenantId: string | null; isSuperAdmin: boolean; mustChangePassword?: boolean };
       path?: string;
       method?: string;
       ip?: string;
@@ -52,6 +52,10 @@ export class PermissionsGuard implements CanActivate {
 
     if (!req.user?.sub) {
       throw new ForbiddenException('No autenticado');
+    }
+    // Contraseña temporal: nada de negocio hasta cambiarla (POST /auth/change-password).
+    if (req.user.mustChangePassword === true) {
+      throw new ForbiddenException('Debe cambiar su contraseña temporal antes de continuar.');
     }
 
     // El TenantInterceptor corre DESPUÉS de los guards, por lo que TenantContext

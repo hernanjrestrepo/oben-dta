@@ -150,6 +150,13 @@ class ApiClient {
     return data;
   }
 
+  /** El usuario cambia su propia contraseña; devuelve una sesión nueva. */
+  async changePassword(currentPassword: string, newPassword: string): Promise<AuthResponse> {
+    const { data } = await this.client.post<AuthResponse>('/auth/change-password', { currentPassword, newPassword });
+    this.setAuth(data);
+    return data;
+  }
+
   async platformLogin(email: string, password: string): Promise<AuthResponse> {
     const { data } = await this.client.post<AuthResponse>('/auth/platform-login', { email, password });
     this.setAuth(data);

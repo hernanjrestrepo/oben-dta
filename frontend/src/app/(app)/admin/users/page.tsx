@@ -12,9 +12,19 @@ import {
   Unlock,
   KeyRound,
   Trash2,
+  Wand2,
+  Copy,
   ShieldCheck,
   Users as UsersIcon,
 } from 'lucide-react';
+
+/** Contraseña temporal aleatoria (12 caracteres, sin 0/O/1/l para dictarla sin errores). */
+function generarContrasenaTemporal(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = new Uint32Array(12);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<TenantUser[]>([]);
@@ -295,13 +305,36 @@ export default function AdminUsersPage() {
               <p className="text-sm text-red-700">{resetError}</p>
             </div>
           )}
-          <input
-            type="text"
-            value={resetPassword}
-            onChange={(e) => setResetPassword(e.target.value)}
-            placeholder="Nueva contraseña temporal (mínimo 8 caracteres)"
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              placeholder="Nueva contraseña temporal (mínimo 8 caracteres)"
+              className="flex-1 min-w-0 px-4 py-2.5 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
+            />
+            <button
+              type="button"
+              onClick={() => setResetPassword(generarContrasenaTemporal())}
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+              title="Generar una contraseña aleatoria"
+            >
+              <Wand2 className="w-4 h-4" /> Generar
+            </button>
+            <button
+              type="button"
+              disabled={!resetPassword}
+              onClick={() => { navigator.clipboard?.writeText(resetPassword).catch(() => undefined); }}
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              title="Copiar"
+            >
+              <Copy className="w-4 h-4" /> Copiar
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">
+            Es temporal: al entrar con ella, el sistema le pedirá a {resetTarget.firstName} que la cambie antes de usar Oben Xmart.
+            Envíasela por un medio distinto al correo (por ejemplo, WhatsApp).
+          </p>
           <div className="flex items-center justify-end gap-3">
             <button
               type="button"
@@ -387,6 +420,11 @@ export default function AdminUsersPage() {
                           }`}>
                             {user.isActive ? 'Activo' : 'Inactivo'}
                           </span>
+                          {user.mustChangePassword && (
+                            <span className="inline-flex w-fit px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                              Contraseña temporal
+                            </span>
+                          )}
                           {user.isLocked && (
                             <span className="inline-flex w-fit px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
                               Bloqueado

@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/layout/Sidebar';
 import { EvaWidget } from '@/components/layout/EvaWidget';
+import { ContrasenaTemporalGuard } from '@/components/layout/ContrasenaTemporalGuard';
 
 export default function AppLayout({
   children,
@@ -8,6 +9,7 @@ export default function AppLayout({
 }) {
   return (
     <div className="min-h-screen bg-[#F5F7FA] lg:pl-64">
+      <ContrasenaTemporalGuard />
       <Sidebar />
       <main className="p-6 lg:p-8">{children}</main>
       <EvaWidget />

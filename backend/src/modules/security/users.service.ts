@@ -27,6 +27,8 @@ export interface TenantUserView {
   email: string;
   isActive: boolean;
   isLocked: boolean;
+  /** Tiene una contraseña temporal pendiente de cambiar. */
+  mustChangePassword: boolean;
   createdAt: Date;
   roles: string[];
 }
@@ -89,6 +91,8 @@ export class UsersService {
         passwordHash,
         isActive: true,
         isSuperAdmin: false,
+        // La contraseña la escribió un administrador: es temporal.
+        mustChangePassword: true,
       }),
     );
     for (const roleKey of dto.roleKeys ?? []) {
@@ -155,6 +159,8 @@ export class UsersService {
     user.passwordHash = await bcrypt.hash(password, 12);
     // Invalida cualquier refresh token emitido antes del reset.
     user.tokenVersion += 1;
+    // Contraseña temporal: el usuario debe cambiarla en su siguiente ingreso.
+    user.mustChangePassword = true;
     await this.users.save(user);
     return this.findById(id);
   }
@@ -176,6 +182,7 @@ export class UsersService {
       email: user.email,
       isActive: user.isActive,
       isLocked: !!user.lockedUntil && user.lockedUntil.getTime() > Date.now(),
+      mustChangePassword: !!user.mustChangePassword,
       createdAt: user.createdAt,
       roles,
     };

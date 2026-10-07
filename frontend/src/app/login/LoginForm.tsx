@@ -36,7 +36,8 @@ export function LoginForm() {
 
     try {
       await login(email, password);
-      router.push(redirectTo);
+      // Contraseña temporal: primero hay que cambiarla.
+      router.push(useAuthStore.getState().user?.mustChangePassword ? '/cambiar-contrasena' : redirectTo);
     } catch {
       // Error is handled by store
     }

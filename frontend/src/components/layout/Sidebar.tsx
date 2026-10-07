@@ -27,6 +27,7 @@ import {
   ReceiptText,
   UserCog,
   FilePenLine,
+  KeyRound,
   type LucideIcon,
 } from 'lucide-react';
 import { useMemo, useState, useSyncExternalStore } from 'react';
@@ -217,6 +218,13 @@ export function Sidebar() {
                 <p className="text-xs text-white/70 truncate">{user.email}</p>
               </div>
             )}
+            <Link
+              href="/cambiar-contrasena"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition"
+            >
+              <KeyRound className="w-5 h-5" />
+              <span>Cambiar contraseña</span>
+            </Link>
             <button
               onClick={logout}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition"

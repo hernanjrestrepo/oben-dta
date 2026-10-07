@@ -24,6 +24,7 @@ const ROUTES_WITHOUT_PERMISSION: Record<string, string> = {
   'AuthController.platformLogin': 'público: inicio de sesión de plataforma',
   'AuthController.refresh': 'público: renovación de token (valida el refresh token)',
   'AuthController.logout': 'solo JWT: cierra la sesión propia',
+  'AuthController.changePassword': 'solo JWT: cambia la contraseña propia (exige la actual)',
   'SecurityController.myPermissions': 'solo JWT: lista los permisos del propio usuario',
   'LicenseController.status': 'solo JWT: estado de licencia del propio tenant (pantalla de bloqueo)',
 };

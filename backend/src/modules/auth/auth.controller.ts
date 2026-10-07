@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, PlatformLoginDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, PlatformLoginDto, ChangePasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PermissionsGuard } from '../security/permissions.guard';
@@ -61,6 +61,15 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token requerido');
     }
     return this.authService.refresh(token);
+  }
+
+  /** El propio usuario cambia su contraseña (obligatorio si entró con una temporal). */
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @Throttle(AUTH_THROTTLE)
+  @UsePipes(new ValidationPipe({ whitelist: true }))
+  async changePassword(@CurrentUser() user: { sub: string }, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(user.sub, dto.currentPassword, dto.newPassword);
   }
 
   @Post('logout')

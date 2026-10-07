@@ -277,3 +277,44 @@ describe('AuthService.register() — crea un usuario dentro del tenant de quien 
     ).rejects.toThrow(UnauthorizedException);
   });
 });
+
+describe('AuthService.changePassword() — contraseña temporal', () => {
+  it('con la contraseña actual correcta: cambia el hash, apaga la obligación, invalida sesiones y entrega tokens nuevos', async () => {
+    const { users, tenants, store } = makeRepos(makeUser({ mustChangePassword: true, tokenVersion: 3 }));
+    const jwt = makeJwt();
+    const svc = new AuthService(users as never, tenants as never, jwt as never);
+
+    const res = await svc.changePassword('u1', 'CorrectPass123!', 'NuevaClave2026!');
+
+    expect(res.access_token).toBeTruthy();
+    expect(res.user.mustChangePassword).toBe(false);
+    const saved = store.current as unknown as { mustChangePassword: boolean; tokenVersion: number; passwordHash: string };
+    expect(saved.mustChangePassword).toBe(false);
+    expect(saved.tokenVersion).toBe(4);
+    expect(bcrypt.compareSync('NuevaClave2026!', saved.passwordHash)).toBe(true);
+    // El token nuevo ya no lleva la marca que bloquea las rutas de negocio.
+    expect(jwt.sign.mock.calls.at(-1)![0]).not.toHaveProperty('mustChangePassword');
+  });
+
+  it('con la contraseña actual incorrecta: rechaza y cuenta el intento fallido', async () => {
+    const { users, tenants } = makeRepos(makeUser({ mustChangePassword: true }));
+    const svc = new AuthService(users as never, tenants as never, makeJwt() as never);
+    await expect(svc.changePassword('u1', 'mala', 'NuevaClave2026!')).rejects.toThrow(UnauthorizedException);
+    expect(users.save).toHaveBeenCalledWith(expect.objectContaining({ failedLoginAttempts: 1, mustChangePassword: true }));
+  });
+
+  it('la nueva no puede ser igual a la actual', async () => {
+    const { users, tenants } = makeRepos(makeUser({ mustChangePassword: true }));
+    const svc = new AuthService(users as never, tenants as never, makeJwt() as never);
+    await expect(svc.changePassword('u1', 'CorrectPass123!', 'CorrectPass123!')).rejects.toThrow(BadRequestException);
+  });
+
+  it('el login de un usuario con contraseña temporal lo avisa y marca el token', async () => {
+    const { users, tenants } = makeRepos(makeUser({ mustChangePassword: true }));
+    const jwt = makeJwt();
+    const svc = new AuthService(users as never, tenants as never, jwt as never);
+    const res = await svc.login({ email: 'test@oben.com', password: 'CorrectPass123!', tenantSlug: 'oben' });
+    expect(res.user.mustChangePassword).toBe(true);
+    expect(jwt.sign.mock.calls[0][0]).toMatchObject({ mustChangePassword: true });
+  });
+});
