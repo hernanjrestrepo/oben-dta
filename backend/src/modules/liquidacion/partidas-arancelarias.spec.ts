@@ -1,4 +1,4 @@
-import { ARANCEL_USA_PCT, PARTIDAS, arancelDestinoPct, familiaDe, partidaComun, partidaDe } from './partidas-arancelarias';
+import { ARANCEL_USA_PCT, PARTIDAS, arancelDestinoPct, familiaDe, partidaComun, partidaDe, tipoDeLinea } from './partidas-arancelarias';
 
 describe('partidas arancelarias de Oben (2026-10-02)', () => {
   it('las 4 referencias entregadas por Oben', () => {
@@ -40,5 +40,29 @@ describe('partidas arancelarias de Oben (2026-10-02)', () => {
   it('partida común: todas las líneas iguales; mezcla o desconocidas → ninguna', () => {
     expect(partidaComun(['SC---0030TN0405S0760', 'SC---0030TN0410S0760']).partida?.ncm).toBe('3920.20.19');
     expect(partidaComun(['SC---0030TN0405S0760', 'ENA--0012TM0902S0760'])).toMatchObject({ partida: null, sinPartida: ['ENA--0012TM0902S0760'] });
+  });
+
+  it.each([
+    ['BOPP', 'CRISTAL', 'bopp'],
+    ['BOPP', 'METALIZADO', 'bopp_metalizado'],
+    ['bopet', null, 'pet'],
+    ['PET-S', 'CRISTAL', 'pet_termoencogible'],
+    ['', 'CRISTAL', null],
+    [null, null, null],
+  ])('Linea %j + TipoMaterial %j de Oben → %s', (linea, material, tipo) => {
+    expect(tipoDeLinea(linea, material)).toBe(tipo);
+  });
+
+  it('con Linea de Oben ya no se adivina por la familia: ENA marcada BOPET es PET', () => {
+    expect(partidaDe({ codigo: 'ENA--0012TM0902S0760', linea: 'BOPET', tipoMaterial: 'CRISTAL' })?.tipo).toBe('pet');
+    expect(partidaDe({ codigo: 'SC---0020TN', linea: 'BOPP', tipoMaterial: 'METALIZADO' })?.descripcionEs).toContain('METALIZADO');
+  });
+
+  it('BOPP cristal y BOPP metalizado en la misma PF son mezcla (misma partida, distinta descripción)', () => {
+    const r = partidaComun([
+      { codigo: 'SC---0020TN', linea: 'BOPP', tipoMaterial: 'CRISTAL' },
+      { codigo: 'SC---0030TN', linea: 'BOPP', tipoMaterial: 'METALIZADO' },
+    ]);
+    expect(r).toMatchObject({ partida: null, mezcla: true });
   });
 });

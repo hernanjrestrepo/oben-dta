@@ -13,6 +13,8 @@ export interface CheckSettlementLine {
   /** Partida arancelaria de Colombia del SKU (José agregó Parida y TipoMaterial, 6-oct). */
   Parida?: string | null;
   TipoMaterial?: string | null;
+  /** Línea de película en OBEN MAS: BOPP, BOPET o PET-S (José, 7-oct). */
+  Linea?: string | null;
 }
 
 export interface CheckSettlementResponse {
@@ -142,6 +144,11 @@ export interface LiquidacionDraft {
    * `simulated`: con alguna, el borrador se simula pero no se envía.
    */
   sinConfirmar: string[];
+  /**
+   * Tipo de película común de la PF (de `Linea`/`TipoMaterial` de Oben) con su
+   * descripción oficial para la factura; null si la PF mezcla tipos o no se sabe.
+   */
+  partidaTipo?: import('./partidas-arancelarias').PartidaArancelaria | null;
 }
 
 export interface LiquidacionSubmitOptions {

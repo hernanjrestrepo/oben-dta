@@ -1,3 +1,4 @@
+import { PARTIDAS } from '../../liquidacion/partidas-arancelarias';
 import type { FacturacionDraft } from '../facturacion.types';
 import type { LiquidacionDraft } from '../../liquidacion/liquidacion.types';
 import { ciudadDeDireccion, construirFacturaDian, descripcionMaterial, fechaEmisionTxt } from './representacion';
@@ -79,6 +80,17 @@ describe('construirFacturaDian', () => {
     expect(f.qr).toContain('NitFac: 901046830');
     expect(avisos.join(' ')).toMatch(/PROVISIONAL/);
     expect(avisos.join(' ')).toMatch(/sin confirmar/);
+  });
+
+  it('PA NCM con la partida de Colombia (Parida) lleva la descripción del tipo que entrega Oben (Linea/TipoMaterial)', () => {
+    const liq = {
+      ...LIQ,
+      header: { ...LIQ.header, paNcm: '39.20.10.90', paNaladi: '3920.20.10' },
+      headerOrigen: { paNcm: 'oben' },
+      partidaTipo: PARTIDAS.bopp,
+    } as unknown as LiquidacionDraft;
+    const { factura: f } = construirFacturaDian({ draft: DRAFT, factura: null, liquidacion: liq, trm: { valor: 3341.23, fecha: '2026-10-01' }, ahora: AHORA });
+    expect(f.observaciones).toContain('PA NCM: 39.20.10.90 PELICULA DE POLIPROPILENO BIORIENTADO // 39.20.10.90 BIORIENTED POLYPROPYLENE FILM');
   });
 
   it('sin liquidación: precio negociado, flete y seguro en 0, con aviso', () => {

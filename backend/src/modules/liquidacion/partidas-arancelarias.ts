@@ -83,17 +83,39 @@ export function familiaDe(codigo: string): string | null {
   return m ? m[1] : null;
 }
 
-export function partidaDe(codigo: string): PartidaArancelaria | null {
-  const familia = familiaDe(codigo);
-  const tipo = familia ? FAMILIA_A_TIPO[familia] : undefined;
+/**
+ * Tipo de película según OBEN MAS (José, 7-oct: spCheckSettlement trae `Linea`
+ * por SKU — BOPP, BOPET o PET-S — y `TipoMaterial` CRISTAL o METALIZADO). Es la
+ * fuente oficial; la familia del código solo queda de respaldo si no viene.
+ */
+export function tipoDeLinea(linea?: string | null, tipoMaterial?: string | null): TipoPelicula | null {
+  const l = (linea ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  const metalizado = /METAL/.test((tipoMaterial ?? '').toUpperCase());
+  if (l === 'BOPP') return metalizado ? 'bopp_metalizado' : 'bopp';
+  if (l === 'BOPET') return 'pet';
+  if (l === 'PET-S' || l === 'PETS') return 'pet_termoencogible';
+  return null;
+}
+
+/** Un material de la PF tal como lo entrega Oben. */
+export interface MaterialOben {
+  codigo: string;
+  linea?: string | null;
+  tipoMaterial?: string | null;
+}
+
+export function partidaDe(codigo: string | MaterialOben): PartidaArancelaria | null {
+  const m = typeof codigo === 'string' ? { codigo } : codigo;
+  const familia = familiaDe(m.codigo);
+  const tipo = tipoDeLinea(m.linea, m.tipoMaterial) ?? (familia ? FAMILIA_A_TIPO[familia] : undefined);
   return tipo ? PARTIDAS[tipo] : null;
 }
 
 /** Partida común de varios materiales: solo si todos resuelven a la MISMA (el encabezado lleva una sola). */
-export function partidaComun(codigos: string[]): { partida: PartidaArancelaria | null; sinPartida: string[]; mezcla: boolean } {
-  const resueltas = codigos.map((c) => ({ c, p: partidaDe(c) }));
+export function partidaComun(materiales: Array<string | MaterialOben>): { partida: PartidaArancelaria | null; sinPartida: string[]; mezcla: boolean } {
+  const resueltas = materiales.map((m) => ({ c: typeof m === 'string' ? m : m.codigo, p: partidaDe(m) }));
   const sinPartida = resueltas.filter((x) => !x.p).map((x) => x.c);
-  const distintas = new Set(resueltas.filter((x) => x.p).map((x) => `${x.p!.ncm}|${x.p!.naladi}`));
+  const distintas = new Set(resueltas.filter((x) => x.p).map((x) => x.p!.tipo));
   if (sinPartida.length || distintas.size !== 1) return { partida: null, sinPartida, mezcla: distintas.size > 1 };
   return { partida: resueltas[0].p, sinPartida: [], mezcla: false };
 }

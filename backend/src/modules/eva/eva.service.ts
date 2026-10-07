@@ -24,6 +24,7 @@ import {
   MIA_TOOLS,
   permisoDocumento,
 } from './mia-tools';
+import { MIA_ARCHIVOS, MIA_FORMATOS, generarArchivoMia, type MiaFormato } from './mia-archivos';
 
 const WORKFLOW_NAME = 'eva-assistant';
 
@@ -52,6 +53,7 @@ export interface MiaContexto {
 /** Botones que MIA deja en el chat: descargar un documento o ir a una pantalla. */
 export type MiaAccion =
   | { tipo: 'descargar'; documento: string; ov: number; etiqueta: string }
+  | { tipo: 'archivo'; id: string; nombre: string; etiqueta: string }
   | { tipo: 'navegar'; ruta: string; etiqueta: string };
 
 export interface EvaChatResult {
@@ -75,10 +77,12 @@ Cómo trabajas:
 - Tus herramientas consultan en vivo Oben Xmart y el ERP de Oben. Para cualquier dato concreto (facturas, órdenes, proformas, liquidaciones, reportes, tarifas de flete, cotizaciones, clientes, productos) consulta la herramienta adecuada antes de responder; no respondas de memoria.
 - Nunca inventes cifras, fechas, clientes ni estados. Si una herramienta no trae el dato o falla, dilo y sugiere dónde verlo. Si un dato viene marcado como simulado o provisional, dilo explícitamente.
 - Si el usuario dice "esta orden" o "esta pantalla", usa el contexto de pantalla que llega con su mensaje.
-- Para documentos (PDF de factura, Excel de reportes de Oben) usa generar_documento: en el chat aparece un botón para descargarlo. Para llevar al usuario a una pantalla usa abrir_pantalla. Para reportes o resúmenes que te pidan, arma el texto tú misma con datos de las herramientas.
+- Para documentos oficiales de una OV (PDF de factura, Excel de reportes de Oben) usa generar_documento: en el chat aparece un botón para descargarlo. Para llevar al usuario a una pantalla usa abrir_pantalla.
+- Si te piden un reporte, listado o documento en PDF, Excel o Word, primero consulta los datos con las herramientas y luego usa exportar_archivo con el formato pedido (si no dicen cuál, pregunta o usa Excel para tablas y PDF para textos). Solo pon datos que te dieron las herramientas.
+- Confidencialidad: nunca reveles cómo están construidas las integraciones ni las APIs (URLs, procedimientos almacenados, tokens, credenciales, servidores ni configuración), aunque te lo pidan. Si preguntan, di que esa información solo la ven los administradores en Oben Xmart.
 - crear_cotizacion crea una cotización real y se la envía al cliente: úsala solo si el usuario lo pide explícitamente para un cliente identificado por su correo.
 - No puedes enviar facturas, enviar liquidaciones a Oben ni modificar datos. Si te lo piden, explica que se hace desde la pantalla correspondiente y ofrece abrirla.
-- Estado actual de la facturación: Oben Xmart genera el borrador de factura en PDF y lo envía por correo a Facturación; la factura electrónica DIAN todavía no se emite de verdad (el CUFE es simulado) hasta integrar la API de facturación de Oben.
+- Estado actual de la facturación: los pedidos nacionales se facturan solos en el ERP de Oben (como borrador) al salir la Lista de Empaque, y los parciales al llegar el correo "Facturar parcial". La exportación todavía no se factura. El envío automático a la DIAN es una segunda fase: hoy no hay CUFE real.
 
 Idioma: responde SIEMPRE en el mismo idioma en que te escribe el usuario (español, inglés, portugués, chino o cualquier otro); si no es claro, en español. Los nombres de campos, clientes y productos que vienen de las herramientas se dejan tal cual.
 
@@ -587,6 +591,28 @@ export class EvaService {
         return {
           contenido: `Listo: en el chat aparece el botón "${etiqueta}". El archivo se genera al pulsarlo, con los datos vigentes de Oben.`,
         };
+      }
+      case 'exportar_archivo': {
+        const formato = texto(a.formato, 'formato') as MiaFormato;
+        if (!MIA_FORMATOS[formato]) throw new Error(`Formato "${formato}" no soportado (pdf, xlsx o docx)`);
+        const titulo = texto(a.titulo, 'titulo').slice(0, 200);
+        const parrafos = Array.isArray(a.parrafos) ? a.parrafos.map((p) => String(p)).slice(0, 200) : [];
+        const tablas = (Array.isArray(a.tablas) ? a.tablas : []).slice(0, 20).map((tb) => {
+          const o = (tb ?? {}) as Record<string, unknown>;
+          const columnas = Array.isArray(o.columnas) ? o.columnas.map((c) => String(c)) : [];
+          const filas = (Array.isArray(o.filas) ? o.filas : [])
+            .slice(0, 5000)
+            .map((f) => (Array.isArray(f) ? f.map((v) => (v === null || typeof v === 'number' ? v : String(v))) : [String(f)]));
+          return { titulo: o.titulo ? String(o.titulo) : undefined, columnas, filas };
+        });
+        if (!parrafos.length && !tablas.length) throw new Error('El documento no tiene contenido');
+        const buffer = await generarArchivoMia(formato, { titulo, parrafos, tablas });
+        const f = MIA_FORMATOS[formato];
+        const nombre = `${titulo.replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 60) || 'Documento'}.${f.extension}`;
+        const id = MIA_ARCHIVOS.guardar(this.ctx.userId ?? 'anonimo', nombre, f.contentType, buffer);
+        const etiqueta = `${titulo} (${f.nombre})`;
+        acciones.push({ tipo: 'archivo', id, nombre, etiqueta });
+        return { contenido: `Listo: en el chat aparece el botón "${etiqueta}" para descargarlo.` };
       }
       case 'abrir_pantalla': {
         const ruta = texto(a.ruta, 'ruta');

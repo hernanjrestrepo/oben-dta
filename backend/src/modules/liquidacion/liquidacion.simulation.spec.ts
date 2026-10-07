@@ -21,6 +21,8 @@ import type { LiquidacionInput } from './liquidacion.types';
  */
 
 const CHECK: Record<string, unknown> = {
+  // PF 10867 tal como responde HOY el servidor .12 (verificado en vivo el 2026-10-07): ya trae Parida, TipoMaterial y Linea.
+  '99010': { Proforma: '99010', OrdenVenta: '10758', OrdenCompra: '-', Cliente: 'ERPLASTI INDUSTRIA E COMERCIO DE PLASTICOS LTDA', Detalle: [{ CodSed_LineFilm: 6, TipoPelicula: 'SC---0020TN', Precio: 2.55, KilosTotales: 22080.76, Parida: '39.20.10.90', TipoMaterial: 'CRISTAL', Linea: 'BOPP' }] },
   '10867': { Proforma: '10867', OrdenVenta: '10758', OrdenCompra: '-', Cliente: 'ERPLASTI INDUSTRIA E COMERCIO DE PLASTICOS LTDA', Detalle: [{ CodSed_LineFilm: 6, TipoPelicula: 'SC---0020TN', Precio: 2.55, KilosTotales: 22080.76 }] },
   '11357': { Proforma: '11357', OrdenVenta: '11147', OrdenCompra: '3398', Cliente: 'OBEN DISTRIBUIDORA COLOMBIA LTDA', Detalle: [{ CodSed_LineFilm: 13, TipoPelicula: 'SC---0015TN', Precio: 2.85, KilosTotales: 5661.2 }] },
   '11271': { Proforma: '11271', OrdenVenta: '11086', OrdenCompra: '128353', Cliente: 'OBEN US, LLC', Detalle: [{ CodSed_LineFilm: 113, TipoPelicula: 'ENA--0012TM', Precio: 2.827, KilosTotales: 1339.42 }] },
@@ -138,7 +140,7 @@ const HEADER_USER = { direccion: '1 Port Rd, Miami FL', puertoArribo: 'Miami', p
 const USA_CHARGES = { inlandFreight: 900, destinationCharges: 150 };
 
 /** El aviso de "sin partida" (familia ENA sin tipo confirmado) es ajeno a lo que prueban los ajustes de tarifas. */
-const deTarifas = (a: string) => !a.startsWith('Sin partida en la tabla') && !a.startsWith('Arancel de importación');
+const deTarifas = (a: string) => !a.startsWith('Sin partida en la tabla') && !a.startsWith('Sin tipo de película') && !a.startsWith('Arancel de importación');
 
 function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: boolean; requiereAprobacion?: boolean } = {}) {
   const sim = new ObenSim();
@@ -241,11 +243,20 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(digitada.headerOrigen.paNcm).toBe('usuario');
     });
 
+    it('respuesta actual de Oben (Parida + Linea BOPP + CRISTAL): Pa_Ncm = partida de Colombia y tipo BOPP para la factura', async () => {
+      const { service } = build({ calculator: new IncotermFormulaCalculator() });
+      const d = await service.getDraft('99010');
+      expect(d.header.paNcm).toBe('39.20.10.90');
+      expect(d.headerOrigen.paNcm).toBe('oben');
+      expect(d.partidaTipo?.tipo).toBe('bopp');
+      expect(d.header.paNaladi).toBe('3920.20.10');
+    });
+
     it('familia sin tipo confirmado (ENA): no se adivina, queda la partida provisional y se avisa', async () => {
       const { service } = build({ calculator: new IncotermFormulaCalculator(), provisionales: true });
       const d = await service.getDraft('11271');
       expect(d.headerOrigen.paNcm).toBe('provisional');
-      expect(d.ajustes.some((a) => a.startsWith('Sin partida en la tabla de Oben para: ENA--0012TM'))).toBe(true);
+      expect(d.ajustes.some((a) => a.startsWith('Sin tipo de película para: ENA--0012TM'))).toBe(true);
     });
 
     it('PF 10867 (la ya liquidada de referencia): valor total inicial = 2.55 × 22080.76', async () => {

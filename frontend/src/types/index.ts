@@ -899,6 +899,7 @@ export interface MiaContexto {
 /** Botones que MIA deja en el chat: descargar un documento o ir a una pantalla. */
 export type MiaAccion =
   | { tipo: 'descargar'; documento: string; ov: number; etiqueta: string }
+  | { tipo: 'archivo'; id: string; nombre: string; etiqueta: string }
   | { tipo: 'navegar'; ruta: string; etiqueta: string };
 
 export interface MiaRespuesta {

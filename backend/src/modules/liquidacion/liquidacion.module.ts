@@ -9,6 +9,7 @@ import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { DistributionListsModule } from '../distribution-lists/distribution-lists.module';
 import { ObenReportsModule } from '../oben-reports/oben-reports.module';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
+import { LiquidacionAvisoService } from './liquidacion-aviso.service';
 import { LiquidacionController } from './liquidacion.controller';
 import { LIQUIDACION_OPCIONES, LiquidacionService } from './liquidacion.service';
 import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFromEnv } from './liquidacion-value-calculator';
@@ -34,6 +35,7 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
       useFactory: () => ({ valoresProvisionales: process.env.LIQUIDACION_VALORES_PROVISIONALES !== 'false', requiereAprobacion: true }),
     },
     LiquidacionCierreService,
+    LiquidacionAvisoService,
     {
       // Producción (variable ausente): IncotermFormulaCalculator — la fórmula
       // de José con los datos que digita el usuario (sus puntos sin confirmar
@@ -52,6 +54,6 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
       },
     },
   ],
-  exports: [LiquidacionService],
+  exports: [LiquidacionService, LiquidacionAvisoService],
 })
 export class LiquidacionModule {}

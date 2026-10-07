@@ -279,7 +279,10 @@ export class LiquidacionService {
       }
     }
     // Partida arancelaria por tipo de película (tabla de Oben, 2026-10-02); lo digitado manda.
-    const { partida, sinPartida, mezcla } = partidaComun(baseLines.map((l) => l.tipoPelicula));
+    // El tipo sale de Linea/TipoMaterial que entrega Oben por SKU; la familia del código es respaldo.
+    const { partida, sinPartida, mezcla } = partidaComun(
+      check.Detalle.map((l) => ({ codigo: l.TipoPelicula, linea: l.Linea, tipoMaterial: l.TipoMaterial })),
+    );
     // COMEX (María Escobar, 6-oct): en el encabezado va la partida arancelaria de COLOMBIA (la que Oben
     // entrega por SKU en `Parida`); el NCM/NALADI de destino depende del país y no va en Pa_Ncm.
     if (paridaComun) {
@@ -312,7 +315,7 @@ export class LiquidacionService {
       );
     } else if (sinPartida.length && !paridaComun && !paridaMezcla) {
       ajustes.push(
-        `Sin partida en la tabla de Oben para: ${[...new Set(sinPartida)].join(', ')} (falta decir a cuál de los 4 tipos de película — BOPP, BOPP metalizado, PET o PET termoencogible — pertenece su familia).`,
+        `Sin tipo de película para: ${[...new Set(sinPartida)].join(', ')} (Oben no entregó la Linea del SKU y su familia no está en la tabla).`,
       );
     }
     // Arancel de importación (Jorge, 2026-10-05): en destino no se paga, salvo EE. UU. (12,5 %).
@@ -438,6 +441,7 @@ export class LiquidacionService {
       aprobacion: null,
       simulated: this.calculator.simulated,
       sinConfirmar,
+      partidaTipo: partida,
     };
   }
 

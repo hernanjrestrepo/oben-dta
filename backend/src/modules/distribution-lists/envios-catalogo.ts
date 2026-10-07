@@ -101,6 +101,13 @@ export const ENVIOS_CATALOGO: EnvioCatalogo[] = [
     manual: false,
   },
   {
+    clave: 'liquidacion_aprobacion',
+    label: 'Liquidación para aprobar (COMEX)',
+    descripcion: 'Aviso a COMEX cuando sale la Lista de Empaque de una exportación: su liquidación queda lista para aprobar.',
+    grupo: 'Facturación y liquidación',
+    manual: false,
+  },
+  {
     clave: 'liquidacion_cierre',
     label: 'Cierre de liquidación',
     descripcion: 'Correo a COMEX cuando una liquidación queda registrada en Oben.',

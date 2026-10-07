@@ -1,4 +1,7 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { MIA_ARCHIVOS } from './mia-archivos';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -68,6 +71,17 @@ class EvaChatDto {
 @Controller('eva')
 export class EvaController {
   constructor(private readonly evaService: EvaService) {}
+
+  /** Descarga un archivo que MIA generó para ESTE usuario (vive 1 hora en memoria). */
+  @Get('archivos/:id')
+  @RequirePermission('dashboard.view')
+  archivo(@Param('id') id: string, @CurrentUser() user: { sub: string }, @Res() res: Response) {
+    const a = MIA_ARCHIVOS.obtener(id, user.sub);
+    if (!a) throw new NotFoundException('El archivo ya no está disponible: pídeselo de nuevo a MIA.');
+    res.setHeader('Content-Type', a.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(a.nombre)}`);
+    res.send(a.buffer);
+  }
 
   @Post('chat')
   @RequirePermission('dashboard.view')

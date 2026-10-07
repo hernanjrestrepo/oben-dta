@@ -17,6 +17,7 @@ import { PackingListCarteraService, type CarteraDecision } from './packing-list-
 import { origenDatosOben } from '../oben-reports/origen-datos';
 import { FormatosService, renderEnvio } from '../formatos/formatos.service';
 import { FacturasParcialesService } from '../facturacion/facturas-parciales.service';
+import { LiquidacionAvisoService } from '../liquidacion/liquidacion-aviso.service';
 
 /** Lista de distribución que recibe los avisos de órdenes retenidas por cartera (PND). */
 export const PACKING_LIST_CARTERA_DISTRIBUTION_KEY = 'packing_list_cartera';
@@ -86,6 +87,7 @@ export class PackingListAutomationService {
     private readonly cartera: PackingListCarteraService,
     @Optional() private readonly formatos?: FormatosService,
     @Optional() private readonly facturas?: FacturasParcialesService,
+    @Optional() private readonly avisoLiquidacion?: LiquidacionAvisoService,
   ) {}
 
   async handleOvApproved(numberOrderSales: number): Promise<HandleOvApprovedResult> {
@@ -263,6 +265,14 @@ export class PackingListAutomationService {
       if (f) this.logger.log(`Orden ${numberOrderSales}: factura automática → ${f.estado}${f.motivo ? ` (${f.motivo})` : ''}.`);
     } catch (err) {
       this.logger.error(`Orden ${numberOrderSales}: la factura automática falló: ${(err as Error).message}`);
+    }
+    // Pedido de exportación → la liquidación de su PF queda lista y se avisa a COMEX para aprobarla
+    // (José, 7-oct). Nunca tumba el envío ni manda nada a Oben.
+    try {
+      const l = await this.avisoLiquidacion?.avisarExportacion(numberOrderSales);
+      if (l && l.estado !== 'omitida') this.logger.log(`Orden ${numberOrderSales}: liquidación para COMEX → ${l.estado}${l.motivo ? ` (${l.motivo})` : ''}.`);
+    } catch (err) {
+      this.logger.error(`Orden ${numberOrderSales}: el aviso de liquidación a COMEX falló: ${(err as Error).message}`);
     }
 
     this.logger.log(

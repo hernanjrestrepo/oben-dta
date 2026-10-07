@@ -538,6 +538,12 @@ class ApiClient {
     return data;
   }
 
+  /** Archivo (PDF, Excel o Word) que MIA generó para este usuario. */
+  async downloadMiaArchivo(id: string): Promise<Blob> {
+    const { data } = await this.client.get(`/eva/archivos/${id}`, { responseType: 'blob' });
+    return data;
+  }
+
   async downloadObenReportExcel(key: string, numberOrderSales: string): Promise<Blob> {
     const { data } = await this.client.get(`/oben-reports/${key}/${numberOrderSales}/excel`, { responseType: 'blob' });
     return data;

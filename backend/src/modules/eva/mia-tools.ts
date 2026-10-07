@@ -240,6 +240,38 @@ export const MIA_TOOLS: Array<{
     },
   },
   {
+    // Sin permiso propio: el contenido sale de otras herramientas, que ya exigen el suyo.
+    permiso: null,
+    tool: {
+      name: 'exportar_archivo',
+      description:
+        'Genera un archivo PDF, Excel o Word con un reporte o documento que tú armas (título, párrafos y tablas) con datos que YA consultaste con las otras herramientas. En el chat aparece un botón para descargarlo. Úsala cuando el usuario pida un reporte, listado o documento en PDF, Excel o Word.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          formato: { type: 'string', enum: ['pdf', 'xlsx', 'docx'], description: 'pdf, xlsx (Excel) o docx (Word).' },
+          titulo: { type: 'string', description: 'Título del documento.' },
+          parrafos: { type: 'array', items: { type: 'string' }, description: 'Texto del documento, un párrafo por elemento.' },
+          tablas: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                titulo: { type: 'string' },
+                columnas: { type: 'array', items: { type: 'string' } },
+                filas: { type: 'array', items: { type: 'array', items: { type: ['string', 'number', 'null'] } } },
+              },
+              required: ['columnas', 'filas'],
+            },
+            description: 'Tablas del documento (en Excel, cada una va en su hoja).',
+          },
+        },
+        required: ['formato', 'titulo'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
     permiso: null,
     tool: {
       name: 'abrir_pantalla',

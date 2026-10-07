@@ -186,7 +186,9 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
 
   const observaciones: string[] = [];
   if (exportacion) {
-    const desc = descripcionPartida(ncm, lineas.map((l) => l.codigo));
+    // Descripción por el tipo de película que entrega Oben (Linea/TipoMaterial); Pa_Ncm ahora es la
+    // partida de Colombia (39.20.10.90…), que no coincide con el NCM de la tabla.
+    const desc = liquidacion?.partidaTipo ?? descripcionPartida(ncm, lineas.map((l) => l.codigo));
     const e = draft.empaque;
     observaciones.push(
       `PF ${draft.proforma ?? ''}  OV  ${draft.numberOrderSales}`,

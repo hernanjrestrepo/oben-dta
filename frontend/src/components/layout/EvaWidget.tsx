@@ -68,13 +68,20 @@ export function EvaWidget() {
     setDescargando(accion.etiqueta);
     try {
       const blob =
-        accion.documento === 'factura_pdf'
-          ? await api.downloadFacturacionPdf(accion.ov)
-          : await api.downloadObenReportExcel(accion.documento, String(accion.ov));
+        accion.tipo === 'archivo'
+          ? await api.downloadMiaArchivo(accion.id)
+          : accion.documento === 'factura_pdf'
+            ? await api.downloadFacturacionPdf(accion.ov)
+            : await api.downloadObenReportExcel(accion.documento, String(accion.ov));
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = accion.documento === 'factura_pdf' ? `Factura-OV${accion.ov}.pdf` : `${accion.documento}-OV${accion.ov}.xlsx`;
+      a.download =
+        accion.tipo === 'archivo'
+          ? accion.nombre
+          : accion.documento === 'factura_pdf'
+            ? `Factura-OV${accion.ov}.pdf`
+            : `${accion.documento}-OV${accion.ov}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: unknown) {
@@ -156,7 +163,7 @@ export function EvaWidget() {
                       >
                         {descargando === a.etiqueta ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                        ) : a.tipo === 'descargar' ? (
+                        ) : a.tipo === 'descargar' || a.tipo === 'archivo' ? (
                           <Download className="w-3.5 h-3.5 shrink-0" />
                         ) : (
                           <ArrowRight className="w-3.5 h-3.5 shrink-0" />
