@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { FacturasParcialesService, parsearCorreoFacturaParcial } from './facturas-parciales.service';
+import { FacturasParcialesService, confirmaExito, parsearCorreoFacturaParcial } from './facturas-parciales.service';
 
 // Correo REAL que llegó al buzón de pedidos el 2026-10-01 (ejemplo de José).
 const ASUNTO = 'Proforma 10770 - Facturar Parcial';
@@ -27,7 +27,9 @@ describe('parsearCorreoFacturaParcial', () => {
   });
 });
 
-function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; auto?: boolean } = {}) {
+const crearCalls = (hub: { call: jest.Mock }) => hub.call.mock.calls.filter((c) => c[1] === 'factura.crear').length;
+
+function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; auto?: boolean; mercado?: string | null } = {}) {
   const filas: Array<Record<string, unknown>> = [];
   const coincide = (f: Record<string, unknown>, w: Record<string, unknown>) =>
     Object.entries(w).every(([k, v]) => {
@@ -51,7 +53,14 @@ function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; au
   };
   const tenants = { findOne: jest.fn(async () => ({ settings: { facturacion: { parcialAutomatica: opts.auto === true } } })) };
   const ctx = { tenantId: 't1', userId: 'u1' };
-  const hub = { call: jest.fn(async () => ({ mode: 'real', ...(opts.hub ?? { ok: true, data: { isSuccessful: true, Code: '200' } }) })) };
+  const PFS = ['10770', '11250', '11381', '11242', '11249'];
+  const hub = {
+    call: jest.fn(async (_s: string, op: string) =>
+      op === 'query.run'
+        ? { ok: true, mode: 'real', data: opts.mercado === null ? [] : PFS.map((p) => ({ NroProforma: p, Mercado: opts.mercado ?? 'NACIONAL' })) }
+        : { mode: 'real', ...(opts.hub ?? { ok: true, data: { isSuccessful: true, Code: '200' } }) },
+    ),
+  };
   const audit = { log: jest.fn() };
   const svc = new FacturasParcialesService(repo as never, tenants as never, ctx as never, hub as never, audit as never);
   return { svc, hub, filas, audit };
@@ -64,7 +73,7 @@ describe('FacturasParcialesService (WO-023)', () => {
     const { svc, hub } = build();
     const f = await svc.registrarDesdeCorreo(correo);
     expect(f).toMatchObject({ numberPF: '10770', numeroDistribucion: '11023', estado: 'pendiente', origen: 'correo' });
-    expect(hub.call).not.toHaveBeenCalled();
+    expect(crearCalls(hub)).toBe(0);
   });
 
   it('con parcialAutomatica factura al llegar el correo con NumberPF + NumberDistribucion', async () => {
@@ -87,7 +96,7 @@ describe('FacturasParcialesService (WO-023)', () => {
     expect(filas).toHaveLength(1);
     await svc.facturar(a.id);
     await svc.facturar(a.id);
-    expect(hub.call).toHaveBeenCalledTimes(1);
+    expect(crearCalls(hub)).toBe(1);
   });
 
   it('Oben rechaza → "rechazada" (se puede reintentar); timeout → "revisar" (exige confirmar antes)', async () => {
@@ -103,6 +112,51 @@ describe('FacturasParcialesService (WO-023)', () => {
     const f2 = await r2.svc.registrarManual('10770', '11023');
     expect((await r2.svc.facturar(f2.id)).estado).toBe('revisar');
     await expect(r2.svc.facturar(f2.id)).rejects.toBeInstanceOf(ConflictException);
-    expect(r2.hub.call).toHaveBeenCalledTimes(1);
+    expect(crearCalls(r2.hub)).toBe(1);
+  });
+
+  it('un HTTP exitoso SIN confirmación explícita de Oben NO es factura creada: queda en "revisar" y no se reintenta a ciegas', async () => {
+    for (const data of [{ message: 'An error has occurred.' }, null, {}, 'OK']) {
+      const { svc, hub } = build({ hub: { ok: true, data } });
+      const f = await svc.registrarManual('11250', '11084');
+      const r = await svc.facturar(f.id);
+      expect(r.estado).toBe('revisar');
+      expect(r.error).toMatch(/sin confirmación de éxito/);
+      await expect(svc.facturar(f.id)).rejects.toBeInstanceOf(ConflictException);
+      expect(crearCalls(hub)).toBe(1);
+    }
+  });
+});
+
+describe('confirmaExito', () => {
+  it.each([
+    [{ isSuccessful: true }, true],
+    [{ isSuccessful: 'True', code: '200' }, true],
+    [{ Code: 200 }, true],
+    [{ code: '200', message: 'OK' }, true],
+    [{ isSuccessful: 'False', code: '400' }, false],
+    [{ message: 'An error has occurred.' }, false],
+    [[], false],
+    [null, false],
+    ['OK', false],
+  ])('%j → %s', (data, esperado) => {
+    expect(confirmaExito(data)).toBe(esperado);
+  });
+
+  it('SOLO NACIONALES: una PF de exportación no se factura (ni por clic ni automática) y queda el motivo', async () => {
+    const { svc, hub, filas } = build({ mercado: 'EXPORTACION', auto: true });
+    const f = await svc.registrarDesdeCorreo({ ...{ from: 'notif.app.co@obengroup.com', subject: 'Proforma 10770 - Facturar Parcial', body: 'Numero de Proforma: 10770 - Numero de Distribucion: 11023', messageId: '<x>' } }).catch((e) => e);
+    // en modo automático la solicitud se registra y el intento de facturar falla con el motivo
+    expect(String((f as Error).message ?? '')).toMatch(/EXPORTACIÓN/);
+    expect(crearCalls(hub)).toBe(0);
+    expect(String(filas[0].error)).toMatch(/solo se facturan pedidos nacionales/);
+    expect(filas[0].estado).toBe('pendiente');
+  });
+
+  it('una PF que no aparece en el listado de Oben tampoco se factura (no se puede confirmar que sea nacional)', async () => {
+    const { svc, hub } = build({ mercado: null });
+    const f = await svc.registrarManual('11250', '11084');
+    await expect(svc.facturar(f.id)).rejects.toThrow(/No se pudo confirmar/);
+    expect(crearCalls(hub)).toBe(0);
   });
 });

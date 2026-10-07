@@ -20,6 +20,15 @@ const CUERPO_RE = /N[uú]mero\s+de\s+Proforma\s*:\s*(\d+)[\s\S]*?N[uú]mero\s+de
 /** Solo correos internos de Oben pueden pedir una factura. */
 const DOMINIO_OBEN = 'obengroup.com';
 
+/** true solo si Oben confirma el éxito: `isSuccessful` verdadero o `Code` 200 (mayúsculas/minúsculas y texto/número indistintos). */
+export function confirmaExito(data: unknown): boolean {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const o = Object.fromEntries(Object.entries(data as Record<string, unknown>).map(([k, v]) => [k.toLowerCase(), v]));
+  const ok = String(o.issuccessful ?? '').toLowerCase() === 'true';
+  const code = String(o.code ?? '').trim() === '200';
+  return ok || code;
+}
+
 export interface SolicitudParcial {
   numberPF: string;
   numeroDistribucion: string;
@@ -95,6 +104,17 @@ export class FacturasParcialesService {
     const fila = await this.repo.findOne({ where: { id, tenantId } });
     if (!fila) throw new NotFoundException('Solicitud de factura parcial no encontrada.');
     if (fila.estado === 'facturada') return fila;
+    // Solo pedidos NACIONALES (Hernán, 7-oct): exportación todavía no está en vivo en Oben. Si no se puede
+    // confirmar que la PF es nacional, tampoco se factura (ante la duda, no se crea una factura fiscal).
+    const mercado = await this.mercadoDe(fila.numberPF);
+    if (mercado !== 'nacional') {
+      const motivo =
+        mercado === 'exportacion'
+          ? `La PF ${fila.numberPF} es de EXPORTACIÓN: por ahora solo se facturan pedidos nacionales (Colombia).`
+          : `No se pudo confirmar que la PF ${fila.numberPF} sea nacional (no aparece en el listado de proformas de Oben): no se factura.`;
+      await this.repo.update({ id, tenantId }, { error: motivo });
+      throw new BadRequestException(motivo);
+    }
     const desde: EstadoFacturaParcial[] = confirmoQueNoExiste ? ['pendiente', 'rechazada', 'revisar'] : ['pendiente', 'rechazada'];
     if (!desde.includes(fila.estado)) {
       throw new ConflictException(
@@ -116,31 +136,55 @@ export class FacturasParcialesService {
     // Oben contesta un rechazo de negocio con HTTP 200+isSuccessful=false o con HTTP 4xx (visto el 2026-10-06: 400 "No se pudo crear la factura de venta"): en ambos casos NO se creó nada y es seguro reintentar.
     const rechazo = !r.ok && /^(Oben rechazó la operación|HTTP 4\d\d:)/.test(r.error ?? '');
     const errorCliente = !r.ok && /BUSINESS_ERROR|pending_credentials|ssrf_blocked/.test(r.error ?? '');
-    const estado: EstadoFacturaParcial = r.ok ? 'facturada' : rechazo || errorCliente ? 'rechazada' : 'revisar';
+    // Éxito = confirmación EXPLÍCITA de Oben (isSuccessful true o Code 200). Un HTTP exitoso con otro cuerpo
+    // (visto el 2026-10-07: {"message":"An error has occurred."}) no prueba que se facturó: queda en 'revisar'.
+    const confirmada = r.ok && confirmaExito(r.data);
+    const estado: EstadoFacturaParcial = confirmada ? 'facturada' : r.ok || (!rechazo && !errorCliente) ? 'revisar' : 'rechazada';
+    const errorTexto = confirmada
+      ? null
+      : r.ok
+        ? `Respuesta de Oben sin confirmación de éxito (${JSON.stringify(r.data ?? null).slice(0, 160)}). Verificar en OBEN MAS si la factura existe antes de reintentar.`
+        : (r.error ?? 'Error desconocido');
     await this.repo.update(
       { id, tenantId },
       {
         estado,
         respuesta: (r.ok ? r.data : null) as never,
-        error: r.ok ? null : (r.error ?? 'Error desconocido'),
+        error: errorTexto,
         modo: r.mode ?? null,
         facturadoPor: this.ctx.userId ?? null,
-        facturadaAt: r.ok ? new Date() : null,
+        facturadaAt: confirmada ? new Date() : null,
       },
     );
     await this.audit.log({
       workflowName: 'facturacion',
       eventType: WorkflowEventType.ACTION_EXECUTED,
-      action: r.ok ? 'factura_parcial_creada' : 'factura_parcial_fallida',
+      action: confirmada ? 'factura_parcial_creada' : 'factura_parcial_fallida',
       entityType: 'proforma',
       entityId: fila.numberPF,
       actorId: this.ctx.userId,
       inputData: { numberPF: fila.numberPF, numeroDistribucion: fila.numeroDistribucion, origen: fila.origen },
-      outputData: { ok: r.ok, estado, modo: r.mode ?? null, respuesta: r.ok ? r.data : null },
-      reason: r.ok ? null : r.error,
+      outputData: { ok: confirmada, estado, modo: r.mode ?? null, respuesta: r.ok ? r.data : null },
+      reason: errorTexto,
     });
-    this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: ${estado}${r.ok ? '' : ` — ${r.error}`}`);
+    this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: ${estado}${errorTexto ? ` — ${errorTexto}` : ''}`);
     return (await this.repo.findOne({ where: { id, tenantId } }))!;
+  }
+
+  /** Mercado de la PF según el listado de proformas de Oben (campo Mercado: NACIONAL / EXPORTACION). null = no se pudo saber. */
+  private async mercadoDe(pf: string): Promise<'nacional' | 'exportacion' | null> {
+    const r = await this.hub.call<unknown>(
+      'obenCostOrder',
+      'query.run',
+      { procedure: 'spCheckSalesOrderComex_Paradixe', numberOrderSales: Number(pf) },
+      { maxAttempts: 2, timeoutMs: 60_000 },
+    );
+    const lista = r.ok && Array.isArray(r.data) ? (r.data as Array<Record<string, unknown>>) : [];
+    const e = lista.find((x) => String(x.NroProforma ?? '').trim() === pf);
+    const m = String(e?.Mercado ?? '').trim().toUpperCase();
+    if (m.startsWith('EXPORT')) return 'exportacion';
+    if (m.startsWith('NAC')) return 'nacional';
+    return null;
   }
 
   private async registrar(
