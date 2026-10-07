@@ -16,6 +16,7 @@ import {
 import { PackingListCarteraService, type CarteraDecision } from './packing-list-cartera.service';
 import { origenDatosOben } from '../oben-reports/origen-datos';
 import { FormatosService, renderEnvio } from '../formatos/formatos.service';
+import { FacturasParcialesService } from '../facturacion/facturas-parciales.service';
 
 /** Lista de distribución que recibe los avisos de órdenes retenidas por cartera (PND). */
 export const PACKING_LIST_CARTERA_DISTRIBUTION_KEY = 'packing_list_cartera';
@@ -84,6 +85,7 @@ export class PackingListAutomationService {
     private readonly retries: Repository<PackingListPendingRetry>,
     private readonly cartera: PackingListCarteraService,
     @Optional() private readonly formatos?: FormatosService,
+    @Optional() private readonly facturas?: FacturasParcialesService,
   ) {}
 
   async handleOvApproved(numberOrderSales: number): Promise<HandleOvApprovedResult> {
@@ -253,6 +255,15 @@ export class PackingListAutomationService {
     // Confirma a Oben que ya se generaron los documentos — best effort, no
     // bloquea el correo si falla (ver ObenReportsService.confirmApproveComex).
     await this.reports.confirmApproveComex(numberOrderSales);
+
+    // Pedido nacional completo → se factura solo, sin que nadie lo pida (Hernán, 7-oct). Nunca tumba el envío:
+    // si falla, queda en el log y en la pantalla de Facturas (solo Colombia; exportación no se factura).
+    try {
+      const f = await this.facturas?.facturarOvNacional(numberOrderSales);
+      if (f) this.logger.log(`Orden ${numberOrderSales}: factura automática → ${f.estado}${f.motivo ? ` (${f.motivo})` : ''}.`);
+    } catch (err) {
+      this.logger.error(`Orden ${numberOrderSales}: la factura automática falló: ${(err as Error).message}`);
+    }
 
     this.logger.log(
       `Orden ${numberOrderSales} (${cliente}): ${includedKeys.length} documentos generados y enviados (${includedKeys.join(', ')}).`,

@@ -29,7 +29,7 @@ describe('parsearCorreoFacturaParcial', () => {
 
 const crearCalls = (hub: { call: jest.Mock }) => hub.call.mock.calls.filter((c) => c[1] === 'factura.crear').length;
 
-function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; auto?: boolean; mercado?: string | null } = {}) {
+function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; auto?: boolean; mercado?: string | null; pais?: string } = {}) {
   const filas: Array<Record<string, unknown>> = [];
   const coincide = (f: Record<string, unknown>, w: Record<string, unknown>) =>
     Object.entries(w).every(([k, v]) => {
@@ -55,8 +55,10 @@ function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; au
   const ctx = { tenantId: 't1', userId: 'u1' };
   const PFS = ['10770', '11250', '11381', '11242', '11249'];
   const hub = {
-    call: jest.fn(async (_s: string, op: string) =>
-      op === 'query.run'
+    call: jest.fn(async (_s: string, op: string, args: { procedure?: string }) =>
+      op === 'query.run' && args?.procedure === 'spEmpaqueUnificada_Paradixe'
+        ? { ok: true, mode: 'real', data: { Pais: opts.pais ?? 'COLOMBIA', Proforma: '11547' } }
+        : op === 'query.run'
         ? { ok: true, mode: 'real', data: opts.mercado === null ? [] : PFS.map((p) => ({ NroProforma: p, Mercado: opts.mercado ?? 'NACIONAL' })) }
         : { mode: 'real', ...(opts.hub ?? { ok: true, data: { isSuccessful: true, Code: '200' } }) },
     ),
@@ -158,5 +160,39 @@ describe('confirmaExito', () => {
     const f = await svc.registrarManual('11250', '11084');
     await expect(svc.facturar(f.id)).rejects.toThrow(/No se pudo confirmar/);
     expect(crearCalls(hub)).toBe(0);
+  });
+});
+
+describe('Factura AUTOMÁTICA de pedidos nacionales (Hernán, 7-oct)', () => {
+  it('OV de Colombia: factura la PF completa (NumberDistribucion vacío) sin que nadie lo pida', async () => {
+    const { svc, hub, filas } = build({ pais: 'COLOMBIA' });
+    const r = await svc.facturarOvNacional(11339);
+    expect(r).toMatchObject({ estado: 'facturada', numberPF: '11547' });
+    expect(hub.call).toHaveBeenCalledWith('obenCostOrder', 'factura.crear', { numberPF: '11547', numberDistribucion: '' }, expect.anything());
+    expect(filas[0]).toMatchObject({ origen: 'automatico', numeroDistribucion: '' });
+  });
+
+  it('OV de exportación (México, EE. UU.): NO se factura', async () => {
+    for (const pais of ['MEXICO', 'USA']) {
+      const { svc, hub } = build({ pais });
+      expect((await svc.facturarOvNacional(11014)).estado).toBe('omitida');
+      expect(crearCalls(hub)).toBe(0);
+    }
+  });
+
+  it('idempotente: la misma OV dos veces es una sola factura; y si la PF ya tiene solicitud (parcial) no se pide otra', async () => {
+    const { svc, hub } = build();
+    await svc.facturarOvNacional(11339);
+    expect((await svc.facturarOvNacional(11339)).estado).toBe('omitida');
+    expect(crearCalls(hub)).toBe(1);
+    const b = build();
+    await b.svc.registrarManual('11547', '11099'); // ya hay un parcial de esa PF
+    expect((await b.svc.facturarOvNacional(11339)).estado).toBe('omitida');
+    expect(crearCalls(b.hub)).toBe(0);
+  });
+
+  it('respuesta sin confirmación de Oben → "revisar", nunca "facturada"', async () => {
+    const { svc } = build({ hub: { ok: true, data: { message: 'An error has occurred.' } } });
+    expect((await svc.facturarOvNacional(11339)).estado).toBe('revisar');
   });
 });

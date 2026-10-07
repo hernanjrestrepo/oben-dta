@@ -99,14 +99,14 @@ export class FacturasParcialesService {
    * que no: seguro reintentar). 'revisar' (no se sabe si Oben facturó) exige
    * `confirmoQueNoExiste` — reintentar a ciegas podría duplicar la factura.
    */
-  async facturar(id: string, confirmoQueNoExiste = false): Promise<FacturaParcial> {
+  async facturar(id: string, confirmoQueNoExiste = false, mercadoConfirmado = false): Promise<FacturaParcial> {
     const tenantId = this.ctx.tenantId;
     const fila = await this.repo.findOne({ where: { id, tenantId } });
     if (!fila) throw new NotFoundException('Solicitud de factura parcial no encontrada.');
     if (fila.estado === 'facturada') return fila;
     // Solo pedidos NACIONALES (Hernán, 7-oct): exportación todavía no está en vivo en Oben. Si no se puede
     // confirmar que la PF es nacional, tampoco se factura (ante la duda, no se crea una factura fiscal).
-    const mercado = await this.mercadoDe(fila.numberPF);
+    const mercado = mercadoConfirmado ? 'nacional' : await this.mercadoDe(fila.numberPF);
     if (mercado !== 'nacional') {
       const motivo =
         mercado === 'exportacion'
@@ -171,20 +171,94 @@ export class FacturasParcialesService {
     return (await this.repo.findOne({ where: { id, tenantId } }))!;
   }
 
-  /** Mercado de la PF según el listado de proformas de Oben (campo Mercado: NACIONAL / EXPORTACION). null = no se pudo saber. */
+  /**
+   * Mercado de la PF. El listado de Oben (spCheckSalesOrderComex_Paradixe) es de COMEX: trae las de exportación y
+   * normalmente NO trae las nacionales. Si la PF no aparece, se mira de qué país es su orden (spCheckSettlement →
+   * orden de venta → Lista de Empaque): Colombia = nacional. Sin certeza, null (y no se factura).
+   */
   private async mercadoDe(pf: string): Promise<'nacional' | 'exportacion' | null> {
-    const r = await this.hub.call<unknown>(
-      'obenCostOrder',
-      'query.run',
-      { procedure: 'spCheckSalesOrderComex_Paradixe', numberOrderSales: Number(pf) },
-      { maxAttempts: 2, timeoutMs: 60_000 },
-    );
+    const opts = { maxAttempts: 2, timeoutMs: 60_000 };
+    const r = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: 'spCheckSalesOrderComex_Paradixe', numberOrderSales: Number(pf) }, opts);
     const lista = r.ok && Array.isArray(r.data) ? (r.data as Array<Record<string, unknown>>) : [];
     const e = lista.find((x) => String(x.NroProforma ?? '').trim() === pf);
     const m = String(e?.Mercado ?? '').trim().toUpperCase();
     if (m.startsWith('EXPORT')) return 'exportacion';
     if (m.startsWith('NAC')) return 'nacional';
-    return null;
+    const c = await this.hub.call<unknown>('obenCostOrder', 'liquidacion.consultar', { numberPF: pf }, opts);
+    const d = c.ok ? (Array.isArray(c.data) ? (c.data as unknown[])[0] : c.data) : null;
+    const ov = Number((d as Record<string, unknown> | null)?.OrdenVenta);
+    if (!Number.isInteger(ov) || ov <= 0) return null;
+    const pais = (await this.encabezadoDeOv(ov))?.pais ?? '';
+    if (!pais) return null;
+    return /^col(ombia)?\b/i.test(pais) ? 'nacional' : 'exportacion';
+  }
+
+  private async encabezadoDeOv(ov: number): Promise<{ pais: string; proforma: string } | null> {
+    const r = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: 'spEmpaqueUnificada_Paradixe', numberOrderSales: ov }, { maxAttempts: 2, timeoutMs: 60_000 });
+    const h = r.ok ? (Array.isArray(r.data) ? (r.data as unknown[])[0] : r.data) : null;
+    if (!h || typeof h !== 'object') return null;
+    const o = h as Record<string, unknown>;
+    return { pais: String(o.Pais ?? '').trim(), proforma: String(o.Proforma ?? '').trim() };
+  }
+
+  /**
+   * Factura AUTOMÁTICA de un pedido nacional completo (Hernán, 7-oct: "eso tiene que ser automático"): se llama
+   * cuando termina de enviarse la Lista de Empaque de la OV. Solo Colombia; exportación no se factura. Una factura
+   * por PF (NumberDistribucion vacío = pedido completo, según José). Si la PF ya tiene una solicitud (parcial por
+   * correo, manual o automática) no se vuelve a pedir. Apagable con settings.facturacion.nacionalAutomatica=false.
+   */
+  async facturarOvNacional(numberOrderSales: number): Promise<{ estado: string; motivo?: string; numberPF?: string }> {
+    const tenantId = this.ctx.tenantId;
+    const omitir = async (motivo: string, pf?: string) => {
+      await this.audit.log({
+        workflowName: 'facturacion',
+        eventType: WorkflowEventType.ACTION_EXECUTED,
+        action: 'factura_automatica_omitida',
+        entityType: 'orden_venta',
+        entityId: String(numberOrderSales),
+        actorId: this.ctx.userId,
+        outputData: { numberPF: pf ?? null },
+        reason: motivo,
+      });
+      this.logger.log(`OV ${numberOrderSales}: factura automática omitida — ${motivo}`);
+      return { estado: 'omitida', motivo, numberPF: pf };
+    };
+    if (!(await this.nacionalAutomatica())) return omitir('La factura automática de pedidos nacionales está apagada.');
+    const h = await this.encabezadoDeOv(numberOrderSales);
+    if (!h?.proforma) return omitir('Oben no devolvió la proforma de la orden.');
+    if (!/^col(ombia)?\b/i.test(h.pais)) {
+      return omitir(`La orden es de ${h.pais || 'país desconocido'}: solo se facturan pedidos nacionales (Colombia).`, h.proforma);
+    }
+    const previa = await this.repo.find({ where: { tenantId, numberPF: h.proforma } });
+    if (previa.length > 0) return omitir(`La PF ${h.proforma} ya tiene una solicitud de factura (${previa.map((p) => p.estado).join(', ')}).`, h.proforma);
+    let fila: FacturaParcial;
+    try {
+      fila = await this.repo.save(
+        this.repo.create({
+          tenantId,
+          numberPF: h.proforma,
+          numeroDistribucion: '',
+          origen: 'automatico',
+          remitente: `OV ${numberOrderSales}`,
+          estado: 'pendiente',
+          solicitadoPor: this.ctx.userId ?? null,
+        }),
+      );
+    } catch {
+      return omitir(`La PF ${h.proforma} ya tiene una solicitud de factura.`, h.proforma); // carrera: otra ejecución la registró primero
+    }
+    const r = await this.facturar(fila.id, false, true);
+    return { estado: r.estado, numberPF: h.proforma };
+  }
+
+  private async nacionalAutomatica(): Promise<boolean> {
+    try {
+      const t = await this.tenants.findOne({ where: { id: this.ctx.tenantId } });
+      const f = (t?.settings?.facturacion ?? {}) as Record<string, unknown>;
+      return f.nacionalAutomatica !== false;
+    } catch {
+      return true;
+    }
   }
 
   private async registrar(

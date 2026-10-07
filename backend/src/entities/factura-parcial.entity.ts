@@ -23,7 +23,8 @@ export class FacturaParcial extends TenantScopedEntity {
   numeroDistribucion: string;
 
   @Column({ type: 'varchar', length: 16 })
-  origen: 'correo' | 'manual';
+  /** correo = "Facturar Parcial" de Oben; manual = digitada; automatico = pedido nacional completo, al enviarse su Lista de Empaque. */
+  origen: 'correo' | 'manual' | 'automatico';
 
   @Column({ name: 'message_id', type: 'varchar', nullable: true })
   messageId: string | null;
