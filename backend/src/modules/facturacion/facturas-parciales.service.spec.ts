@@ -29,7 +29,7 @@ describe('parsearCorreoFacturaParcial', () => {
 
 const crearCalls = (hub: { call: jest.Mock }) => hub.call.mock.calls.filter((c) => c[1] === 'factura.crear').length;
 
-function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; auto?: boolean; mercado?: string | null; pais?: string } = {}) {
+function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; auto?: boolean; mercado?: string | null; pais?: string; suspendida?: boolean } = {}) {
   const filas: Array<Record<string, unknown>> = [];
   const coincide = (f: Record<string, unknown>, w: Record<string, unknown>) =>
     Object.entries(w).every(([k, v]) => {
@@ -51,7 +51,7 @@ function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; au
       return { affected: f ? 1 : 0 };
     }),
   };
-  const tenants = { findOne: jest.fn(async () => ({ settings: { facturacion: { parcialAutomatica: opts.auto === true } } })) };
+  const tenants = { findOne: jest.fn(async () => ({ settings: { facturacion: { parcialAutomatica: opts.auto === true, ...(opts.suspendida ? { suspendida: true } : {}) } } })) };
   const ctx = { tenantId: 't1', userId: 'u1' };
   const PFS = ['10770', '11250', '11381', '11242', '11249'];
   const hub = {
@@ -217,5 +217,13 @@ describe('Factura AUTOMÁTICA de pedidos nacionales (Hernán, 7-oct)', () => {
     const f = await svc.registrarManual('11250', '11084');
     expect((await svc.facturar(f.id)).estado).toBe('revisar');
     expect(crearCalls(hub)).toBe(2);
+  });
+
+  it('SUSPENDIDA: no se pide ninguna factura a Oben (ni el botón, ni el automático de pedidos nacionales)', async () => {
+    const { svc, hub } = build({ suspendida: true });
+    const f = await svc.registrarManual('11250', '11084');
+    await expect(svc.facturar(f.id)).rejects.toThrow(/suspendida/);
+    expect((await svc.facturarOvNacional(11339)).estado).toBe('omitida');
+    expect(crearCalls(hub)).toBe(0);
   });
 });

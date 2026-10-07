@@ -109,6 +109,10 @@ export class FacturasParcialesService {
     const fila = await this.repo.findOne({ where: { id, tenantId } });
     if (!fila) throw new NotFoundException('Solicitud de factura parcial no encontrada.');
     if (fila.estado === 'facturada') return fila;
+    // Interruptor general (Hernán, 7-oct: "suspendida la facturación hasta nueva orden"): no se pide NINGUNA factura a Oben.
+    if (await this.suspendida()) {
+      throw new ConflictException('La facturación está suspendida hasta nueva orden: no se envía ninguna factura a Oben.');
+    }
     // Solo pedidos NACIONALES (Hernán, 7-oct): exportación todavía no está en vivo en Oben. Si no se puede
     // confirmar que la PF es nacional, tampoco se factura (ante la duda, no se crea una factura fiscal).
     const mercado = mercadoConfirmado ? 'nacional' : await this.mercadoDe(fila.numberPF);
@@ -238,6 +242,7 @@ export class FacturasParcialesService {
       this.logger.log(`OV ${numberOrderSales}: factura automática omitida — ${motivo}`);
       return { estado: 'omitida', motivo, numberPF: pf };
     };
+    if (await this.suspendida()) return omitir('La facturación está suspendida hasta nueva orden.');
     if (!(await this.nacionalAutomatica())) return omitir('La factura automática de pedidos nacionales está apagada.');
     const h = await this.encabezadoDeOv(numberOrderSales);
     if (!h?.proforma) return omitir('Oben no devolvió la proforma de la orden.');
@@ -264,6 +269,17 @@ export class FacturasParcialesService {
     }
     const r = await this.facturar(fila.id, false, true);
     return { estado: r.estado, numberPF: h.proforma };
+  }
+
+  /** `settings.facturacion.suspendida === true`: nada se factura (ni automático, ni parcial, ni el botón). Si no se puede leer, se asume suspendida (ante la duda, no se factura). */
+  private async suspendida(): Promise<boolean> {
+    try {
+      const t = await this.tenants.findOne({ where: { id: this.ctx.tenantId } });
+      const f = (t?.settings?.facturacion ?? {}) as Record<string, unknown>;
+      return f.suspendida === true;
+    } catch {
+      return true;
+    }
   }
 
   private async nacionalAutomatica(): Promise<boolean> {
