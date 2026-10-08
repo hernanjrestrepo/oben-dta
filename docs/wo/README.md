@@ -36,6 +36,7 @@ producción (`10.50.30.10`) el mismo 2026-10-01.
 | [WO-029](WO-029-mia-analitica-gerencial.md) | MIA analítica para gerencia | En espera | Faltan datos que MIA aún no puede consultar |
 | [WO-030](WO-030-modulo-comercial.md) | Módulo Comercial: APIs de Oben y demo | En espera | APIs comerciales de José |
 | [WO-031](WO-031-dominio-y-acceso-red-oben.md) | Dominio corporativo y acceso desde la red de Oben | En espera | Que Oben defina |
+| [WO-032](WO-032-facturacion-por-programacion-diaria.md) | Facturación guiada por la programación diaria de Oben (Excel compartido, corte 4 p. m., TRM, aviso por correo) | P1 | Acceso al Excel, reglas y TRM de Oben |
 
 Entrega acordada: comercial lista esta semana; entrega formal lunes 5 o martes
 6 de octubre. Los detalles de forma ("el colorcito") van después de la
