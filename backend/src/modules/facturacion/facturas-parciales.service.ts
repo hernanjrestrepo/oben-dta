@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { FacturaParcial, EstadoFacturaParcial } from '../../entities/factura-parcial.entity';
@@ -7,6 +7,7 @@ import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
+import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
 
 /**
  * Formato REAL del correo de Oben (leído del buzón el 2026-10-01, ejemplo
@@ -72,6 +73,7 @@ export class FacturasParcialesService {
     private readonly ctx: TenantContext,
     private readonly hub: IntegrationHubService,
     private readonly audit: WorkflowAuditService,
+    @Optional() private readonly distributionLists?: DistributionListsService,
   ) {}
 
   listar(limite = 50): Promise<FacturaParcial[]> {
@@ -187,7 +189,57 @@ export class FacturasParcialesService {
       reason: errorTexto,
     });
     this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: ${estado}${errorTexto ? ` — ${errorTexto}` : ''}`);
+    await this.avisarResultado(fila, estado, errorTexto, r.mode, yaFacturada);
     return (await this.repo.findOne({ where: { id, tenantId } }))!;
+  }
+
+  /**
+   * Aviso por correo a la lista "Facturación" con el resultado de cada factura pedida a Oben (facturada, rechazada
+   * o por revisar). Antes (7-oct) el flujo automático facturaba y NO avisaba a nadie. Oben no devuelve el número de
+   * factura por la API: el correo lo dice y manda a consultarlo en OBEN MAS. Nunca tumba la facturación.
+   */
+  private async avisarResultado(fila: FacturaParcial, estado: EstadoFacturaParcial, errorTexto: string | null, modo: string | undefined, yaFacturada: boolean): Promise<void> {
+    if (!this.distributionLists) return;
+    try {
+      const dest = await this.distributionLists.resolveRecipients('document', 'facturacion');
+      if (dest.to.length === 0) {
+        this.logger.warn(`PF ${fila.numberPF}: no hay lista "facturacion" con destinatarios: no se avisó por correo.`);
+        return;
+      }
+      const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const [para, ...resto] = dest.to;
+      const cc = [...resto, ...dest.cc];
+      const titulo = { facturada: 'Factura creada en OBEN MAS', rechazada: 'Factura RECHAZADA por Oben', revisar: 'Factura por REVISAR en OBEN MAS', pendiente: 'Factura pendiente', facturando: 'Factura en proceso' }[estado];
+      const simulado = modo === 'mock';
+      const origen = fila.origen === 'automatico' ? `Automática (${fila.remitente ?? 'pedido nacional'})` : fila.origen === 'correo' ? 'Correo "Facturar Parcial" de Oben' : 'Digitada en pantalla';
+      const detalle =
+        estado === 'facturada'
+          ? yaFacturada
+            ? 'Oben indica que esa factura ya existía (sus artículos ya estaban cerrados): no se duplicó nada.'
+            : 'Oben confirmó la creación.'
+          : errorTexto ?? '';
+      const html =
+        `<p><b>${titulo}</b></p>` +
+        `<table cellpadding="4" style="border-collapse:collapse">` +
+        `<tr><td>Proforma</td><td><b>${esc(fila.numberPF)}</b></td></tr>` +
+        `<tr><td>Distribución</td><td>${fila.numeroDistribucion ? esc(fila.numeroDistribucion) : 'Pedido completo'}</td></tr>` +
+        `<tr><td>Origen</td><td>${esc(origen)}</td></tr>` +
+        `<tr><td>Resultado</td><td>${esc(estado)}</td></tr>` +
+        `</table>` +
+        (detalle ? `<p>${esc(detalle)}</p>` : '') +
+        (estado === 'facturada' ? '<p>La API de Oben no entrega el número de la factura: consúltalo en OBEN MAS.</p>' : '') +
+        (estado === 'revisar' ? '<p>No quedó claro si Oben la creó: verifica en OBEN MAS antes de reintentar.</p>' : '') +
+        (simulado ? '<p><b>SIMULADO:</b> no se creó ninguna factura real.</p>' : '');
+      const r = await this.hub.call<unknown>(
+        'email',
+        'send',
+        { to: para, ...(cc.length ? { cc: cc.join(',') } : {}), ...(dest.bcc.length ? { bcc: dest.bcc.join(',') } : {}), subject: `${simulado ? '[SIMULADO] ' : ''}${titulo} — PF ${fila.numberPF}`, body: html },
+        { maxAttempts: 1, timeoutMs: 30_000 },
+      );
+      if (!r.ok) this.logger.warn(`PF ${fila.numberPF}: no se pudo enviar el aviso por correo: ${r.error}`);
+    } catch (err) {
+      this.logger.warn(`PF ${fila.numberPF}: falló el aviso por correo: ${(err as Error).message}`);
+    }
   }
 
   /**

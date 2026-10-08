@@ -64,9 +64,10 @@ function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; au
     ),
   };
   const audit = { log: jest.fn() };
-  const svc = new FacturasParcialesService(repo as never, tenants as never, ctx as never, hub as never, audit as never);
+  const listas = { resolveRecipients: jest.fn(async () => ({ to: ['jorge@oben.com', 'camilo@oben.com'], cc: ['hernan@x.com'], bcc: [] })) };
+  const svc = new FacturasParcialesService(repo as never, tenants as never, ctx as never, hub as never, audit as never, listas as never);
   svc.esperaVerificacionMs = 0;
-  return { svc, hub, filas, audit };
+  return { svc, hub, filas, audit, listas };
 }
 
 describe('FacturasParcialesService (WO-023)', () => {
@@ -225,5 +226,40 @@ describe('Factura AUTOMÁTICA de pedidos nacionales (Hernán, 7-oct)', () => {
     await expect(svc.facturar(f.id)).rejects.toThrow(/suspendida/);
     expect((await svc.facturarOvNacional(11339)).estado).toBe('omitida');
     expect(crearCalls(hub)).toBe(0);
+  });
+
+  it('AVISO por correo a la lista Facturación tras facturar (facturada, rechazada o por revisar) — antes el flujo automático no avisaba a nadie', async () => {
+    const correos = (hub: { call: jest.Mock }) => hub.call.mock.calls.filter((c) => c[1] === 'send').map((c) => c[2] as { to: string; cc?: string; subject: string; body: string });
+    const ok = build();
+    await ok.svc.facturarOvNacional(11339);
+    const a = correos(ok.hub);
+    expect(a).toHaveLength(1);
+    expect(a[0].to).toBe('jorge@oben.com');
+    expect(a[0].cc).toBe('camilo@oben.com,hernan@x.com');
+    expect(a[0].subject).toBe('Factura creada en OBEN MAS — PF 11547');
+    expect(a[0].body).toContain('Pedido completo');
+    expect(a[0].body).toContain('consúltalo en OBEN MAS');
+
+    const mal = build({ hub: { ok: false, error: 'HTTP 400: {"isSuccessful":"False"}' } });
+    await mal.svc.facturarOvNacional(11339);
+    expect(correos(mal.hub)[0].subject).toBe('Factura RECHAZADA por Oben — PF 11547');
+
+    const dudoso = build({ hub: { ok: false, error: 'This operation was aborted' } });
+    await dudoso.svc.facturarOvNacional(11339);
+    expect(correos(dudoso.hub)[0].subject).toBe('Factura por REVISAR en OBEN MAS — PF 11547');
+  });
+
+  it('si no hay destinatarios o el correo falla, la factura igual queda registrada (el aviso nunca la tumba)', async () => {
+    const { svc, listas, filas } = build();
+    listas.resolveRecipients.mockRejectedValueOnce(new Error('db caída'));
+    const r = await svc.facturarOvNacional(11339);
+    expect(r.estado).toBe('facturada');
+    expect(filas[0].estado).toBe('facturada');
+  });
+
+  it('suspendida: no hay factura y tampoco correo', async () => {
+    const { svc, hub } = build({ suspendida: true });
+    await svc.facturarOvNacional(11339);
+    expect(hub.call.mock.calls.filter((c) => c[1] === 'send')).toHaveLength(0);
   });
 });
