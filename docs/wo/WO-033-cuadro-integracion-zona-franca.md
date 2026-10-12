@@ -1,6 +1,6 @@
 # WO-033 — Cuadro de integración (Certificado de Integración de Zona Franca) y reglas de factura NetSuite
 
-**Estado:** Propuesta (EPWO-007: no se inicia sin aprobación de Hernán) · **Origen:** archivos de Oben del 2026-10-12: `cuadrint-9010468303-1008838.pdf`, `FAC.pdf`, `BASEDEXPORTACION.xlsx`; mensajes de José ("terminé todos los JSON y Maestros", "quiero salir de los cuadros de integración").
+**Estado:** Aprobada por Hernán (2026-10-12); construida con datos SIMULADOS, a la espera de las APIs de José · **Origen:** archivos de Oben del 2026-10-12: `cuadrint-9010468303-1008838.pdf`, `FAC.pdf`, `BASEDEXPORTACION.xlsx`; mensajes de José ("terminé todos los JSON y Maestros", "quiero salir de los cuadros de integración").
 
 ## Qué es el "cuadro de integración" (aclarado)
 No es la liquidación de exportación. Es el **Certificado de Integración de Materias Primas e Insumos Nacionales y Extranjeros** que Oben presenta en la Zona Franca Permanente Internacional del Atlántico (formulario 1008838, certificado 51590, destino "Al resto del mundo", presentado 2026-09-23). Por cada producto elaborado lista: insumos nacionales, insumos extranjeros (cada uno atado a su autorización/declaración de importación, p. ej. `69256-003`), desperdicios del proceso y otros costos (mano de obra, gastos operativos, utilidad), con el % de participación nacional/extranjera.
@@ -30,3 +30,17 @@ No es la liquidación de exportación. Es el **Certificado de Integración de Ma
 
 ## Pendiente de Oben / decisiones
 Ver el mensaje a José en la conversación del 2026-10-12. Sin las APIs (consumo por orden, maestro de autorizaciones, costos por insumo) solo se puede construir con datos simulados (política de simulación).
+
+## Construido (2026-10-12, con datos simulados)
+`backend/src/modules/cuadro-integracion/`: `GET /cuadro-integracion/:orden` y `/:orden/excel` (solo lectura, permiso `exportations.liquidate`).
+- **Fórmula verificada contra el certificado 51590**: MP: cantidad = consumo × (1 + %desperdicio + %regranulado); ME: cantidad = consumo, desperdicio aparte; % desperdicio impreso = desperdicio / cantidad sobre valores redondeados. Las 11 materias primas, los desperdicios y las participaciones (51,90 % / 1,52 % / 46,58 %) coinciden.
+- **Cuadre de masas**: consumo de MP (22.080,77 kg) = producto elaborado sin recuperado (22.080,76 kg).
+- **Avisos** de lo que falta: referencia sin maestro, sin costo, sin conversión a kg, masa que no cuadra.
+- **Fuente**: `CuadroIntegracionFuenteSimulada` (certificado 51590). Al llegar las APIs de José se agrega otra implementación de `CuadroIntegracionFuente` y se cambia el proveedor del módulo; el cálculo no cambia.
+- Pruebas: 7 nuevas (suite completa 999 en verde).
+
+## Sin confirmar con Oben
+1. Qué significa NACIONALIZADO SI/NO del Excel frente a la separación nacional/extranjero del certificado (no coinciden: 13 SI vs 17 extranjeros). Hoy el origen es un campo del maestro.
+2. Convención de la cantidad de insumos nacionales y de empaque (se toma el consumo, sin sumar desperdicio).
+3. Subpartida y costo por insumo, y otros costos (mano de obra, gastos, utilidad): vienen del PDF, no del Excel.
+4. Cómo se entrega a la Zona Franca (archivo/API o digitado).

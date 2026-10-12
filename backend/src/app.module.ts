@@ -16,6 +16,7 @@ import { EvaModule } from './modules/eva/eva.module';
 import { PackingListModule } from './modules/packing-list/packing-list.module';
 import { ObenReportsModule } from './modules/oben-reports/oben-reports.module';
 import { LiquidacionModule } from './modules/liquidacion/liquidacion.module';
+import { CuadroIntegracionModule } from './modules/cuadro-integracion/cuadro-integracion.module';
 import { DashboardModule } from './modules/dashboard.module';
 import { TenantModule } from './common/tenant/tenant.module';
 import { MicrosoftOAuthModule } from './common/microsoft-oauth/microsoft-oauth.module';
@@ -200,6 +201,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
     FormatosModule,
     ObenReportsModule,
     LiquidacionModule,
+    CuadroIntegracionModule,
     EquivalencesModule,
     FacturacionModule,
     ComercialModule,
