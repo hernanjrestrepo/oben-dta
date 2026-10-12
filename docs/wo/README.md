@@ -37,6 +37,7 @@ producción (`10.50.30.10`) el mismo 2026-10-01.
 | [WO-030](WO-030-modulo-comercial.md) | Módulo Comercial: APIs de Oben y demo | En espera | APIs comerciales de José |
 | [WO-031](WO-031-dominio-y-acceso-red-oben.md) | Dominio corporativo y acceso desde la red de Oben | En espera | Que Oben defina |
 | [WO-032](WO-032-facturacion-por-programacion-diaria.md) | Facturación guiada por la programación diaria de Oben (Excel compartido, corte 4 p. m., TRM, aviso por correo) | P1 | Acceso al Excel, reglas y TRM de Oben |
+| [WO-033](WO-033-cuadro-integracion-zona-franca.md) | Cuadro de integración (Zona Franca) y reglas de factura NetSuite | Propuesta | Aprobación de Hernán; APIs y maestros de José |
 
 Entrega acordada: comercial lista esta semana; entrega formal lunes 5 o martes
 6 de octubre. Los detalles de forma ("el colorcito") van después de la
