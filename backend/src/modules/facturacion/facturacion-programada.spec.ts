@@ -32,25 +32,37 @@ function repoEnMemoria(filas: Fila[], prefijo: string) {
   };
 }
 
-// Órdenes REALES del cuadro que Oben envió el 2026-10-13 ("esto es lo que se va a facturar hoy").
+// Órdenes REALES del cuadro que Oben envió el 2026-10-13 ("esto es lo que se va a facturar hoy"), con el país y la
+// proforma que devolvió Oben para cada una ese día.
 const OVS: Record<number, { pf: string; pais: string }> = {
   11341: { pf: '11546', pais: 'COLOMBIA' }, // AMCOR FLEXIBLES CALI — CERRADA
   11235: { pf: '11374', pais: 'COLOMBIA' }, // PLASMAR — CERRADA
   11256: { pf: '11457', pais: 'USA' }, // BAYSHORE FILMS LLC — CERRADA (exportación)
-  10963: { pf: '11126', pais: 'COLOMBIA' }, // FLEXO SPRING — POR CERRAR
-  11052: { pf: '11228', pais: 'COLOMBIA' }, // LITOPLAS — SALDO PENDIENTE
+  11039: { pf: '11235', pais: 'COLOMBIA' }, // OBEN DISTRIBUIDORA — POR CERRAR
+  10963: { pf: '11126', pais: 'COLOMBIA' }, // FLEXO SPRING — POR CERRAR, con parcial pedido el viernes 4:02 p. m.
+  11052: { pf: '11228', pais: 'COLOMBIA' }, // LITOPLAS — SALDO PENDIENTE, con parcial pedido el viernes
   11031: { pf: '11198', pais: 'COLOMBIA' }, // FLEXIPACK — SALDO PENDIENTE
 };
 const HOY = '2026-10-13';
 /** 10:30 a. m. en Bogotá. */
 const MANANA_1030 = new Date('2026-10-13T15:30:00Z');
+const VIERNES_1226 = new Date('2026-10-09T17:26:41Z');
+const VIERNES_1522 = new Date('2026-10-09T20:22:42Z');
+const VIERNES_1602 = new Date('2026-10-09T21:02:32Z');
+
+const correo = (pf: string, dist: string) => ({
+  from: 'notif.app.co@obengroup.com',
+  subject: `Proforma ${pf} - Facturar Parcial`,
+  body: `Numero de Proforma: ${pf} - Numero de Distribucion: ${dist}`,
+  messageId: `<${pf}-${dist}>`,
+});
 
 function armar(
   opts: {
     ajustes?: Record<string, unknown>;
     ahora?: Date;
     programadas?: Array<{ ov: number; pf?: string; tipo?: string; fecha?: string }>;
-    /** OV → fecha y hora en que salió su Lista de Empaque (cerró); `ok:false` = el envío falló. */
+    /** OV → cuándo salió su Lista de Empaque (cerró); `ok:false` = el envío falló. */
     cerradas?: Record<number, { en: Date; ok?: boolean }>;
     solicitudes?: Fila[];
   } = {},
@@ -66,7 +78,7 @@ function armar(
   }));
   const repo = repoEnMemoria(filas, 'f');
   const programadas = repoEnMemoria(prog, 'p');
-  const tenants = { findOne: jest.fn(async () => ({ settings: { facturacion: { soloProgramadas: true, ...(opts.ajustes ?? {}) } } })) };
+  const tenants = { findOne: jest.fn(async () => ({ settings: { facturacion: { soloProgramadas: true, parcialAutomatica: true, ...(opts.ajustes ?? {}) } } })) };
   const ctx = { tenantId: 't1', userId: 'u1' };
   const hub = {
     call: jest.fn(async (_s: string, op: string, args: { procedure?: string; numberOrderSales?: number; numberPF?: string }) => {
@@ -104,7 +116,7 @@ describe('fechaHoraBogota', () => {
   });
 });
 
-describe('Facturación programada (WO-032): solo se factura lo que Oben programó para hoy', () => {
+describe('Facturación programada (WO-032): pedido completo, al cerrar la orden', () => {
   it('una orden que NO está en la programación de hoy no se factura, aunque sea nacional y cierre', async () => {
     const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11235 }] });
     const r = await svc.facturarOvNacional(11341);
@@ -148,11 +160,11 @@ describe('Facturación programada (WO-032): solo se factura lo que Oben program�
     expect(facturasPedidas()).toEqual([]);
   });
 
-  it('programada como PARCIAL (saldo pendiente): no se pide la factura del pedido completo', async () => {
+  it('programada con SALDO PENDIENTE (parcial) y sin correo "Facturar Parcial": no se pide la factura del pedido completo', async () => {
     const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11052, tipo: 'parcial' }] });
     const r = await svc.facturarOvNacional(11052);
     expect(r.estado).toBe('omitida');
-    expect(r.motivo).toMatch(/programada como factura PARCIAL/);
+    expect(r.motivo).toMatch(/saldo pendiente \(factura PARCIAL\)/);
     expect(facturasPedidas()).toEqual([]);
   });
 
@@ -160,21 +172,80 @@ describe('Facturación programada (WO-032): solo se factura lo que Oben program�
     const { svc } = armar({ ajustes: { soloProgramadas: false } });
     expect((await svc.facturarOvNacional(11341)).estado).toBe('facturada');
   });
+});
 
-  it('correo "Facturar Parcial": se factura solo si su proforma está programada para hoy; si no, queda pendiente con el motivo', async () => {
-    const correo = (pf: string, dist: string) => ({
-      from: 'notif.app.co@obengroup.com',
-      subject: `Proforma ${pf} - Facturar Parcial`,
-      body: `Numero de Proforma: ${pf} - Numero de Distribucion: ${dist}`,
-      messageId: `<${pf}-${dist}>`,
+describe('Facturación programada: parciales ("Facturar Parcial") esperan el cierre de su orden', () => {
+  const parcial = (pf: string, dist: string, pedida: Date) => ({ numberPF: pf, numeroDistribucion: dist, origen: 'correo', estado: 'pendiente', createdAt: pedida });
+
+  it('caso real 10963 (POR CERRAR, parcial pedido el viernes 4:02 p. m.): al cerrar la orden se factura ESE parcial, no el pedido completo', async () => {
+    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 10963 }], solicitudes: [parcial('11126', '11144', VIERNES_1602)] });
+    const r = await svc.facturarOvNacional(10963); // sale su Lista de Empaque hoy a las 10:30
+    expect(r).toMatchObject({ estado: 'facturada', motivo: 'distribución 11144: facturada', numberPF: '11126' });
+    expect(facturasPedidas()).toEqual([{ numberPF: '11126', numberDistribucion: '11144' }]);
+  });
+
+  it('si la factura parcial automática está apagada, al cerrar no se factura: queda para el botón', async () => {
+    const { svc, facturasPedidas } = armar({ ajustes: { parcialAutomatica: false }, programadas: [{ ov: 10963 }], solicitudes: [parcial('11126', '11144', VIERNES_1602)] });
+    const r = await svc.facturarOvNacional(10963);
+    expect(r.estado).toBe('omitida');
+    expect(r.motivo).toMatch(/se facturan con el botón/);
+    expect(facturasPedidas()).toEqual([]);
+  });
+
+  it('un parcial pedido DESPUÉS del último cierre de la orden espera su propio cierre', async () => {
+    // La orden cerró el viernes a las 3:22 p. m.; hoy Oben pide otro parcial (otra distribución) que aún no cierra.
+    const { svc, facturasPedidas } = armar({
+      programadas: [{ ov: 11052, tipo: 'parcial' }],
+      cerradas: { 11052: { en: VIERNES_1522 } },
+      solicitudes: [parcial('11228', '11199', new Date('2026-10-13T15:00:00Z'))],
     });
-    const { svc, facturasPedidas } = armar({ ajustes: { parcialAutomatica: true }, programadas: [{ ov: 11052, tipo: 'parcial' }] });
+    const r = await svc.facturarProgramadasDeHoy();
+    expect(r[0]).toMatchObject({ resultado: 'omitida', detalle: expect.stringMatching(/posterior al último cierre/) });
+    expect(facturasPedidas()).toEqual([]);
+  });
 
-    expect((await svc.registrarDesdeCorreo(correo('11228', '11120'))).estado).toBe('facturada');
-    const fuera = await svc.registrarDesdeCorreo(correo('11198', '11121'));
-    expect(fuera.estado).toBe('pendiente');
-    expect(String(fuera.error)).toMatch(/No está en la programación de facturación de hoy/);
-    expect(facturasPedidas()).toEqual([{ numberPF: '11228', numberDistribucion: '11120' }]);
+  it('llega el correo y la orden AÚN no cierra: queda pendiente con el motivo, y se factura sola cuando cierre', async () => {
+    const { svc, filas, facturasPedidas } = armar({ programadas: [{ ov: 11039 }] });
+    const f = await svc.registrarDesdeCorreo(correo('11235', '11160'));
+    expect(f.estado).toBe('pendiente');
+    expect(String(f.error)).toMatch(/Espera el cierre de su orden/);
+    expect(facturasPedidas()).toEqual([]);
+
+    expect((await svc.facturarOvNacional(11039)).estado).toBe('facturada'); // cierra la orden
+    expect(facturasPedidas()).toEqual([{ numberPF: '11235', numberDistribucion: '11160' }]);
+    expect(filas[0].estado).toBe('facturada');
+  });
+
+  it('llega el correo minutos después del cierre de la orden: se factura de una vez', async () => {
+    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11039 }], cerradas: { 11039: { en: new Date('2026-10-13T15:20:00Z') } } });
+    expect((await svc.registrarDesdeCorreo(correo('11235', '11160'))).estado).toBe('facturada');
+    expect(facturasPedidas()).toEqual([{ numberPF: '11235', numberDistribucion: '11160' }]);
+  });
+
+  it('llega el correo de una proforma que NO está programada para hoy: queda pendiente', async () => {
+    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11039 }] });
+    const f = await svc.registrarDesdeCorreo(correo('11198', '11153'));
+    expect(f.estado).toBe('pendiente');
+    expect(String(f.error)).toMatch(/No está en la programación de facturación de hoy/);
+    expect(facturasPedidas()).toEqual([]);
+  });
+
+  it('la orden cerró y el correo llega después del corte: no se factura hoy', async () => {
+    const { svc, facturasPedidas } = armar({
+      programadas: [{ ov: 11039 }],
+      cerradas: { 11039: { en: new Date('2026-10-13T21:10:00Z') } },
+      ahora: new Date('2026-10-13T21:15:00Z'),
+    });
+    const f = await svc.registrarDesdeCorreo(correo('11235', '11160'));
+    expect(f.estado).toBe('pendiente');
+    expect(String(f.error)).toMatch(/después del corte de las 16:00/);
+    expect(facturasPedidas()).toEqual([]);
+  });
+
+  it('sin programación diaria (interruptor apagado) el parcial se factura al llegar el correo, como antes', async () => {
+    const { svc, facturasPedidas } = armar({ ajustes: { soloProgramadas: false } });
+    expect((await svc.registrarDesdeCorreo(correo('11235', '11160'))).estado).toBe('facturada');
+    expect(facturasPedidas()).toEqual([{ numberPF: '11235', numberDistribucion: '11160' }]);
   });
 });
 
@@ -221,37 +292,45 @@ describe('programarDia: cargar el cuadro del día', () => {
   });
 });
 
-describe('facturarProgramadasDeHoy: factura lo que ya se puede y deja esperando lo demás', () => {
-  const cerroHoy = { en: new Date('2026-10-13T14:00:00Z') }; // 9:00 a. m.
+describe('facturarProgramadasDeHoy: factura lo que ya cerró y deja esperando lo demás', () => {
+  const cerroElLunes = { en: new Date('2026-10-12T14:00:00Z') };
 
-  it('cuadro real del 13-oct: factura las nacionales cerradas, espera las que no han cerrado y no toca exportación', async () => {
+  it('cuadro real del 13-oct: completas cerradas, parcial de saldo pendiente ya cerrado, las POR CERRAR esperan y exportación no se toca', async () => {
     const { svc, facturasPedidas } = armar({
-      programadas: [{ ov: 11341 }, { ov: 11235 }, { ov: 11256 }, { ov: 10963 }, { ov: 11052, tipo: 'parcial' }],
-      cerradas: { 11341: cerroHoy, 11235: cerroHoy, 11256: cerroHoy },
+      programadas: [{ ov: 11341 }, { ov: 11235 }, { ov: 11256 }, { ov: 11039 }, { ov: 10963 }, { ov: 11052, tipo: 'parcial' }, { ov: 11031, tipo: 'parcial' }],
+      cerradas: { 11341: cerroElLunes, 11235: cerroElLunes, 11256: cerroElLunes, 11052: { en: VIERNES_1522 }, 11031: cerroElLunes },
+      solicitudes: [
+        { numberPF: '11228', numeroDistribucion: '11140', origen: 'correo', estado: 'pendiente', createdAt: VIERNES_1226 }, // LITOPLAS
+        { numberPF: '11126', numeroDistribucion: '11144', origen: 'correo', estado: 'pendiente', createdAt: VIERNES_1602 }, // FLEXO SPRING, aún sin cerrar
+      ],
     });
     const r = await svc.facturarProgramadasDeHoy();
     const de = (ov: number) => r.find((x) => x.ov === ov);
 
-    expect(de(11341)?.resultado).toBe('facturada');
-    expect(de(11235)?.resultado).toBe('facturada');
+    expect(de(11341)?.resultado).toBe('facturada'); // completa
+    expect(de(11235)?.resultado).toBe('facturada'); // completa
     expect(de(11256)).toMatchObject({ resultado: 'omitida', detalle: expect.stringMatching(/solo se facturan pedidos nacionales/) });
-    expect(de(10963)?.resultado).toBe('espera_cierre');
-    expect(de(11052)?.resultado).toBe('espera_correo_parcial');
-    // Solo las dos nacionales cerradas, cada una como pedido completo (distribución vacía).
-    expect(facturasPedidas().map((f) => f.numberPF).sort()).toEqual(['11374', '11546']);
-    expect(facturasPedidas().every((f) => f.numberDistribucion === '')).toBe(true);
+    expect(de(11039)?.resultado).toBe('espera_cierre'); // POR CERRAR, sin parcial
+    expect(de(10963)?.resultado).toBe('espera_cierre'); // POR CERRAR, con parcial pedido: espera el cierre
+    expect(de(11052)).toMatchObject({ resultado: 'facturada', detalle: 'distribución 11140: facturada' }); // saldo pendiente: su parcial
+    expect(de(11031)).toMatchObject({ resultado: 'omitida', detalle: expect.stringMatching(/saldo pendiente \(factura PARCIAL\)/) }); // sin correo parcial
+    expect(
+      facturasPedidas()
+        .map((f) => `${f.numberPF}/${f.numberDistribucion}`)
+        .sort(),
+    ).toEqual(['11228/11140', '11374/', '11546/']);
   });
 
-  it('volver a correrla no repite facturas: lo ya pedido sale como "ya_solicitada"', async () => {
-    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11341 }], cerradas: { 11341: cerroHoy } });
+  it('volver a correrla no repite facturas', async () => {
+    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11341 }], cerradas: { 11341: cerroElLunes } });
     await svc.facturarProgramadasDeHoy();
     const r = await svc.facturarProgramadasDeHoy();
-    expect(r[0]).toMatchObject({ resultado: 'ya_solicitada', detalle: 'pedido completo: facturada' });
+    expect(r[0]).toMatchObject({ resultado: 'omitida', detalle: expect.stringMatching(/ya tiene una solicitud de factura \(facturada\)/) });
     expect(facturasPedidas()).toHaveLength(1);
   });
 
   it('un envío FALLIDO de la Lista de Empaque no cuenta como orden cerrada', async () => {
-    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11341 }], cerradas: { 11341: { en: cerroHoy.en, ok: false } } });
+    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11341 }], cerradas: { 11341: { en: cerroElLunes.en, ok: false } } });
     expect((await svc.facturarProgramadasDeHoy())[0].resultado).toBe('espera_cierre');
     expect(facturasPedidas()).toEqual([]);
   });
@@ -267,25 +346,14 @@ describe('facturarProgramadasDeHoy: factura lo que ya se puede y deja esperando 
     expect(facturasPedidas()).toEqual([]);
   });
 
-  it('parciales: con su correo y la factura parcial automática encendida se facturan con el número de distribución; apagada, esperan el botón', async () => {
-    const solicitud = { numberPF: '11228', numeroDistribucion: '11120', origen: 'correo', estado: 'pendiente' };
-    const on = armar({ ajustes: { parcialAutomatica: true }, programadas: [{ ov: 11052, tipo: 'parcial' }], solicitudes: [solicitud] });
-    expect((await on.svc.facturarProgramadasDeHoy())[0]).toMatchObject({ resultado: 'facturada', detalle: 'distribución 11120' });
-    expect(on.facturasPedidas()).toEqual([{ numberPF: '11228', numberDistribucion: '11120' }]);
-
-    const off = armar({ programadas: [{ ov: 11052, tipo: 'parcial' }], solicitudes: [{ ...solicitud }] });
-    expect((await off.svc.facturarProgramadasDeHoy())[0]).toMatchObject({ resultado: 'omitida', detalle: expect.stringMatching(/se factura con el botón/) });
-    expect(off.facturasPedidas()).toEqual([]);
-  });
-
   it('con la facturación SUSPENDIDA no se pide nada', async () => {
-    const { svc, facturasPedidas } = armar({ ajustes: { suspendida: true }, programadas: [{ ov: 11341 }], cerradas: { 11341: cerroHoy } });
+    const { svc, facturasPedidas } = armar({ ajustes: { suspendida: true }, programadas: [{ ov: 11341 }], cerradas: { 11341: cerroElLunes } });
     expect((await svc.facturarProgramadasDeHoy())[0]).toMatchObject({ resultado: 'omitida', detalle: expect.stringMatching(/suspendida/) });
     expect(facturasPedidas()).toEqual([]);
   });
 
   it('lo programado para otro día no se factura hoy', async () => {
-    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11341, fecha: '2026-10-14' }], cerradas: { 11341: cerroHoy } });
+    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11341, fecha: '2026-10-14' }], cerradas: { 11341: cerroElLunes } });
     expect(await svc.facturarProgramadasDeHoy()).toEqual([]);
     expect(facturasPedidas()).toEqual([]);
   });

@@ -52,12 +52,14 @@ export interface ResultadoProgramada {
   ov: number;
   pf: string;
   tipo: TipoFacturaProgramada;
-  /** facturada | rechazada | revisar | omitida | espera_cierre | espera_correo_parcial | ya_solicitada | error */
+  /** facturada | rechazada | revisar | omitida | espera_cierre | varias | error */
   resultado: string;
   detalle?: string;
 }
 
 const HORA_CORTE_POR_DEFECTO = '16:00';
+/** Un correo "Facturar Parcial" y el cierre de su orden pueden llegar en cualquier orden, con minutos de diferencia. */
+const TOLERANCIA_CIERRE_MS = 30 * 60_000;
 
 /** Fecha (AAAA-MM-DD) y minutos del día en Bogotá: UTC−5 fijo, Colombia no cambia la hora. */
 export function fechaHoraBogota(d: Date): { fecha: string; minutos: number } {
@@ -71,6 +73,18 @@ function minutosDe(hora: unknown): number | null {
 }
 
 const hhmm = (minutos: number) => `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${String(minutos % 60).padStart(2, '0')}`;
+
+const noProgramada = (fecha: string) => `No está en la programación de facturación de hoy (${fecha}): se factura cuando Oben la programe.`;
+
+/**
+ * Corte de facturación: lo que cierra HOY a la hora de corte o después no se factura hoy ("si corte cierra una OV a
+ * las 4:05 p. m. queda para el día siguiente", Jorge, 8-oct). Lo cerrado en días anteriores sí. null = se puede.
+ */
+function motivoDeCorte(cierre: Date, fechaHoy: string, corte: number): string | null {
+  const c = fechaHoraBogota(cierre);
+  if (c.fecha !== fechaHoy || c.minutos < corte) return null;
+  return `Cerró a las ${hhmm(c.minutos)}, después del corte de las ${hhmm(corte)}: no se factura hoy; queda para cuando Oben la reprograme.`;
+}
 
 /** null si no es el correo de factura parcial. Lanza si lo es pero viene incompleto o inconsistente (nunca adivina). */
 export function parsearCorreoFacturaParcial(asunto: string, cuerpo: string): SolicitudParcial | null {
@@ -126,12 +140,26 @@ export class FacturasParcialesService {
     }
     const fila = await this.registrar(solicitud, 'correo', { messageId: input.messageId, remitente: input.from });
     if (fila.estado === 'pendiente' && (await this.automatica())) {
-      // Con la programación diaria activa, el parcial solo se factura solo si su proforma está programada para hoy.
-      const fuera = (await this.programacionDe({ pf: fila.numberPF }, this.reloj(), 'parcial')).motivo;
-      if (fuera) {
-        await this.repo.update({ id: fila.id, tenantId: this.ctx.tenantId }, { error: fuera });
-        this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: queda pendiente — ${fuera}`);
-        return (await this.repo.findOne({ where: { id: fila.id, tenantId: this.ctx.tenantId } })) ?? fila;
+      // Programación diaria (WO-032): el parcial se factura cuando su orden está programada para hoy Y ya cerró
+      // (aprobada en corte = salió su Lista de Empaque). Si aún no cierra queda pendiente y se factura al cerrar.
+      const prog = await this.programadaHoy({ pf: fila.numberPF });
+      if (prog.activa) {
+        let espera: string | null;
+        if (!prog.entrada) {
+          espera = noProgramada(prog.fecha);
+        } else {
+          const cierre = await this.cierreDe(prog.entrada.numberOrderSales);
+          const pedido = fila.createdAt ? new Date(fila.createdAt) : this.reloj();
+          espera =
+            cierre && cierre.getTime() >= pedido.getTime() - TOLERANCIA_CIERRE_MS
+              ? motivoDeCorte(cierre, prog.fecha, prog.corte)
+              : 'Espera el cierre de su orden (aprobada en corte): se factura sola cuando salga la Lista de Empaque, antes del corte.';
+        }
+        if (espera) {
+          await this.repo.update({ id: fila.id, tenantId: this.ctx.tenantId }, { error: espera });
+          this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: queda pendiente — ${espera}`);
+          return (await this.repo.findOne({ where: { id: fila.id, tenantId: this.ctx.tenantId } })) ?? fila;
+        }
       }
       return this.facturar(fila.id);
     }
@@ -341,8 +369,13 @@ export class FacturasParcialesService {
     if (await this.suspendida()) return omitir('La facturación está suspendida hasta nueva orden.');
     if (!(await this.nacionalAutomatica())) return omitir('La factura automática de pedidos nacionales está apagada.');
     // Programación diaria (WO-032): solo lo que Oben programó para hoy, y solo si cerró antes del corte.
-    const prog = await this.programacionDe({ ov: numberOrderSales }, cerradaEn ?? this.reloj(), 'completa');
-    if (prog.motivo) return omitir(prog.motivo, prog.entrada?.numberPF);
+    const cierre = cerradaEn ?? this.reloj();
+    const prog = await this.programadaHoy({ ov: numberOrderSales });
+    if (prog.activa) {
+      if (!prog.entrada) return omitir(noProgramada(prog.fecha));
+      const tarde = motivoDeCorte(cierre, prog.fecha, prog.corte);
+      if (tarde) return omitir(tarde, prog.entrada.numberPF);
+    }
     const h = await this.encabezadoDeOv(numberOrderSales);
     if (!h?.proforma) return omitir('Oben no devolvió la proforma de la orden.');
     if (prog.entrada && prog.entrada.numberPF !== h.proforma) {
@@ -352,7 +385,37 @@ export class FacturasParcialesService {
       return omitir(`La orden es de ${h.pais || 'país desconocido'}: solo se facturan pedidos nacionales (Colombia).`, h.proforma);
     }
     const previa = await this.repo.find({ where: { tenantId, numberPF: h.proforma } });
-    if (previa.length > 0) return omitir(`La PF ${h.proforma} ya tiene una solicitud de factura (${previa.map((p) => p.estado).join(', ')}).`, h.proforma);
+    if (previa.length > 0) {
+      const pendientes = previa.filter((p) => p.estado === 'pendiente' && p.numeroDistribucion);
+      if (!prog.activa || pendientes.length === 0) {
+        return omitir(`La PF ${h.proforma} ya tiene una solicitud de factura (${previa.map((p) => p.estado).join(', ')}).`, h.proforma);
+      }
+      // Programación diaria: la orden cerró → se facturan los parciales que Oben había pedido para esa proforma
+      // (cada uno con su número de distribución). Un parcial pedido DESPUÉS de este cierre espera su propio cierre.
+      const listos = pendientes.filter((p) => !p.createdAt || new Date(p.createdAt).getTime() <= cierre.getTime() + TOLERANCIA_CIERRE_MS);
+      if (listos.length === 0) {
+        return omitir(`La PF ${h.proforma} tiene un parcial pendiente posterior al último cierre de la orden: se factura cuando la orden cierre de nuevo.`, h.proforma);
+      }
+      if (!(await this.automatica())) {
+        return omitir(`La PF ${h.proforma} tiene ${listos.length} parcial(es) pendiente(s) y la factura parcial automática está apagada: se facturan con el botón.`, h.proforma);
+      }
+      const estados = new Set<string>();
+      const partes: string[] = [];
+      for (const p of listos) {
+        try {
+          const r = await this.facturar(p.id, false, true);
+          estados.add(r.estado);
+          partes.push(`distribución ${p.numeroDistribucion}: ${r.estado}`);
+        } catch (err) {
+          estados.add('error');
+          partes.push(`distribución ${p.numeroDistribucion}: error — ${(err as Error).message}`);
+        }
+      }
+      return { estado: estados.size === 1 ? [...estados][0] : 'varias', motivo: partes.join('; '), numberPF: h.proforma };
+    }
+    if (prog.entrada?.tipo === 'parcial') {
+      return omitir('Está programada con saldo pendiente (factura PARCIAL): se factura con su correo "Facturar Parcial" (número de distribución), no como pedido completo.', h.proforma);
+    }
     let fila: FacturaParcial;
     try {
       fila = await this.repo.save(
@@ -374,36 +437,28 @@ export class FacturasParcialesService {
   }
 
   /**
-   * Programación diaria (WO-032). Con `settings.facturacion.soloProgramadas === true` la facturación automática solo
-   * factura lo que Oben programó para HOY ("se factura lo que Comercial y Despacho programan cada día", reunión del
-   * 8-oct) y respeta el corte: lo que cierra a la hora de corte o después (16:00, hora de Bogotá) no se factura ese
-   * día. Lo cerrado en días anteriores y programado para hoy sí se factura. `motivo` = por qué NO se factura
-   * (null si se puede); `entrada` = la orden en la programación de hoy. Sin el interruptor no restringe nada.
+   * Programación diaria (WO-032). Con `settings.facturacion.soloProgramadas === true` (`activa`) la facturación
+   * automática solo factura lo que Oben programó para HOY ("se factura lo que Comercial y Despacho programan cada
+   * día", reunión del 8-oct). `entrada` = la orden en la programación de hoy (null si no está); `corte` = minutos
+   * del día de la hora de corte. Sin el interruptor no restringe nada.
    */
-  private async programacionDe(
-    c: { ov?: number; pf?: string },
-    cerradaEn: Date,
-    tipo: TipoFacturaProgramada,
-  ): Promise<{ motivo: string | null; entrada: FacturaProgramada | null }> {
+  private async programadaHoy(c: { ov?: number; pf?: string }): Promise<{ activa: boolean; entrada: FacturaProgramada | null; fecha: string; corte: number }> {
     const f = await this.ajustes();
-    if (f?.soloProgramadas !== true) return { motivo: null, entrada: null };
-    const hoy = fechaHoraBogota(this.reloj());
-    if (!this.programadas) return { motivo: 'No se pudo leer la programación de facturación: no se factura.', entrada: null };
+    const fecha = fechaHoraBogota(this.reloj()).fecha;
+    const corte = minutosDe(f?.horaCorte) ?? (minutosDe(HORA_CORTE_POR_DEFECTO) as number);
+    if (f?.soloProgramadas !== true) return { activa: false, entrada: null, fecha, corte };
+    if (!this.programadas) return { activa: true, entrada: null, fecha, corte };
     const entrada = await this.programadas.findOne({
-      where: { tenantId: this.ctx.tenantId, fecha: hoy.fecha, ...(c.ov !== undefined ? { numberOrderSales: c.ov } : { numberPF: c.pf }) },
+      where: { tenantId: this.ctx.tenantId, fecha, ...(c.ov !== undefined ? { numberOrderSales: c.ov } : { numberPF: c.pf }) },
     });
-    if (!entrada) {
-      return { motivo: `No está en la programación de facturación de hoy (${hoy.fecha}): se factura cuando Oben la programe.`, entrada: null };
-    }
-    if (tipo === 'completa' && entrada.tipo !== 'completa') {
-      return { motivo: 'Está programada como factura PARCIAL: se factura con su correo "Facturar Parcial" (número de distribución), no como pedido completo.', entrada };
-    }
-    const corte = minutosDe(f.horaCorte) ?? (minutosDe(HORA_CORTE_POR_DEFECTO) as number);
-    const cierre = fechaHoraBogota(cerradaEn);
-    if (cierre.fecha === hoy.fecha && cierre.minutos >= corte) {
-      return { motivo: `Cerró a las ${hhmm(cierre.minutos)}, después del corte de las ${hhmm(corte)}: no se factura hoy; queda para cuando Oben la reprograme.`, entrada };
-    }
-    return { motivo: null, entrada };
+    return { activa: true, entrada, fecha, corte };
+  }
+
+  /** Cuándo cerró la orden (aprobada en corte): el último envío exitoso de su Lista de Empaque. null = aún no cierra. */
+  private async cierreDe(ov: number): Promise<Date | null> {
+    const eventos = await this.audit.listForEntity('packing_list', String(ov));
+    const envio = eventos.filter((e) => e.action === 'ov_approved_lista_empaque_enviada' && e.outputData?.ok !== false).pop();
+    return envio ? new Date(envio.createdAt) : null;
   }
 
   /** Programación guardada de un día (por defecto hoy, hora de Bogotá). */
@@ -461,18 +516,16 @@ export class FacturasParcialesService {
   }
 
   /**
-   * Factura lo programado para HOY que ya se puede facturar: los pedidos completos cuya Lista de Empaque ya salió
-   * (cerrados) y los parciales que ya tienen su correo "Facturar Parcial". Lo que aún no cierra queda esperando: se
-   * factura solo cuando salga su Lista de Empaque. Con las mismas reglas de siempre: solo Colombia, una factura por
-   * proforma, nada si la facturación está suspendida.
+   * Factura lo programado para HOY que ya se puede facturar: las órdenes que ya cerraron (salió su Lista de Empaque)
+   * — el pedido completo, o sus parciales pendientes si Oben los pidió con "Facturar Parcial". Lo que aún no cierra
+   * queda esperando: se factura solo al cerrar. Mismas reglas que el cierre en vivo: programada para hoy, cierre
+   * antes del corte, solo Colombia, una factura por proforma o distribución, nada si está suspendida.
    */
   async facturarProgramadasDeHoy(): Promise<ResultadoProgramada[]> {
     const hoy = await this.programacionDelDia();
     const resultados: ResultadoProgramada[] = [];
     if (hoy.length === 0) return resultados;
     const suspendida = await this.suspendida();
-    const parcialAuto = await this.automatica();
-    const tenantId = this.ctx.tenantId;
     for (const p of hoy) {
       const base = { ov: p.numberOrderSales, pf: p.numberPF, tipo: p.tipo };
       if (suspendida) {
@@ -480,39 +533,12 @@ export class FacturasParcialesService {
         continue;
       }
       try {
-        const solicitudes = await this.repo.find({ where: { tenantId, numberPF: p.numberPF } });
-        if (p.tipo === 'parcial') {
-          const pendientes = solicitudes.filter((x) => x.estado === 'pendiente' && x.numeroDistribucion);
-          if (pendientes.length === 0) {
-            const hechas = solicitudes.filter((x) => x.numeroDistribucion);
-            resultados.push(
-              hechas.length
-                ? { ...base, resultado: 'ya_solicitada', detalle: hechas.map((x) => `distribución ${x.numeroDistribucion}: ${x.estado}`).join('; ') }
-                : { ...base, resultado: 'espera_correo_parcial', detalle: 'Falta el correo "Facturar Parcial" de Oben con el número de distribución.' },
-            );
-            continue;
-          }
-          if (!parcialAuto) {
-            resultados.push({ ...base, resultado: 'omitida', detalle: `Tiene ${pendientes.length} solicitud(es) parcial(es) pendiente(s) y la factura parcial automática está apagada: se factura con el botón.` });
-            continue;
-          }
-          for (const x of pendientes) {
-            const r = await this.facturar(x.id);
-            resultados.push({ ...base, resultado: r.estado, detalle: `distribución ${x.numeroDistribucion}${r.error ? `: ${r.error}` : ''}` });
-          }
-          continue;
-        }
-        if (solicitudes.length > 0) {
-          resultados.push({ ...base, resultado: 'ya_solicitada', detalle: solicitudes.map((x) => `${x.numeroDistribucion ? `distribución ${x.numeroDistribucion}` : 'pedido completo'}: ${x.estado}`).join('; ') });
-          continue;
-        }
-        const eventos = await this.audit.listForEntity('packing_list', String(p.numberOrderSales));
-        const envio = eventos.filter((e) => e.action === 'ov_approved_lista_empaque_enviada' && e.outputData?.ok !== false).pop();
-        if (!envio) {
+        const cierre = await this.cierreDe(p.numberOrderSales);
+        if (!cierre) {
           resultados.push({ ...base, resultado: 'espera_cierre', detalle: 'Aún no ha salido su Lista de Empaque: se factura sola cuando cierre (antes del corte).' });
           continue;
         }
-        const r = await this.facturarOvNacional(p.numberOrderSales, envio.createdAt);
+        const r = await this.facturarOvNacional(p.numberOrderSales, cierre);
         resultados.push({ ...base, resultado: r.estado, detalle: r.motivo });
       } catch (err) {
         resultados.push({ ...base, resultado: 'error', detalle: (err as Error).message });
