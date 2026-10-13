@@ -204,14 +204,10 @@ describe('Facturación programada: parciales ("Facturar Parcial") esperan el cie
     expect(facturasPedidas()).toEqual([]);
   });
 
-  it('llega el correo y la orden AÚN no cierra: queda pendiente con el motivo, y se factura sola cuando cierre', async () => {
+  it('llega el correo y la orden AÚN no cierra: se factura de una vez (José 13-oct: el parcial ya está montado, no espera cierre)', async () => {
     const { svc, filas, facturasPedidas } = armar({ programadas: [{ ov: 11039 }] });
     const f = await svc.registrarDesdeCorreo(correo('11235', '11160'));
-    expect(f.estado).toBe('pendiente');
-    expect(String(f.error)).toMatch(/Espera el cierre de su orden/);
-    expect(facturasPedidas()).toEqual([]);
-
-    expect((await svc.facturarOvNacional(11039)).estado).toBe('facturada'); // cierra la orden
+    expect(f.estado).toBe('facturada');
     expect(facturasPedidas()).toEqual([{ numberPF: '11235', numberDistribucion: '11160' }]);
     expect(filas[0].estado).toBe('facturada');
   });
@@ -230,16 +226,14 @@ describe('Facturación programada: parciales ("Facturar Parcial") esperan el cie
     expect(facturasPedidas()).toEqual([]);
   });
 
-  it('la orden cerró y el correo llega después del corte: no se factura hoy', async () => {
+  it('el correo llega después del corte: el parcial se factura igual (el corte aplica al cierre de pedidos completos)', async () => {
     const { svc, facturasPedidas } = armar({
       programadas: [{ ov: 11039 }],
       cerradas: { 11039: { en: new Date('2026-10-13T21:10:00Z') } },
       ahora: new Date('2026-10-13T21:15:00Z'),
     });
-    const f = await svc.registrarDesdeCorreo(correo('11235', '11160'));
-    expect(f.estado).toBe('pendiente');
-    expect(String(f.error)).toMatch(/después del corte de las 16:00/);
-    expect(facturasPedidas()).toEqual([]);
+    expect((await svc.registrarDesdeCorreo(correo('11235', '11160'))).estado).toBe('facturada');
+    expect(facturasPedidas()).toEqual([{ numberPF: '11235', numberDistribucion: '11160' }]);
   });
 
   it('sin programación diaria (interruptor apagado) el parcial se factura al llegar el correo, como antes', async () => {

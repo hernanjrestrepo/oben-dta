@@ -147,26 +147,15 @@ export class FacturasParcialesService {
     }
     const fila = await this.registrar(solicitud, 'correo', { messageId: input.messageId, remitente: input.from });
     if (fila.estado === 'pendiente' && (await this.automatica())) {
-      // Programación diaria (WO-032): el parcial se factura cuando su orden está programada para hoy Y ya cerró
-      // (aprobada en corte = salió su Lista de Empaque). Si aún no cierra queda pendiente y se factura al cerrar.
+      // Programación diaria (WO-032) + José (13-oct): un PARCIAL se factura apenas llega el correo "Facturar Parcial"
+      // (el pedido ya está montado y cargado esperando la factura): no espera cierre ni Lista de Empaque. Solo se
+      // exige que Oben lo haya programado para hoy en el cuadro del día.
       const prog = await this.programadaHoy({ pf: fila.numberPF });
-      if (prog.activa) {
-        let espera: string | null;
-        if (!prog.entrada) {
-          espera = noProgramada(prog.fecha);
-        } else {
-          const cierre = await this.cierreDe(prog.entrada.numberOrderSales);
-          const pedido = fila.createdAt ? new Date(fila.createdAt) : this.reloj();
-          espera =
-            cierre && cierre.getTime() >= pedido.getTime() - TOLERANCIA_CIERRE_MS
-              ? motivoDeCorte(cierre, prog.fecha, prog.corte)
-              : 'Espera el cierre de su orden (aprobada en corte): se factura sola cuando salga la Lista de Empaque, antes del corte.';
-        }
-        if (espera) {
-          await this.repo.update({ id: fila.id, tenantId: this.ctx.tenantId }, { error: espera });
-          this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: queda pendiente — ${espera}`);
-          return (await this.repo.findOne({ where: { id: fila.id, tenantId: this.ctx.tenantId } })) ?? fila;
-        }
+      if (prog.activa && !prog.entrada) {
+        const espera = noProgramada(prog.fecha);
+        await this.repo.update({ id: fila.id, tenantId: this.ctx.tenantId }, { error: espera });
+        this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: queda pendiente — ${espera}`);
+        return (await this.repo.findOne({ where: { id: fila.id, tenantId: this.ctx.tenantId } })) ?? fila;
       }
       return this.facturar(fila.id);
     }
