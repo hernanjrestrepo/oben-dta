@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { FacturaParcial, EstadoFacturaParcial } from '../../entities/factura-parcial.entity';
+import { FacturaProgramada, TipoFacturaProgramada } from '../../entities/factura-programada.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
@@ -38,6 +39,39 @@ export interface SolicitudParcial {
   numeroDistribucion: string;
 }
 
+/** Una orden del cuadro diario de Oben ("esto es lo que se va a facturar hoy"). */
+export interface OrdenProgramada {
+  ov: number;
+  pf: string;
+  tipo?: TipoFacturaProgramada;
+  estadoOben?: string;
+  cliente?: string;
+}
+
+export interface ResultadoProgramada {
+  ov: number;
+  pf: string;
+  tipo: TipoFacturaProgramada;
+  /** facturada | rechazada | revisar | omitida | espera_cierre | espera_correo_parcial | ya_solicitada | error */
+  resultado: string;
+  detalle?: string;
+}
+
+const HORA_CORTE_POR_DEFECTO = '16:00';
+
+/** Fecha (AAAA-MM-DD) y minutos del día en Bogotá: UTC−5 fijo, Colombia no cambia la hora. */
+export function fechaHoraBogota(d: Date): { fecha: string; minutos: number } {
+  const b = new Date(d.getTime() - 5 * 3_600_000);
+  return { fecha: b.toISOString().slice(0, 10), minutos: b.getUTCHours() * 60 + b.getUTCMinutes() };
+}
+
+function minutosDe(hora: unknown): number | null {
+  const m = typeof hora === 'string' ? /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(hora.trim()) : null;
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+const hhmm = (minutos: number) => `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${String(minutos % 60).padStart(2, '0')}`;
+
 /** null si no es el correo de factura parcial. Lanza si lo es pero viene incompleto o inconsistente (nunca adivina). */
 export function parsearCorreoFacturaParcial(asunto: string, cuerpo: string): SolicitudParcial | null {
   const a = asunto.match(ASUNTO_RE);
@@ -66,6 +100,8 @@ export class FacturasParcialesService {
   private readonly logger = new Logger(FacturasParcialesService.name);
   /** Espera antes de la llamada de verificación (las pruebas la ponen en 0). */
   esperaVerificacionMs = 3_000;
+  /** Reloj (las pruebas lo fijan para probar el corte de las 4 p. m.). */
+  reloj: () => Date = () => new Date();
 
   constructor(
     @InjectRepository(FacturaParcial) private readonly repo: Repository<FacturaParcial>,
@@ -74,6 +110,7 @@ export class FacturasParcialesService {
     private readonly hub: IntegrationHubService,
     private readonly audit: WorkflowAuditService,
     @Optional() private readonly distributionLists?: DistributionListsService,
+    @Optional() @InjectRepository(FacturaProgramada) private readonly programadas?: Repository<FacturaProgramada>,
   ) {}
 
   listar(limite = 50): Promise<FacturaParcial[]> {
@@ -89,6 +126,13 @@ export class FacturasParcialesService {
     }
     const fila = await this.registrar(solicitud, 'correo', { messageId: input.messageId, remitente: input.from });
     if (fila.estado === 'pendiente' && (await this.automatica())) {
+      // Con la programación diaria activa, el parcial solo se factura solo si su proforma está programada para hoy.
+      const fuera = (await this.programacionDe({ pf: fila.numberPF }, this.reloj(), 'parcial')).motivo;
+      if (fuera) {
+        await this.repo.update({ id: fila.id, tenantId: this.ctx.tenantId }, { error: fuera });
+        this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: queda pendiente — ${fuera}`);
+        return (await this.repo.findOne({ where: { id: fila.id, tenantId: this.ctx.tenantId } })) ?? fila;
+      }
       return this.facturar(fila.id);
     }
     return fila;
@@ -278,7 +322,7 @@ export class FacturasParcialesService {
    * por PF (NumberDistribucion vacío = pedido completo, según José). Si la PF ya tiene una solicitud (parcial por
    * correo, manual o automática) no se vuelve a pedir. Apagable con settings.facturacion.nacionalAutomatica=false.
    */
-  async facturarOvNacional(numberOrderSales: number): Promise<{ estado: string; motivo?: string; numberPF?: string }> {
+  async facturarOvNacional(numberOrderSales: number, cerradaEn?: Date): Promise<{ estado: string; motivo?: string; numberPF?: string }> {
     const tenantId = this.ctx.tenantId;
     const omitir = async (motivo: string, pf?: string) => {
       await this.audit.log({
@@ -296,8 +340,14 @@ export class FacturasParcialesService {
     };
     if (await this.suspendida()) return omitir('La facturación está suspendida hasta nueva orden.');
     if (!(await this.nacionalAutomatica())) return omitir('La factura automática de pedidos nacionales está apagada.');
+    // Programación diaria (WO-032): solo lo que Oben programó para hoy, y solo si cerró antes del corte.
+    const prog = await this.programacionDe({ ov: numberOrderSales }, cerradaEn ?? this.reloj(), 'completa');
+    if (prog.motivo) return omitir(prog.motivo, prog.entrada?.numberPF);
     const h = await this.encabezadoDeOv(numberOrderSales);
     if (!h?.proforma) return omitir('Oben no devolvió la proforma de la orden.');
+    if (prog.entrada && prog.entrada.numberPF !== h.proforma) {
+      return omitir(`La programación dice PF ${prog.entrada.numberPF} y Oben dice PF ${h.proforma} para esta orden: no se factura hasta aclararlo.`, h.proforma);
+    }
     if (!/^col(ombia)?\b/i.test(h.pais)) {
       return omitir(`La orden es de ${h.pais || 'país desconocido'}: solo se facturan pedidos nacionales (Colombia).`, h.proforma);
     }
@@ -321,6 +371,173 @@ export class FacturasParcialesService {
     }
     const r = await this.facturar(fila.id, false, true);
     return { estado: r.estado, numberPF: h.proforma };
+  }
+
+  /**
+   * Programación diaria (WO-032). Con `settings.facturacion.soloProgramadas === true` la facturación automática solo
+   * factura lo que Oben programó para HOY ("se factura lo que Comercial y Despacho programan cada día", reunión del
+   * 8-oct) y respeta el corte: lo que cierra a la hora de corte o después (16:00, hora de Bogotá) no se factura ese
+   * día. Lo cerrado en días anteriores y programado para hoy sí se factura. `motivo` = por qué NO se factura
+   * (null si se puede); `entrada` = la orden en la programación de hoy. Sin el interruptor no restringe nada.
+   */
+  private async programacionDe(
+    c: { ov?: number; pf?: string },
+    cerradaEn: Date,
+    tipo: TipoFacturaProgramada,
+  ): Promise<{ motivo: string | null; entrada: FacturaProgramada | null }> {
+    const f = await this.ajustes();
+    if (f?.soloProgramadas !== true) return { motivo: null, entrada: null };
+    const hoy = fechaHoraBogota(this.reloj());
+    if (!this.programadas) return { motivo: 'No se pudo leer la programación de facturación: no se factura.', entrada: null };
+    const entrada = await this.programadas.findOne({
+      where: { tenantId: this.ctx.tenantId, fecha: hoy.fecha, ...(c.ov !== undefined ? { numberOrderSales: c.ov } : { numberPF: c.pf }) },
+    });
+    if (!entrada) {
+      return { motivo: `No está en la programación de facturación de hoy (${hoy.fecha}): se factura cuando Oben la programe.`, entrada: null };
+    }
+    if (tipo === 'completa' && entrada.tipo !== 'completa') {
+      return { motivo: 'Está programada como factura PARCIAL: se factura con su correo "Facturar Parcial" (número de distribución), no como pedido completo.', entrada };
+    }
+    const corte = minutosDe(f.horaCorte) ?? (minutosDe(HORA_CORTE_POR_DEFECTO) as number);
+    const cierre = fechaHoraBogota(cerradaEn);
+    if (cierre.fecha === hoy.fecha && cierre.minutos >= corte) {
+      return { motivo: `Cerró a las ${hhmm(cierre.minutos)}, después del corte de las ${hhmm(corte)}: no se factura hoy; queda para cuando Oben la reprograme.`, entrada };
+    }
+    return { motivo: null, entrada };
+  }
+
+  /** Programación guardada de un día (por defecto hoy, hora de Bogotá). */
+  async programacionDelDia(fecha?: string): Promise<FacturaProgramada[]> {
+    if (!this.programadas) return [];
+    const dia = fecha ?? fechaHoraBogota(this.reloj()).fecha;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) throw new BadRequestException('La fecha debe venir como AAAA-MM-DD.');
+    return this.programadas.find({ where: { tenantId: this.ctx.tenantId, fecha: dia }, order: { numberOrderSales: 'ASC' } });
+  }
+
+  /**
+   * Carga el cuadro de Oben de lo que se factura un día. REEMPLAZA la programación de ese día (el plan cambia durante
+   * el día: se vuelve a cargar el cuadro completo). No factura nada: para eso está `facturarProgramadasDeHoy`.
+   */
+  async programarDia(fecha: string, ordenes: OrdenProgramada[]): Promise<FacturaProgramada[]> {
+    if (!this.programadas) throw new ConflictException('La programación de facturación no está disponible.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || Number.isNaN(Date.parse(`${fecha}T00:00:00Z`))) {
+      throw new BadRequestException('La fecha debe venir como AAAA-MM-DD.');
+    }
+    if (fecha < fechaHoraBogota(this.reloj()).fecha) throw new BadRequestException(`No se programa una fecha pasada (${fecha}).`);
+    if (!Array.isArray(ordenes)) throw new BadRequestException('Falta la lista de órdenes.');
+    const limpias = new Map<number, Required<Pick<OrdenProgramada, 'ov' | 'pf' | 'tipo'>> & Pick<OrdenProgramada, 'estadoOben' | 'cliente'>>();
+    for (const o of ordenes) {
+      const ov = Number(o?.ov);
+      const pf = String(o?.pf ?? '').trim();
+      if (!Number.isInteger(ov) || ov <= 0) throw new BadRequestException(`Orden de venta inválida: "${String(o?.ov)}".`);
+      if (!/^\d{1,12}$/.test(pf)) throw new BadRequestException(`La orden ${ov} no trae una proforma numérica.`);
+      const tipo = o.tipo ?? 'completa';
+      if (tipo !== 'completa' && tipo !== 'parcial') throw new BadRequestException(`La orden ${ov} trae un tipo desconocido: "${String(o.tipo)}".`);
+      const previa = limpias.get(ov);
+      if (previa && previa.pf !== pf) throw new BadRequestException(`La orden ${ov} aparece dos veces con proformas distintas (${previa.pf} y ${pf}).`);
+      limpias.set(ov, { ov, pf, tipo, estadoOben: o.estadoOben?.trim() || undefined, cliente: o.cliente?.trim() || undefined });
+    }
+    const tenantId = this.ctx.tenantId;
+    const actuales = await this.programadas.find({ where: { tenantId, fecha } });
+    const sobran = actuales.filter((a) => !limpias.has(a.numberOrderSales));
+    if (sobran.length) await this.programadas.delete({ id: In(sobran.map((x) => x.id)), tenantId });
+    for (const o of limpias.values()) {
+      const cambios = { numberPF: o.pf, tipo: o.tipo, estadoOben: o.estadoOben ?? null, cliente: o.cliente ?? null };
+      const existente = actuales.find((a) => a.numberOrderSales === o.ov);
+      if (existente) await this.programadas.update({ id: existente.id, tenantId }, cambios);
+      else await this.programadas.save(this.programadas.create({ tenantId, fecha, numberOrderSales: o.ov, ...cambios, cargadaPor: this.ctx.userId ?? null }));
+    }
+    await this.audit.log({
+      workflowName: 'facturacion',
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: 'facturacion_programacion_cargada',
+      entityType: 'facturacion_programada',
+      entityId: fecha,
+      actorId: this.ctx.userId,
+      inputData: { fecha, ordenes: [...limpias.values()].map((o) => ({ ov: o.ov, pf: o.pf, tipo: o.tipo })) },
+      outputData: { total: limpias.size, retiradas: sobran.map((x) => x.numberOrderSales) },
+    });
+    return this.programacionDelDia(fecha);
+  }
+
+  /**
+   * Factura lo programado para HOY que ya se puede facturar: los pedidos completos cuya Lista de Empaque ya salió
+   * (cerrados) y los parciales que ya tienen su correo "Facturar Parcial". Lo que aún no cierra queda esperando: se
+   * factura solo cuando salga su Lista de Empaque. Con las mismas reglas de siempre: solo Colombia, una factura por
+   * proforma, nada si la facturación está suspendida.
+   */
+  async facturarProgramadasDeHoy(): Promise<ResultadoProgramada[]> {
+    const hoy = await this.programacionDelDia();
+    const resultados: ResultadoProgramada[] = [];
+    if (hoy.length === 0) return resultados;
+    const suspendida = await this.suspendida();
+    const parcialAuto = await this.automatica();
+    const tenantId = this.ctx.tenantId;
+    for (const p of hoy) {
+      const base = { ov: p.numberOrderSales, pf: p.numberPF, tipo: p.tipo };
+      if (suspendida) {
+        resultados.push({ ...base, resultado: 'omitida', detalle: 'La facturación está suspendida hasta nueva orden.' });
+        continue;
+      }
+      try {
+        const solicitudes = await this.repo.find({ where: { tenantId, numberPF: p.numberPF } });
+        if (p.tipo === 'parcial') {
+          const pendientes = solicitudes.filter((x) => x.estado === 'pendiente' && x.numeroDistribucion);
+          if (pendientes.length === 0) {
+            const hechas = solicitudes.filter((x) => x.numeroDistribucion);
+            resultados.push(
+              hechas.length
+                ? { ...base, resultado: 'ya_solicitada', detalle: hechas.map((x) => `distribución ${x.numeroDistribucion}: ${x.estado}`).join('; ') }
+                : { ...base, resultado: 'espera_correo_parcial', detalle: 'Falta el correo "Facturar Parcial" de Oben con el número de distribución.' },
+            );
+            continue;
+          }
+          if (!parcialAuto) {
+            resultados.push({ ...base, resultado: 'omitida', detalle: `Tiene ${pendientes.length} solicitud(es) parcial(es) pendiente(s) y la factura parcial automática está apagada: se factura con el botón.` });
+            continue;
+          }
+          for (const x of pendientes) {
+            const r = await this.facturar(x.id);
+            resultados.push({ ...base, resultado: r.estado, detalle: `distribución ${x.numeroDistribucion}${r.error ? `: ${r.error}` : ''}` });
+          }
+          continue;
+        }
+        if (solicitudes.length > 0) {
+          resultados.push({ ...base, resultado: 'ya_solicitada', detalle: solicitudes.map((x) => `${x.numeroDistribucion ? `distribución ${x.numeroDistribucion}` : 'pedido completo'}: ${x.estado}`).join('; ') });
+          continue;
+        }
+        const eventos = await this.audit.listForEntity('packing_list', String(p.numberOrderSales));
+        const envio = eventos.filter((e) => e.action === 'ov_approved_lista_empaque_enviada' && e.outputData?.ok !== false).pop();
+        if (!envio) {
+          resultados.push({ ...base, resultado: 'espera_cierre', detalle: 'Aún no ha salido su Lista de Empaque: se factura sola cuando cierre (antes del corte).' });
+          continue;
+        }
+        const r = await this.facturarOvNacional(p.numberOrderSales, envio.createdAt);
+        resultados.push({ ...base, resultado: r.estado, detalle: r.motivo });
+      } catch (err) {
+        resultados.push({ ...base, resultado: 'error', detalle: (err as Error).message });
+      }
+    }
+    await this.audit.log({
+      workflowName: 'facturacion',
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: 'facturacion_programadas_procesadas',
+      entityType: 'facturacion_programada',
+      entityId: fechaHoraBogota(this.reloj()).fecha,
+      actorId: this.ctx.userId,
+      outputData: { resultados },
+    });
+    return resultados;
+  }
+
+  /** Ajustes de facturación del tenant (`settings.facturacion`); null si no se pueden leer. */
+  private async ajustes(): Promise<Record<string, unknown> | null> {
+    try {
+      const t = await this.tenants.findOne({ where: { id: this.ctx.tenantId } });
+      return (t?.settings?.facturacion ?? {}) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
   }
 
   /** `settings.facturacion.suspendida === true`: nada se factura (ni automático, ni parcial, ni el botón). Si no se puede leer, se asume suspendida (ante la duda, no se factura). */

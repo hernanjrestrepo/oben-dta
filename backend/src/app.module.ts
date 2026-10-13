@@ -41,6 +41,7 @@ import { ObenPlusSimProforma } from './entities/oben-plus-sim-proforma.entity';
 import { ComercialCase } from './entities/comercial-case.entity';
 import { FormatoEnvio } from './entities/formato-envio.entity';
 import { FacturaParcial } from './entities/factura-parcial.entity';
+import { FacturaProgramada } from './entities/factura-programada.entity';
 import { LiquidacionAprobacion } from './entities/liquidacion-aprobacion.entity';
 import { Tenant } from './entities/tenant.entity';
 import { ModuleCatalog } from './entities/module-catalog.entity';
@@ -170,6 +171,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
           ComercialCase,
           FormatoEnvio,
           FacturaParcial,
+          FacturaProgramada,
           LiquidacionAprobacion,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',

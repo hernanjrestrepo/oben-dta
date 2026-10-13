@@ -43,3 +43,21 @@ Oben no factura "cuando sale la Lista de Empaque". Factura lo que **Comercial/De
 6. Formulario con casilla "proceder con facturación" (fase 2).
 
 **Sigue suspendida** (`settings.facturacion.suspendida = true`) hasta que Jorge dé la orden de reactivar.
+
+## Sprint 1 — Facturación de lo programado (2026-10-13)
+Jorge pidió reactivar la facturación nacional el 13-oct y envió el cuadro de "lo que se va a facturar hoy" (20 órdenes con estado CERRADA / POR CERRAR / SALDO PENDIENTE), pidiendo tener en cuenta las particularidades ya enviadas. Mientras no haya acceso al Excel, el cuadro del día se carga a mano.
+
+Construido (backend, sin pantalla todavía):
+- Tabla `facturacion_programada` (migración 0024): órdenes programadas por día (OV, proforma, tipo `completa`/`parcial`, estado que traía en el cuadro de Oben).
+- Interruptor `settings.facturacion.soloProgramadas`: con él la facturación automática **solo factura lo programado para hoy**.
+  - Pedido completo: se factura al cerrar (cuando sale su Lista de Empaque) si está en el cuadro de hoy.
+  - Corte: lo que cierra a las 16:00 o después (hora de Bogotá, `settings.facturacion.horaCorte`) no se factura ese día. Lo cerrado en días anteriores y programado para hoy sí.
+  - Parcial (saldo pendiente): se factura con su correo "Facturar Parcial" si su proforma está en el cuadro de hoy; nunca como pedido completo.
+  - Si la proforma del cuadro no coincide con la que Oben tiene para esa orden, no se factura.
+- `POST /facturacion-programada` (carga y reemplaza el cuadro del día; factura en segundo plano lo que ya cerró), `GET /facturacion-programada?fecha=` y `POST /facturacion-programada/facturar`. Permisos `invoices.create` / `invoices.read`.
+- Siguen aplicando las reglas anteriores: solo Colombia, una factura por proforma, verificación de respuestas ambiguas, aviso por correo a la lista Facturación y nada si está suspendida.
+- Pruebas: `facturacion-programada.spec.ts` (21) con órdenes reales del cuadro del 13-oct.
+
+Particularidades de Camilo (`FAC.pdf`) que la API de factura de Oben NO permite cumplir desde Oben Xmart (solo recibe proforma y número de distribución): retención en "Observaciones 1", campo NOTAS del cliente, TRM especial de PPC FLEX y el estado "Cantidades cambiadas". Deben resolverse en la API de Oben (José) o revisarse en NetSuite antes de emitir.
+
+Pendiente: pantalla para que Oben cargue el cuadro (o lectura automática del Excel / de un correo diario), confirmar con Oben el significado exacto de SALDO PENDIENTE y si "CERRADA" ya implica "Cantidades cambiadas".
