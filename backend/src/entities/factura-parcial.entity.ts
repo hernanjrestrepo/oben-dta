@@ -8,7 +8,7 @@ import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
  * - rechazada: Oben respondió isSuccessful=false — es seguro reintentar.
  * - revisar: no se supo si Oben facturó (timeout/red) — verificar en OBEN MAS antes de reintentar.
  */
-export type EstadoFacturaParcial = 'pendiente' | 'facturando' | 'facturada' | 'rechazada' | 'revisar';
+export type EstadoFacturaParcial = 'pendiente' | 'facturando' | 'facturada' | 'rechazada' | 'revisar' | 'en_espera';
 
 /** Solicitud de factura parcial de una proforma por número de distribución (WO-023). */
 @Entity('facturas_parciales')

@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, MoreThanOrEqual, Repository } from 'typeorm';
 import { FacturaParcial, EstadoFacturaParcial } from '../../entities/factura-parcial.entity';
 import { FacturaProgramada, TipoFacturaProgramada } from '../../entities/factura-programada.entity';
 import { Tenant } from '../../entities/tenant.entity';
@@ -23,6 +23,13 @@ const CUERPO_RE = /N[uú]mero\s+de\s+Proforma\s*:\s*(\d+)[\s\S]*?N[uú]mero\s+de
 const DOMINIO_OBEN = 'obengroup.com';
 
 /** Rechazos de Oben que significan "esta factura YA existe": la proforma figura Facturada o sus artículos ya se cerraron. */
+/** Oben no la rechaza: la proforma aún espera una aprobación interna suya. Se reintenta sola. */
+const EN_ESPERA_OBEN = /se encuentra en estado:\s*Aprobaci[oó]n pendiente/i;
+/** Al crear la factura Oben contesta Code 200 y un número en `message` (p. ej. 9089336). */
+export function numeroDeRespuesta(data: unknown): string | null {
+  const m = data && typeof data === 'object' ? String((data as Record<string, unknown>).message ?? (data as Record<string, unknown>).Message ?? '').trim() : '';
+  return /^\d{4,}$/.test(m) ? m : null;
+}
 const YA_FACTURADA = /NO SE ENCUENTRA EN LA ORDEN DE VENTA|se encuentra en estado:\s*Facturada/i;
 
 /** true solo si Oben confirma el éxito: `isSuccessful` verdadero o `Code` 200 (mayúsculas/minúsculas y texto/número indistintos). */
@@ -198,7 +205,7 @@ export class FacturasParcialesService {
       await this.repo.update({ id, tenantId }, { error: motivo });
       throw new BadRequestException(motivo);
     }
-    const desde: EstadoFacturaParcial[] = confirmoQueNoExiste ? ['pendiente', 'rechazada', 'revisar'] : ['pendiente', 'rechazada'];
+    const desde: EstadoFacturaParcial[] = confirmoQueNoExiste ? ['pendiente', 'rechazada', 'en_espera', 'revisar'] : ['pendiente', 'rechazada', 'en_espera'];
     if (!desde.includes(fila.estado)) {
       throw new ConflictException(
         fila.estado === 'revisar'
@@ -232,7 +239,8 @@ export class FacturasParcialesService {
     const rechazo = esRechazo(r);
     const errorCliente = esErrorCliente(r);
     const confirmada = esExito(r) || yaFacturada;
-    const estado: EstadoFacturaParcial = confirmada ? 'facturada' : r.ok || (!rechazo && !errorCliente) ? 'revisar' : 'rechazada';
+    const enEspera = !confirmada && !r.ok && EN_ESPERA_OBEN.test(r.error ?? '');
+    const estado: EstadoFacturaParcial = confirmada ? 'facturada' : enEspera ? 'en_espera' : r.ok || (!rechazo && !errorCliente) ? 'revisar' : 'rechazada';
     const errorTexto = confirmada
       ? null
       : r.ok
@@ -261,7 +269,8 @@ export class FacturasParcialesService {
       reason: errorTexto,
     });
     this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: ${estado}${errorTexto ? ` — ${errorTexto}` : ''}`);
-    await this.avisarResultado(fila, estado, errorTexto, r.mode, yaFacturada);
+    // En espera no es un fallo: se reintenta sola (reintentarEnEspera) y solo se avisa cuando se resuelve.
+    if (estado !== 'en_espera') await this.avisarResultado(fila, estado, errorTexto, r.mode, yaFacturada, !yaFacturada && confirmada ? numeroDeRespuesta(r.data) : null);
     return (await this.repo.findOne({ where: { id, tenantId } }))!;
   }
 
@@ -270,7 +279,7 @@ export class FacturasParcialesService {
    * o por revisar). Antes (7-oct) el flujo automático facturaba y NO avisaba a nadie. Oben no devuelve el número de
    * factura por la API: el correo lo dice y manda a consultarlo en OBEN MAS. Nunca tumba la facturación.
    */
-  private async avisarResultado(fila: FacturaParcial, estado: EstadoFacturaParcial, errorTexto: string | null, modo: string | undefined, yaFacturada: boolean): Promise<void> {
+  private async avisarResultado(fila: FacturaParcial, estado: EstadoFacturaParcial, errorTexto: string | null, modo: string | undefined, yaFacturada: boolean, numeroOben: string | null = null): Promise<void> {
     if (!this.distributionLists) return;
     try {
       const dest = await this.distributionLists.resolveRecipients('document', 'facturacion');
@@ -297,9 +306,10 @@ export class FacturasParcialesService {
         `<tr><td>Distribución</td><td>${fila.numeroDistribucion ? esc(fila.numeroDistribucion) : 'Pedido completo'}</td></tr>` +
         `<tr><td>Origen</td><td>${esc(origen)}</td></tr>` +
         `<tr><td>Resultado</td><td>${esc(estado)}</td></tr>` +
+        (numeroOben ? `<tr><td>Número que devolvió Oben</td><td><b>${esc(numeroOben)}</b></td></tr>` : '') +
         `</table>` +
         (detalle ? `<p>${esc(detalle)}</p>` : '') +
-        (estado === 'facturada' ? '<p>La API de Oben no entrega el número de la factura: consúltalo en OBEN MAS.</p>' : '') +
+        (estado === 'facturada' ? '<p>' + (numeroOben ? 'Este número lo devuelve la API de Oben al crear la factura (pendiente confirmar con José si es el número fiscal); confróntalo en OBEN MAS.' : 'La API de Oben no entregó número: consúltalo en OBEN MAS.') + '</p>' : '') +
         (estado === 'revisar' ? '<p>No quedó claro si Oben la creó: verifica en OBEN MAS antes de reintentar.</p>' : '') +
         (simulado ? '<p><b>SIMULADO:</b> no se creó ninguna factura real.</p>' : '');
       const r = await this.hub.call<unknown>(
@@ -385,6 +395,20 @@ export class FacturasParcialesService {
       return omitir(`La orden es de ${h.pais || 'país desconocido'}: solo se facturan pedidos nacionales (Colombia).`, h.proforma);
     }
     const previa = await this.repo.find({ where: { tenantId, numberPF: h.proforma } });
+    const espera = previa.filter((p) => p.estado === 'en_espera');
+    if (espera.length > 0) {
+      // Oben tenía la proforma en "Aprobación pendiente": se reintenta (sigue en espera si Oben aún no la aprueba).
+      const estados = new Set<string>();
+      for (const p of espera) {
+        try {
+          estados.add((await this.facturar(p.id, false, true)).estado);
+        } catch (err) {
+          estados.add('error');
+          this.logger.warn(`PF ${h.proforma}: reintento en espera falló: ${(err as Error).message}`);
+        }
+      }
+      return { estado: estados.size === 1 ? [...estados][0] : 'varias', numberPF: h.proforma, motivo: 'Reintento de una factura que esperaba aprobación en Oben.' };
+    }
     if (previa.length > 0) {
       const pendientes = previa.filter((p) => p.estado === 'pendiente' && p.numeroDistribucion);
       if (!prog.activa || pendientes.length === 0) {
@@ -554,6 +578,25 @@ export class FacturasParcialesService {
       outputData: { resultados },
     });
     return resultados;
+  }
+
+  /**
+   * Reintenta las solicitudes que Oben dejó en "Aprobación pendiente" (últimas 48 h). Las llama el procesador de
+   * fondo cada 15 min; si Oben ya las aprobó se facturan y ahí sí sale el aviso por correo.
+   */
+  async reintentarEnEspera(): Promise<number> {
+    const desde = new Date(this.reloj().getTime() - 48 * 3_600_000);
+    const filas = await this.repo.find({ where: { tenantId: this.ctx.tenantId, estado: 'en_espera', updatedAt: MoreThanOrEqual(desde) } });
+    let n = 0;
+    for (const f of filas) {
+      try {
+        await this.facturar(f.id, false, f.origen === 'automatico');
+        n++;
+      } catch (err) {
+        this.logger.warn(`PF ${f.numberPF}: reintento en espera falló: ${(err as Error).message}`);
+      }
+    }
+    return n;
   }
 
   /** Ajustes de facturación del tenant (`settings.facturacion`); null si no se pueden leer. */

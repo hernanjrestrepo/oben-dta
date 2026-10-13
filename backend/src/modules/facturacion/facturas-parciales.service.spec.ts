@@ -119,6 +119,13 @@ describe('FacturasParcialesService (WO-023)', () => {
     expect(crearCalls(r2.hub)).toBe(2); // 1 intento + 1 de verificación (sigue sin aclararse)
   });
 
+  it('"Aprobación pendiente" de Oben NO es rechazo: queda "en_espera", no avisa por correo y se puede reintentar', async () => {
+    const r = build({ hub: { ok: false, error: 'Oben rechazó la operación (Code 500): La proforma: PF-11374, se encuentra en estado: Aprobación pendiente' } });
+    const f = await r.svc.registrarManual('10770', '11200');
+    expect((await r.svc.facturar(f.id)).estado).toBe('en_espera');
+    expect((await r.svc.facturar(f.id)).estado).toBe('en_espera'); // reintentable
+  });
+
   it('un HTTP exitoso SIN confirmación explícita de Oben NO es factura creada: queda en "revisar" y no se reintenta a ciegas', async () => {
     for (const data of [{ message: 'An error has occurred.' }, null, {}, 'OK']) {
       const { svc, hub } = build({ hub: { ok: true, data } });

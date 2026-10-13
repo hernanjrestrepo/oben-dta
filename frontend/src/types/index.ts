@@ -579,7 +579,7 @@ export interface FormatoEnvio {
 }
 
 /** Solicitud de factura parcial (WO-023). */
-export type EstadoFacturaParcial = 'pendiente' | 'facturando' | 'facturada' | 'rechazada' | 'revisar';
+export type EstadoFacturaParcial = 'pendiente' | 'facturando' | 'facturada' | 'rechazada' | 'revisar' | 'en_espera';
 export interface FacturaParcial {
   id: string;
   numberPF: string;

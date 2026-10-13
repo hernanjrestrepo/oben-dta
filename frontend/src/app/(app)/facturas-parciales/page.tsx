@@ -16,6 +16,7 @@ const ESTADO: Record<EstadoFacturaParcial, { label: string; cls: string }> = {
   facturando: { label: 'Facturando…', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   facturada: { label: 'Facturada', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   rechazada: { label: 'Rechazada por Oben', cls: 'bg-red-50 text-red-700 border-red-200' },
+  en_espera: { label: 'Esperando aprobación en Oben', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   revisar: { label: 'Revisar en OBEN MAS', cls: 'bg-orange-50 text-[#C4521A] border-orange-200' },
 };
 
@@ -161,7 +162,7 @@ export default function FacturasParcialesPage() {
             <tbody className="divide-y divide-gray-100">
               {filas.map((f) => {
                 const e = ESTADO[f.estado];
-                const puede = puedeFacturar && ['pendiente', 'rechazada', 'revisar'].includes(f.estado);
+                const puede = puedeFacturar && ['pendiente', 'rechazada', 'revisar', 'en_espera'].includes(f.estado);
                 return (
                   <tr key={f.id} className="align-top">
                     <td className="px-4 py-3 font-semibold text-gray-900">{f.numberPF}</td>

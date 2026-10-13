@@ -9,6 +9,7 @@ import { Tenant } from '../../entities/tenant.entity';
 import { FacturaParcial } from '../../entities/factura-parcial.entity';
 import { FacturaProgramada } from '../../entities/factura-programada.entity';
 import { FacturasParcialesService } from './facturas-parciales.service';
+import { FacturasEsperaProcessor } from './facturas-espera.processor';
 import { FacturasParcialesController } from './facturas-parciales.controller';
 import { FacturacionProgramadaController } from './facturacion-programada.controller';
 import { FacturacionController } from './facturacion.controller';
@@ -27,7 +28,7 @@ import { LiquidacionModule } from '../liquidacion/liquidacion.module';
     LiquidacionModule,
   ],
   controllers: [FacturacionController, FacturasParcialesController, FacturacionProgramadaController],
-  providers: [FacturacionService, FacturacionPdfService, TrmService, FacturasParcialesService],
+  providers: [FacturacionService, FacturacionPdfService, TrmService, FacturasParcialesService, FacturasEsperaProcessor],
   exports: [FacturacionService, FacturasParcialesService],
 })
 export class FacturacionModule {}
