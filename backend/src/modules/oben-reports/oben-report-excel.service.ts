@@ -175,6 +175,27 @@ function autoWidth(ws: ExcelJS.Worksheet, minWidths: number[] = []): void {
   });
 }
 
+/**
+ * Ancho en pulgadas de la Lista Especial como número ENTERO, aproximado al
+ * más cercano (pedido de Comercial de Oben el 2026-10-13: los clientes de
+ * EE. UU. no quieren decimales ni la fracción "36.00-1.00/2.00" que entrega
+ * spPackingListUSA_Paradixe). Sale del ancho en mm; si no viene, se
+ * interpreta el texto de Oben ("entero-numerador/denominador"). Sin un dato
+ * que se pueda leer se deja el valor original: no se inventa un ancho.
+ */
+export function anchoPulgadasEntero(anchoMm: unknown, widthIn: unknown): string | number {
+  const mm = typeof anchoMm === 'number' ? anchoMm : typeof anchoMm === 'string' && anchoMm.trim() ? Number(anchoMm) : NaN;
+  if (Number.isFinite(mm) && mm > 0) return Math.round(mm / 25.4);
+  const texto = typeof widthIn === 'number' ? String(widthIn) : typeof widthIn === 'string' ? widthIn.trim() : '';
+  const partes = /^(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?))?$/.exec(texto);
+  if (partes) {
+    const denominador = Number(partes[3]);
+    const fraccion = partes[2] && denominador > 0 ? Number(partes[2]) / denominador : 0;
+    return Math.round(Number(partes[1]) + fraccion);
+  }
+  return scalar(widthIn);
+}
+
 /** Columnas reales de spPackingListUSA_Paradixe (confirmadas en vivo el 2026-08-31), con etiqueta legible. */
 const PACKING_LIST_COLUMNS: Array<[string, string]> = [
   ['Descripcion', 'Producto'],
@@ -848,12 +869,25 @@ export class ObenReportExcelService {
       ['LongMt', 'Long Mt'],
       ['LengthFt', 'Length Ft'],
       ['Lote', 'Lote / Lot'],
+      // Desde aquí: las 10 columnas del archivo completo de Oben (ListaEspecial
+      // de la FEXP3164) que faltaban — los clientes de EE. UU. reclamaron el
+      // código y los pesos en kg y lb (correo de Comercial, 2026-10-13).
+      ['CodigoBarraBobina', 'Cod Barra Bobina / Roll BarCode'],
+      ['CodigoInternoBobina', 'Cod. Interno / Internal Code'],
+      ['FabricacionMFG', 'Fabricación / MFG Date'],
+      ['BobinaPesoNetoKg', 'Bobina Peso Neto Kg / Roll Net Weight Kg'],
+      ['RollNetWeightLb', 'Bobina Peso Neto Lb / Roll Net Weight Lb'],
+      ['PaletaPesoNetoKg', 'Paleta Peso Neto Kg / Pallet Net Weight Kg'],
+      ['PalletNetWeightLb', 'Paleta Peso Neto Lb / Pallet Net Weight Lb'],
+      ['PaletaPesoBrutoKg', 'Paleta Peso Bruto Kg / Pallet Gross Weight Kg'],
+      ['PalletGrossWeightLb', 'Paleta Peso Bruto Lb / Pallet Gross Weight Lb'],
+      ['Empalmes', 'Empalmes / Splices'],
     ];
-    if (lines.length === 0) return writeNoDataMessage(ws, row, 15);
+    if (lines.length === 0) return writeNoDataMessage(ws, row, columns.length);
     writeTableHeader(ws, row, columns.map(([, label]) => label));
     row += 1;
     for (const line of lines) {
-      writeTableRow(ws, row, columns.map(([key]) => scalar(line[key])));
+      writeTableRow(ws, row, columns.map(([key]) => (key === 'WidthIn' ? anchoPulgadasEntero(line.Ancho, line.WidthIn) : scalar(line[key]))));
       row += 1;
     }
     return row;
@@ -897,7 +931,7 @@ export class ObenReportExcelService {
     let totalNetoKg = 0;
     let totalBrutoKg = 0;
     for (const pallet of pallets.values()) {
-      writeTableRow(ws, row, columns.map(([key]) => scalar(pallet[key])));
+      writeTableRow(ws, row, columns.map(([key]) => (key === 'WidthIn' ? anchoPulgadasEntero(pallet.Ancho, pallet.WidthIn) : scalar(pallet[key]))));
       row += 1;
       totalBobinas += pallet.Bobinas;
       const neto = Number(pallet.PaletaPesoNetoKg);
@@ -941,16 +975,26 @@ export class ObenReportExcelService {
     ];
     if (lines.length === 0) return writeNoDataMessage(ws, row, 7);
 
-    const widths = new Map<string, { po: unknown; descripcion: unknown; widthIn: unknown; netoKg: number; netoLb: number; pallets: Map<string, number> }>();
+    const widths = new Map<
+      string,
+      { po: unknown; descripcion: unknown; widthIn: string | number; netoKg: number; netoLb: number; pallets: Map<string, { kg: number; lb: number }> }
+    >();
     const allPallets = new Set<string>();
     for (const line of lines) {
       const key = String(line.Ancho ?? '');
       const palletKey = String(line.CodigoBarraPallet ?? '');
       allPallets.add(palletKey);
-      const entry = widths.get(key) ?? { po: line.PO, descripcion: line.Descripcion, widthIn: line.WidthIn, netoKg: 0, netoLb: 0, pallets: new Map() };
+      const entry = widths.get(key) ?? {
+        po: line.PO,
+        descripcion: line.Descripcion,
+        widthIn: anchoPulgadasEntero(line.Ancho, line.WidthIn),
+        netoKg: 0,
+        netoLb: 0,
+        pallets: new Map(),
+      };
       entry.netoKg += Number(line.BobinaPesoNetoKg) || 0;
       entry.netoLb += Number(line.RollNetWeightLb) || 0;
-      entry.pallets.set(palletKey, Number(line.PaletaPesoBrutoKg) || 0);
+      entry.pallets.set(palletKey, { kg: Number(line.PaletaPesoBrutoKg) || 0, lb: Number(line.PalletGrossWeightLb) || 0 });
       widths.set(key, entry);
     }
 
@@ -961,20 +1005,23 @@ export class ObenReportExcelService {
     let totalBrutoKg = 0;
     let totalBrutoLb = 0;
     for (const entry of widths.values()) {
-      const brutoKg = Array.from(entry.pallets.values()).reduce((sum, v) => sum + v, 0);
+      const brutoKg = Array.from(entry.pallets.values()).reduce((sum, v) => sum + v.kg, 0);
+      // El peso bruto en lb quedaba vacío (y su total en 0): se suma por paleta distinta, igual que el de kg.
+      const brutoLb = Array.from(entry.pallets.values()).reduce((sum, v) => sum + v.lb, 0);
       writeTableRow(ws, row, [
         scalar(entry.po),
         scalar(entry.descripcion),
-        scalar(entry.widthIn),
+        entry.widthIn,
         Math.round(entry.netoKg * 100) / 100,
         Math.round(entry.netoLb * 100) / 100,
         Math.round(brutoKg * 100) / 100,
-        '',
+        Math.round(brutoLb * 100) / 100,
       ]);
       row += 1;
       totalNetoKg += entry.netoKg;
       totalNetoLb += entry.netoLb;
       totalBrutoKg += brutoKg;
+      totalBrutoLb += brutoLb;
     }
     writeTotalsRow(ws, row, [
       'Totales',

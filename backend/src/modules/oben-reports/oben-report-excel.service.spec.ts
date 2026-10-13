@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { ObenReportExcelService } from './oben-report-excel.service';
+import { ObenReportExcelService, anchoPulgadasEntero } from './oben-report-excel.service';
 
 describe('ObenReportExcelService', () => {
   const service = new ObenReportExcelService();
@@ -242,6 +242,163 @@ describe('ObenReportExcelService', () => {
       expect(flat).toContain('Código Interno|Tipo Película');
       expect(flat).toContain('2672838C651901840');
       expect(flat).toContain('1026064');
+    });
+  });
+
+  describe('Lista Especial (spPackingListUSA_Paradixe)', () => {
+    // Valores reales del archivo completo de Oben (ListaEspecial de la FEXP3164, OC 1031/PO#657724).
+    const rollo928 = {
+      PO: '1031/PO#657724',
+      CodigoInternacional: '2691428C53204152026914C0301359771',
+      Descripcion: 'OPET PLAIN FILM ET12 TA X 928 MM Core 6 Diámetro 940',
+      CodigoItem: 'ET---0012TA0928S0940',
+      Producto: 'ET-12-TA',
+      Tratamiento: 'TA',
+      NroUnico: 359771,
+      CodigoBarraPallet: '26914C0301359771',
+      Ancho: 928,
+      WidthIn: '36.00-1.00/2.00',
+      ODmm: 934,
+      ODin: 36.77,
+      LongMt: 50598.74,
+      LengthFt: 166014.47,
+      Lote: '3261112',
+      CodigoBarraBobina: '2691428C532041520',
+      CodigoInternoBobina: '2691428C532041520',
+      FabricacionMFG: '2026-09-14',
+      BobinaPesoNetoKg: 804.35,
+      RollNetWeightLb: 1773.27,
+      PaletaPesoNetoKg: 804.35,
+      PalletNetWeightLb: 1773.27,
+      PaletaPesoBrutoKg: 894,
+      PalletGrossWeightLb: 1970.91,
+      Empalmes: 0,
+    };
+    const rollo1397 = {
+      ...rollo928,
+      CodigoInternacional: '2691427C53204146026914C0101359764',
+      Descripcion: 'OPET PLAIN FILM ET12 TA X 1397 MM Core 6 Diámetro 940',
+      CodigoItem: 'ET---0012TA1397S0940',
+      NroUnico: 359764,
+      CodigoBarraPallet: '26914C0101359764',
+      Ancho: 1397,
+      WidthIn: '55',
+      CodigoBarraBobina: '2691427C532041460',
+      CodigoInternoBobina: '2691427C532041460',
+      BobinaPesoNetoKg: 1207.75,
+      RollNetWeightLb: 2662.61,
+      PaletaPesoNetoKg: 1207.75,
+      PalletNetWeightLb: 2662.61,
+      PaletaPesoBrutoKg: 1303,
+      PalletGrossWeightLb: 2872.59,
+    };
+    const data = {
+      Cliente: 'FORESTREE INC',
+      OC_Cliente: '1031/PO#657724',
+      Contenedor: 'ONEU6368790',
+      Numero: 11238,
+      DetailedPackingList: [rollo928, rollo1397],
+    };
+
+    /** Filas de una hoja con todas sus columnas (también las vacías), para ubicar cada dato por su encabezado. */
+    async function hoja(buffer: Buffer, nombre: string): Promise<{ encabezados: string[]; filas: unknown[][] }> {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+      const ws = wb.getWorksheet(nombre);
+      if (!ws) throw new Error(`No existe la hoja ${nombre}`);
+      const todas: unknown[][] = [];
+      ws.eachRow({ includeEmpty: false }, (row) => {
+        const valores: unknown[] = [];
+        for (let c = 1; c <= ws.columnCount; c += 1) valores.push(row.getCell(c).value ?? '');
+        todas.push(valores);
+      });
+      const inicio = todas.findIndex((f) => f[0] === 'PO');
+      return { encabezados: todas[inicio].map(String).filter(Boolean), filas: todas.slice(inicio + 1) };
+    }
+
+    it('la hoja Detailed trae las 25 columnas del archivo completo de Oben: código de paleta y de bobina, y pesos en kg y lb por rollo', async () => {
+      const { encabezados, filas } = await hoja(await service.buildListaEspecial(11081, data), 'Detailed Packing List');
+
+      expect(encabezados).toEqual([
+        'PO',
+        'Cod. Internacional / International Code',
+        'Descripcion / Description',
+        'Código / Item',
+        'Producto / Product',
+        'Trat. / Treat.',
+        'Nro. Único / Number Unique',
+        'Cod Barra Pallet / Pallet BarCode',
+        'Ancho (mm)',
+        'Width (in)',
+        'OD (mm)',
+        'OD (in)',
+        'Long Mt',
+        'Length Ft',
+        'Lote / Lot',
+        'Cod Barra Bobina / Roll BarCode',
+        'Cod. Interno / Internal Code',
+        'Fabricación / MFG Date',
+        'Bobina Peso Neto Kg / Roll Net Weight Kg',
+        'Bobina Peso Neto Lb / Roll Net Weight Lb',
+        'Paleta Peso Neto Kg / Pallet Net Weight Kg',
+        'Paleta Peso Neto Lb / Pallet Net Weight Lb',
+        'Paleta Peso Bruto Kg / Pallet Gross Weight Kg',
+        'Paleta Peso Bruto Lb / Pallet Gross Weight Lb',
+        'Empalmes / Splices',
+      ]);
+      const dato = (fila: unknown[], columna: string) => fila[encabezados.indexOf(columna)];
+      expect(filas).toHaveLength(2);
+      expect(dato(filas[0], 'Cod Barra Pallet / Pallet BarCode')).toBe('26914C0301359771');
+      expect(dato(filas[0], 'Cod Barra Bobina / Roll BarCode')).toBe('2691428C532041520');
+      expect(dato(filas[0], 'Fabricación / MFG Date')).toBe('2026-09-14');
+      expect(dato(filas[0], 'Bobina Peso Neto Kg / Roll Net Weight Kg')).toBe(804.35);
+      expect(dato(filas[0], 'Bobina Peso Neto Lb / Roll Net Weight Lb')).toBe(1773.27);
+      expect(dato(filas[0], 'Paleta Peso Neto Kg / Pallet Net Weight Kg')).toBe(804.35);
+      expect(dato(filas[0], 'Paleta Peso Neto Lb / Pallet Net Weight Lb')).toBe(1773.27);
+      expect(dato(filas[0], 'Paleta Peso Bruto Kg / Pallet Gross Weight Kg')).toBe(894);
+      expect(dato(filas[0], 'Paleta Peso Bruto Lb / Pallet Gross Weight Lb')).toBe(1970.91);
+      expect(dato(filas[0], 'Empalmes / Splices')).toBe(0);
+      expect(dato(filas[1], 'Paleta Peso Bruto Lb / Pallet Gross Weight Lb')).toBe(2872.59);
+    });
+
+    it('el ancho en pulgadas sale como número entero, aproximado al más cercano, en las tres hojas (928 mm → 37, 1397 mm → 55)', async () => {
+      const buffer = await service.buildListaEspecial(11081, data);
+      for (const nombre of ['Detailed Packing List', 'Summary Packing List', 'Width Wise Summary PL']) {
+        const { encabezados, filas } = await hoja(buffer, nombre);
+        const anchos = filas.slice(0, 2).map((f) => f[encabezados.indexOf('Width (in)')]);
+        expect(anchos).toEqual([37, 55]);
+      }
+    });
+
+    it('anchoPulgadasEntero: parte del ancho en mm; sin mm interpreta la fracción de Oben; sin dato legible no inventa', () => {
+      expect(anchoPulgadasEntero(826, '32.00-1.00/2.00')).toBe(33);
+      expect(anchoPulgadasEntero(915, '36.00')).toBe(36);
+      expect(anchoPulgadasEntero(953, '37.00-1.00/2.00')).toBe(38);
+      expect(anchoPulgadasEntero(1524, 60)).toBe(60);
+      expect(anchoPulgadasEntero('928', null)).toBe(37);
+      expect(anchoPulgadasEntero(undefined, '36.00-1.00/2.00')).toBe(37);
+      expect(anchoPulgadasEntero(null, '32.00-1.00/4.00')).toBe(32);
+      expect(anchoPulgadasEntero('', 55)).toBe(55);
+      expect(anchoPulgadasEntero(null, '36.00')).toBe(36);
+      expect(anchoPulgadasEntero(0, 'N/A')).toBe('N/A');
+      expect(anchoPulgadasEntero(null, null)).toBe('');
+    });
+
+    it('Width Wise: el peso bruto en lb se suma por paleta distinta (antes salía vacío y el total en 0)', async () => {
+      // Dos rollos en la MISMA paleta de 928 mm: el bruto de la paleta no se duplica.
+      const segundo = { ...rollo928, NroUnico: 359772, CodigoBarraBobina: '2691428C532041521', BobinaPesoNetoKg: 100, RollNetWeightLb: 220.46 };
+      const buffer = await service.buildListaEspecial(11081, { ...data, DetailedPackingList: [rollo928, segundo, rollo1397] });
+      const { encabezados, filas } = await hoja(buffer, 'Width Wise Summary PL');
+      const dato = (fila: unknown[], columna: string) => fila[encabezados.indexOf(columna)];
+
+      expect(dato(filas[0], 'Peso Neto Kg / Net Weight Kg')).toBe(904.35);
+      expect(dato(filas[0], 'Peso Bruto Kg / Gross Weight Kg')).toBe(894);
+      expect(dato(filas[0], 'Peso Bruto Lb / Gross Weight Lb')).toBe(1970.91);
+      expect(dato(filas[1], 'Peso Bruto Lb / Gross Weight Lb')).toBe(2872.59);
+      const totales = filas[2];
+      expect(totales[0]).toBe('Totales');
+      expect(dato(totales, 'Peso Bruto Kg / Gross Weight Kg')).toBe(2197);
+      expect(dato(totales, 'Peso Bruto Lb / Gross Weight Lb')).toBe(4843.5);
     });
   });
 });
