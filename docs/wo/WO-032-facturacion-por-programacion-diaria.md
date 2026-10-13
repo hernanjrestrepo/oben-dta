@@ -61,3 +61,30 @@ Construido (backend, sin pantalla todavía):
 Particularidades de Camilo (`FAC.pdf`) que la API de factura de Oben NO permite cumplir desde Oben Xmart (solo recibe proforma y número de distribución): retención en "Observaciones 1", campo NOTAS del cliente, TRM especial de PPC FLEX y el estado "Cantidades cambiadas". Deben resolverse en la API de Oben (José) o revisarse en NetSuite antes de emitir.
 
 Pendiente: pantalla para que Oben cargue el cuadro (o lectura automática del Excel / de un correo diario), confirmar con Oben el significado exacto de SALDO PENDIENTE y si "CERRADA" ya implica "Cantidades cambiadas".
+
+### Ajuste del mismo día: los parciales esperan el cierre de su orden (commit f58a255)
+Al cruzar el cuadro con los datos reales quedó claro qué significa cada estado:
+- **CERRADA**: la orden ya fue aprobada en corte (salió su Lista de Empaque) y no tiene parcial → se factura el pedido completo.
+- **SALDO PENDIENTE**: la orden cerró con un parcial que Oben pidió con "Facturar Parcial" → se factura ese parcial (su número de distribución), nunca el pedido completo.
+- **POR CERRAR**: aún no la aprueban en corte. Si ya tiene un "Facturar Parcial" (los del viernes 9-oct después de las 4 p. m.), ese parcial espera: se factura solo cuando la orden cierre.
+
+Regla en el código: una orden programada para hoy se factura al cerrar; si su proforma tiene parciales pendientes pedidos antes de ese cierre se facturan esos, y si no, el pedido completo. Un parcial pedido después del último cierre espera el siguiente.
+
+### Reactivación del 13-oct (11:04 a. m., hora de Bogotá)
+Orden de Hernán a partir del correo de Jorge ("reactivemos nacional; esto es lo que se va a facturar hoy"). Ajustes en producción: `suspendida:false, nacionalAutomatica:true, parcialAutomatica:true, soloProgramadas:true, horaCorte:"16:00"`. El cuadro (20 órdenes) se cargó desde la imagen del correo; las 20 proformas coincidieron con las que Oben tiene para cada orden.
+
+| Resultado | Órdenes |
+|---|---|
+| Creadas, confirmadas por Oben | PF 11198 dist. 11153 (FLEXIPACK) → `9089336`; PF 11228 dist. 11140 (LITOPLAS) → `9089337` |
+| Oben responde que ya estaban facturadas | PF 11125 dist. 11143 (FLEXO SPRING); PF 11136 (AGRAF, tras respuesta ambigua y verificación) |
+| Rechazadas: proforma en "Aprobación pendiente" | PF 11374 y 11441 (PLASMAR), PF 11546 (AMCOR) |
+| Rechazadas: HTTP 400 "No se pudo crear la factura de venta" | PF 11416 y 11488 (OBEN DISTRIBUIDORA COLOMBIA) |
+| Esperan el cierre (se facturan solas) | OV 10963, 11039, 11155, 11214, 11216, 11263 |
+| Exportación (no se facturan) | OV 11209, 11256, 11257, 11268, 11269 (BAYSHORE FILMS, EE. UU.) |
+
+Aprendizajes:
+- En el éxito la API devuelve un número en `message` (`9089336`): hay que confirmar con José si es el número de la factura o su identificador interno, y mostrarlo en el aviso.
+- "La proforma … se encuentra en estado: Aprobación pendiente" es un rechazo por estado: Oben mismo impide facturar antes de la aprobación. Hoy no se reintenta solo: se reintenta con el botón de la pantalla Facturas.
+- Las tres proformas de OBEN DISTRIBUIDORA COLOMBIA que se han intentado (11490 el 7-oct, 11416 y 11488 hoy) fallan con el mismo HTTP 400: José debe revisar ese cliente en la API.
+
+Siguiente sprint propuesto: reintento automático de las rechazadas por "Aprobación pendiente" hasta el corte, pantalla para cargar el cuadro del día (hoy lo carga Paradixe) y número de Oben en el aviso por correo.
