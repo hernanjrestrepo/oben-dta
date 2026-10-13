@@ -74,8 +74,10 @@ export default function FacturasParcialesPage() {
   async function facturar(f: FacturaParcial) {
     const confirmo = f.estado === 'revisar';
     const pregunta = confirmo
-      ? `No se sabe si Oben alcanzó a facturar la PF ${f.numberPF} (distribución ${f.numeroDistribucion}). ¿Ya verificaste en OBEN MAS que NO existe esa factura? Si existe, reintentar la duplicaría.`
-      : `Se creará en OBEN MAS la factura parcial de la PF ${f.numberPF}, distribución ${f.numeroDistribucion}. ¿Continuar?`;
+      ? `No se sabe si Oben alcanzó a facturar la PF ${f.numberPF} (${f.numeroDistribucion ? `distribución ${f.numeroDistribucion}` : 'pedido completo'}). ¿Ya verificaste en OBEN MAS que NO existe esa factura? Si existe, reintentar la duplicaría.`
+      : f.numeroDistribucion
+        ? `Se creará en OBEN MAS la factura parcial de la PF ${f.numberPF}, distribución ${f.numeroDistribucion}. ¿Continuar?`
+        : `Se creará en OBEN MAS la factura del pedido completo de la PF ${f.numberPF}. ¿Continuar?`;
     if (!confirm(pregunta)) return;
     try {
       setFacturando(f.id);
@@ -163,12 +165,14 @@ export default function FacturasParcialesPage() {
                 return (
                   <tr key={f.id} className="align-top">
                     <td className="px-4 py-3 font-semibold text-gray-900">{f.numberPF}</td>
-                    <td className="px-4 py-3 text-gray-800">{f.numeroDistribucion}</td>
+                    <td className="px-4 py-3 text-gray-800">{f.numeroDistribucion || 'Pedido completo'}</td>
                     <td className="px-4 py-3 text-gray-600">
                       {f.origen === 'correo' ? (
                         <span className="inline-flex items-center gap-1" title={f.remitente ?? ''}>
                           <Mail className="w-3.5 h-3.5 text-gray-400" /> Correo
                         </span>
+                      ) : f.origen === 'automatico' ? (
+                        <span title={f.remitente ?? ''}>Automática{f.remitente ? ` · ${f.remitente}` : ''}</span>
                       ) : (
                         'Manual'
                       )}

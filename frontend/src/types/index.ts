@@ -584,7 +584,8 @@ export interface FacturaParcial {
   id: string;
   numberPF: string;
   numeroDistribucion: string;
-  origen: 'correo' | 'manual';
+  /** automatico = pedido nacional completo, facturado al cerrar (sin número de distribución). */
+  origen: 'correo' | 'manual' | 'automatico';
   remitente: string | null;
   estado: EstadoFacturaParcial;
   respuesta: unknown;
