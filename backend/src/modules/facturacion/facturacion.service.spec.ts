@@ -336,7 +336,7 @@ describe('FacturacionService (borrador de facturación)', () => {
       const { service, hub } = makeService({ hubResponses: { header: HEADER_NACIONAL, check: CHECK_OK } });
       await service.getDraft(10758);
       for (const call of hub.call.mock.calls) {
-        expect(call[3]).toEqual({ maxAttempts: 1, timeoutMs: 30_000 });
+        expect(call[3]).toEqual({ maxAttempts: 1, timeoutMs: 90_000 });
       }
     });
   });
@@ -497,7 +497,7 @@ describe('FacturacionService (borrador de facturación)', () => {
         simulatedFields: ['direccionEntrega'],
         readyToGenerate: true,
       });
-      expect(hub.call).toHaveBeenCalledWith('obenPlus', 'proforma.status', { numberPF: '11271' }, { maxAttempts: 1, timeoutMs: 30_000 });
+      expect(hub.call).toHaveBeenCalledWith('obenPlus', 'proforma.status', { numberPF: '11271' }, { maxAttempts: 1, timeoutMs: 90_000 });
     });
 
     it('si Oben+ responde en modo real (sin marca simulated), la dirección NO queda marcada como simulada', async () => {

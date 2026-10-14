@@ -50,7 +50,7 @@ describe('PackingListController', () => {
         'obenCostOrder',
         'query.run',
         { procedure: 'spPackingListUSA_Paradixe', numberOrderSales: 10794 },
-        { maxAttempts: 1, timeoutMs: 30_000 },
+        { maxAttempts: 1, timeoutMs: 90_000 },
       );
     });
 

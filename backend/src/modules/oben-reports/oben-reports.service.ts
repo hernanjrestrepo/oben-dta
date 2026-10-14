@@ -49,7 +49,13 @@ const DOCUMENT_PACKAGE_REPORTS = OBEN_REPORTS.filter((r) => !EXCLUDED_FROM_PACKA
  * concurrente y empeora la lentitud en vez de mitigarla. Por eso aquí se usa
  * maxAttempts:1 (nada de reintentos automáticos) con un timeout más realista.
  */
-export const OBEN_QUERY_OPTIONS = { maxAttempts: 1, timeoutMs: 30_000 };
+/**
+ * 14-oct-2026: spConsumoME de Oben pasó a tardar ~30 s a ratos (y a responder
+ * "no se encuentran datos" si hay otra consulta en curso), igual al límite de
+ * 30 s de antes: 12 OV agotaron sus 5 reintentos y no se envió ningún
+ * documento en todo el día. 90 s es lo que aguanta la pantalla (timeout 90 s).
+ */
+export const OBEN_QUERY_OPTIONS = { maxAttempts: 1, timeoutMs: 90_000 };
 
 /**
  * Campo que trae la tabla de cada reporte — si Oben responde 200 pero sin

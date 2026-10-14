@@ -83,7 +83,7 @@ describe('ComercialService — seguimiento de Proformas (Oben+)', () => {
       const { service, hub } = withSimulator();
       await service.getProforma('11271');
       expect(hub.call.mock.calls.map((c) => c[1])).toEqual(['proforma.status', 'proforma.cartera', 'proforma.cubicaje']);
-      for (const c of hub.call.mock.calls) expect(c[3]).toEqual({ maxAttempts: 1, timeoutMs: 30_000 });
+      for (const c of hub.call.mock.calls) expect(c[3]).toEqual({ maxAttempts: 1, timeoutMs: 90_000 });
     });
 
     it('el tablero cuadra: por estado, pendientes+activas, exportación+nacional y por cliente suman el total', async () => {
