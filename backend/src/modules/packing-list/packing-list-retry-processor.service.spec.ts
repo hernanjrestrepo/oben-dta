@@ -97,18 +97,56 @@ describe('PackingListRetryProcessorService (reintento de Lista de Empaque, pedid
     );
   });
 
-  it('en el 5to intento fallido, escala a José/Jorge y marca la fila "escalated" en vez de seguir reintentando', async () => {
+  it('en el 5to intento fallido avisa a José/Jorge UNA vez pero la orden SIGUE en la cola (cada hora), no se abandona', async () => {
     const buildDocumentPackage = jest.fn().mockResolvedValue(INCOMPLETE_PACKAGE);
     const row = makeRow({ attempts: 4 });
     const { service, automation, retries } = makeService({ buildDocumentPackage, findDue: jest.fn().mockResolvedValue([row]) });
 
+    const antes = Date.now();
     await service.processDueRetries();
 
+    expect(automation.sendEscalation).toHaveBeenCalledTimes(1);
     expect(automation.sendEscalation).toHaveBeenCalledWith(10982, INCOMPLETE_PACKAGE.failed);
-    expect(retries.update).toHaveBeenCalledWith(
-      'row-1',
-      expect.objectContaining({ status: 'escalated', attempts: 5 }),
-    );
+    const cambios = retries.update.mock.calls[0][1];
+    expect(cambios).toMatchObject({ kind: 'incompleto', attempts: 5 });
+    expect(cambios.status).toBeUndefined(); // sigue 'pending'
+    expect(cambios.nextRetryAt.getTime()).toBeGreaterThanOrEqual(antes + 60 * 60_000 - 1000);
+  });
+
+  it('ya escalada y todavía incompleta: reintenta cada hora SIN volver a avisar', async () => {
+    const buildDocumentPackage = jest.fn().mockResolvedValue(INCOMPLETE_PACKAGE);
+    const row = makeRow({ attempts: 5, createdAt: new Date(Date.now() - 6 * 3_600_000) });
+    const { service, automation, retries } = makeService({ buildDocumentPackage, findDue: jest.fn().mockResolvedValue([row]) });
+
+    await service.processDueRetries();
+
+    expect(automation.sendEscalation).not.toHaveBeenCalled();
+    expect(automation.sendCompletePackage).not.toHaveBeenCalled();
+    expect(retries.update).toHaveBeenCalledWith('row-1', expect.objectContaining({ attempts: 6, lastMissing: INCOMPLETE_PACKAGE.failed }));
+    expect(retries.update.mock.calls[0][1].status).toBeUndefined();
+  });
+
+  it('caso real 11376/11277/11276: escalada, Oben carga los datos horas después → el paquete sale solo y la fila queda "completed"', async () => {
+    const buildDocumentPackage = jest.fn().mockResolvedValue(COMPLETE_PACKAGE);
+    const row = makeRow({ attempts: 5, createdAt: new Date(Date.now() - 5 * 3_600_000) });
+    const { service, automation, retries } = makeService({ buildDocumentPackage, findDue: jest.fn().mockResolvedValue([row]) });
+
+    await service.processDueRetries();
+
+    expect(automation.sendCompletePackage).toHaveBeenCalledTimes(1);
+    expect(automation.sendEscalation).not.toHaveBeenCalled();
+    expect(retries.update).toHaveBeenCalledWith('row-1', { status: 'completed', lastMissing: null });
+  });
+
+  it('a las 48 h sin datos deja de reintentar: queda "escalated" para resolverla a mano', async () => {
+    const buildDocumentPackage = jest.fn().mockResolvedValue(INCOMPLETE_PACKAGE);
+    const row = makeRow({ attempts: 20, createdAt: new Date(Date.now() - 49 * 3_600_000) });
+    const { service, automation, retries } = makeService({ buildDocumentPackage, findDue: jest.fn().mockResolvedValue([row]) });
+
+    await service.processDueRetries();
+
+    expect(automation.sendEscalation).not.toHaveBeenCalled();
+    expect(retries.update).toHaveBeenCalledWith('row-1', expect.objectContaining({ status: 'escalated', attempts: 21 }));
   });
 
   it('si el paquete está completo pero el ENVÍO falla, NO marca "completed" — reprograma como si siguiera incompleto', async () => {
@@ -145,10 +183,8 @@ describe('PackingListRetryProcessorService (reintento de Lista de Empaque, pedid
     await service.processDueRetries();
 
     expect(automation.sendEscalation).toHaveBeenCalledWith(10982, [sendFailure]);
-    expect(retries.update).toHaveBeenCalledWith(
-      'row-1',
-      expect.objectContaining({ status: 'escalated', attempts: 5, lastMissing: [sendFailure] }),
-    );
+    expect(retries.update).toHaveBeenCalledWith('row-1', expect.objectContaining({ kind: 'incompleto', attempts: 5, lastMissing: [sendFailure] }));
+    expect(retries.update.mock.calls[0][1].status).toBeUndefined(); // sigue en la cola
   });
 
   it('solo procesa filas "pending" cuyo next_retry_at ya venció (delegado al repo, pero se confirma que se usa el resultado tal cual)', async () => {

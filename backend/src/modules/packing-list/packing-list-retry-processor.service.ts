@@ -7,7 +7,12 @@ import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { ObenReportsService } from '../oben-reports/oben-reports.service';
 import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
 import { PackingListAutomationService } from './packing-list-automation.service';
-import { PACKING_LIST_RETRY_INTERVAL_MS, PACKING_LIST_RETRY_MAX_ATTEMPTS } from './packing-list-retry.constants';
+import {
+  PACKING_LIST_RETRY_INTERVAL_MS,
+  PACKING_LIST_RETRY_LONG_INTERVAL_MS,
+  PACKING_LIST_RETRY_MAX_AGE_MS,
+  PACKING_LIST_RETRY_MAX_ATTEMPTS,
+} from './packing-list-retry.constants';
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -123,12 +128,34 @@ export class PackingListRetryProcessorService implements OnModuleInit, OnModuleD
     }
 
     const attempts = previousAttempts + 1;
-    if (attempts >= PACKING_LIST_RETRY_MAX_ATTEMPTS) {
+    if (attempts === PACKING_LIST_RETRY_MAX_ATTEMPTS) {
+      // Se avisa UNA vez a José/Jorge, pero la orden sigue en la cola (cada hora): ver PACKING_LIST_RETRY_LONG_INTERVAL_MS.
       await automation.sendEscalation(row.numberOrderSales, stillMissing);
-      await this.retries.update(row.id, { status: 'escalated', attempts, lastMissing: stillMissing });
+      await this.retries.update(row.id, {
+        kind: 'incompleto',
+        attempts,
+        nextRetryAt: new Date(Date.now() + PACKING_LIST_RETRY_LONG_INTERVAL_MS),
+        lastMissing: stillMissing,
+      });
       this.logger.warn(
-        `Orden ${row.numberOrderSales}: sigue incompleta tras ${attempts} intentos (${stillMissing.map((f) => f.key).join(', ')}) — escalada a José/Jorge.`,
+        `Orden ${row.numberOrderSales}: sigue incompleta tras ${attempts} intentos (${stillMissing.map((f) => f.key).join(', ')}) — escalada a José/Jorge; se sigue verificando cada hora hasta 48 h.`,
       );
+      return;
+    }
+    if (attempts > PACKING_LIST_RETRY_MAX_ATTEMPTS) {
+      const edadMs = row.createdAt ? Date.now() - new Date(row.createdAt).getTime() : 0;
+      if (edadMs > PACKING_LIST_RETRY_MAX_AGE_MS) {
+        await this.retries.update(row.id, { status: 'escalated', attempts, lastMissing: stillMissing });
+        this.logger.warn(
+          `Orden ${row.numberOrderSales}: sigue incompleta tras 48 h (${stillMissing.map((f) => f.key).join(', ')}) — se deja de reintentar; hay que resolverla a mano.`,
+        );
+        return;
+      }
+      await this.retries.update(row.id, {
+        attempts,
+        nextRetryAt: new Date(Date.now() + PACKING_LIST_RETRY_LONG_INTERVAL_MS),
+        lastMissing: stillMissing,
+      });
       return;
     }
 
