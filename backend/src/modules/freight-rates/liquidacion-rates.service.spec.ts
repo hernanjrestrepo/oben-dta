@@ -199,6 +199,8 @@ describe('LiquidacionRatesService.resolveOceanFreight (pata 2 del archivo de fle
     expect(ciudadDe('CARTAGENA - COLOMBIA')).toBe('CARTAGENA');
     expect(ciudadDe('DALLAS, TX 75212')).toBe('DALLAS');
     expect(ciudadDe('Houston, TX, United States (USHOU) - Port')).toBe('Houston');
+    expect(ciudadDe('PUERTO GUAYAQUIL')).toBe('GUAYAQUIL');
+    expect(ciudadDe('PUERTO RIO GRANDE')).toBe('RIO GRANDE');
     expect(ciudadDe('')).toBeNull();
     expect(ciudadDe(undefined)).toBeNull();
   });
