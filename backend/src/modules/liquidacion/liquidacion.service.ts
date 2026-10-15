@@ -10,7 +10,7 @@ import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
-import { LIQUIDACION_VALUE_CALCULATOR, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
+import { LIQUIDACION_VALUE_CALCULATOR, noQuedarPorDebajo, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
 import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-settlement-defaults';
 import { SP_PROFORMAS_COMEX, incotermDeProforma, paisDeProforma } from './incoterm-de-oben';
@@ -249,13 +249,14 @@ export class LiquidacionService {
     let puertoInland: string | null = null;
     if (esUSA && pais && headerOrigen.inlandFreight !== 'usuario') {
       const destino = [header.direccion, header.puertoArribo].filter((v): v is string => typeof v === 'string').join(' ');
-      const inland = await this.rates.resolveInlandByAddress(this.ctx.tenantId, 'USA', destino);
+      // El puerto de arribo de la PF manda (15-oct: la PF 11237 dice Cincinnati y se había ido por Columbus).
+      const inland = await this.rates.resolveInlandByAddress(this.ctx.tenantId, 'USA', destino, undefined, header.puertoArribo);
       if (isNum(inland.inlandFreight)) {
         header.inlandFreight = round2(inland.inlandFreight * contenedores);
         headerOrigen.inlandFreight = 'maestro';
         puertoInland = inland.destinationPort;
         ajustes.push(
-          `Inland Freight de la tabla de fletes: ${inland.destinationPort} → ${inland.destinationAddress} (contenedor 40'), USD ${inland.inlandFreight.toFixed(2)}${porContenedores}.` +
+          `Inland Freight de la tabla de fletes: ${inland.destinationPort} → ${inland.destinationAddress} (${[inland.forwarder, "contenedor 40'"].filter(Boolean).join(', ')}), USD ${inland.inlandFreight.toFixed(2)}${porContenedores}.` +
             (inland.vencida ? ` OJO: esa tarifa venció el ${inland.validUntil} — pedir la actualización al forwarder.` : ''),
         );
       }
@@ -339,10 +340,15 @@ export class LiquidacionService {
       }
     }
 
-    const calcular = (t: LiquidacionTotalesInput) =>
-      this.calcularLineas(baseLines, input.lines, (l, indice) =>
+    const calcular = (t: LiquidacionTotalesInput) => {
+      const r = this.calcularLineas(baseLines, input.lines, (l, indice) =>
         this.calculator.compute({ ...envio, indice, pais, esUSA, incoterm, totales: t, line: l }),
       );
+      // Si el usuario sobrescribió el último ítem, lo suyo manda: no se ajusta.
+      const ultimo = baseLines.at(-1);
+      const pasosAjuste = ultimo && !input.lines?.[String(ultimo.codSecLineFilm)] ? noQuedarPorDebajo(r.lines) : 0;
+      return { ...r, pasosAjuste };
+    };
     // USA con DAP/DDP sin "otros costos destino" digitados: la primera pasada
     // usa 0 para poder calcular el FOB (y con él el HMF); después se toman de
     // Destination Charges. Si no se puede (faltan cargos), se recalcula sin el 0.
@@ -364,6 +370,23 @@ export class LiquidacionService {
         if (headerOrigen[key] === 'usuario') continue;
         (header as Record<string, unknown>)[key] = value;
         if (isNum(value)) headerOrigen[key] = 'maestro';
+      }
+      // Con DAP/DDP el FOB final ya tiene descontados los gastos de destino, incluido el propio HMF:
+      // HMF = pct × FOB final = pct × (FOB sin gastos de destino − Inland − Entry − ISF − HMF)
+      //     → HMF = pct × (FOB sin gastos de destino − Inland − Entry − ISF) ÷ (1 + pct).
+      // PF 11237 (15-oct): 44.34, igual que Oben; sobre el FOB sin descontarlos daba 45.68.
+      const pct = s.harborMaintenanceFeePct;
+      if (headerOrigen.harborMaintenanceFee === 'maestro' && isNum(pct) && conceptos?.includes('otrosGastos')) {
+        const fobSinDestino = this.sumaFOB((otrosPendientesUSA ? calculo : calcular({ ...totales, otrosGastos: 0 })).lines);
+        const fijos = [header.inlandFreight, header.entryFee, header.importerSecurityFiling];
+        const base = isNum(fobSinDestino) && fijos.every(isNum) ? fobSinDestino - fijos.reduce((a, b) => a + b, 0) : null;
+        // Con base ≤ 0 (los gastos superan la mercancía) el FOB queda negativo y la liquidación se bloquea igual.
+        if (isNum(base) && base > 0) {
+          header.harborMaintenanceFee = round2((pct * base) / (1 + pct));
+          ajustes.push(
+            `Harbor Maintenance Fee = ${(pct * 100).toFixed(3)} % del FOB final (ya sin Inland, Entry, ISF ni el propio HMF): USD ${header.harborMaintenanceFee.toFixed(2)}.`,
+          );
+        }
       }
       if (prov && !isNum(header.harborMaintenanceFee) && headerOrigen.harborMaintenanceFee !== 'usuario') {
         header.harborMaintenanceFee = VALORES_PROVISIONALES.harborMaintenanceFeeUSD;
@@ -399,6 +422,13 @@ export class LiquidacionService {
           `Destino USA con ${incoterm} (no lleva otros gastos): Destination Charges (USD ${dc.toFixed(2)}) va en el encabezado pero no se descuenta de la mercancía — confirmar con José.`,
         );
       }
+    }
+
+    if (calculo.pasosAjuste > 0) {
+      const ultima = calculo.lines.at(-1)!;
+      ajustes.push(
+        `Redondeo (José, 15-oct): al último ítem (línea ${ultima.codSecLineFilm}) se le restaron ${(calculo.pasosAjuste * 0.0001).toFixed(4)} al flete por unidad para que la liquidación no quede por debajo del valor de la mercancía.`,
+      );
     }
 
     const headerMissing: string[] = [];

@@ -7,6 +7,7 @@ import {
   VALOR_POLIZA_VIGENTE,
   SimulatedIncotermCalculator,
   calculatorFromEnv,
+  noQuedarPorDebajo,
   prorratear,
   type LiquidacionLineContext,
 } from './liquidacion-value-calculator';
@@ -93,16 +94,16 @@ describe('Calculadores de Liquidación', () => {
       for (const incoterm of ['DAP', 'DDP']) {
         expect(calc.compute(ctx(0, incoterm))).toEqual({
           valueTotal: 1785, // 2.55 × 700
-          // Precio final (José): 2.55 − 1.2345 − 0.0045 − 0.0876
-          kilosTotalUnit: 1.2234,
+          // Precio final (José): 2.55 − 1.2346 − 0.0046 − 0.0877
+          kilosTotalUnit: 1.2231,
           valueFreight: 864.19, // 1234.56 × 70%
-          valueFreightUnit: 1.2345, // 864.19 / 700 = 1.23455… truncado
+          valueFreightUnit: 1.2346, // 864.19 / 700 = 1.234557… redondeado
           subTotal: 920.81, // 1785 − 864.19
           valueSure: 3.21, // 920.81 − 920.81 / 1.0035
-          valueSureUnit: 0.0045,
+          valueSureUnit: 0.0046, // 0.004585…
           expensesOther: 61.36, // 87.65 × 70% = 61.355, reparto sin perder centavos
-          expensesOtherUnit: 0.0876,
-          valueFOB: 856.38, // 1785 − 3.21 − 864.19 − 61.36
+          expensesOtherUnit: 0.0877, // 0.087657…
+          valueFOB: 856.17, // 1.2231 × 700 (la PF completa se ajusta con noQuedarPorDebajo)
           // José (2026-09-30): Total y TotalUnidad se mandan en 0.
           total: 0,
           totalUnidad: 0,
@@ -120,8 +121,8 @@ describe('Calculadores de Liquidación', () => {
           valueSureUnit: 0,
           expensesOther: 0,
           expensesOtherUnit: 0,
-          valueFOB: 477.75,
-          kilosTotalUnit: 1.5925, // 2.827 − 1.2345
+          valueFOB: 477.72, // 1.5924 × 300
+          kilosTotalUnit: 1.5924, // 2.827 − 1.2346 (370.37 / 300 = 1.234566… redondeado)
           total: 0,
           totalUnidad: 0,
         });
@@ -129,24 +130,71 @@ describe('Calculadores de Liquidación', () => {
     });
 
     it('PF 10867 REAL de OBEN MAS (CFR, flete 752): cuadra con la pantalla de Oben centavo por centavo', () => {
+      const line = { codSecLineFilm: 6, tipoPelicula: 'SC---0020TN', precio: 2.55, kilosTotal: 22080.76, valueTotal: 56305.94 };
       const v = calc.compute({
         pais: 'BRASIL',
         esUSA: false,
         incoterm: 'CFR',
         totales: { flete: 752 },
-        line: { codSecLineFilm: 6, tipoPelicula: 'SC---0020TN', precio: 2.55, kilosTotal: 22080.76, valueTotal: 56305.94 },
+        line,
         indice: 0,
         kilosPorLinea: [22080.76],
         totalValor: 56305.94,
         totalKilos: 22080.76,
       } as never);
-      expect(v).toMatchObject({ valueTotal: 56305.94, valueFreight: 752, valueFreightUnit: 0.034, kilosTotalUnit: 2.516, valueFOB: 55555.19 });
-      expect(round2((v.valueFOB as number) + (v.valueFreight as number))).toBe(56307.19); // "Total" de la factura de Oben
+      // Redondeado: 752 / 22080.76 = 0.034056… → 0.0341; FOB 55552.98 + 752 < 56305.94 → ajuste de 0.0001.
+      expect(v).toMatchObject({ valueFreightUnit: 0.0341, valueFOB: 55552.98 });
+      const lineas = [{ ...line, ...v }];
+      expect(noQuedarPorDebajo(lineas)).toBe(1);
+      expect(lineas[0]).toMatchObject({ valueTotal: 56305.94, valueFreight: 752, valueFreightUnit: 0.034, kilosTotalUnit: 2.516, valueFOB: 55555.19 });
+      expect(round2((lineas[0].valueFOB as number) + 752)).toBe(56307.19); // "Total" de la factura de Oben
+    });
+
+    it('PF 11237 REAL (DAP a Cincinnati, reunión del 15-oct): flete 3150, otros 1069.34 → los valores de José al centavo', () => {
+      const line = { codSecLineFilm: 1, tipoPelicula: 'SC', precio: 2.22, kilosTotal: 17887.16, valueTotal: 39709.5 };
+      const v = calc.compute({
+        pais: 'ESTADOS UNIDOS',
+        esUSA: true,
+        incoterm: 'DAP',
+        totales: { flete: 3150, otrosGastos: 1069.34, valorPoliza: 1.00053 },
+        line,
+        indice: 0,
+        kilosPorLinea: [17887.16],
+        totalValor: 39709.5,
+        totalKilos: 17887.16,
+      } as never);
+      const lineas = [{ ...line, ...v }];
+      expect(noQuedarPorDebajo(lineas)).toBe(1);
+      // José: flete unidad 0.1760, seguro 0.0011, otros 0.0598, precio 1.9831, FOB 35472.03 (truncando daba 0.1761 / 0.0010 / 0.0597 / 35473.82).
+      expect(lineas[0]).toMatchObject({
+        valueSure: 19.37,
+        valueFreightUnit: 0.176,
+        valueSureUnit: 0.0011,
+        expensesOtherUnit: 0.0598,
+        kilosTotalUnit: 1.9831,
+        valueFOB: 35472.03,
+      });
+    });
+
+    it('noQuedarPorDebajo: si ya no queda por debajo, no toca nada; sin FOB en alguna línea, tampoco', () => {
+      const ok = [{ precio: 2, kilosTotal: 100, valueTotal: 200, valueFOB: 190, valueFreight: 10, valueFreightUnit: 0.1, kilosTotalUnit: 1.9 }];
+      expect(noQuedarPorDebajo(ok)).toBe(0);
+      expect(ok[0].valueFOB).toBe(190);
+      expect(noQuedarPorDebajo([{ precio: 2, kilosTotal: 100, valueTotal: 200, valueFreightUnit: 0.1 }])).toBe(0);
+    });
+
+    it('noQuedarPorDebajo: ajusta SOLO el último ítem de la PF', () => {
+      const lineas = [ctx(0, 'DAP'), ctx(1, 'DAP')].map((c) => ({ ...c.line, ...calc.compute(c) }));
+      const antes = { ...lineas[0] };
+      noQuedarPorDebajo(lineas);
+      expect(lineas[0]).toEqual(antes);
+      const suma = lineas.reduce((a, l) => a + (l.valueFOB ?? 0) + (l.valueFreight ?? 0) + (l.valueSure ?? 0) + (l.expensesOther ?? 0), 0);
+      expect(round2(suma)).toBeGreaterThanOrEqual(1785 + 848.1);
     });
 
     it('CFR no necesita la póliza ni los otros gastos para quedar completo', () => {
       const v = calc.compute(ctx(0, 'CFR', { flete: 1234.56 }));
-      expect(v.valueFOB).toBe(920.85);
+      expect(v.valueFOB).toBe(920.78); // (2.55 − 1.2346) × 700
     });
 
     it('FCA/FOB: no se pide nada — la mercancía queda igual (FOB = valor total)', () => {
@@ -203,11 +251,12 @@ describe('Calculadores de Liquidación', () => {
       }
     });
 
-    it('unitarios con 4 decimales TRUNCADOS, sin ruido de coma flotante', () => {
+    it('unitarios con 4 decimales REDONDEADOS (PF 11237, 15-oct), sin ruido de coma flotante', () => {
       const una = (kilos: number, flete: number) =>
         calc.compute({ ...ctx(0, 'CFR', { flete }), line: { ...L1, kilosTotal: kilos, valueTotal: 2.55 * kilos }, kilosPorLinea: [kilos], indice: 0, totalKilos: kilos });
       expect(una(100, 29).valueFreightUnit).toBe(0.29); // 0.29 × 10⁴ = 2899.9999… en binario
-      expect(una(3, 2).valueFreightUnit).toBe(0.6666); // 0.66666…: truncado, no 0.6667
+      expect(una(3, 2).valueFreightUnit).toBe(0.6667); // 0.66666…: redondeado
+      expect(una(3, 1).valueFreightUnit).toBe(0.3333);
     });
 
     it('sin kilos no calcula nada — nunca divide por cero', () => {
@@ -245,7 +294,7 @@ describe('Calculadores de Liquidación', () => {
         line: { codSecLineFilm: 13, tipoPelicula: 'SC---0015TN', precio: 2.85, kilosTotal: 5661.2, valueTotal: 16134.42 },
       });
       // seguro = 15455.08 − 15455.08 / 1.00053
-      expect(v).toMatchObject({ valueFreight: 679.34, subTotal: 15455.08, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15286.94 });
+      expect(v).toMatchObject({ valueFreight: 679.34, subTotal: 15455.08, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15285.81 });
     });
   });
 });

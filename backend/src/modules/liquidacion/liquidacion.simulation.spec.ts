@@ -28,8 +28,10 @@ const CHECK: Record<string, unknown> = {
   '11271': { Proforma: '11271', OrdenVenta: '11086', OrdenCompra: '128353', Cliente: 'OBEN US, LLC', Detalle: [{ CodSed_LineFilm: 113, TipoPelicula: 'ENA--0012TM', Precio: 2.827, KilosTotales: 1339.42 }] },
   // Sintética (2 líneas) — el ejemplo de PF con varias líneas aún no se ha visto en vivo.
   '99001': { Proforma: '99001', OrdenVenta: '11086', OrdenCompra: '1', Cliente: 'OBEN US, LLC', Detalle: [{ CodSed_LineFilm: 1, TipoPelicula: 'A', Precio: 2, KilosTotales: 100 }, { CodSed_LineFilm: 2, TipoPelicula: 'B', Precio: 3, KilosTotales: 200 }] },
+  // PF 11237 / OV 11054 (Cincinnati), revisada con José y María en la reunión del 15-oct.
+  '11237': { Proforma: '11237', OrdenVenta: '11054', OrdenCompra: '1', Cliente: 'OBEN US, LLC', Detalle: [{ CodSed_LineFilm: 1, TipoPelicula: 'SC', Precio: 2.22, KilosTotales: 17887.16 }] },
 };
-const PAIS_BY_OV: Record<string, string> = { '10758': 'COLOMBIA', '11147': 'COLOMBIA', '11086': 'USA' };
+const PAIS_BY_OV: Record<string, string> = { '10758': 'COLOMBIA', '11147': 'COLOMBIA', '11086': 'USA', '11054': 'USA' };
 
 class ObenSim {
   calls: Array<{ op: string; args: Record<string, unknown>; options: unknown }> = [];
@@ -139,8 +141,9 @@ const testCalculator: LiquidacionValueCalculator = {
 const HEADER_USER = { direccion: '1 Port Rd, Miami FL', puertoArribo: 'Miami', puertoEmbarque: 'Cartagena', paNcm: '3920.20', paNaladi: '3920.20.00', notes: 'prueba' };
 const USA_CHARGES = { inlandFreight: 900, destinationCharges: 150 };
 
-/** El aviso de "sin partida" (familia ENA sin tipo confirmado) es ajeno a lo que prueban los ajustes de tarifas. */
-const deTarifas = (a: string) => !a.startsWith('Sin partida en la tabla') && !a.startsWith('Sin tipo de película') && !a.startsWith('Arancel de importación');
+/** Los avisos de partida, arancel y redondeo son ajenos a lo que prueban los ajustes de tarifas (el redondeo se prueba aparte). */
+const deTarifas = (a: string) =>
+  !a.startsWith('Sin partida en la tabla') && !a.startsWith('Sin tipo de película') && !a.startsWith('Arancel de importación') && !a.startsWith('Redondeo');
 
 function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: boolean; requiereAprobacion?: boolean } = {}) {
   const sim = new ObenSim();
@@ -617,7 +620,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.simulated).toBe(true);
       // DAP de ejemplo sobre la PF 11357 real (ver liquidacion-value-calculator.spec.ts).
       expect(draft.incoterm).toBe('DAP');
-      expect(draft.lines[0]).toMatchObject({ valueFreight: 679.34, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15286.94 });
+      expect(draft.lines[0]).toMatchObject({ valueFreight: 679.34, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15285.81 });
     });
 
     it('USA con cargos del maestro + digitados: también completo y simulado', async () => {
@@ -770,6 +773,46 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.missing.some((m) => m.includes('FOB final negativo'))).toBe(true);
     });
 
+    it('PF 11237 REAL (reunión del 15-oct): con flete 3150 e Inland 860 da EXACTO lo de Oben — HMF 44.34, otros 1069.34, FOB 35472.03', async () => {
+      const { service, rates } = jose();
+      rates.resolveSurcharges.mockResolvedValue({
+        entryFee: 120,
+        importerSecurityFiling: 45,
+        harborMaintenanceFee: 45.68, // el 0.125 % sobre el FOB SIN descontar los gastos de destino: lo que daba antes
+        harborMaintenanceFeeFormula: '0.125% del FOB',
+        harborMaintenanceFeePct: 0.00125,
+        destinationCharges: null,
+        missing: [],
+      });
+      const draft = await service.getDraft('11237', {
+        header: { ...HEADER_USER, inlandFreight: 860 },
+        totales: { incoterm: 'DAP', flete: 3150 },
+      });
+      expect(draft.header).toMatchObject({ harborMaintenanceFee: 44.34, destinationCharges: 1069.34 }); // 860 + 120 + 45 + 44.34
+      expect(draft.totales.otrosGastos).toBe(1069.34);
+      expect(draft.lines[0]).toMatchObject({
+        valueTotal: 39709.5,
+        valueSure: 19.37,
+        valueFreightUnit: 0.176,
+        valueSureUnit: 0.0011,
+        expensesOtherUnit: 0.0598,
+        kilosTotalUnit: 1.9831,
+        valueFOB: 35472.03,
+      });
+      expect(draft.ajustes).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Harbor Maintenance Fee = 0.125 % del FOB final'),
+          expect.stringContaining('Redondeo (José, 15-oct): al último ítem (línea 1) se le restaron 0.0001'),
+        ]),
+      );
+    });
+
+    it('con un HMF de monto fijo (sin porcentaje) se respeta el del maestro', async () => {
+      const { service } = jose();
+      const draft = await service.getDraft('11237', { header: { ...HEADER_USER, inlandFreight: 860 }, totales: { incoterm: 'DAP', flete: 3150 } });
+      expect(draft.header.harborMaintenanceFee).toBe(4.73);
+    });
+
     it('USA con DAP: si ya cuadran, no hay ajuste', async () => {
       const { service } = jose();
       const draft = await service.getDraft('99001', usaInput({ totales: { incoterm: 'DAP', flete: 300, otrosGastos: 1034.73 } }));
@@ -880,7 +923,8 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
         destinationCharges: 1878.73, // 1744 + 110 + 20 + 4.73
       });
       expect(draft.headerOrigen).toMatchObject({ direccion: 'oben', puertoArribo: 'oben', inlandFreight: 'maestro', destinationCharges: 'calculado' });
-      expect(rates.resolveInlandByAddress).toHaveBeenCalledWith('t1', 'USA', expect.stringContaining('75212'));
+      // El puerto de arribo de la PF va aparte: si es puerto/rampa de la tabla, manda (15-oct).
+      expect(rates.resolveInlandByAddress).toHaveBeenCalledWith('t1', 'USA', expect.stringContaining('75212'), undefined, 'DALLAS, TX 75212');
       expect(draft.totales.otrosGastos).toBe(1878.73); // otros costos destino = Destination Charges, sin digitarlos
       expect(draft.ajustes.filter(deTarifas)).toEqual([
         expect.stringContaining('venció el 2026-08-31'),

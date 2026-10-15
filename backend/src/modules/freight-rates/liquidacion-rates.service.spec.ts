@@ -38,7 +38,12 @@ describe('LiquidacionRatesService (spSettlement_Head — pregunta 9 del document
 
       const result = await service.resolveSurcharges(TENANT_ID, 'Colombia', 7787.39);
 
-      expect(result).toMatchObject({ entryFee: 110, importerSecurityFiling: 20, harborMaintenanceFee: 9.7342 });
+      expect(result).toMatchObject({ entryFee: 110, importerSecurityFiling: 20, harborMaintenanceFee: 9.7342, harborMaintenanceFeePct: 0.00125 });
+    });
+
+    it('HMF con monto fijo: no hay porcentaje', async () => {
+      const service = makeService([{ tenantId: TENANT_ID, country: 'Peru', surchargeName: 'Harbor Maintenance Fee', rateAmount: 30, rateFormula: '0.125% del FOB' }]);
+      expect(await service.resolveSurcharges(TENANT_ID, 'PERU', 10_000)).toMatchObject({ harborMaintenanceFee: 30, harborMaintenanceFeePct: null });
     });
 
     it('resuelve Entry Fee e Importer Security Filing como montos fijos reales', async () => {
@@ -117,7 +122,42 @@ describe('LiquidacionRatesService (spSettlement_Head — pregunta 9 del document
       it('PF 11366 real: "Dallas TX 75212" → Houston, TX (Port), USD 1744 (texto de Postgres convertido) y avisa que venció', async () => {
         const service = makeService([], [DALLAS]);
         const r = await service.resolveInlandByAddress(TENANT_ID, 'USA', '2144 FRENCH SETTLEMENT RD, Dallas TX 75212, USA DALLAS, TX 75212', new Date('2026-10-01'));
-        expect(r).toEqual({ inlandFreight: 1744, destinationPort: 'Houston, TX (Port)', destinationAddress: 'Dallas, TX 75212', validUntil: '2026-08-31', vencida: true });
+        expect(r).toEqual({ inlandFreight: 1744, forwarder: null, destinationPort: 'Houston, TX (Port)', destinationAddress: 'Dallas, TX 75212', validUntil: '2026-08-31', vencida: true });
+      });
+
+      it('PF 11366: Dallas no es puerto de la tabla → sigue saliendo de Houston', async () => {
+        const service = makeService([], [DALLAS]);
+        const r = await service.resolveInlandByAddress(TENANT_ID, 'USA', 'Dallas TX 75212', new Date('2026-10-01'), 'DALLAS, TX 75212');
+        expect(r.destinationPort).toBe('Houston, TX (Port)');
+      });
+
+      describe('PF 11237 real (Cincinnati, OH 45240 — reunión del 15-oct)', () => {
+        // Filas reales de la tabla de fletes de prod para el ZIP 45240.
+        const fila = (forwarder: string, destinationPort: string, rate40hc: string, validUntil: string | null) => ({
+          tenantId: TENANT_ID, country: 'USA', forwarder, destinationPort, destinationAddress: 'Cincinnati, OH 45240', rate40hc, validUntil,
+        });
+        const FILAS_45240 = [
+          fila('Shapiro', 'Cincinnati, OH (Ramp)', '523.00', '2026-09-30'),
+          fila('Shapiro', 'Columbus, OH (Ramp)', '523.00', null),
+          fila('Trading', 'Columbus, OH (Ramp)', '770.00', null),
+          fila('Trading', 'Cincinnati, OH (Ramp)', '860.00', null),
+          fila('Transborder', 'Cincinnati, OH (Ramp)', '1200.00', null),
+        ];
+
+        it('el puerto de arribo de la PF manda: nunca la rampa de Columbus', async () => {
+          const service = makeService([], FILAS_45240);
+          const sept = await service.resolveInlandByAddress(TENANT_ID, 'USA', 'Cincinnati OH 45240', new Date('2026-09-20'), 'CINCINNATI');
+          expect(sept).toMatchObject({ forwarder: 'Shapiro', destinationPort: 'Cincinnati, OH (Ramp)', inlandFreight: 523, vencida: false });
+          // Vencido el 523 de Shapiro, la vigente más barata DESDE CINCINNATI (no el 523 de Columbus, que llevaba al marítimo de 2900).
+          const oct = await service.resolveInlandByAddress(TENANT_ID, 'USA', 'Cincinnati OH 45240', new Date('2026-10-15'), 'CINCINNATI');
+          expect(oct).toMatchObject({ forwarder: 'Trading', destinationPort: 'Cincinnati, OH (Ramp)', inlandFreight: 860 });
+        });
+
+        it('sin puerto de arribo, como antes (la vigente más barata de cualquier puerto)', async () => {
+          const service = makeService([], FILAS_45240);
+          const r = await service.resolveInlandByAddress(TENANT_ID, 'USA', 'Cincinnati OH 45240', new Date('2026-10-15'));
+          expect(r).toMatchObject({ destinationPort: 'Columbus, OH (Ramp)', inlandFreight: 523 });
+        });
       });
 
       it('una tarifa vigente no se marca como vencida', async () => {
@@ -181,6 +221,16 @@ describe('LiquidacionRatesService.resolveOceanFreight (pata 2 del archivo de fle
     expect(r).toEqual({
       flete: 941, origen: 'Cartagena, Colombia (COCTG) - Port', destino: 'Houston, TX (Port)', forwarder: 'Direct', naviera: 'Hapag-Lloyd', validUntil: '2026-10-30', vencida: false,
     });
+  });
+
+  it('PF 11237: con el Inland desde la rampa de Cincinnati, el marítimo va a Cincinnati (no el 2900 a Columbus)', async () => {
+    const filas = [
+      fila({ destinationPort: 'Columbus, OH (Ramp)', forwarder: 'Trading', shippingLine: 'HAPAG LLOYD', rateTotal: '2900.00', validUntil: '2026-09-30' }),
+      fila({ destinationPort: 'Cincinnati, OH (Ramp)', forwarder: 'Trading', shippingLine: 'HAPAG LLOYD', rateTotal: '3150.00', validUntil: '2026-09-30' }),
+      fila({ destinationPort: 'Cincinnati, OH (Ramp)', forwarder: 'Shapiro', shippingLine: 'HAPAG LLOYD', rateTotal: '2804.00', validUntil: '2026-09-30' }),
+    ];
+    const r = await servicio(filas).resolveOceanFreight(TENANT_ID, 'CARTAGENA - COLOMBIA', 'Cincinnati, OH (Ramp)', 'CINCINNATI', new Date('2026-09-20'));
+    expect(r).toMatchObject({ destino: 'Cincinnati, OH (Ramp)', flete: 2804, forwarder: 'Shapiro' });
   });
 
   it('sin puerto de Inland, usa la ciudad del puerto de arribo de Oben (y avisa si venció)', async () => {

@@ -10,6 +10,8 @@ export interface LiquidacionSurchargesResult {
   importerSecurityFiling: number | null;
   harborMaintenanceFee: number | null;
   harborMaintenanceFeeFormula: string | null;
+  /** La fórmula del HMF como fracción ("0.125% del FOB" → 0.00125), o null si no hay fórmula. */
+  harborMaintenanceFeePct?: number | null;
   destinationCharges: null;
   missing: string[];
 }
@@ -22,6 +24,8 @@ export interface LiquidacionInlandFreightResult {
 /** Inland Freight resuelto por la dirección de destino (código postal) contra la tabla de fletes. */
 export interface LiquidacionInlandByAddressResult {
   inlandFreight: number | null;
+  /** Transportador terrestre (Shapiro, Trading, Transborder…). */
+  forwarder?: string | null;
   destinationPort: string | null;
   destinationAddress: string | null;
   validUntil: string | null;
@@ -111,8 +115,9 @@ export class LiquidacionRatesService {
     if (!harbor) missing.push(`Harbor Maintenance Fee: no hay tarifa cargada para "${country}" en el maestro de fletes.`);
 
     let harborMaintenanceFee: number | null = toAmount(harbor?.rateAmount);
+    const harborPct = harbor?.rateFormula ? this.parsePercentFormula(harbor.rateFormula) : null;
     if (harborMaintenanceFee === null && harbor?.rateFormula) {
-      const pct = this.parsePercentFormula(harbor.rateFormula);
+      const pct = harborPct;
       if (pct !== null && fobValue !== undefined) {
         harborMaintenanceFee = Math.round(fobValue * pct * 10_000) / 10_000;
       } else if (pct !== null) {
@@ -131,6 +136,8 @@ export class LiquidacionRatesService {
       importerSecurityFiling: toAmount(isf?.rateAmount),
       harborMaintenanceFee,
       harborMaintenanceFeeFormula: harbor?.rateFormula ?? null,
+      // Con monto fijo no hay porcentaje que aplicar.
+      harborMaintenanceFeePct: toAmount(harbor?.rateAmount) !== null ? null : harborPct,
       destinationCharges: null,
       missing,
     };
@@ -182,14 +189,25 @@ export class LiquidacionRatesService {
     country: 'USA' | 'CA',
     address?: string | null,
     hoy: Date = new Date(),
+    puertoArribo?: unknown,
   ): Promise<LiquidacionInlandByAddressResult> {
     const vacio = { inlandFreight: null, destinationPort: null, destinationAddress: null, validUntil: null, vencida: false };
     const zips = [...new Set((address ?? '').match(/\b\d{5}\b/g) ?? [])];
+    const ciudadArribo = ciudadDe(puertoArribo)?.toLowerCase() ?? null;
     for (const zip of zips) {
-      const rows = await this.inlandRates.find({
-        where: { tenantId, country, destinationAddress: ILike(`%${zip}%`) },
-        take: 50,
-      });
+      const todas = (
+        await this.inlandRates.find({
+          where: { tenantId, country, destinationAddress: ILike(`%${zip}%`) },
+          take: 50,
+        })
+      ).filter((r) => toAmount(r.rate40hc) !== null);
+      // Si la tabla tiene tarifas desde el puerto/rampa de la ciudad de arribo
+      // de la PF, solo esas: la PF 11237 dice Cincinnati y, como el 523 de
+      // Shapiro desde Cincinnati había vencido, se fue por la rampa de Columbus
+      // (y el marítimo la siguió: 2900 en vez de una tarifa a Cincinnati).
+      // Si no tiene (Dallas sale de Houston), todas.
+      const delPuerto = ciudadArribo ? todas.filter((r) => ciudadDe(r.destinationPort)?.toLowerCase() === ciudadArribo) : [];
+      const rows = delPuerto.length ? delPuerto : todas;
       // Varios forwarders para el mismo ZIP (archivo de fletes oct-2026): primero
       // la tarifa vigente, luego la que sale de PUERTO (la de rampa exige
       // tren hasta la rampa), y entre esas la más barata.
@@ -197,7 +215,6 @@ export class LiquidacionRatesService {
       const vigente = (r: { validUntil: unknown }) => !r.validUntil || String(r.validUntil).slice(0, 10) >= hoyIso;
       const deRampa = (r: { destinationPort: string }) => /ramp/i.test(r.destinationPort ?? '');
       const row = rows
-        .filter((r) => toAmount(r.rate40hc) !== null)
         .sort(
           (a, b) =>
             Number(vigente(b)) - Number(vigente(a)) ||
@@ -208,6 +225,7 @@ export class LiquidacionRatesService {
       const validUntil = row.validUntil ? String(row.validUntil).slice(0, 10) : null;
       return {
         inlandFreight: toAmount(row.rate40hc),
+        forwarder: row.forwarder ?? null,
         destinationPort: row.destinationPort,
         destinationAddress: row.destinationAddress,
         validUntil,

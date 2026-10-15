@@ -50,9 +50,15 @@ export interface LiquidacionValueCalculator {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
-/** José: los valores unitarios van con 4 decimales, truncados hacia abajo. `toFixed` absorbe el ruido de coma flotante (0.29 × 10⁴ = 2899.9999…). */
-const trunc4 = (n: number) => Math.floor(Number((n * 10_000).toFixed(6))) / 10_000;
+/**
+ * Los valores unitarios van con 4 decimales REDONDEADOS (no truncados): así
+ * salen los de Oben en la PF 11237 (seguro 19.37 / 17887.16 kg = 0.00108… →
+ * 0.0011; otros 0.05978… → 0.0598). `toFixed` absorbe el ruido de coma
+ * flotante (1.00005 × 10⁴ = 10000.4999…).
+ */
+const round4 = (n: number) => Math.round(Number((n * 10_000).toFixed(6))) / 10_000;
+/** Lo que se le resta al flete por unidad del último ítem en cada paso del ajuste (José, 15-oct). */
+const PASO_AJUSTE = 0.0001;
 
 /**
  * Reparte `total` proporcional a `pesos`, a centavos, sin que sobre ni falte
@@ -87,7 +93,8 @@ export const FORMULA_SIN_CONFIRMAR: readonly string[] = [];
  *  - Seguro: FOB inicial = Subtotal ÷ Valor de la póliza; seguro = Subtotal − FOB inicial.
  *  - FOB final = precio final × kilos (José, 2026-10-06).
  *  - Diferencias de centavos al repartir: se ajusta el último ítem (José, 2026-10-06).
- *  - Cada unitario = valor de la línea ÷ kilos de la línea, 4 decimales truncados.
+ *  - Cada unitario = valor de la línea ÷ kilos de la línea, 4 decimales redondeados.
+ *  - La liquidación no puede quedar por debajo del valor de la mercancía: ver `noQuedarPorDebajo`.
  *  - KilosTotalUnit = precio final = precio − unitarios de flete, seguro y otros.
  *  - Total y TotalUnidad se envían en 0 (José, 2026-09-30).
  * Qué conceptos aplican depende del Incoterm (ver incoterm-rules.ts); el que
@@ -122,10 +129,10 @@ export class IncotermFormulaCalculator implements LiquidacionValueCalculator {
     // José (2026-09-30): Total y TotalUnidad se mandan en 0.
     const values: LiquidacionLineValues = { valueTotal, total: 0, totalUnidad: 0 };
     if (flete !== undefined && subTotal !== undefined) {
-      Object.assign(values, { valueFreight: flete, valueFreightUnit: trunc4(flete / kilos), subTotal });
+      Object.assign(values, { valueFreight: flete, valueFreightUnit: round4(flete / kilos), subTotal });
     }
-    if (seguro !== undefined) Object.assign(values, { valueSure: seguro, valueSureUnit: trunc4(seguro / kilos) });
-    if (otros !== undefined) Object.assign(values, { expensesOther: otros, expensesOtherUnit: trunc4(otros / kilos) });
+    if (seguro !== undefined) Object.assign(values, { valueSure: seguro, valueSureUnit: round4(seguro / kilos) });
+    if (otros !== undefined) Object.assign(values, { expensesOther: otros, expensesOtherUnit: round4(otros / kilos) });
     if (flete !== undefined && seguro !== undefined && otros !== undefined) {
       const precioFinal = round4(line.precio - values.valueFreightUnit! - values.valueSureUnit! - values.expensesOtherUnit!);
       Object.assign(values, {
@@ -137,6 +144,40 @@ export class IncotermFormulaCalculator implements LiquidacionValueCalculator {
     }
     return values;
   }
+}
+
+const esNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * José (reunión del 15-oct): "la liquidación no puede dar por debajo" del
+ * valor de la mercancía. Si por los decimales la suma de FOB final + flete +
+ * seguro + otros gastos de la PF queda por debajo de la suma de los valores
+ * totales, al ÚLTIMO ítem se le resta 0.0001 al flete por unidad (sube su
+ * precio final) hasta que no quede por debajo. José dijo "0.001", pero sus
+ * números son de 0.0001: PF 11237 (flete 0.1761 → 0.1760, FOB 35472.03) y
+ * PF 10867 (0.0341 → 0.0340, FOB 55555.19) cuadran al centavo así.
+ *
+ * Modifica `lines` y devuelve cuántos pasos de 0.0001 aplicó (0 = nada).
+ * Si a alguna línea le falta el FOB final no hace nada (nada que comparar).
+ */
+export function noQuedarPorDebajo(lines: Array<LiquidacionLineValues & { precio: number }>): number {
+  const ultimo = lines.at(-1);
+  if (!ultimo || !lines.every((l) => esNum(l.valueFOB) && esNum(l.valueTotal))) return 0;
+  const { kilosTotal: kilos, valueFreightUnit } = ultimo;
+  if (!esNum(kilos) || !(kilos > 0) || !esNum(valueFreightUnit)) return 0;
+
+  const valorMercancia = round2(lines.reduce((a, l) => a + (l.valueTotal as number), 0));
+  const liquidado = () =>
+    round2(lines.reduce((a, l) => a + (l.valueFOB as number) + (l.valueFreight ?? 0) + (l.valueSure ?? 0) + (l.expensesOther ?? 0), 0));
+  let pasos = 0;
+  // El flete por unidad nunca baja de 0 (sin flete no hay de dónde ajustar).
+  while (liquidado() < valorMercancia && (ultimo.valueFreightUnit as number) >= PASO_AJUSTE) {
+    ultimo.valueFreightUnit = round4((ultimo.valueFreightUnit as number) - PASO_AJUSTE);
+    ultimo.kilosTotalUnit = round4(ultimo.precio - ultimo.valueFreightUnit - (ultimo.valueSureUnit ?? 0) - (ultimo.expensesOtherUnit ?? 0));
+    ultimo.valueFOB = round2(ultimo.kilosTotalUnit * kilos);
+    pasos++;
+  }
+  return pasos;
 }
 
 /**
