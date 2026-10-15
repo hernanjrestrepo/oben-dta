@@ -455,16 +455,23 @@ export class LiquidacionService {
     const cached = this.proformaCache.get(key);
     if (cached && cached.hasta > Date.now()) return cached.valor;
     let valor: { incoterm: string | null; pais: string | null } = { incoterm: null, pais: null };
-    try {
-      const res = await this.hub.call<unknown>(
-        'obenCostOrder',
-        'query.run',
-        { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf, target: 'liquidacion' },
-        INCOTERM_QUERY_OPTIONS,
-      );
-      if (res.ok) valor = { incoterm: incotermDeProforma(res.data, pf), pais: paisDeProforma(res.data, pf) };
-    } catch {
-      /* sin datos de Oben: se sigue sin ellos */
+    // Servidor de liquidación (pruebas .12) primero; si no tiene la PF (el .12 solo guarda datos de prueba,
+    // 15-oct: ya no traía la 11366 ni la 10867), producción — el reporte de proformas real trae el Incoterm.
+    for (const target of ['liquidacion', undefined] as const) {
+      try {
+        const res = await this.hub.call<unknown>(
+          'obenCostOrder',
+          'query.run',
+          { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf, ...(target ? { target } : {}) },
+          INCOTERM_QUERY_OPTIONS,
+        );
+        if (!res.ok) continue;
+        const encontrado = { incoterm: incotermDeProforma(res.data, pf), pais: paisDeProforma(res.data, pf) };
+        valor = { incoterm: valor.incoterm ?? encontrado.incoterm, pais: valor.pais ?? encontrado.pais };
+        if (valor.incoterm && valor.pais) break;
+      } catch {
+        /* sin datos de este servidor: se prueba el siguiente */
+      }
     }
     this.proformaCache.set(key, { valor, hasta: Date.now() + INCOTERM_CACHE_MS });
     return valor;
