@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Product } from '../../entities/product.entity';
 import { Quote } from '../../entities/quote.entity';
@@ -9,7 +9,7 @@ import { FreightDestinationSurcharge } from '../../entities/freight-destination-
 import { FreightOceanRate } from '../../entities/freight-ocean-rate.entity';
 import { EvaController } from './eva.controller';
 import { EvaService } from './eva.service';
-import { MIA_LLM, OllamaNubeLlm } from './mia-llm';
+import { MIA_LLM, crearMiaLlm } from './mia-llm';
 import { QuotesModule } from '../quotes/quotes.module';
 import { AuthModule } from '../auth/auth.module';
 import { FacturacionModule } from '../facturacion/facturacion.module';
@@ -37,9 +37,10 @@ import { IntegrationHubModule } from '../integrations/hub/integration-hub.module
   providers: [
     EvaService,
     {
-      // Sin OLLAMA_API_KEY MIA responde que no está configurada (nunca se cae el backend).
+      // Kimi primero y Ollama de respaldo; sin ninguna clave MIA responde que no está configurada (nunca se cae el backend).
       provide: MIA_LLM,
-      useFactory: () => (process.env.OLLAMA_API_KEY ? new OllamaNubeLlm(process.env.OLLAMA_API_KEY) : null),
+      useFactory: () =>
+        crearMiaLlm(process.env, (err) => new Logger('MIA').warn(`Modelo falló, se intenta el siguiente: ${(err as Error).message}`)),
     },
   ],
 })

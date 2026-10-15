@@ -28,9 +28,7 @@ import { MIA_ARCHIVOS, MIA_FORMATOS, generarArchivoMia, type MiaFormato } from '
 
 const WORKFLOW_NAME = 'eva-assistant';
 
-import { MIA_LLM, MIA_MODEL, MiaLlmError, type MiaLlm, type MiaMensaje } from './mia-llm';
-
-export { MIA_MODEL };
+import { MIA_LLM, MiaLlmError, esSinSaldo, type MiaLlm, type MiaMensaje } from './mia-llm';
 
 /** Vueltas máximas de herramientas por pregunta (cada vuelta = una llamada al modelo). */
 const MAX_VUELTAS = 6;
@@ -133,6 +131,7 @@ export class EvaService {
   ): Promise<EvaChatResult> {
     const herramientas: Array<{ nombre: string; input: unknown; ok: boolean }> =
       [];
+    const modelos = new Set<string>();
     const result = this.llm
       ? await this.conversar(
           this.llm,
@@ -140,10 +139,11 @@ export class EvaService {
           historial,
           contexto,
           herramientas,
+          modelos,
         )
       : {
           reply:
-            'MIA no está configurada todavía en este ambiente (falta OLLAMA_API_KEY). Avisa al equipo técnico.',
+            'MIA no está configurada todavía en este ambiente (falta KIMI_API_KEY u OLLAMA_API_KEY). Avisa al equipo técnico.',
         };
 
     // Auditoría de TODA interacción: qué se le pidió, qué herramientas usó y
@@ -161,7 +161,7 @@ export class EvaService {
         action: result.action ?? null,
         acciones: result.acciones ?? [],
         herramientas,
-        modelo: MIA_MODEL,
+        modelo: [...modelos].join(', ') || null,
       },
     });
     return result;
@@ -173,6 +173,7 @@ export class EvaService {
     historial: MiaTurno[],
     contexto: MiaContexto,
     herramientas: Array<{ nombre: string; input: unknown; ok: boolean }>,
+    modelos: Set<string>,
   ): Promise<EvaChatResult> {
     const messages: MiaMensaje[] = [
       { role: 'system', content: SYSTEM_PROMPT },
@@ -191,6 +192,7 @@ export class EvaService {
       } catch (err) {
         return { reply: this.mensajeError(err), acciones };
       }
+      if (resp.modelo) modelos.add(resp.modelo);
 
       const { texto, llamadas } = resp;
       if (llamadas.length === 0) {
@@ -271,6 +273,9 @@ export class EvaService {
   private mensajeError(err: unknown): string {
     const status = err instanceof MiaLlmError ? err.status : undefined;
     this.logger.error(`El modelo de MIA falló (${status ?? 'sin status'}): ${(err as Error).message}`);
+    if (esSinSaldo(err)) {
+      return 'MIA se quedó sin saldo en el servicio de IA. Avisa al equipo técnico.';
+    }
     if (status === 401 || status === 402 || status === 403) {
       return 'MIA no pudo autenticarse con el servicio de IA (clave o plan). Avisa al equipo técnico.';
     }

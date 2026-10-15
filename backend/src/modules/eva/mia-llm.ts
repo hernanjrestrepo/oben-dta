@@ -1,11 +1,11 @@
 /**
- * Modelo de MIA: la nube de Ollama (https://ollama.com/v1, API compatible
- * con OpenAI), el mismo servicio que usa EVA BPO con la cuenta de Hernán —
- * sin costo en su plan (decisión de Hernán, 2026-10-05: "olvídate de Haiku").
- * Medido ese día desde el servidor de Oben: gemma4:31b respondió en 0,7 s y
- * pidió la herramienta correcta.
+ * Modelo de MIA: cualquier API compatible con OpenAI (`/chat/completions`
+ * con function calling). Desde el 2026-10-15 va primero Kimi (Moonshot,
+ * kimi-k2.6) y la nube de Ollama (gemma4:31b) queda de respaldo: ese día
+ * Ollama respondió 429 "monthly usage limit" y MIA quedó sin servicio
+ * (pedido de Hernán: "conecta a MIA a Kimi"). Medido desde el servidor de
+ * Oben: kimi-k2.6 pidió la herramienta correcta en ~2 s por vuelta.
  */
-export const MIA_MODEL = process.env.MIA_OLLAMA_MODEL || 'gemma4:31b';
 export const MIA_LLM = Symbol('MIA_LLM');
 
 export interface MiaHerramienta {
@@ -20,7 +20,7 @@ export interface MiaLlamada {
   input: unknown;
 }
 
-/** Mensajes en el formato de chat de OpenAI/Ollama. */
+/** Mensajes en el formato de chat de OpenAI. */
 export type MiaMensaje =
   | { role: 'system' | 'user'; content: string }
   | { role: 'assistant'; content: string; tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> }
@@ -31,13 +31,15 @@ export interface MiaRespuestaLlm {
   llamadas: MiaLlamada[];
   /** La respuesta se cortó por longitud. */
   cortada: boolean;
+  /** Proveedor y modelo que respondió (ej. "kimi:kimi-k2.6"), para la auditoría. */
+  modelo?: string;
 }
 
 export interface MiaLlm {
   completar(mensajes: MiaMensaje[], herramientas: MiaHerramienta[]): Promise<MiaRespuestaLlm>;
 }
 
-/** Error del proveedor con su status HTTP (401/402 = clave o plan; 429 = demasiadas consultas). */
+/** Error del proveedor con su status HTTP (401/402 = clave o plan; 429 = límite o saldo). */
 export class MiaLlmError extends Error {
   constructor(
     message: string,
@@ -47,26 +49,73 @@ export class MiaLlmError extends Error {
   }
 }
 
-export class OllamaNubeLlm implements MiaLlm {
+/** El proveedor dijo que se acabó el saldo o el cupo (no que haya muchas consultas a la vez). */
+export function esSinSaldo(err: unknown): boolean {
+  return err instanceof MiaLlmError && (err.status === 402 || /usage limit|quota|billing|balance|credit|insufficient/i.test(err.message));
+}
+
+export interface MiaProveedor {
+  nombre: 'kimi' | 'ollama';
+  baseUrl: string;
+  modelo: string;
+  apiKey: string;
+  /** Sin valor no se envía: kimi-k2.6 solo acepta el default ("only 1 is allowed for this model", 2026-08-28). */
+  temperatura?: number;
+}
+
+/** Proveedores configurados, en orden de preferencia: Kimi y después Ollama. */
+export function proveedoresMia(env: NodeJS.ProcessEnv = process.env): MiaProveedor[] {
+  const lista: MiaProveedor[] = [];
+  if (env.KIMI_API_KEY) {
+    lista.push({
+      nombre: 'kimi',
+      baseUrl: env.KIMI_URL || 'https://api.moonshot.ai/v1',
+      modelo: env.MIA_KIMI_MODEL || 'kimi-k2.6',
+      apiKey: env.KIMI_API_KEY,
+    });
+  }
+  if (env.OLLAMA_API_KEY) {
+    lista.push({
+      nombre: 'ollama',
+      baseUrl: env.OLLAMA_NUBE_URL || 'https://ollama.com/v1',
+      modelo: env.MIA_OLLAMA_MODEL || 'gemma4:31b',
+      apiKey: env.OLLAMA_API_KEY,
+      temperatura: 0.2,
+    });
+  }
+  return lista;
+}
+
+/** Arma el modelo de MIA con lo configurado; `null` si no hay ninguna clave. */
+export function crearMiaLlm(env: NodeJS.ProcessEnv = process.env, alFallar?: (err: unknown) => void): MiaLlm | null {
+  const llms = proveedoresMia(env).map((p) => new LlmCompatibleOpenAi(p));
+  if (llms.length === 0) return null;
+  return llms.length === 1 ? llms[0] : new MiaLlmConRespaldo(llms, alFallar);
+}
+
+export class LlmCompatibleOpenAi implements MiaLlm {
   constructor(
-    private readonly apiKey: string,
-    private readonly baseUrl = process.env.OLLAMA_NUBE_URL || 'https://ollama.com/v1',
-    private readonly modelo = MIA_MODEL,
+    private readonly proveedor: MiaProveedor,
     private readonly timeoutMs = 90_000,
   ) {}
 
+  get modelo(): string {
+    return `${this.proveedor.nombre}:${this.proveedor.modelo}`;
+  }
+
   async completar(mensajes: MiaMensaje[], herramientas: MiaHerramienta[]): Promise<MiaRespuestaLlm> {
+    const { baseUrl, apiKey, modelo, temperatura } = this.proveedor;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await fetch(`${this.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         signal: controller.signal,
-        headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: this.modelo,
+          model: modelo,
           max_tokens: 4000,
-          temperature: 0.2,
+          ...(temperatura === undefined ? {} : { temperature: temperatura }),
           messages: mensajes,
           tools: herramientas.map((h) => ({
             type: 'function',
@@ -75,7 +124,7 @@ export class OllamaNubeLlm implements MiaLlm {
         }),
       });
       const texto = await res.text();
-      if (!res.ok) throw new MiaLlmError(`HTTP ${res.status}: ${texto.slice(0, 200)}`, res.status);
+      if (!res.ok) throw new MiaLlmError(`${this.modelo} HTTP ${res.status}: ${texto.slice(0, 200)}`, res.status);
       const json = JSON.parse(texto) as {
         choices?: Array<{
           finish_reason?: string;
@@ -86,13 +135,38 @@ export class OllamaNubeLlm implements MiaLlm {
       const llamadas = (c?.message?.tool_calls ?? [])
         .filter((t) => t.function?.name)
         .map((t, i) => ({ id: t.id || `call_${i}`, name: t.function!.name!, input: parsearArgs(t.function!.arguments) }));
-      return { texto: (c?.message?.content ?? '').trim(), llamadas, cortada: c?.finish_reason === 'length' };
+      return { texto: (c?.message?.content ?? '').trim(), llamadas, cortada: c?.finish_reason === 'length', modelo: this.modelo };
     } catch (err) {
       if (err instanceof MiaLlmError) throw err;
-      throw new MiaLlmError((err as Error).name === 'AbortError' ? 'timeout' : (err as Error).message);
+      throw new MiaLlmError(`${this.modelo}: ${(err as Error).name === 'AbortError' ? 'timeout' : (err as Error).message}`);
     } finally {
       clearTimeout(timer);
     }
+  }
+}
+
+/**
+ * Prueba los modelos en orden: si uno falla (sin saldo, clave, caída o
+ * timeout), la misma vuelta se repite con el siguiente. Si todos fallan se
+ * lanza el error del primero, que es el que hay que arreglar.
+ */
+export class MiaLlmConRespaldo implements MiaLlm {
+  constructor(
+    private readonly cadena: MiaLlm[],
+    private readonly alFallar: (err: unknown) => void = () => {},
+  ) {}
+
+  async completar(mensajes: MiaMensaje[], herramientas: MiaHerramienta[]): Promise<MiaRespuestaLlm> {
+    let primero: unknown;
+    for (const llm of this.cadena) {
+      try {
+        return await llm.completar(mensajes, herramientas);
+      } catch (err) {
+        this.alFallar(err);
+        primero ??= err;
+      }
+    }
+    throw primero;
   }
 }
 

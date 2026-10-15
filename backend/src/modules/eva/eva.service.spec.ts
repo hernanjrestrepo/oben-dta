@@ -1,5 +1,5 @@
-import { EvaService, MIA_MODEL } from './eva.service';
-import type { MiaLlm, MiaMensaje, MiaRespuestaLlm } from './mia-llm';
+import { EvaService } from './eva.service';
+import { MiaLlmError, type MiaLlm, type MiaMensaje, type MiaRespuestaLlm } from './mia-llm';
 
 const T = 'tenant-1';
 
@@ -91,12 +91,25 @@ function build(
   return { svc, pedidos, client, audit, authz, quotesService };
 }
 
-describe('EvaService (MIA sobre la nube de Ollama)', () => {
-  it('sin ANTHROPIC_API_KEY responde que no está configurada (y audita)', async () => {
+describe('EvaService (MIA sobre Kimi, con Ollama de respaldo)', () => {
+  it('sin ninguna clave responde que no está configurada (y audita)', async () => {
     const { svc, audit } = build({ sinCliente: true });
     const r = await svc.chat('hola');
-    expect(r.reply).toMatch(/OLLAMA_API_KEY/);
+    expect(r.reply).toMatch(/KIMI_API_KEY/);
     expect(audit.log).toHaveBeenCalled();
+  });
+
+  it('sin saldo lo dice así, no como "demasiadas consultas"', async () => {
+    const { svc, client } = build();
+    client.completar.mockRejectedValueOnce(new MiaLlmError('ollama:gemma4:31b HTTP 429: you have reached your monthly usage limit', 429));
+    const r = await svc.chat('hola');
+    expect(r.reply).toMatch(/sin saldo/);
+  });
+
+  it('audita qué modelo respondió', async () => {
+    const { svc, audit } = build({ respuestas: [{ ...respuesta([texto('Hola.')], 'end_turn'), modelo: 'kimi:kimi-k2.6' }] });
+    await svc.chat('hola');
+    expect(audit.log.mock.calls[0][0].outputData.modelo).toBe('kimi:kimi-k2.6');
   });
 
   it('consulta la herramienta y responde con el texto final del modelo', async () => {
@@ -111,7 +124,6 @@ describe('EvaService (MIA sobre la nube de Ollama)', () => {
     });
     const r = await svc.chat('¿cuándo fue la última factura?');
     expect(r.reply).toBe('La última factura fue la OV 11187.');
-    expect(MIA_MODEL).toBe('gemma4:31b');
     expect(pedidos[0][0].role).toBe('system');
     const resultado = pedidos[1].at(-1) as { role: string; tool_call_id: string; content: string };
     expect(resultado.role).toBe('tool');
