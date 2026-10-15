@@ -122,6 +122,14 @@ export interface OrdenReciente {
   fecha: string;
 }
 
+/** Una proforma y sus órdenes de venta según Oben (la pantalla busca por PF desde el 15-oct). */
+export interface ProformaOrdenes {
+  numberPF: string;
+  ordenesVenta: number[];
+  cliente: string | null;
+  pais: string | null;
+}
+
 export interface FacturacionSendResult {
   sent: boolean;
   to: string[];

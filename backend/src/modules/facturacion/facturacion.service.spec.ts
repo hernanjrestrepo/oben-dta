@@ -95,6 +95,31 @@ const sendCalls = (hub: { call: jest.Mock }) => hub.call.mock.calls.filter((c: u
 const dianCalls = (hub: { call: jest.Mock }) => hub.call.mock.calls.filter((c: unknown[]) => c[1] === 'invoice.send');
 const OBEN_PLUS_OK = { ok: true, mode: 'mock', data: { simulated: true, numberPF: '11271', direccionEntrega: 'DIRECCIÓN SIMULADA (Oben+ mock) — Bodega 3, USA' } };
 
+describe('FacturacionService.ordenesDeProforma (búsqueda por PF, reunión del 15-oct)', () => {
+  // Así llega el reporte de proformas en prod: objetos separados por coma, sin corchetes (PF 11208 real).
+  const REPORTE =
+    '{"NroProforma":"11208","Cliente":"ETIFLEX ETIQUETAS FLEXOGRAFICAS S.A.","Pais":"ECUADOR","OrdenesVenta":[{"NroOrdenVenta":"11028","DetalleSKU":[]}]},' +
+    '{"NroProforma":"11300","Cliente":"X","Pais":"USA","OrdenesVenta":[{"NroOrdenVenta":"11101"},{"NroOrdenVenta":"11102"}]}';
+
+  it('PF abierta: todas sus OV salen del reporte de proformas', async () => {
+    const { service } = makeService({ hubResponses: { header: { ok: true, data: REPORTE } } });
+    expect(await service.ordenesDeProforma('11208')).toEqual({ numberPF: '11208', ordenesVenta: [11028], cliente: 'ETIFLEX ETIQUETAS FLEXOGRAFICAS S.A.', pais: 'ECUADOR' });
+    expect((await service.ordenesDeProforma(' 11300 ')).ordenesVenta).toEqual([11101, 11102]);
+  });
+
+  it('PF que ya no está en el reporte (11237): su OV sale de spCheckSettlement', async () => {
+    const check = { ok: true, data: { ...CHECK_OK.data, Proforma: '11237', OrdenVenta: '11054' } };
+    const { service } = makeService({ hubResponses: { header: { ok: true, data: REPORTE }, check } });
+    expect(await service.ordenesDeProforma('11237')).toMatchObject({ numberPF: '11237', ordenesVenta: [11054], cliente: 'OBEN US, LLC' });
+  });
+
+  it('sin OV en ninguna fuente → 404 claro; un número inválido → 400', async () => {
+    const { service } = makeService({ hubResponses: { header: { ok: true, data: REPORTE } } });
+    await expect(service.ordenesDeProforma('99999')).rejects.toThrow('proforma 99999');
+    await expect(service.ordenesDeProforma('11a')).rejects.toThrow(BadRequestException);
+  });
+});
+
 describe('FacturacionService (borrador de facturación)', () => {
   it('clasifica como exportación cuando el país no es Colombia y bloquea sin dirección de entrega', async () => {
     const { service } = makeService({ hubResponses: { header: HEADER_EXPORT, check: CHECK_OK } });

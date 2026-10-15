@@ -800,6 +800,14 @@ export interface OrdenReciente {
   fecha: string;
 }
 
+/** Una proforma y sus órdenes de venta según Oben (la pantalla busca por PF). */
+export interface ProformaOrdenes {
+  numberPF: string;
+  ordenesVenta: number[];
+  cliente: string | null;
+  pais: string | null;
+}
+
 // ── Liquidación de comercio exterior — espejo de backend/src/modules/liquidacion/liquidacion.types.ts ──
 
 export type ConceptoLiquidacion = 'flete' | 'seguro' | 'otrosGastos';

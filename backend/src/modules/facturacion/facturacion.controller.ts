@@ -65,6 +65,13 @@ export class FacturacionController {
     return this.facturacion.destinatarios();
   }
 
+  /** Órdenes de venta de una proforma: la pantalla busca por PF (reunión del 15-oct). */
+  @Get('proforma/:numberPF')
+  @RequirePermission('invoices.read')
+  proforma(@Param('numberPF') numberPF: string) {
+    return this.facturacion.ordenesDeProforma(numberPF);
+  }
+
   @Get(':numberOrderSales/draft')
   @RequirePermission('invoices.read')
   draft(@Param('numberOrderSales') numberOrderSales: string) {

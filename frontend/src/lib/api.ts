@@ -9,7 +9,7 @@ import {
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
-  FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, OrdenReciente,
+  FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, OrdenReciente, ProformaOrdenes,
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
@@ -231,6 +231,12 @@ class ApiClient {
 
   async getOrdenesRecientes(): Promise<OrdenReciente[]> {
     const { data } = await this.client.get<OrdenReciente[]>('/facturacion/ordenes-recientes');
+    return data;
+  }
+
+  /** Órdenes de venta de una proforma (la pantalla de Liquidación y Facturación busca por PF). */
+  async getProformaOrdenes(numberPF: string): Promise<ProformaOrdenes> {
+    const { data } = await this.client.get<ProformaOrdenes>(`/facturacion/proforma/${encodeURIComponent(numberPF)}`, this.OBEN_LIVE);
     return data;
   }
 

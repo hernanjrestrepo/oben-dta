@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
-import type { FacturacionDraft, FacturacionHistorial, FacturacionInput, OrdenReciente } from '@/types';
+import type { FacturacionDraft, FacturacionHistorial, FacturacionInput, OrdenReciente, ProformaOrdenes } from '@/types';
 import {
   AlertCircle,
   CheckCircle2,
@@ -37,13 +37,16 @@ const TONO: Record<Tono, string> = {
 };
 
 /**
- * Liquidación y Facturación de una orden de venta de Oben, de punta a punta:
- * 1) Liquidación de comercio exterior (fórmula de José), 2) Documento de
- * facturación, 3) Envío a Facturación/COMEX. Todo en vivo contra el ERP de
+ * Liquidación y Facturación de Oben, de punta a punta: 1) Liquidación de
+ * comercio exterior (fórmula de José), 2) Documento de facturación, 3) Envío
+ * a Facturación/COMEX. Se busca por PROFORMA (Comex trabaja por PF; una PF
+ * puede traer varias OV, reunión del 15-oct); los enlaces viejos por OV
+ * (/facturacion?ov=11147) siguen funcionando. Todo en vivo contra el ERP de
  * Oben; lo simulado se rotula siempre.
  */
 export default function FacturacionPage() {
-  const [ovInput, setOvInput] = useState('');
+  const [pfInput, setPfInput] = useState('');
+  const [proforma, setProforma] = useState<ProformaOrdenes | null>(null);
   const [draft, setDraft] = useState<FacturacionDraft | null>(null);
   const [historial, setHistorial] = useState<FacturacionHistorial | null>(null);
   const [input, setInput] = useState<FacturacionInput>({});
@@ -64,7 +67,8 @@ export default function FacturacionPage() {
     if (top < window.scrollY) window.scrollTo({ top, behavior: 'smooth' });
   }
 
-  const cargar = useCallback(async (n: number) => {
+  /** Carga una OV. `pf` = la proforma por la que se llegó (sin ella, se toma la de la OV). */
+  const cargar = useCallback(async (n: number, pf: ProformaOrdenes | null = null) => {
     const id = ++reqId.current;
     setLoading(true);
     setError('');
@@ -72,33 +76,65 @@ export default function FacturacionPage() {
     setHistorial(null);
     setInput({});
     setLiqEstado(null);
-    setOvInput(String(n));
+    setProforma(pf);
+    setPfInput(pf ? pf.numberPF : '');
     primeraCarga.current = true;
     try {
-      window.history.replaceState(null, '', `/facturacion?ov=${n}`);
+      window.history.replaceState(null, '', pf ? `/facturacion?pf=${pf.numberPF}&ov=${n}` : `/facturacion?ov=${n}`);
       const [d, h] = await Promise.all([api.getFacturacionDraft(n), api.getFacturacionHistorial(n)]);
       if (id !== reqId.current) return;
       setDraft(d);
       setHistorial(h);
+      if (!pf && d.proforma) setPfInput(d.proforma);
       setPaso(d.kind === 'exportacion' ? 'liquidacion' : 'documento');
     } catch (err) {
-      if (id === reqId.current) setError(extractMessage(err, `No se pudo consultar la orden ${n} en el ERP de Oben.`));
+      if (id === reqId.current) setError(extractMessage(err, `No se pudo consultar la orden de venta ${n} en el ERP de Oben.`));
     } finally {
       if (id === reqId.current) setLoading(false);
     }
   }, []);
+
+  /** Busca la proforma en Oben y carga su (primera) orden de venta. */
+  const cargarProforma = useCallback(
+    async (pf: string, ov?: number) => {
+      const id = ++reqId.current;
+      setLoading(true);
+      setError('');
+      setDraft(null);
+      setProforma(null);
+      setPfInput(pf);
+      try {
+        const p = await api.getProformaOrdenes(pf);
+        if (id !== reqId.current) return;
+        void cargar(ov && p.ordenesVenta.includes(ov) ? ov : p.ordenesVenta[0], p);
+      } catch (err) {
+        if (id === reqId.current) {
+          setError(extractMessage(err, `No se pudo consultar la proforma ${pf} en el ERP de Oben.`));
+          setLoading(false);
+        }
+      }
+    },
+    [cargar],
+  );
 
   useEffect(() => {
     api
       .getOrdenesRecientes()
       .then(setRecientes)
       .catch(() => setRecientes([]));
-    // Enlace directo (/facturacion?ov=11147): se carga fuera del render del efecto.
-    const ov = Number(new URLSearchParams(window.location.search).get('ov'));
-    if (!Number.isInteger(ov) || ov <= 0) return;
-    const t = setTimeout(() => void cargar(ov), 0);
-    return () => clearTimeout(t);
-  }, [cargar]);
+    // Enlace directo (/facturacion?pf=11208, o el viejo /facturacion?ov=11147): se carga fuera del render del efecto.
+    const params = new URLSearchParams(window.location.search);
+    const pf = (params.get('pf') ?? '').trim();
+    const ov = Number(params.get('ov'));
+    const t = /^\d+$/.test(pf)
+      ? setTimeout(() => void cargarProforma(pf, Number.isInteger(ov) && ov > 0 ? ov : undefined), 0)
+      : Number.isInteger(ov) && ov > 0
+        ? setTimeout(() => void cargar(ov), 0)
+        : null;
+    return () => {
+      if (t) clearTimeout(t);
+    };
+  }, [cargar, cargarProforma]);
 
   // Lo que se digita en el documento se re-valida contra el backend (qué falta, de dónde sale la dirección).
   const ov = draft?.numberOrderSales ?? null;
@@ -125,12 +161,12 @@ export default function FacturacionPage() {
   }, [ov, input]);
 
   function buscar() {
-    const n = Number(ovInput.trim());
-    if (!Number.isInteger(n) || n <= 0) {
-      setError('Escribe un número de orden de venta válido (ej: 11147).');
+    const pf = pfInput.trim();
+    if (!/^\d+$/.test(pf) || Number(pf) <= 0) {
+      setError('Escribe un número de proforma válido (ej: 11208).');
       return;
     }
-    void cargar(n);
+    void cargarProforma(pf);
   }
 
   async function refrescarHistorial() {
@@ -188,10 +224,14 @@ export default function FacturacionPage() {
             <Receipt className="w-6 h-6 text-[#F47735]" />
             Liquidación y Facturación
           </h1>
-          <p className="text-gray-500 mt-1">De la orden de venta al documento de facturación, con los datos reales del ERP de Oben. Lo simulado se marca siempre.</p>
+          <p className="text-gray-500 mt-1">De la proforma al documento de facturación, con los datos reales del ERP de Oben. Lo simulado se marca siempre.</p>
         </div>
         {draft && (
-          <button className={btnSecondary} onClick={() => void cargar(draft.numberOrderSales)} disabled={loading}>
+          <button
+            className={btnSecondary}
+            onClick={() => void (proforma ? cargarProforma(proforma.numberPF, draft.numberOrderSales) : cargar(draft.numberOrderSales))}
+            disabled={loading}
+          >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar desde Oben
           </button>
         )}
@@ -203,23 +243,43 @@ export default function FacturacionPage() {
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-              value={ovInput}
-              onChange={(e) => setOvInput(e.target.value)}
+              value={pfInput}
+              onChange={(e) => setPfInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && buscar()}
               inputMode="numeric"
-              placeholder="Número de orden de venta de Oben (ej: 11147)"
+              placeholder="Número de proforma de Oben (ej: 11208)"
+              aria-label="Número de proforma"
               className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none text-gray-900"
             />
           </div>
           <button
             onClick={buscar}
-            disabled={loading || !ovInput.trim()}
+            disabled={loading || !pfInput.trim()}
             className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            Cargar orden
+            Cargar proforma
           </button>
         </div>
+        {proforma && proforma.ordenesVenta.length > 1 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-gray-500">
+              La proforma {proforma.numberPF} tiene {proforma.ordenesVenta.length} órdenes de venta:
+            </span>
+            {proforma.ordenesVenta.map((n) => (
+              <button
+                key={n}
+                onClick={() => void cargar(n, proforma)}
+                disabled={loading}
+                className={`px-2.5 py-1 rounded-full border transition ${
+                  draft?.numberOrderSales === n ? 'border-[#F47735] bg-orange-50 text-[#C4521A] font-semibold' : 'border-gray-200 bg-white text-gray-700 hover:border-[#F47735]/50'
+                }`}
+              >
+                OV {n}
+              </button>
+            ))}
+          </div>
+        )}
         {recientes && recientes.length > 0 && (
           <div className="mt-3">
             <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1.5 flex items-center gap-1">
@@ -262,7 +322,7 @@ export default function FacturacionPage() {
           <div className="h-20 rounded-xl bg-white border border-gray-200 animate-pulse" />
           <div className="h-80 rounded-xl bg-white border border-gray-200 animate-pulse" />
           <p className="text-center text-xs text-gray-400 flex items-center justify-center gap-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Consultando la orden en el ERP de Oben…
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Consultando la proforma en el ERP de Oben…
           </p>
         </div>
       )}
@@ -276,7 +336,9 @@ export default function FacturacionPage() {
             <div className="flex flex-col lg:flex-row lg:items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold text-gray-400">OV {draft.numberOrderSales}</span>
+                  <span className="text-xs font-semibold text-gray-400">
+                    {draft.proforma ? `PF ${draft.proforma} · ` : ''}OV {draft.numberOrderSales}
+                  </span>
                   {draft.kind && (
                     <span
                       className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -400,8 +462,8 @@ function Bienvenida() {
   return (
     <Card className="p-8">
       <div className="text-center max-w-2xl mx-auto">
-        <p className="text-lg font-semibold text-gray-900">Carga una orden de venta para empezar</p>
-        <p className="text-sm text-gray-500 mt-1">El sistema consulta la orden en el ERP de Oben, la clasifica (exportación o nacional) y te guía en tres pasos.</p>
+        <p className="text-lg font-semibold text-gray-900">Carga una proforma para empezar</p>
+        <p className="text-sm text-gray-500 mt-1">El sistema consulta la proforma y sus órdenes de venta en el ERP de Oben, la clasifica (exportación o nacional) y te guía en tres pasos.</p>
       </div>
       <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
         {pasos.map((p, i) => (

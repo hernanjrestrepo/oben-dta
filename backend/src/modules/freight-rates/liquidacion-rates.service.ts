@@ -288,11 +288,18 @@ export class LiquidacionRatesService {
   }
 }
 
-/** Ciudad de un puerto como lo escribe Oben: "CARTAGENA - COLOMBIA" → "CARTAGENA"; "DALLAS, TX 75212" → "DALLAS". */
+/**
+ * Ciudad de un puerto como lo escribe Oben: "CARTAGENA - COLOMBIA" → "CARTAGENA";
+ * "DALLAS, TX 75212" → "DALLAS"; "CINCINNATI OH 45240" (PF 11237, sin coma) → "CINCINNATI".
+ */
 export function ciudadDe(puerto: unknown): string | null {
   if (typeof puerto !== 'string') return null;
   // Oben escribe "PUERTO GUAYAQUIL" / "PUERTO RIO GRANDE": el prefijo no es parte de la ciudad.
-  const ciudad = puerto.split(/\s+-\s+|,|\(/)[0].replace(/^\s*PUERTO\s+(DE\s+)?/i, '').trim();
+  const ciudad = puerto
+    .split(/\s+-\s+|,|\(/)[0]
+    .replace(/^\s*PUERTO\s+(DE\s+)?/i, '')
+    .replace(/\s+[A-Z]{2}\s+\d{5}(-\d{4})?\s*$/i, '')
+    .trim();
   return ciudad.length >= 3 ? ciudad : null;
 }
 

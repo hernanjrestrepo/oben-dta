@@ -146,10 +146,10 @@ describe('LiquidacionRatesService (spSettlement_Head — pregunta 9 del document
 
         it('el puerto de arribo de la PF manda: nunca la rampa de Columbus', async () => {
           const service = makeService([], FILAS_45240);
-          const sept = await service.resolveInlandByAddress(TENANT_ID, 'USA', 'Cincinnati OH 45240', new Date('2026-09-20'), 'CINCINNATI');
+          const sept = await service.resolveInlandByAddress(TENANT_ID, 'USA', 'Cincinnati OH 45240', new Date('2026-09-20'), 'CINCINNATI OH 45240');
           expect(sept).toMatchObject({ forwarder: 'Shapiro', destinationPort: 'Cincinnati, OH (Ramp)', inlandFreight: 523, vencida: false });
           // Vencido el 523 de Shapiro, la vigente más barata DESDE CINCINNATI (no el 523 de Columbus, que llevaba al marítimo de 2900).
-          const oct = await service.resolveInlandByAddress(TENANT_ID, 'USA', 'Cincinnati OH 45240', new Date('2026-10-15'), 'CINCINNATI');
+          const oct = await service.resolveInlandByAddress(TENANT_ID, 'USA', 'Cincinnati OH 45240', new Date('2026-10-15'), 'CINCINNATI OH 45240');
           expect(oct).toMatchObject({ forwarder: 'Trading', destinationPort: 'Cincinnati, OH (Ramp)', inlandFreight: 860 });
         });
 
@@ -247,7 +247,10 @@ describe('LiquidacionRatesService.resolveOceanFreight (pata 2 del archivo de fle
 
   it('ciudadDe lee los puertos como los escribe Oben', () => {
     expect(ciudadDe('CARTAGENA - COLOMBIA')).toBe('CARTAGENA');
+    expect(ciudadDe('CARTAGENA - CARTAGENA')).toBe('CARTAGENA'); // PF 11237
     expect(ciudadDe('DALLAS, TX 75212')).toBe('DALLAS');
+    expect(ciudadDe('CINCINNATI OH 45240')).toBe('CINCINNATI'); // PF 11237, sin coma
+    expect(ciudadDe('Cincinnati, OH (Ramp)')).toBe('Cincinnati');
     expect(ciudadDe('Houston, TX, United States (USHOU) - Port')).toBe('Houston');
     expect(ciudadDe('PUERTO GUAYAQUIL')).toBe('GUAYAQUIL');
     expect(ciudadDe('PUERTO RIO GRANDE')).toBe('RIO GRANDE');

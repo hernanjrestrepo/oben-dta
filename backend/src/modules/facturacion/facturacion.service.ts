@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
@@ -25,7 +25,9 @@ import type {
   FacturacionSendResult,
   OrdenReciente,
   FacturacionEmpaque,
+  ProformaOrdenes,
 } from './facturacion.types';
+import { SP_PROFORMAS_COMEX, parsearProformasComex } from '../liquidacion/incoterm-de-oben';
 import { FacturacionPdfService } from './facturacion-pdf.service';
 import { LiquidacionService } from '../liquidacion/liquidacion.service';
 import type { LiquidacionDraft } from '../liquidacion/liquidacion.types';
@@ -59,6 +61,12 @@ const text = (v: unknown): string | null => {
   const s = typeof v === 'string' ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : '';
   return s || null;
 };
+
+/** Números de OV sin repetir, en orden; acepta "11054", 11054 o "11054, 11055". */
+function numerosDeOv(valores: unknown[]): number[] {
+  const ovs = valores.flatMap((v) => (text(v) ?? '').split(/[\s,;/]+/)).map(Number);
+  return [...new Set(ovs.filter((n) => Number.isInteger(n) && n > 0))];
+}
 
 /** Campos de spEmpaqueUnificada_Paradixe que usa Facturación, ya normalizados. */
 interface EmpaqueUnificadaHeader {
@@ -658,6 +666,44 @@ export class FacturacionService {
       : [];
     const c = matches.length === 1 ? matches[0] : null;
     return { liquidacion, trm, cliente: c ? { correo: c.email, telefono: c.phone, direccion: c.address } : null };
+  }
+
+  /**
+   * Órdenes de venta de una proforma: Comex busca por PF, no por OV (reunión
+   * del 15-oct). Primero el reporte de proformas de Oben, que trae TODAS las
+   * OV de la PF pero solo de las proformas abiertas; si la PF no está ahí (la
+   * 11237 ya no estaba), spCheckSettlement, que trae su OV.
+   */
+  async ordenesDeProforma(numberPF: string): Promise<ProformaOrdenes> {
+    const pf = numberPF.trim();
+    if (!/^\d+$/.test(pf)) throw new BadRequestException('El número de proforma debe ser numérico (ej: 11208).');
+    const resultado: ProformaOrdenes = { numberPF: pf, ordenesVenta: [], cliente: null, pais: null };
+    const reporte = await this.hub.call<unknown>(
+      'obenCostOrder',
+      'query.run',
+      { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf },
+      OBEN_QUERY_OPTIONS,
+    );
+    if (reporte.ok) {
+      const fila = parsearProformasComex(reporte.data).find((r) => String(r.NroProforma ?? r.Proforma ?? '').trim() === pf);
+      if (fila) {
+        const ovs = Array.isArray(fila.OrdenesVenta) ? (fila.OrdenesVenta as Array<Record<string, unknown>>) : [];
+        resultado.ordenesVenta = numerosDeOv(ovs.map((o) => o?.NroOrdenVenta));
+        resultado.cliente = text(fila.Cliente);
+        resultado.pais = text(fila.Pais);
+      }
+    }
+    if (resultado.ordenesVenta.length === 0) {
+      const c = await this.fetchCheckSettlement(pf);
+      if (c) {
+        resultado.ordenesVenta = numerosDeOv([c.check.OrdenVenta]);
+        resultado.cliente ??= text(c.check.Cliente);
+      }
+    }
+    if (resultado.ordenesVenta.length === 0) {
+      throw new NotFoundException(`Oben no devolvió órdenes de venta para la proforma ${pf}. Revisa el número.`);
+    }
+    return resultado;
   }
 
   private async fetchCheckSettlement(numberPF: string): Promise<{ check: CheckSettlementResponse; simulated: boolean } | null> {
