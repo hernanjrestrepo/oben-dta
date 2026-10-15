@@ -367,6 +367,7 @@ export class FacturasParcialesService {
     };
     if (await this.suspendida()) return omitir('La facturación está suspendida hasta nueva orden.');
     if (!(await this.nacionalAutomatica())) return omitir('La factura automática de pedidos nacionales está apagada.');
+    if ((await this.ovExcluidas()).has(numberOrderSales)) return omitir(`La OV ${numberOrderSales} está marcada para NO facturar.`);
     // Programación diaria (WO-032): solo lo que Oben programó para hoy, y solo si cerró antes del corte.
     const cierre = cerradaEn ?? this.reloj();
     const prog = await this.programadaHoy({ ov: numberOrderSales });
@@ -493,6 +494,8 @@ export class FacturasParcialesService {
     }
     if (fecha < fechaHoraBogota(this.reloj()).fecha) throw new BadRequestException(`No se programa una fecha pasada (${fecha}).`);
     if (!Array.isArray(ordenes)) throw new BadRequestException('Falta la lista de órdenes.');
+    const excluidas = await this.ovExcluidas();
+    ordenes = ordenes.filter((o) => !excluidas.has(Number(o?.ov))); // OV marcadas "no facturar": no entran al cuadro
     const limpias = new Map<number, Required<Pick<OrdenProgramada, 'ov' | 'pf' | 'tipo'>> & Pick<OrdenProgramada, 'estadoOben' | 'cliente'>>();
     for (const o of ordenes) {
       const ov = Number(o?.ov);
@@ -607,6 +610,13 @@ export class FacturasParcialesService {
     } catch {
       return true;
     }
+  }
+
+  /** `settings.facturacion.noFacturarOv`: órdenes de venta que Hernán/Oben mandaron NO facturar (ni automático ni en el cuadro). */
+  private async ovExcluidas(): Promise<Set<number>> {
+    const f = await this.ajustes();
+    const l = f?.noFacturarOv;
+    return new Set(Array.isArray(l) ? l.map(Number).filter((n) => Number.isInteger(n)) : []);
   }
 
   private async nacionalAutomatica(): Promise<boolean> {

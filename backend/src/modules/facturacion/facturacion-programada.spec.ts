@@ -351,4 +351,12 @@ describe('facturarProgramadasDeHoy: factura lo que ya cerró y deja esperando lo
     expect(await svc.facturarProgramadasDeHoy()).toEqual([]);
     expect(facturasPedidas()).toEqual([]);
   });
+
+  it('una OV marcada en settings.facturacion.noFacturarOv no se factura aunque esté en el cuadro y haya cerrado', async () => {
+    const { svc, facturasPedidas } = armar({ programadas: [{ ov: 11341 }], ajustes: { noFacturarOv: [11341] } });
+    const r = await svc.facturarOvNacional(11341);
+    expect(r.estado).toBe('omitida');
+    expect(r.motivo).toMatch(/marcada para NO facturar/);
+    expect(facturasPedidas()).toEqual([]);
+  });
 });
