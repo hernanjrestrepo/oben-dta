@@ -30,10 +30,10 @@ Fecha: 15-oct-2026 · Fuente: reuniones de hoy con Jorge, María, José y Herná
 |---|---|---|
 | Flete marítimo | Más barato vigente **al puerto de la proforma**; Comex puede cambiarlo | Corregido el error de puerto (§4) |
 | Inland (pata 3) | Más barato vigente al puerto de la proforma; Comex puede cambiar transportador | Corregido el error de puerto (§4) |
-| Entry fee | **120** fijo, negociado, igual para cualquier agente (María; Jorge: "va en todas las proformas") | Tarifario actualizado 110 → 120; José confirma |
-| ISF | **45** fijo (María) | Tarifario actualizado 20 → 45; José confirma |
-| HMF | 0,125 % del **FOB final**, que ya tiene descontados Inland, Entry, ISF y el propio HMF | Corregido: PF 11237 da 44,34 (antes 45,68) |
-| Redondeo | Unitarios **redondeados** a 4 decimales; si la liquidación queda por debajo del valor de la mercancía, al **último ítem** se le resta **0,0001** al flete por unidad | Corregido: cuadra con las PF 10867 y 11237 |
+| Entry fee | **120** fijo, negociado, igual para cualquier agente (María; Jorge: "va en todas las proformas") | **Pendiente:** el cambio 110 → 120 en la base de prod requiere autorización explícita de Hernán; José confirma |
+| ISF | **45** fijo (María) | **Pendiente:** 20 → 45, igual que el Entry |
+| HMF | 0,125 % del **FOB final**, que ya tiene descontados Inland, Entry, ISF y el propio HMF | Corregido y desplegado: PF 11237 da 44,34 (antes 45,68) |
+| Redondeo | Unitarios **redondeados** a 4 decimales; si la liquidación queda por debajo del valor de la mercancía, al **último ítem** se le resta **0,0001** al flete por unidad | Corregido y desplegado: cuadra con las PF 10867 y 11237 |
 | Arancel EE. UU. | 12,5 %, solo informativo hasta que Jorge confirme la base | Ya está así |
 
 ## 3. Desarrollo por fases
@@ -82,8 +82,17 @@ Fecha: 15-oct-2026 · Fuente: reuniones de hoy con Jorge, María, José y Herná
 - La PF dice puerto de arribo **Cincinnati** (ZIP 45240).
 - En el tarifario, el Inland de Shapiro desde la rampa de Cincinnati (523) **venció el 30-sep**; el mismo 523 desde la rampa de **Columbus** no tiene vencimiento. El sistema prefería "vigente", tomó Columbus y el flete marítimo lo siguió: Trading / Hapag vía New York a Columbus = **2900**.
 - Comex usó: marítimo Trading / Hapag a Cincinnati vía New York **3150** + Inland Trading **860**.
-- Arreglo: si la ciudad de arribo de la proforma tiene tarifas, solo se buscan ahí. Si no tiene (ej. Dallas, que sale de Houston), se sigue como antes.
-- Pendiente del tarifario: casi todo el marítimo vence el 30-sep (solo "Directo" llega al 31-dic). Hay que pedir a Comex el archivo vigente.
+- Arreglo (desplegado el 15-oct): si la ciudad de arribo de la proforma tiene tarifas, solo se buscan ahí. Si no tiene (ej. Dallas, que sale de Houston), se sigue como antes. Oben escribe el puerto como "CINCINNATI OH 45240" (sin coma): también se lee.
+- Resultado en prod hoy para la 11237: marítimo Directo / Hapag-Lloyd a Cincinnati **3.151,50** (la única vigente) + Inland Trading **860** (el 523 de Shapiro desde Cincinnati venció).
+- Con los valores de Comex (3150 + 860, Entry 120, ISF 45) el sistema da en prod exactamente lo de Oben: HMF 44,34, otros 1.069,34, precio final 1,9831, FOB 35.472,03.
+- Pendiente del tarifario: casi todo el marítimo vence el 30-sep (solo "Directo" llega al 31-dic). Hay que pedir a Comex el archivo vigente. **Ojo:** subir un archivo nuevo del forwarder vuelve a poner Entry 110 e ISF 20 (así vienen en su hoja "Destination Surcharges").
+
+## 4 bis. APIs nuevas de Oben (revisión del 15-oct)
+
+- Las 5 APIs que ya usamos responden (Consulta, Liquidación, CostOrder, CrearEnc/DetLiq, CrearInvoice).
+- Se probaron ~50 variantes de nombre de las APIs que José describió en la reunión (Customer Parametrization, Valid Product Master Empaque, encabezado y detalle de PF, ActivateOV, cartera, maestros, consumo, autorizaciones) en los 3 servidores (api.obengroup.co, .12:9096, .12:9098), con OPTIONS/GET que no ejecutan nada: **ninguna existe** con la ruta `/api/External/API…Paradixe`. No hay Swagger publicado.
+- En el buzón de Oben Xmart no hay correos de José con la documentación desde el 8-oct.
+- Falta: el documento o los mensajes donde José "pasó" las APIs (nombres exactos, URL, JSON de ejemplo). Puede que estén con otro prefijo o que sean SP nuevos de APIConsultaParadixe.
 
 ## 5. Preguntas — una sola lista, todas para José
 
