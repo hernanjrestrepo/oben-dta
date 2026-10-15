@@ -908,3 +908,62 @@ export interface MiaRespuesta {
   action?: { type: string; data: unknown };
   acciones?: MiaAccion[];
 }
+
+// ── Cuadro de integración (Zona Franca) — espejo de backend/src/modules/cuadro-integracion/cuadro-integracion.types.ts ──
+
+export interface CuadroProducto {
+  referencia: string;
+  descripcion: string;
+  subpartida: string;
+  cantidadKg: number;
+  valorUsd: number;
+}
+
+export interface CuadroLineaInsumo {
+  referencia: string;
+  declaracion: string | null;
+  subpartida: string | null;
+  descripcion: string;
+  origen: 'nacional' | 'extranjero';
+  unidad: string;
+  consumo: number;
+  desperdicio: number;
+  regranulado: number;
+  cantidad: number;
+  pesoNetoKg: number | null;
+  valorUsd: number | null;
+  pctDesperdicio: number;
+}
+
+export interface CuadroLineaDesperdicio {
+  referencia: string;
+  descripcion: string;
+  unidad: string;
+  cantidad: number;
+  pesoNetoKg: number | null;
+  valorUsd: number | null;
+}
+
+export interface CuadroIntegracion {
+  orden: string;
+  destino: string;
+  simulado: boolean;
+  productos: CuadroProducto[];
+  insumosNacionales: CuadroLineaInsumo[];
+  insumosExtranjeros: CuadroLineaInsumo[];
+  desperdicios: CuadroLineaDesperdicio[];
+  otrosCostos: { concepto: string; valorUsd: number }[];
+  totales: {
+    productoKg: number;
+    productoUsd: number;
+    nacionalesUsd: number;
+    extranjerosUsd: number;
+    otrosUsd: number;
+    desperdiciosKg: number;
+    participacionNacionalPct: number;
+    participacionExtranjeraPct: number;
+    participacionOtrosPct: number;
+  };
+  balanceMasa: { consumoMpKg: number; productoKg: number; diferenciaKg: number; cuadra: boolean };
+  avisos: string[];
+}

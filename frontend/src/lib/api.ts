@@ -11,6 +11,7 @@ import {
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
   FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, OrdenReciente,
   MiaContexto, MiaRespuesta, MiaTurno,
+  CuadroIntegracion,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
 } from '@/types';
 
@@ -541,6 +542,17 @@ class ApiClient {
   /** Archivo (PDF, Excel o Word) que MIA generó para este usuario. */
   async downloadMiaArchivo(id: string): Promise<Blob> {
     const { data } = await this.client.get(`/eva/archivos/${id}`, { responseType: 'blob' });
+    return data;
+  }
+
+  // Cuadro de integración (Certificado de Zona Franca): solo lectura; datos simulados hasta que Oben publique sus APIs.
+  async getCuadroIntegracion(orden: string): Promise<CuadroIntegracion> {
+    const { data } = await this.client.get<CuadroIntegracion>(`/cuadro-integracion/${encodeURIComponent(orden)}`);
+    return data;
+  }
+
+  async downloadCuadroIntegracionExcel(orden: string): Promise<Blob> {
+    const { data } = await this.client.get(`/cuadro-integracion/${encodeURIComponent(orden)}/excel`, { responseType: 'blob' });
     return data;
   }
 

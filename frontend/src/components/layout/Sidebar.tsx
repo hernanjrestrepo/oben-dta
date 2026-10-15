@@ -67,6 +67,7 @@ const GRUPOS: Array<{ titulo: string; items: NavItem[] }> = [
     items: [
       { href: '/lista-empaque', label: 'Lista de Empaque', icon: Package },
       { href: '/facturacion', label: 'Liquidación y Facturación', icon: Receipt },
+      { href: '/cuadro-integracion', label: 'Cuadro de integración', icon: FileSpreadsheet, permiso: 'exportations.liquidate' },
       { href: '/facturas-parciales', label: 'Facturas parciales', icon: ReceiptText, permiso: 'invoices.read' },
       { href: '/invoices', label: 'Facturas', icon: FileText },
       { href: '/fletes', label: 'Fletes', icon: Truck },
