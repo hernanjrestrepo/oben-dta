@@ -22,6 +22,11 @@ class LiquidacionRutaDto {
   @IsUUID()
   inlandId?: string | null;
 
+  /** Fila de la pata 3 cuya comisión aduanera se usa (agente aduanero). */
+  @IsOptional()
+  @IsUUID()
+  aduanaId?: string | null;
+
   /** Justificación (opcional, decisión de Hernán del 15-oct). */
   @IsOptional()
   @IsString()
@@ -149,7 +154,7 @@ export class LiquidacionController {
     const nombre = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || null;
     return this.liquidacion.cambiarRuta(
       numberPF,
-      { maritimaId: dto.maritimaId, inlandId: dto.inlandId, motivo: dto.motivo },
+      { maritimaId: dto.maritimaId, inlandId: dto.inlandId, aduanaId: dto.aduanaId, motivo: dto.motivo },
       { header: dto.header, totales: dto.totales },
       { nombre },
     );

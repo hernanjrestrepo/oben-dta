@@ -136,12 +136,14 @@ function mejorInlandDesde(opciones: OpcionInland[], puerto: string): OpcionInlan
 }
 
 /** "Cartagena → Cincinnati, OH (Ramp) · Trading / HAPAG LLOYD USD 3150.00 + Inland Trading USD 860.00". */
-function describirRuta(ruta: RutaLiquidacion, ids: { maritimaId: string | null; inlandId: string | null }): string {
+function describirRuta(ruta: RutaLiquidacion, ids: { maritimaId: string | null; inlandId: string | null; aduanaId?: string | null }): string {
   const m = ruta.opciones.maritimas.find((o) => o.id === ids.maritimaId);
   const i = ruta.opciones.inland.find((o) => o.id === ids.inlandId);
+  const a = ruta.opciones.inland.find((o) => o.id === (ids.aduanaId ?? ids.inlandId));
   const partes = [
     m ? `${ciudadDe(m.origen) ?? m.origen} → ${m.destino} · ${[m.forwarder, m.naviera].filter(Boolean).join(' / ')} USD ${m.flete.toFixed(2)}` : null,
     i ? `Inland ${i.forwarder ?? ''} desde ${i.puerto} USD ${i.valor.toFixed(2)}` : null,
+    a && isNum(a.comisionAduanera) ? `Aduana ${a.forwarder ?? ''} USD ${a.comisionAduanera.toFixed(2)}` : null,
   ].filter(Boolean);
   return partes.join(' + ') || 'Sin tarifa del tarifario';
 }
@@ -286,7 +288,7 @@ export class LiquidacionService {
         : null;
     const maritimaComex = guardada?.maritimaId ? (opcionesRuta?.maritimas.find((o) => o.id === guardada.maritimaId) ?? null) : null;
     const inlandComex = guardada?.inlandId ? (opcionesRuta?.inland.find((o) => o.id === guardada.inlandId) ?? null) : null;
-    if ((guardada?.maritimaId && !maritimaComex) || (guardada?.inlandId && !inlandComex)) {
+    if ((guardada?.maritimaId && !maritimaComex) || (guardada?.inlandId && !inlandComex) || (guardada?.aduanaId && !opcionesRuta?.inland.some((o) => o.id === guardada.aduanaId))) {
       ajustes.push('La ruta que había escogido COMEX ya no está en el tarifario (se cargó uno nuevo): se usó la sugerida. Escógela de nuevo.');
     }
     const sug = { maritimaId: null as string | null, inlandId: null as string | null, maritima: null as number | null, inland: null as number | null };
@@ -530,6 +532,14 @@ export class LiquidacionService {
       ...calculo.missing,
     ];
 
+    // Comisión aduanera (pata 3): la del transportador del Inland o, si COMEX la escogió aparte, la de otro agente.
+    // Es informativa: Oben NO la suma a Destination Charges (PF 11237: 860 + 120 + 45 + HMF = 1069.34).
+    const aduanaComex = guardada?.aduanaId ? (opcionesRuta?.inland.find((o) => o.id === guardada.aduanaId && isNum(o.comisionAduanera)) ?? null) : null;
+    const aduanaDe = (id: string | null) => opcionesRuta?.inland.find((o) => o.id === id) ?? null;
+    const aduanaActual = aduanaComex ?? aduanaDe(act.inlandId);
+    const aduanaSugerida = aduanaDe(sug.inlandId);
+    const costoAduana = (o: { comisionAduanera: number | null } | null) => (o && isNum(o.comisionAduanera) ? round2(o.comisionAduanera * contenedores) : null);
+
     return {
       numberPF: pf,
       ordenVenta: check.OrdenVenta,
@@ -555,12 +565,15 @@ export class LiquidacionService {
         ? {
             opciones: opcionesRuta,
             contenedores,
-            sugerida: { maritimaId: sug.maritimaId, inlandId: sug.inlandId, costo: costoRuta(sug, contenedores) },
+            sugerida: { maritimaId: sug.maritimaId, inlandId: sug.inlandId, aduanaId: aduanaSugerida?.id ?? null, costo: costoRuta(sug, contenedores), costoAduana: costoAduana(aduanaSugerida) },
             actual: {
               maritimaId: act.maritimaId,
               inlandId: act.inlandId,
+              aduanaId: aduanaActual?.id ?? null,
               costo: costoRuta(act, contenedores),
-              escogidaPorComex: !!(maritimaComex || inlandComex),
+              costoAduana: costoAduana(aduanaActual),
+              aduanaPorComex: !!aduanaComex,
+              escogidaPorComex: !!(maritimaComex || inlandComex || aduanaComex),
               maritimaPorComex: !!maritimaComex,
               inlandPorComex: !!inlandComex,
             },
@@ -568,6 +581,8 @@ export class LiquidacionService {
               isNum(costoRuta(act, contenedores)) && isNum(costoRuta(sug, contenedores))
                 ? round2(costoRuta(act, contenedores)! - costoRuta(sug, contenedores)!)
                 : null,
+            sobrecostoAduana:
+              isNum(costoAduana(aduanaActual)) && isNum(costoAduana(aduanaSugerida)) ? round2(costoAduana(aduanaActual)! - costoAduana(aduanaSugerida)!) : null,
             historial: await this.historialRuta(pf),
           }
         : null,
@@ -606,7 +621,7 @@ export class LiquidacionService {
    */
   async cambiarRuta(
     numberPF: string,
-    cambio: { maritimaId?: string | null; inlandId?: string | null; motivo?: string | null },
+    cambio: { maritimaId?: string | null; inlandId?: string | null; aduanaId?: string | null; motivo?: string | null },
     input: LiquidacionInput,
     usuario: { nombre: string | null },
   ): Promise<LiquidacionDraft> {
@@ -616,6 +631,10 @@ export class LiquidacionService {
     if (!antes.ruta) throw new BadRequestException(`La PF ${pf} no lleva flete ni Inland que escoger con su Incoterm.`);
     const maritimaId = cambio.maritimaId || null;
     const inlandId = cambio.inlandId || null;
+    const aduanaId = cambio.aduanaId || null;
+    if (aduanaId && !antes.ruta.opciones.inland.some((o) => o.id === aduanaId && isNum(o.comisionAduanera))) {
+      throw new BadRequestException('Esa comisión aduanera no es una opción del tarifario para esta PF.');
+    }
     if (maritimaId && !antes.ruta.opciones.maritimas.some((o) => o.id === maritimaId)) {
       throw new BadRequestException('Ese flete marítimo no es una opción del tarifario para esta PF.');
     }
@@ -629,6 +648,7 @@ export class LiquidacionService {
         numberPF: pf,
         maritimaId,
         inlandId,
+        aduanaId,
         motivo,
         usuarioId: this.ctx.userId ?? null,
         usuarioNombre: usuario.nombre,
@@ -643,6 +663,9 @@ export class LiquidacionService {
       costoAntes: antes.ruta.actual.costo,
       costoDespues: despues.ruta?.actual.costo ?? null,
       sobrecosto: despues.ruta?.sobrecosto ?? null,
+      costoAduanaAntes: antes.ruta.actual.costoAduana,
+      costoAduanaDespues: despues.ruta?.actual.costoAduana ?? null,
+      sobrecostoAduana: despues.ruta?.sobrecostoAduana ?? null,
       contenedores: antes.ruta.contenedores,
     };
     fila.detalle = detalle;
@@ -654,7 +677,7 @@ export class LiquidacionService {
       entityType: 'liquidacion',
       entityId: pf,
       actorId: this.ctx.userId,
-      inputData: { maritimaId, inlandId, motivo },
+      inputData: { maritimaId, inlandId, aduanaId, motivo },
       outputData: detalle,
     });
     // El historial del borrador ya trae este cambio con su detalle completo.

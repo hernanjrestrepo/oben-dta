@@ -169,9 +169,11 @@ export interface RutaLiquidacion {
   opciones: import('../freight-rates/liquidacion-rates.service').OpcionesDeRuta;
   contenedores: number;
   /** La que propone el sistema: la más barata vigente al puerto de la PF. */
-  sugerida: { maritimaId: string | null; inlandId: string | null; costo: number | null };
+  sugerida: { maritimaId: string | null; inlandId: string | null; aduanaId: string | null; costo: number | null; costoAduana: number | null };
   /** La que se está usando en esta liquidación. */
-  actual: { maritimaId: string | null; inlandId: string | null; costo: number | null; escogidaPorComex: boolean; maritimaPorComex: boolean; inlandPorComex: boolean };
+  actual: { maritimaId: string | null; inlandId: string | null; aduanaId: string | null; costo: number | null; costoAduana: number | null; escogidaPorComex: boolean; maritimaPorComex: boolean; inlandPorComex: boolean; aduanaPorComex: boolean };
+  /** Comisión aduanera escogida − sugerida (informativa: no entra en Destination Charges). */
+  sobrecostoAduana: number | null;
   sobrecosto: number | null;
   historial: CambioRuta[];
 }

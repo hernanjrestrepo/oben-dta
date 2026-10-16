@@ -906,6 +906,7 @@ export interface OpcionInland {
   puerto: string;
   direccion: string;
   valor: number;
+  comisionAduanera: number | null;
   validUntil: string | null;
   vencida: boolean;
 }
@@ -923,8 +924,9 @@ export interface CambioRuta {
 export interface RutaLiquidacion {
   opciones: { maritimas: OpcionMaritima[]; inland: OpcionInland[] };
   contenedores: number;
-  sugerida: { maritimaId: string | null; inlandId: string | null; costo: number | null };
-  actual: { maritimaId: string | null; inlandId: string | null; costo: number | null; escogidaPorComex: boolean; maritimaPorComex: boolean; inlandPorComex: boolean };
+  sugerida: { maritimaId: string | null; inlandId: string | null; aduanaId: string | null; costo: number | null; costoAduana: number | null };
+  actual: { maritimaId: string | null; inlandId: string | null; aduanaId: string | null; costo: number | null; costoAduana: number | null; escogidaPorComex: boolean; maritimaPorComex: boolean; inlandPorComex: boolean; aduanaPorComex: boolean };
+  sobrecostoAduana: number | null;
   sobrecosto: number | null;
   historial: CambioRuta[];
 }

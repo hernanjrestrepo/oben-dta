@@ -25,6 +25,10 @@ export class LiquidacionRuta extends TenantScopedEntity {
   @Column({ name: 'inland_id', type: 'uuid', nullable: true })
   inlandId: string | null;
 
+  /** Fila de la pata 3 cuya comisión aduanera escogió COMEX (null = la del transportador). */
+  @Column({ name: 'aduana_id', type: 'uuid', nullable: true })
+  aduanaId: string | null;
+
   /** Antes / después / sugerida / sobrecosto, tal como se vio al escoger. */
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   detalle: Record<string, unknown>;

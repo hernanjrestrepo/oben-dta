@@ -43,6 +43,10 @@ export class FreightInlandRate extends TenantScopedEntity {
   @Column({ name: 'rate_40hc', type: 'decimal', precision: 12, scale: 2 })
   rate40hc: number;
 
+  /** Comisión aduanera del transportador (pata 3, archivo de octubre); no entra en Destination Charges. */
+  @Column({ name: 'customs_commission', type: 'decimal', precision: 12, scale: 2, nullable: true })
+  customsCommission: string | null;
+
   @Column({ name: 'transit_time_days', type: 'int', nullable: true })
   transitTimeDays: number | null;
 

@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
 import type { LiquidacionDraft, LiquidacionHeaderValues, LiquidacionTotalesInput, OpcionInland, OpcionMaritima, RutaLiquidacion } from '@/types';
-import { AlertCircle, Anchor, CheckCircle2, History, Loader2, Receipt, RotateCcw, Truck } from 'lucide-react';
+import { AlertCircle, Anchor, CheckCircle2, History, Landmark, Loader2, Receipt, RotateCcw, Truck } from 'lucide-react';
 import { Card, CardHeader, btnPrimary, btnSecondary, fecha, inputCls, isNum, usd } from './ui';
 
 const ciudad = (puerto: string) => puerto.split(/,| - |\(/)[0].trim().toLowerCase();
@@ -16,7 +16,7 @@ type Entrada = { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesI
 function useGuardarRuta(pf: string, input: Entrada, onDraft: (d: LiquidacionDraft) => void) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
-  async function guardar(cambio: { maritimaId: string | null; inlandId: string | null; motivo: string | null }) {
+  async function guardar(cambio: { maritimaId: string | null; inlandId: string | null; aduanaId?: string | null; motivo: string | null }) {
     try {
       setGuardando(true);
       setError('');
@@ -64,8 +64,8 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
       actual.inlandPorComex && elegida && opciones.inland.some((i) => i.id === actual.inlandId && ciudad(i.puerto) === ciudad(elegida.destino));
     const ok = await guardar(
       volver
-        ? { maritimaId: null, inlandId: actual.inlandPorComex ? actual.inlandId : null, motivo: motivo.trim() || null }
-        : { maritimaId: marSel, inlandId: inlandOk ? actual.inlandId : null, motivo: motivo.trim() || null },
+        ? { maritimaId: null, inlandId: actual.inlandPorComex ? actual.inlandId : null, aduanaId: actual.aduanaPorComex ? actual.aduanaId : null, motivo: motivo.trim() || null }
+        : { maritimaId: marSel, inlandId: inlandOk ? actual.inlandId : null, aduanaId: actual.aduanaPorComex ? actual.aduanaId : null, motivo: motivo.trim() || null },
     );
     if (ok) {
       setSel(null);
@@ -179,30 +179,44 @@ export function OtrosGastosCard({
 }) {
   const ruta = liq.ruta;
   const [sel, setSel] = useState<string | null>(null);
+  const [selAduana, setSelAduana] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const { guardar, guardando, error } = useGuardarRuta(pf, input, onDraft);
 
-  if (!aplica && !liq.esUSA) return null;
-
   const h = liq.header;
   const actual = ruta?.actual;
+  const contenedores = ruta?.contenedores ?? 1;
   const maritima = ruta?.opciones.maritimas.find((o) => o.id === actual?.maritimaId) ?? null;
   const inlSel = sel ?? actual?.inlandId ?? null;
-  const pendiente = sel !== null && sel !== actual?.inlandId;
+  // La comisión aduanera sigue al transportador, salvo que COMEX escoja otro agente aduanero.
+  const aduSel = selAduana ?? (actual?.aduanaPorComex ? actual.aduanaId : inlSel);
+  const pendiente = (sel !== null && sel !== actual?.inlandId) || (selAduana !== null && selAduana !== actual?.aduanaId);
   // Con el marítimo escogido por COMEX, solo los transportadores que salen de su puerto de llegada; si no, cualquiera (el marítimo lo sigue).
   const empalma = (o: OpcionInland) => !actual?.maritimaPorComex || !maritima || ciudad(o.puerto) === ciudad(maritima.destino);
-  const elegido = ruta?.opciones.inland.find((o) => o.id === inlSel) ?? null;
-  const sugerido = ruta?.opciones.inland.find((o) => o.id === ruta?.sugerida.inlandId) ?? null;
-  const sobrecosto = pendiente && elegido && sugerido ? (elegido.valor - sugerido.valor) * (ruta?.contenedores ?? 1) : null;
+  const inlandOpts = ruta?.opciones.inland ?? [];
+  const aduanaOpts = inlandOpts.filter((o) => isNum(o.comisionAduanera));
+  const elegido = inlandOpts.find((o) => o.id === inlSel) ?? null;
+  const sugerido = inlandOpts.find((o) => o.id === ruta?.sugerida.inlandId) ?? null;
+  const aduanaElegida = inlandOpts.find((o) => o.id === aduSel) ?? null;
+  const aduanaSugerida = inlandOpts.find((o) => o.id === ruta?.sugerida.aduanaId) ?? null;
+  const sobrecosto = pendiente && elegido && sugerido ? (elegido.valor - sugerido.valor) * contenedores : null;
+  const sobrecostoAduana =
+    pendiente && isNum(aduanaElegida?.comisionAduanera) && isNum(aduanaSugerida?.comisionAduanera)
+      ? (aduanaElegida.comisionAduanera - aduanaSugerida.comisionAduanera) * contenedores
+      : null;
+  const sobre = sobrecosto !== null || sobrecostoAduana !== null ? (sobrecosto ?? 0) + (sobrecostoAduana ?? 0) : null;
 
   async function aplicar(volver = false) {
+    const aduanaId = volver || !aduSel || aduSel === inlSel ? null : aduSel;
     const ok = await guardar({
       maritimaId: actual?.maritimaPorComex ? (actual.maritimaId ?? null) : null,
       inlandId: volver ? null : inlSel,
+      aduanaId,
       motivo: motivo.trim() || null,
     });
     if (ok) {
       setSel(null);
+      setSelAduana(null);
       setMotivo('');
     }
   }
@@ -211,9 +225,13 @@ export function OtrosGastosCard({
     <Card>
       <CardHeader
         icon={<Receipt className="w-4 h-4 text-[#F47735]" />}
-        title="3 · Otros gastos"
-        subtitle={liq.esUSA ? 'Gastos en destino (EE. UU.): Inland + Entry + ISF + HMF. COMEX puede cambiar el transportador terrestre.' : 'Gastos en destino del envío.'}
-        right={liq.esUSA && actual ? <EstadoBadge comex={actual.inlandPorComex} /> : undefined}
+        title="3 · Pata 3: otros gastos en destino"
+        subtitle={
+          liq.esUSA
+            ? 'Inland + Entry + ISF + HMF. COMEX puede cambiar el transportador terrestre y el agente aduanero (comisión aduanera).'
+            : 'Transporte terrestre y gastos en destino del envío.'
+        }
+        right={liq.esUSA && actual ? <EstadoBadge comex={actual.inlandPorComex || actual.aduanaPorComex} /> : undefined}
       />
       <div className="p-4 space-y-3">
         {!aplica && <p className="text-xs text-gray-500">{incoterm ? `${incoterm} no lleva otros gastos: se informan pero no se descuentan de la mercancía.` : ''}</p>}
@@ -230,64 +248,104 @@ export function OtrosGastosCard({
                     <td className="px-3 py-2 text-gray-900">Total otros gastos (Destination Charges)</td>
                     <td className="px-3 py-2 text-right tabular-nums text-gray-900">{usd(h.destinationCharges)}</td>
                   </tr>
+                  <Concepto
+                    label="Comisión aduanera (agente aduanero)"
+                    detalle={aduanaElegida ? `${aduanaElegida.forwarder ?? ''} · informativa: no suma a Destination Charges` : 'Sin tarifa en el tarifario'}
+                    valor={isNum(aduanaElegida?.comisionAduanera) ? aduanaElegida.comisionAduanera * contenedores : null}
+                  />
                 </tbody>
               </table>
             </div>
 
-            {ruta && ruta.opciones.inland.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
-                  <Truck className="w-3.5 h-3.5 text-[#F47735]" /> Transportador terrestre (del tarifario)
-                </p>
-                <div className="rounded-lg border border-gray-200 overflow-hidden">
-                  <table className="w-full text-xs">
-                    <tbody className="divide-y divide-gray-100">
-                      {ruta.opciones.inland.map((o) => {
-                        const ok = empalma(o);
-                        return (
-                          <tr
-                            key={o.id}
-                            onClick={() => ok && setSel(o.id)}
-                            className={`${ok ? 'cursor-pointer hover:bg-gray-50' : 'opacity-40 cursor-not-allowed'} ${o.id === inlSel ? 'bg-orange-50' : ''}`}
-                            title={ok ? undefined : `Sale de ${o.puerto}: no empalma con el marítimo escogido (llega a ${maritima?.destino})`}
-                          >
-                            <td className="pl-2 w-8">
-                              <input type="radio" readOnly disabled={!ok} checked={o.id === inlSel} className="accent-[#F47735]" aria-label={`Escoger ${o.forwarder}`} />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <span className="font-medium text-gray-900">{o.forwarder ?? '—'}</span> desde {o.puerto}
-                              <Marcas id={o.id} sugeridaId={ruta.sugerida.inlandId} actualId={ruta.actual.inlandId} vencida={o.vencida} validUntil={o.validUntil} />
-                            </td>
-                            <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-900">{usd(o.valor)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+            {inlandOpts.length > 0 ? (
+              <>
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
+                    <Truck className="w-3.5 h-3.5 text-[#F47735]" /> Transportador terrestre (del tarifario)
+                  </p>
+                  <div className="rounded-lg border border-gray-200 overflow-hidden">
+                    <table className="w-full text-xs">
+                      <tbody className="divide-y divide-gray-100">
+                        {inlandOpts.map((o) => {
+                          const ok = empalma(o);
+                          return (
+                            <tr
+                              key={o.id}
+                              onClick={() => ok && setSel(o.id)}
+                              className={`${ok ? 'cursor-pointer hover:bg-gray-50' : 'opacity-40 cursor-not-allowed'} ${o.id === inlSel ? 'bg-orange-50' : ''}`}
+                              title={ok ? undefined : `Sale de ${o.puerto}: no empalma con el marítimo escogido (llega a ${maritima?.destino})`}
+                            >
+                              <td className="pl-2 w-8">
+                                <input type="radio" readOnly disabled={!ok} checked={o.id === inlSel} className="accent-[#F47735]" aria-label={`Escoger ${o.forwarder}`} />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <span className="font-medium text-gray-900">{o.forwarder ?? '—'}</span> desde {o.puerto}
+                                <Marcas id={o.id} sugeridaId={ruta?.sugerida.inlandId ?? null} actualId={actual?.inlandId ?? null} vencida={o.vencida} validUntil={o.validUntil} />
+                              </td>
+                              <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-900">{usd(o.valor)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {!actual?.maritimaPorComex && <p className="mt-1 text-[11px] text-gray-500">Si escoges un transportador de otro puerto, el flete marítimo se ajusta para llegar a ese puerto.</p>}
                 </div>
-                {!actual?.maritimaPorComex && <p className="mt-1 text-[11px] text-gray-500">Si escoges un transportador de otro puerto, el flete marítimo se ajusta para llegar a ese puerto.</p>}
-              </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
+                    <Landmark className="w-3.5 h-3.5 text-[#F47735]" /> Agente aduanero · comisión aduanera (del tarifario)
+                  </p>
+                  {aduanaOpts.length === 0 ? (
+                    <p className="text-[11px] text-gray-500">El tarifario no trae comisión aduanera para este destino.</p>
+                  ) : (
+                    <div className="rounded-lg border border-gray-200 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <tbody className="divide-y divide-gray-100">
+                          {aduanaOpts.map((o) => (
+                            <tr key={o.id} onClick={() => setSelAduana(o.id)} className={`cursor-pointer hover:bg-gray-50 ${o.id === aduSel ? 'bg-orange-50' : ''}`}>
+                              <td className="pl-2 w-8">
+                                <input type="radio" readOnly checked={o.id === aduSel} className="accent-[#F47735]" aria-label={`Escoger aduana ${o.forwarder}`} />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <span className="font-medium text-gray-900">{o.forwarder ?? '—'}</span>
+                                <Marcas id={o.id} sugeridaId={ruta?.sugerida.aduanaId ?? null} actualId={actual?.aduanaId ?? null} vencida={o.vencida} validUntil={o.validUntil} />
+                              </td>
+                              <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-900">{usd(o.comisionAduanera)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <SinTarifas />
             )}
             <Aplicar
               pendiente={pendiente}
-              porComex={!!actual?.inlandPorComex}
-              sobrecosto={sobrecosto}
+              porComex={!!actual?.inlandPorComex || !!actual?.aduanaPorComex}
+              sobrecosto={sobre}
               motivo={motivo}
               setMotivo={setMotivo}
               guardando={guardando}
               error={error}
               onAplicar={() => void aplicar()}
-              onDescartar={() => setSel(null)}
+              onDescartar={() => {
+                setSel(null);
+                setSelAduana(null);
+              }}
               onVolver={() => void aplicar(true)}
             />
           </>
+        ) : aplica ? (
+          <label className="block text-xs text-gray-600">
+            Otros gastos (USD) — fuera de EE. UU. no hay tarifario de gastos en destino
+            <input value={otrosDigitados} onChange={(e) => setOtrosDigitados(e.target.value)} inputMode="decimal" placeholder={usd(liq.totales.otrosGastos)} className={`${inputCls} w-full mt-1`} />
+          </label>
         ) : (
-          aplica && (
-            <label className="block text-xs text-gray-600">
-              Otros gastos (USD) — fuera de EE. UU. no hay tarifario de gastos en destino
-              <input value={otrosDigitados} onChange={(e) => setOtrosDigitados(e.target.value)} inputMode="decimal" placeholder={usd(liq.totales.otrosGastos)} className={`${inputCls} w-full mt-1`} />
-            </label>
-          )
+          <p className="text-xs text-gray-500">Sin tarifas de transporte terrestre ni aduana para {liq.pais ?? 'este destino'}: el tarifario solo trae la pata 3 de EE. UU. y Canadá.</p>
         )}
       </div>
     </Card>

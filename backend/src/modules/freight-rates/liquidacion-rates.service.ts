@@ -46,6 +46,8 @@ export interface OpcionInland {
   direccion: string;
   /** USD por contenedor de 40'. */
   valor: number;
+  /** Comisión aduanera de este transportador (USD por contenedor), si el archivo la trae. */
+  comisionAduanera: number | null;
   validUntil: string | null;
   vencida: boolean;
 }
@@ -347,7 +349,7 @@ export class LiquidacionRatesService {
         const valor = toAmount(r.rate40hc);
         if (valor === null || inland.some((o) => o.id === r.id)) continue;
         const validUntil = fecha(r.validUntil);
-        inland.push({ id: r.id, forwarder: r.forwarder ?? null, puerto: r.destinationPort, direccion: r.destinationAddress, valor, validUntil, vencida: !!validUntil && validUntil < hoyIso });
+        inland.push({ id: r.id, forwarder: r.forwarder ?? null, puerto: r.destinationPort, direccion: r.destinationAddress, valor, comisionAduanera: toAmount(r.customsCommission), validUntil, vencida: !!validUntil && validUntil < hoyIso });
       }
     }
 

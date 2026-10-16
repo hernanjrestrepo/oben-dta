@@ -824,12 +824,12 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       const mar = (id: string, destino: string, forwarder: string, flete: number, vencida = false) => ({
         id, origen: 'Cartagena, Colombia (COCTG) - Port', destino, forwarder, naviera: 'HAPAG LLOYD', transito: null, dias: null, flete, validUntil: null, vencida,
       });
-      const inl = (id: string, puerto: string, forwarder: string, valor: number, vencida = false) => ({
-        id, forwarder, puerto, direccion: 'Cincinnati, OH 45240', valor, validUntil: null, vencida,
+      const inl = (id: string, puerto: string, forwarder: string, valor: number, comisionAduanera: number | null = null, vencida = false) => ({
+        id, forwarder, puerto, direccion: 'Cincinnati, OH 45240', valor, comisionAduanera, validUntil: null, vencida,
       });
       const OPCIONES = {
         maritimas: [mar('m-shapiro', 'Cincinnati, OH (Ramp)', 'Shapiro', 2804), mar('m-trading', 'Cincinnati, OH (Ramp)', 'Trading', 3150), mar('m-columbus', 'Columbus, OH (Ramp)', 'Trading', 2900)],
-        inland: [inl('i-shapiro', 'Cincinnati, OH (Ramp)', 'Shapiro', 523), inl('i-trading-col', 'Columbus, OH (Ramp)', 'Trading', 770), inl('i-trading', 'Cincinnati, OH (Ramp)', 'Trading', 860)],
+        inland: [inl('i-shapiro', 'Cincinnati, OH (Ramp)', 'Shapiro', 523, 240), inl('i-trading-col', 'Columbus, OH (Ramp)', 'Trading', 770, 165), inl('i-trading', 'Cincinnati, OH (Ramp)', 'Trading', 860, 165), inl('i-sin-aduana', 'Cincinnati, OH (Ramp)', 'Transborder', 1200)],
       };
       const preparar = () => {
         const b = jose();
@@ -873,6 +873,17 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
         expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'liquidacion_ruta_cambiada', entityId: '11237' }));
         // Se queda: la próxima vez que se abre la PF sale con la ruta de COMEX.
         expect((await service.getDraft('11237', input)).totales.flete).toBe(3150);
+      });
+
+      it('la comisión aduanera sigue al transportador y COMEX puede escoger otra, sin tocar Destination Charges', async () => {
+        const { service } = preparar();
+        const base = await service.getDraft('11237', input);
+        expect(base.ruta).toMatchObject({ sugerida: { aduanaId: 'i-shapiro', costoAduana: 240 }, actual: { aduanaId: 'i-shapiro', aduanaPorComex: false }, sobrecostoAduana: 0 });
+        const d = await service.cambiarRuta('11237', { aduanaId: 'i-trading', motivo: 'Mejor tarifa de aduana' }, input, { nombre: 'María' });
+        expect(d.ruta).toMatchObject({ actual: { aduanaId: 'i-trading', costoAduana: 165, aduanaPorComex: true }, sobrecostoAduana: -75 });
+        expect(d.header.destinationCharges).toBe(base.header.destinationCharges);
+        expect(d.ruta?.historial[0].despues).toContain('Aduana Trading');
+        await expect(service.cambiarRuta('11237', { aduanaId: 'i-sin-aduana' }, input, { nombre: null })).rejects.toThrow(BadRequestException);
       });
 
       it('si COMEX escoge solo el marítimo, el Inland sale del puerto donde llega ese marítimo', async () => {
