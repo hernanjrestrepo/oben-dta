@@ -561,6 +561,8 @@ export class LiquidacionService {
               inlandId: act.inlandId,
               costo: costoRuta(act, contenedores),
               escogidaPorComex: !!(maritimaComex || inlandComex),
+              maritimaPorComex: !!maritimaComex,
+              inlandPorComex: !!inlandComex,
             },
             sobrecosto:
               isNum(costoRuta(act, contenedores)) && isNum(costoRuta(sug, contenedores))

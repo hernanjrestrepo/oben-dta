@@ -1,206 +1,262 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
 import type { LiquidacionDraft, LiquidacionHeaderValues, LiquidacionTotalesInput, OpcionInland, OpcionMaritima, RutaLiquidacion } from '@/types';
-import { AlertCircle, Anchor, CheckCircle2, History, Loader2, RotateCcw, Route, Truck } from 'lucide-react';
-import { Card, CardHeader, btnPrimary, btnSecondary, fecha, inputCls, usd } from './ui';
+import { AlertCircle, Anchor, CheckCircle2, History, Loader2, Receipt, RotateCcw, Truck } from 'lucide-react';
+import { Card, CardHeader, btnPrimary, btnSecondary, fecha, inputCls, isNum, usd } from './ui';
 
-const ciudad = (puerto: string) => puerto.split(/,| - |\(/)[0].trim();
+const ciudad = (puerto: string) => puerto.split(/,| - |\(/)[0].trim().toLowerCase();
 const TODOS = '';
 
-/**
- * COMEX escoge la ruta de la liquidación DEL TARIFARIO (reunión del 15-oct):
- * puerto de origen, puerto de destino, agente, naviera y transportador
- * terrestre. Nada se digita. La sugerida es la más barata vigente al puerto
- * de la proforma; cada cambio queda como orden de compra interna numerada,
- * con sobrecosto y motivo (opcional).
- */
-export function RutaPanel({
-  pf,
-  ruta,
-  esUSA,
-  input,
-  onDraft,
-}: {
-  pf: string;
-  ruta: RutaLiquidacion;
-  esUSA: boolean;
-  input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput };
-  onDraft: (d: LiquidacionDraft) => void;
-}) {
-  const { opciones, actual, sugerida, contenedores } = ruta;
-  const [maritimaId, setMaritimaId] = useState<string | null>(null);
-  const [inlandId, setInlandId] = useState<string | null>(null);
-  const [motivo, setMotivo] = useState('');
+type Entrada = { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput };
+
+/** Guarda la ruta (solo ids del tarifario) y devuelve la liquidación recalculada. */
+function useGuardarRuta(pf: string, input: Entrada, onDraft: (d: LiquidacionDraft) => void) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  async function guardar(cambio: { maritimaId: string | null; inlandId: string | null; motivo: string | null }) {
+    try {
+      setGuardando(true);
+      setError('');
+      onDraft(await api.cambiarRutaLiquidacion(pf, cambio, input));
+      return true;
+    } catch (err) {
+      setError(extractMessage(err, 'No se pudo guardar la ruta.'));
+      return false;
+    } finally {
+      setGuardando(false);
+    }
+  }
+  return { guardar, guardando, error };
+}
+
+/**
+ * Flete marítimo (pata 2): COMEX escoge DEL TARIFARIO el puerto de origen,
+ * el de destino, el agente y la naviera (reunión del 15-oct). Nada se
+ * digita. La sugerida es la más barata vigente al puerto de la proforma.
+ */
+export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; ruta: RutaLiquidacion; input: Entrada; onDraft: (d: LiquidacionDraft) => void }) {
+  const { opciones, actual, sugerida, contenedores } = ruta;
+  const [sel, setSel] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState('');
   const [filtro, setFiltro] = useState({ origen: TODOS, destino: TODOS, agente: TODOS, naviera: TODOS });
-  const [verHistorial, setVerHistorial] = useState(false);
+  const { guardar, guardando, error } = useGuardarRuta(pf, input, onDraft);
 
-  // Lo que el usuario está escogiendo (sin aplicar) o, si no ha tocado nada, lo vigente.
-  const marSel = maritimaId ?? actual.maritimaId;
-  const inlSel = inlandId ?? actual.inlandId;
-  const maritima = opciones.maritimas.find((o) => o.id === marSel) ?? null;
-  const inland = opciones.inland.find((o) => o.id === inlSel) ?? null;
-  const pendiente = (maritimaId !== null && maritimaId !== actual.maritimaId) || (inlandId !== null && inlandId !== actual.inlandId);
-
-  const valores = (k: 'origen' | 'destino' | 'forwarder' | 'naviera') =>
-    [...new Set(opciones.maritimas.map((o) => (k === 'origen' || k === 'destino' ? o[k] : (o[k] ?? '—'))))].sort();
-  const maritimasFiltradas = opciones.maritimas.filter(
+  const marSel = sel ?? actual.maritimaId;
+  const elegida = opciones.maritimas.find((o) => o.id === marSel) ?? null;
+  const pendiente = sel !== null && sel !== actual.maritimaId;
+  const valores = (k: 'origen' | 'destino' | 'forwarder' | 'naviera') => [...new Set(opciones.maritimas.map((o) => o[k] ?? '—'))].sort();
+  const filas = opciones.maritimas.filter(
     (o) =>
       (!filtro.origen || o.origen === filtro.origen) &&
       (!filtro.destino || o.destino === filtro.destino) &&
       (!filtro.agente || (o.forwarder ?? '—') === filtro.agente) &&
       (!filtro.naviera || (o.naviera ?? '—') === filtro.naviera),
   );
-  const costoSeleccion = useMemo(() => {
-    if (!maritima && !inland) return null;
-    return ((maritima?.flete ?? 0) + (inland?.valor ?? 0)) * contenedores;
-  }, [maritima, inland, contenedores]);
-  const sobrecostoSeleccion = costoSeleccion !== null && sugerida.costo !== null ? costoSeleccion - sugerida.costo : null;
+  const sugeridaOp = opciones.maritimas.find((o) => o.id === sugerida.maritimaId) ?? null;
+  const sobrecosto = elegida && sugeridaOp ? (elegida.flete - sugeridaOp.flete) * contenedores : null;
 
-  function escogerMaritima(o: OpcionMaritima) {
-    setMaritimaId(o.id);
-    // Si el Inland escogido no sale del puerto donde llega este marítimo, se deja que el sistema escoja el que empalma.
-    if (inland && ciudad(inland.puerto).toLowerCase() !== ciudad(o.destino).toLowerCase()) setInlandId(null);
-  }
-
-  async function aplicar(volverASugerida = false) {
-    try {
-      setGuardando(true);
-      setError('');
-      const empalma = (i: OpcionInland | null) => !!i && !!maritima && ciudad(i.puerto).toLowerCase() === ciudad(maritima.destino).toLowerCase();
-      const cambio = volverASugerida
-        ? { maritimaId: null, inlandId: null, motivo: motivo.trim() || null }
-        : {
-            maritimaId: marSel,
-            // Un Inland que no empalma con el marítimo no se guarda: el sistema toma el que sale de ese puerto.
-            inlandId: esUSA && (empalma(inland) || !maritima) ? inlSel : null,
-            motivo: motivo.trim() || null,
-          };
-      onDraft(await api.cambiarRutaLiquidacion(pf, cambio, input));
-      setMaritimaId(null);
-      setInlandId(null);
+  async function aplicar(volver = false) {
+    // Si el Inland escogido por COMEX no sale del puerto donde llega el marítimo nuevo, el sistema toma el que empalma.
+    const inlandOk =
+      actual.inlandPorComex && elegida && opciones.inland.some((i) => i.id === actual.inlandId && ciudad(i.puerto) === ciudad(elegida.destino));
+    const ok = await guardar(
+      volver
+        ? { maritimaId: null, inlandId: actual.inlandPorComex ? actual.inlandId : null, motivo: motivo.trim() || null }
+        : { maritimaId: marSel, inlandId: inlandOk ? actual.inlandId : null, motivo: motivo.trim() || null },
+    );
+    if (ok) {
+      setSel(null);
       setMotivo('');
-    } catch (err) {
-      setError(extractMessage(err, 'No se pudo guardar la ruta.'));
-    } finally {
-      setGuardando(false);
     }
   }
-
-  const sinOpciones = opciones.maritimas.length === 0 && opciones.inland.length === 0;
 
   return (
     <Card>
       <CardHeader
-        icon={<Route className="w-4 h-4 text-[#F47735]" />}
-        title="2 · Ruta y tarifas (del tarifario)"
-        subtitle="Sugerida: la más barata vigente al puerto de la proforma. COMEX puede escoger otro puerto, agente, naviera o transportador; el valor sale siempre del tarifario."
-        right={
-          actual.escogidaPorComex ? (
-            <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-semibold">Escogida por COMEX</span>
-          ) : (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">Sugerida</span>
-          )
-        }
+        icon={<Anchor className="w-4 h-4 text-[#F47735]" />}
+        title="2 · Flete marítimo"
+        subtitle="Del tarifario: puerto de origen → puerto de destino, agente y naviera. La sugerida es la más barata vigente al puerto de la proforma."
+        right={<EstadoBadge comex={actual.maritimaPorComex} />}
       />
-      <div className="p-4 space-y-4">
-        {sinOpciones ? (
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-            El tarifario no tiene tarifas para esta ruta. Hay que cargar el archivo de fletes vigente.
-          </p>
+      <div className="p-4 space-y-3">
+        {opciones.maritimas.length === 0 ? (
+          <SinTarifas />
         ) : (
           <>
-            {/* Resumen: actual vs sugerida */}
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <Resumen label="Ruta sugerida" valor={usd(sugerida.costo)} />
-              <Resumen label={pendiente ? 'Ruta escogida (sin aplicar)' : 'Ruta actual'} valor={usd(pendiente ? costoSeleccion : actual.costo)} />
-              <Resumen
-                label="Sobrecosto"
-                valor={usd(pendiente ? sobrecostoSeleccion : ruta.sobrecosto)}
-                tono={(pendiente ? sobrecostoSeleccion : ruta.sobrecosto) ?? 0}
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <Filtro label="Puerto de origen" valor={filtro.origen} opciones={valores('origen')} onChange={(v) => setFiltro((f) => ({ ...f, origen: v }))} />
+              <Filtro label="Puerto de destino" valor={filtro.destino} opciones={valores('destino')} onChange={(v) => setFiltro((f) => ({ ...f, destino: v }))} />
+              <Filtro label="Agente" valor={filtro.agente} opciones={valores('forwarder')} onChange={(v) => setFiltro((f) => ({ ...f, agente: v }))} />
+              <Filtro label="Naviera" valor={filtro.naviera} opciones={valores('naviera')} onChange={(v) => setFiltro((f) => ({ ...f, naviera: v }))} />
             </div>
-            {contenedores > 1 && <p className="text-[11px] text-gray-500">Valores por {contenedores} contenedores de 40 pies.</p>}
-
-            {/* Marítimo */}
-            <div>
-              <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
-                <Anchor className="w-3.5 h-3.5 text-[#F47735]" /> Flete marítimo (pata 2): puerto de origen → puerto de destino, agente y naviera
-              </p>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <Filtro label="Puerto de origen" valor={filtro.origen} opciones={valores('origen')} onChange={(v) => setFiltro((f) => ({ ...f, origen: v }))} />
-                <Filtro label="Puerto de destino" valor={filtro.destino} opciones={valores('destino')} onChange={(v) => setFiltro((f) => ({ ...f, destino: v }))} />
-                <Filtro label="Agente" valor={filtro.agente} opciones={valores('forwarder')} onChange={(v) => setFiltro((f) => ({ ...f, agente: v }))} />
-                <Filtro label="Naviera" valor={filtro.naviera} opciones={valores('naviera')} onChange={(v) => setFiltro((f) => ({ ...f, naviera: v }))} />
-              </div>
-              <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-200">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 text-gray-500 sticky top-0">
-                    <tr>
-                      <th className="w-8" />
-                      <th className="px-2 py-1.5 text-left font-semibold">Ruta</th>
-                      <th className="px-2 py-1.5 text-left font-semibold">Agente / naviera</th>
-                      <th className="px-2 py-1.5 text-right font-semibold">USD</th>
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-200">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 text-gray-500 sticky top-0">
+                  <tr>
+                    <th className="w-8" />
+                    <th className="px-2 py-1.5 text-left font-semibold">Ruta</th>
+                    <th className="px-2 py-1.5 text-left font-semibold">Agente / naviera</th>
+                    <th className="px-2 py-1.5 text-right font-semibold">Días</th>
+                    <th className="px-2 py-1.5 text-right font-semibold">USD</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filas.map((o: OpcionMaritima) => (
+                    <tr key={o.id} onClick={() => setSel(o.id)} className={`cursor-pointer ${o.id === marSel ? 'bg-orange-50' : 'hover:bg-gray-50'}`}>
+                      <td className="pl-2">
+                        <input type="radio" readOnly checked={o.id === marSel} className="accent-[#F47735]" aria-label={`Escoger ${o.forwarder} ${o.naviera}`} />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="font-medium text-gray-900">{o.origen.split(',')[0]}</span> → <span className="font-medium text-gray-900">{o.destino}</span>
+                        {o.transito && <span className="block text-[10px] text-gray-400">vía {o.transito.split(',')[0]}</span>}
+                        <Marcas id={o.id} sugeridaId={sugerida.maritimaId} actualId={actual.maritimaId} vencida={o.vencida} validUntil={o.validUntil} />
+                      </td>
+                      <td className="px-2 py-1.5 text-gray-700">
+                        {o.forwarder ?? '—'}
+                        <span className="block text-[10px] text-gray-400">{o.naviera ?? ''}</span>
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-gray-700">{isNum(o.dias) ? o.dias : '—'}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-900">{usd(o.flete)}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {maritimasFiltradas.map((o) => (
-                      <tr key={o.id} onClick={() => escogerMaritima(o)} className={`cursor-pointer ${o.id === marSel ? 'bg-orange-50' : 'hover:bg-gray-50'}`}>
-                        <td className="pl-2">
-                          <input type="radio" readOnly checked={o.id === marSel} className="accent-[#F47735]" aria-label={`Escoger ${o.forwarder} ${o.naviera} ${o.flete}`} />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <span className="font-medium text-gray-900">{ciudad(o.origen)}</span> → <span className="font-medium text-gray-900">{o.destino}</span>
-                          {o.transito && <span className="block text-[10px] text-gray-400">vía {ciudad(o.transito)}</span>}
-                          <Marcas id={o.id} sugeridaId={sugerida.maritimaId} actualId={actual.maritimaId} vencida={o.vencida} validUntil={o.validUntil} />
-                        </td>
-                        <td className="px-2 py-1.5 text-gray-700">
-                          {o.forwarder ?? '—'}
-                          <span className="block text-[10px] text-gray-400">{o.naviera ?? ''}</span>
-                        </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-900">{usd(o.flete)}</td>
-                      </tr>
-                    ))}
-                    {maritimasFiltradas.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-3 py-3 text-center text-gray-400">
-                          Ninguna tarifa con esos filtros.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                  {filas.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-3 text-center text-gray-400">
+                        Ninguna tarifa con esos filtros.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {contenedores > 1 && <p className="text-[11px] text-gray-500">Valores por contenedor de 40 pies; esta proforma lleva {contenedores}.</p>}
+            <Aplicar
+              pendiente={pendiente}
+              porComex={actual.maritimaPorComex}
+              sobrecosto={pendiente ? sobrecosto : null}
+              motivo={motivo}
+              setMotivo={setMotivo}
+              guardando={guardando}
+              error={error}
+              onAplicar={() => void aplicar()}
+              onDescartar={() => setSel(null)}
+              onVolver={() => void aplicar(true)}
+            />
+            <Historial ruta={ruta} />
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Otros gastos discriminados. USA: Inland (COMEX escoge el transportador
+ * terrestre del tarifario) + Entry + ISF + HMF = Destination Charges = otros
+ * gastos. Fuera de USA, si el Incoterm los pide, no hay tarifario: se digitan.
+ */
+export function OtrosGastosCard({
+  pf,
+  liq,
+  input,
+  onDraft,
+  aplica,
+  incoterm,
+  otrosDigitados,
+  setOtrosDigitados,
+}: {
+  pf: string;
+  liq: LiquidacionDraft;
+  input: Entrada;
+  onDraft: (d: LiquidacionDraft) => void;
+  aplica: boolean;
+  incoterm: string | null;
+  otrosDigitados: string;
+  setOtrosDigitados: (v: string) => void;
+}) {
+  const ruta = liq.ruta;
+  const [sel, setSel] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const { guardar, guardando, error } = useGuardarRuta(pf, input, onDraft);
+
+  if (!aplica && !liq.esUSA) return null;
+
+  const h = liq.header;
+  const actual = ruta?.actual;
+  const maritima = ruta?.opciones.maritimas.find((o) => o.id === actual?.maritimaId) ?? null;
+  const inlSel = sel ?? actual?.inlandId ?? null;
+  const pendiente = sel !== null && sel !== actual?.inlandId;
+  // Con el marítimo escogido por COMEX, solo los transportadores que salen de su puerto de llegada; si no, cualquiera (el marítimo lo sigue).
+  const empalma = (o: OpcionInland) => !actual?.maritimaPorComex || !maritima || ciudad(o.puerto) === ciudad(maritima.destino);
+  const elegido = ruta?.opciones.inland.find((o) => o.id === inlSel) ?? null;
+  const sugerido = ruta?.opciones.inland.find((o) => o.id === ruta?.sugerida.inlandId) ?? null;
+  const sobrecosto = pendiente && elegido && sugerido ? (elegido.valor - sugerido.valor) * (ruta?.contenedores ?? 1) : null;
+
+  async function aplicar(volver = false) {
+    const ok = await guardar({
+      maritimaId: actual?.maritimaPorComex ? (actual.maritimaId ?? null) : null,
+      inlandId: volver ? null : inlSel,
+      motivo: motivo.trim() || null,
+    });
+    if (ok) {
+      setSel(null);
+      setMotivo('');
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        icon={<Receipt className="w-4 h-4 text-[#F47735]" />}
+        title="3 · Otros gastos"
+        subtitle={liq.esUSA ? 'Gastos en destino (EE. UU.): Inland + Entry + ISF + HMF. COMEX puede cambiar el transportador terrestre.' : 'Gastos en destino del envío.'}
+        right={liq.esUSA && actual ? <EstadoBadge comex={actual.inlandPorComex} /> : undefined}
+      />
+      <div className="p-4 space-y-3">
+        {!aplica && <p className="text-xs text-gray-500">{incoterm ? `${incoterm} no lleva otros gastos: se informan pero no se descuentan de la mercancía.` : ''}</p>}
+        {liq.esUSA ? (
+          <>
+            <div className="rounded-lg border border-gray-200 overflow-hidden">
+              <table className="w-full text-xs">
+                <tbody className="divide-y divide-gray-100">
+                  <Concepto label="Inland (transporte terrestre)" detalle={elegido ? `${elegido.forwarder ?? ''} desde ${elegido.puerto}` : undefined} valor={h.inlandFreight} />
+                  <Concepto label="Entry Fee" detalle="Fijo negociado en aduana" valor={h.entryFee} />
+                  <Concepto label="Importer Security Filing (ISF)" detalle="Fijo negociado en aduana" valor={h.importerSecurityFiling} />
+                  <Concepto label="Harbor Maintenance Fee (HMF)" detalle="0,125 % del FOB final" valor={h.harborMaintenanceFee} />
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="px-3 py-2 text-gray-900">Total otros gastos (Destination Charges)</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-gray-900">{usd(h.destinationCharges)}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
-            {/* Inland */}
-            {esUSA && opciones.inland.length > 0 && (
+            {ruta && ruta.opciones.inland.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
-                  <Truck className="w-3.5 h-3.5 text-[#F47735]" /> Inland (pata 3): transportador terrestre hasta el cliente
+                  <Truck className="w-3.5 h-3.5 text-[#F47735]" /> Transportador terrestre (del tarifario)
                 </p>
                 <div className="rounded-lg border border-gray-200 overflow-hidden">
                   <table className="w-full text-xs">
                     <tbody className="divide-y divide-gray-100">
-                      {opciones.inland.map((o) => {
-                        const empalma = !maritima || ciudad(o.puerto).toLowerCase() === ciudad(maritima.destino).toLowerCase();
+                      {ruta.opciones.inland.map((o) => {
+                        const ok = empalma(o);
                         return (
                           <tr
                             key={o.id}
-                            onClick={() => empalma && setInlandId(o.id)}
-                            className={`${empalma ? 'cursor-pointer hover:bg-gray-50' : 'opacity-40 cursor-not-allowed'} ${o.id === inlSel ? 'bg-orange-50' : ''}`}
-                            title={empalma ? undefined : `Sale de ${o.puerto}: no empalma con el marítimo escogido (llega a ${maritima?.destino})`}
+                            onClick={() => ok && setSel(o.id)}
+                            className={`${ok ? 'cursor-pointer hover:bg-gray-50' : 'opacity-40 cursor-not-allowed'} ${o.id === inlSel ? 'bg-orange-50' : ''}`}
+                            title={ok ? undefined : `Sale de ${o.puerto}: no empalma con el marítimo escogido (llega a ${maritima?.destino})`}
                           >
                             <td className="pl-2 w-8">
-                              <input type="radio" readOnly disabled={!empalma} checked={o.id === inlSel} className="accent-[#F47735]" aria-label={`Escoger Inland ${o.forwarder}`} />
+                              <input type="radio" readOnly disabled={!ok} checked={o.id === inlSel} className="accent-[#F47735]" aria-label={`Escoger ${o.forwarder}`} />
                             </td>
                             <td className="px-2 py-1.5">
                               <span className="font-medium text-gray-900">{o.forwarder ?? '—'}</span> desde {o.puerto}
-                              <Marcas id={o.id} sugeridaId={sugerida.inlandId} actualId={actual.inlandId} vencida={o.vencida} validUntil={o.validUntil} />
+                              <Marcas id={o.id} sugeridaId={ruta.sugerida.inlandId} actualId={ruta.actual.inlandId} vencida={o.vencida} validUntil={o.validUntil} />
                             </td>
                             <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-900">{usd(o.valor)}</td>
                           </tr>
@@ -209,100 +265,141 @@ export function RutaPanel({
                     </tbody>
                   </table>
                 </div>
+                {!actual?.maritimaPorComex && <p className="mt-1 text-[11px] text-gray-500">Si escoges un transportador de otro puerto, el flete marítimo se ajusta para llegar a ese puerto.</p>}
               </div>
             )}
-
-            {/* Aplicar */}
-            {(pendiente || actual.escogidaPorComex) && (
-              <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-3 space-y-2">
-                <label className="block text-xs font-medium text-gray-700">
-                  Justificación del cambio <span className="text-gray-400 font-normal">(opcional)</span>
-                  <input
-                    value={motivo}
-                    onChange={(e) => setMotivo(e.target.value)}
-                    maxLength={500}
-                    placeholder="Ej: espacio en el booking, tiempo de tránsito, pedido del cliente"
-                    className={`${inputCls} w-full mt-1`}
-                  />
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {pendiente && (
-                    <button className={btnPrimary} onClick={() => void aplicar()} disabled={guardando}>
-                      {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Aplicar ruta
-                    </button>
-                  )}
-                  {pendiente && (
-                    <button
-                      className={btnSecondary}
-                      onClick={() => {
-                        setMaritimaId(null);
-                        setInlandId(null);
-                      }}
-                      disabled={guardando}
-                    >
-                      Descartar
-                    </button>
-                  )}
-                  {actual.escogidaPorComex && !pendiente && (
-                    <button className={btnSecondary} onClick={() => void aplicar(true)} disabled={guardando}>
-                      <RotateCcw className="w-4 h-4" /> Volver a la sugerida
-                    </button>
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-500">Cada cambio queda registrado como orden de compra interna (quién, cuándo, antes → después, sobrecosto y motivo) y pide aprobar de nuevo.</p>
-              </div>
-            )}
-            {error && (
-              <p className="text-xs text-red-700 flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5" /> {error}
-              </p>
-            )}
-
-            {/* Historial = órdenes de compra internas */}
-            {ruta.historial.length > 0 && (
-              <div>
-                <button className="text-xs text-[#E5641F] hover:underline inline-flex items-center gap-1" onClick={() => setVerHistorial((v) => !v)}>
-                  <History className="w-3.5 h-3.5" /> {verHistorial ? 'Ocultar' : 'Ver'} cambios de ruta ({ruta.historial.length})
-                </button>
-                {verHistorial && (
-                  <ul className="mt-2 space-y-2">
-                    {ruta.historial.map((c) => (
-                      <li key={c.numero} className="rounded-lg border border-gray-200 p-2.5 text-[11px] text-gray-700">
-                        <p className="font-semibold text-gray-900">
-                          OC interna #{c.numero} · {fecha(c.fecha)} · {c.por ?? 'sin usuario'}
-                          {c.sobrecosto !== null && c.sobrecosto !== 0 && (
-                            <span className={c.sobrecosto > 0 ? 'text-red-700' : 'text-emerald-700'}> · sobrecosto {usd(c.sobrecosto)}</span>
-                          )}
-                        </p>
-                        <p>
-                          <span className="text-gray-400">Antes:</span> {c.antes}
-                        </p>
-                        <p>
-                          <span className="text-gray-400">Después:</span> {c.despues}
-                        </p>
-                        <p className={c.motivo ? '' : 'text-red-600'}>
-                          <span className="text-gray-400">Motivo:</span> {c.motivo ?? 'sin justificación'}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+            <Aplicar
+              pendiente={pendiente}
+              porComex={!!actual?.inlandPorComex}
+              sobrecosto={sobrecosto}
+              motivo={motivo}
+              setMotivo={setMotivo}
+              guardando={guardando}
+              error={error}
+              onAplicar={() => void aplicar()}
+              onDescartar={() => setSel(null)}
+              onVolver={() => void aplicar(true)}
+            />
           </>
+        ) : (
+          aplica && (
+            <label className="block text-xs text-gray-600">
+              Otros gastos (USD) — fuera de EE. UU. no hay tarifario de gastos en destino
+              <input value={otrosDigitados} onChange={(e) => setOtrosDigitados(e.target.value)} inputMode="decimal" placeholder={usd(liq.totales.otrosGastos)} className={`${inputCls} w-full mt-1`} />
+            </label>
+          )
         )}
       </div>
     </Card>
   );
 }
 
-function Resumen({ label, valor, tono = 0 }: { label: string; valor: string; tono?: number }) {
+function Concepto({ label, detalle, valor }: { label: string; detalle?: string; valor: unknown }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50/60 px-2 py-2">
-      <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
-      <p className={`text-sm font-bold tabular-nums ${tono > 0 ? 'text-red-700' : 'text-gray-900'}`}>{valor}</p>
+    <tr>
+      <td className="px-3 py-2">
+        <span className="text-gray-800">{label}</span>
+        {detalle && <span className="block text-[10px] text-gray-400">{detalle}</span>}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums text-gray-900">{isNum(valor) ? usd(valor) : '—'}</td>
+    </tr>
+  );
+}
+
+function Aplicar(p: {
+  pendiente: boolean;
+  porComex: boolean;
+  sobrecosto: number | null;
+  motivo: string;
+  setMotivo: (v: string) => void;
+  guardando: boolean;
+  error: string;
+  onAplicar: () => void;
+  onDescartar: () => void;
+  onVolver: () => void;
+}) {
+  if (!p.pendiente && !p.porComex && !p.error) return null;
+  return (
+    <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-3 space-y-2">
+      {p.pendiente && p.sobrecosto !== null && (
+        <p className={`text-xs font-semibold ${p.sobrecosto > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+          {p.sobrecosto > 0 ? `Sobrecosto frente a la sugerida: ${usd(p.sobrecosto)}` : p.sobrecosto < 0 ? `Ahorro frente a la sugerida: ${usd(-p.sobrecosto)}` : 'Mismo costo que la sugerida'}
+        </p>
+      )}
+      <label className="block text-xs font-medium text-gray-700">
+        Justificación del cambio <span className="text-gray-400 font-normal">(opcional)</span>
+        <input value={p.motivo} onChange={(e) => p.setMotivo(e.target.value)} maxLength={500} placeholder="Ej: espacio en el booking, tiempo de tránsito, pedido del cliente" className={`${inputCls} w-full mt-1`} />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        {p.pendiente && (
+          <>
+            <button className={btnPrimary} onClick={p.onAplicar} disabled={p.guardando}>
+              {p.guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Aplicar
+            </button>
+            <button className={btnSecondary} onClick={p.onDescartar} disabled={p.guardando}>
+              Descartar
+            </button>
+          </>
+        )}
+        {p.porComex && !p.pendiente && (
+          <button className={btnSecondary} onClick={p.onVolver} disabled={p.guardando}>
+            <RotateCcw className="w-4 h-4" /> Volver a la sugerida
+          </button>
+        )}
+      </div>
+      {p.error && (
+        <p className="text-xs text-red-700 flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5" /> {p.error}
+        </p>
+      )}
+      <p className="text-[11px] text-gray-500">Cada cambio queda como orden de compra interna (quién, cuándo, antes → después, sobrecosto y motivo) y pide aprobar de nuevo.</p>
     </div>
   );
+}
+
+function Historial({ ruta }: { ruta: RutaLiquidacion }) {
+  const [ver, setVer] = useState(false);
+  if (ruta.historial.length === 0) return null;
+  return (
+    <div>
+      <button className="text-xs text-[#E5641F] hover:underline inline-flex items-center gap-1" onClick={() => setVer((v) => !v)}>
+        <History className="w-3.5 h-3.5" /> {ver ? 'Ocultar' : 'Ver'} cambios de ruta ({ruta.historial.length})
+      </button>
+      {ver && (
+        <ul className="mt-2 space-y-2">
+          {ruta.historial.map((c) => (
+            <li key={c.numero} className="rounded-lg border border-gray-200 p-2.5 text-[11px] text-gray-700">
+              <p className="font-semibold text-gray-900">
+                OC interna #{c.numero} · {fecha(c.fecha)} · {c.por ?? 'sin usuario'}
+                {c.sobrecosto !== null && c.sobrecosto !== 0 && <span className={c.sobrecosto > 0 ? 'text-red-700' : 'text-emerald-700'}> · sobrecosto {usd(c.sobrecosto)}</span>}
+              </p>
+              <p>
+                <span className="text-gray-400">Antes:</span> {c.antes}
+              </p>
+              <p>
+                <span className="text-gray-400">Después:</span> {c.despues}
+              </p>
+              <p className={c.motivo ? '' : 'text-red-600'}>
+                <span className="text-gray-400">Motivo:</span> {c.motivo ?? 'sin justificación'}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function EstadoBadge({ comex }: { comex: boolean }): ReactNode {
+  return comex ? (
+    <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-semibold">Escogido por COMEX</span>
+  ) : (
+    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">Sugerido</span>
+  );
+}
+
+function SinTarifas() {
+  return <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">El tarifario no tiene tarifas para esta ruta. Hay que cargar el archivo de fletes vigente.</p>;
 }
 
 function Filtro({ label, valor, opciones, onChange }: { label: string; valor: string; opciones: string[]; onChange: (v: string) => void }) {

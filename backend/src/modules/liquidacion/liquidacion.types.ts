@@ -171,7 +171,7 @@ export interface RutaLiquidacion {
   /** La que propone el sistema: la más barata vigente al puerto de la PF. */
   sugerida: { maritimaId: string | null; inlandId: string | null; costo: number | null };
   /** La que se está usando en esta liquidación. */
-  actual: { maritimaId: string | null; inlandId: string | null; costo: number | null; escogidaPorComex: boolean };
+  actual: { maritimaId: string | null; inlandId: string | null; costo: number | null; escogidaPorComex: boolean; maritimaPorComex: boolean; inlandPorComex: boolean };
   sobrecosto: number | null;
   historial: CambioRuta[];
 }

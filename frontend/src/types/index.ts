@@ -924,7 +924,7 @@ export interface RutaLiquidacion {
   opciones: { maritimas: OpcionMaritima[]; inland: OpcionInland[] };
   contenedores: number;
   sugerida: { maritimaId: string | null; inlandId: string | null; costo: number | null };
-  actual: { maritimaId: string | null; inlandId: string | null; costo: number | null; escogidaPorComex: boolean };
+  actual: { maritimaId: string | null; inlandId: string | null; costo: number | null; escogidaPorComex: boolean; maritimaPorComex: boolean; inlandPorComex: boolean };
   sobrecosto: number | null;
   historial: CambioRuta[];
 }

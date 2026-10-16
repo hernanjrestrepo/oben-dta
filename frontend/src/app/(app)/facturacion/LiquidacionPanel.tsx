@@ -14,8 +14,8 @@ import type {
   OrigenValor,
 } from '@/types';
 import { IncotermGuia } from './IncotermGuia';
-import { RutaPanel } from './RutaPanel';
-import { AlertCircle, ArrowRight, BadgeCheck, Calculator, FlaskConical, Loader2, Lock, Ship, Sparkles, X } from 'lucide-react';
+import { OtrosGastosCard, RutaMaritimaCard } from './RutaPanel';
+import { AlertCircle, ArrowRight, BadgeCheck, FlaskConical, Loader2, Lock, Ship, Sparkles, X } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -77,12 +77,6 @@ const TEXTOS: Array<[TextoKey, string, string]> = [
   ['paNcm', 'Partida arancelaria NCM', 'Ej: 3920.20'],
   ['paNaladi', 'Partida arancelaria NALADI', 'Ej: 3920.20.00'],
 ];
-const MONTOS_USA: Array<[MontoKey, string]> = [
-  ['inlandFreight', 'Inland Freight'],
-  ['entryFee', 'Entry Fee'],
-  ['importerSecurityFiling', 'Importer Security Filing'],
-  ['harborMaintenanceFee', 'Harbor Maintenance Fee'],
-];
 
 /**
  * Liquidación de comercio exterior con la fórmula de José (llamada y
@@ -103,7 +97,8 @@ export function LiquidacionPanel({
   const [reglas, setReglas] = useState<IncotermRegla[] | null>(null);
   const [incoterm, setIncoterm] = useState<string | null>(null);
   const [otros, setOtros] = useState('');
-  const [poliza, setPoliza] = useState('');
+  // La póliza vigente la pone el backend (José: 1.00053); ya no se digita en pantalla.
+  const [poliza] = useState('');
   // Solo lo que el usuario editó: lo demás lo resuelve el backend (ERP, maestro, cálculo) y se muestra con su origen.
   const [textos, setTextos] = useState<Partial<Record<TextoKey, string>>>({});
   const [montos] = useState<Partial<Record<MontoKey, string>>>({});
@@ -167,6 +162,13 @@ export function LiquidacionPanel({
     return () => clearTimeout(t);
   }, [pf, payload]);
 
+  /** COMEX guardó una ruta: se muestra la liquidación recalculada y se descarta cualquier cálculo en vuelo. */
+  function alGuardarRuta(d: LiquidacionDraft) {
+    reqId.current++;
+    setLiq(d);
+    setSim(null);
+  }
+
   const puedeAprobar = !!useAuthStore.getState().user?.permissions?.includes('exportations.approve');
   const [aprobando, setAprobando] = useState(false);
 
@@ -223,7 +225,6 @@ export function LiquidacionPanel({
     fob: suma((l) => l.valueFOB),
   };
   const textoValor = (k: TextoKey) => textos[k] ?? String(liq?.header[k] ?? '');
-  const montoValor = (k: MontoKey) => montos[k] ?? (isNum(liq?.header[k]) ? String(liq!.header[k]) : '');
   const origen = (k: keyof LiquidacionHeaderValues) => (textos[k as TextoKey] !== undefined || montos[k as MontoKey] !== undefined ? 'usuario' : liq?.headerOrigen[k]);
   const faltantes = agruparFaltantes(liq?.missing ?? []);
   const bloqueos = [
@@ -257,69 +258,24 @@ export function LiquidacionPanel({
       <div className="xl:col-span-5 space-y-5">
 
         {liq?.ruta && (
-          <RutaPanel
+          <RutaMaritimaCard pf={pf} ruta={liq.ruta} input={payload} onDraft={alGuardarRuta} />
+        )}
+
+        {liq && (
+          <OtrosGastosCard
             pf={pf}
-            ruta={liq.ruta}
-            esUSA={liq.esUSA}
+            liq={liq}
             input={payload}
-            onDraft={(d) => {
-              reqId.current++;
-              setLiq(d);
-              setSim(null);
-            }}
+            onDraft={alGuardarRuta}
+            aplica={!regla || pide('otrosGastos')}
+            incoterm={regla?.codigo ?? null}
+            otrosDigitados={otros}
+            setOtrosDigitados={setOtros}
           />
         )}
 
         <Card>
-          <CardHeader
-            icon={<Calculator className="w-4 h-4 text-[#F47735]" />}
-            title={`${liq?.ruta ? '3' : '2'} · Valores del envío`}
-            subtitle="Se calculan una vez para todo el envío y se reparten por kilos entre las líneas."
-          />
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field
-              label={
-                <>
-                  Flete total (USD) <OrigenBadge origen={liq?.totalesOrigen?.flete} />
-                </>
-              }
-              hint={regla && !pide('flete') ? `No aplica en ${regla.codigo}` : 'Sale de la ruta escogida del tarifario; no se digita.'}
-            >
-              <div className={`${inputCls} w-full bg-gray-50 text-gray-900 font-semibold tabular-nums`}>
-                {regla && !pide('flete') ? '—' : usd(liq?.totales.flete)}
-              </div>
-            </Field>
-            <Field
-              label={liq?.esUSA ? 'Otros costos destino (USD)' : 'Otros gastos (USD)'}
-              hint={
-                regla && !pide('otrosGastos')
-                  ? `No aplica en ${regla.codigo}`
-                  : liq?.esUSA
-                    ? 'Debe cuadrar con Destination Charges; si no, se reemplaza (José).'
-                    : undefined
-              }
-            >
-              <input value={otros} onChange={(e) => setOtros(e.target.value)} disabled={!!regla && !pide('otrosGastos')} inputMode="decimal" placeholder="0,00" className={`${inputCls} w-full disabled:bg-gray-50 disabled:text-gray-400`} />
-            </Field>
-            <Field
-              label="Valor de la póliza"
-              className="sm:col-span-2"
-              hint={regla && !pide('seguro') ? `No aplica en ${regla.codigo}` : 'Divisor global del seguro: FOB inicial = Subtotal ÷ póliza. Vigente según José; puede variar en el año.'}
-            >
-              <input
-                value={poliza}
-                onChange={(e) => setPoliza(e.target.value)}
-                disabled={!!regla && !pide('seguro')}
-                inputMode="decimal"
-                placeholder={isNum(liq?.totales.valorPoliza) ? `${liq!.totales.valorPoliza} (vigente)` : '1,00053'}
-                className={`${inputCls} w-full disabled:bg-gray-50 disabled:text-gray-400`}
-              />
-            </Field>
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title={`${liq?.ruta ? '4' : '3'} · Encabezado`} subtitle="Dirección y puertos vienen del ERP de Oben; se pueden modificar." />
+          <CardHeader title={`${liq?.ruta ? '4' : '2'} · Encabezado`} subtitle="Dirección y puertos vienen del ERP de Oben; se pueden modificar." />
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field
               className="sm:col-span-2"
@@ -354,42 +310,6 @@ export function LiquidacionPanel({
               <input value={textoValor('notes')} onChange={(e) => setTextos((t) => ({ ...t, notes: e.target.value }))} className={`${inputCls} w-full`} />
             </Field>
           </div>
-          {liq?.esUSA && (
-            <div className="px-4 pb-4">
-              <div className="rounded-lg border border-sky-200 bg-sky-50/50 p-3">
-                <p className="text-xs font-semibold text-sky-900 mb-2">Cargos de destino (USA)</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {MONTOS_USA.map(([k, label]) => (
-                    <Field
-                      key={k}
-                      label={
-                        <>
-                          {label} <OrigenBadge origen={origen(k)} />
-                        </>
-                      }
-                      hint={
-                        k === 'harborMaintenanceFee'
-                          ? '0.125% del FOB final (José)'
-                          : k === 'inlandFreight'
-                            ? 'Del transportador escogido en la ruta'
-                            : 'Fijo negociado en aduana (tarifario)'
-                      }
-                    >
-                      {/* Tarifas: nunca se digitan (Hernán, 15-oct). */}
-                      <div className={`${inputCls} w-full bg-white text-gray-900 tabular-nums`}>{montoValor(k) ? usd(Number(montoValor(k))) : '—'}</div>
-                    </Field>
-                  ))}
-                </div>
-                <div className="mt-3 flex items-center justify-between rounded-md bg-white border border-sky-200 px-3 py-2">
-                  <span className="text-xs text-gray-600">
-                    Destination Charges <OrigenBadge origen="calculado" />
-                    <span className="block text-[11px] text-gray-400">Inland + Entry + ISF + HMF</span>
-                  </span>
-                  <span className="font-semibold tabular-nums text-gray-900">{usd(liq.header.destinationCharges)}</span>
-                </div>
-              </div>
-            </div>
-          )}
         </Card>
       </div>
 
@@ -502,12 +422,8 @@ export function LiquidacionPanel({
                     )}
                   </table>
                 </div>
-                <p className="text-[11px] text-gray-400">
-                  Montos en USD. Unitarios por kg con 4 decimales redondeados; si la liquidación queda por debajo del valor de la mercancía, se ajusta el último ítem (José). Total y TotalUnidad se envían en 0 (José). Valor de la póliza aplicado:{' '}
-                  {isNum(liq.totales.valorPoliza) ? liq.totales.valorPoliza : '—'}.
-                </p>
 
-                {liq.ajustes.map((a) => (
+                {liq.ajustes.filter(esAvisoDeFaltante).map((a) => (
                   <div key={a} className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 flex gap-2">
                     <Sparkles className="w-4 h-4 shrink-0 mt-px" />
                     <span>
@@ -595,6 +511,11 @@ export function LiquidacionPanel({
     </div>
     </div>
   );
+}
+
+/** De los ajustes automáticos solo se muestra lo que avisa de un dato faltante, provisional o vencido. */
+function esAvisoDeFaltante(a: string): boolean {
+  return /PROVISIONAL|venció|ya no está|no hay tarifa|digítala|Sin tipo|Sin partida|no se pudo|falta/i.test(a);
 }
 
 function Monto({ valor, porKg }: { valor?: number | null; porKg?: number | null }) {
