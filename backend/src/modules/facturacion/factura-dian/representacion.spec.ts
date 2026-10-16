@@ -1,7 +1,7 @@
 import { PARTIDAS } from '../../liquidacion/partidas-arancelarias';
 import type { FacturacionDraft } from '../facturacion.types';
 import type { LiquidacionDraft } from '../../liquidacion/liquidacion.types';
-import { ciudadDeDireccion, construirFacturaDian, descripcionMaterial, fechaEmisionTxt } from './representacion';
+import { ciudadDeDireccion, construirFacturaDian, descripcionMaterial, descripcionNcm, fechaEmisionTxt } from './representacion';
 
 const DRAFT: FacturacionDraft = {
   numberOrderSales: 11187,
@@ -142,5 +142,17 @@ describe('ayudas de formato', () => {
     const d = new Date('2026-09-30T22:36:36Z');
     expect(fechaEmisionTxt('exportacion', d)).toBe('2026-09-30 05:36 PM');
     expect(fechaEmisionTxt('nacional', d)).toBe('2026-09-30 17:36:36-05:00');
+  });
+});
+
+describe('descripcionNcm (DescripcionSKU de Oben, 16-oct)', () => {
+  it('parte el texto de Oben en español // NCM inglés', () => {
+    expect(descripcionNcm('39.20.20.90.00', 'PELÍCULA DE POLIPROPILENO BIORIENTADA / BIAXIALLY ORIENTED POLYPROPYLENE FILM', null)).toBe(
+      ' PELÍCULA DE POLIPROPILENO BIORIENTADA // 39.20.20.90.00 BIAXIALLY ORIENTED POLYPROPYLENE FILM',
+    );
+  });
+  it('sin DescripcionSKU usa la tabla de partidas; sin nada, vacío', () => {
+    expect(descripcionNcm('3920.20.19', null, { descripcionEs: 'ES', descripcionEn: 'EN' } as never)).toBe(' ES // 3920.20.19 EN');
+    expect(descripcionNcm('3920.20.19', null, null)).toBe('');
   });
 });

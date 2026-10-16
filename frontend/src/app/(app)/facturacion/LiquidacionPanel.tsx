@@ -363,6 +363,7 @@ export function LiquidacionPanel({
                           <tr key={l.codSecLineFilm} className="hover:bg-gray-50/60">
                             <td className="px-4 py-2">
                               <p className="font-medium text-gray-900">{l.tipoPelicula}</p>
+                              {l.descripcion && <p className="text-[10px] text-gray-600 max-w-[260px] whitespace-normal">{l.descripcion}</p>}
                               <p className="text-[10px] text-gray-400">Línea {l.codSecLineFilm}</p>
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums">

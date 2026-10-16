@@ -855,6 +855,8 @@ export interface LiquidacionDraftLine {
   codSecLineFilm: number;
   tipoPelicula: string;
   precio: number;
+  /** DescripcionSKU de Oben (español / inglés). */
+  descripcion?: string | null;
   kilosTotal?: number | null;
   kilosTotalUnit?: number | null;
   valueFOB?: number | null;

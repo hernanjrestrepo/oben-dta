@@ -7,7 +7,6 @@ import {
   VALOR_POLIZA_VIGENTE,
   SimulatedIncotermCalculator,
   calculatorFromEnv,
-  igualarConFlete,
   noQuedarPorDebajo,
   prorratear,
   type LiquidacionLineContext,
@@ -182,24 +181,6 @@ describe('Calculadores de Liquidación', () => {
       expect(noQuedarPorDebajo(ok)).toBe(0);
       expect(ok[0].valueFOB).toBe(190);
       expect(noQuedarPorDebajo([{ precio: 2, kilosTotal: 100, valueTotal: 200, valueFreightUnit: 0.1 }])).toBe(0);
-    });
-
-    it('igualarConFlete (16-oct): FOB + flete + seguro + otros = valor de la mercancía exacto, ajustando el flete del último ítem', () => {
-      const lineas = [ctx(0, 'DAP'), ctx(1, 'DAP')].map((c) => ({ ...c.line, ...calc.compute(c) }));
-      noQuedarPorDebajo(lineas);
-      const fleteAntes = lineas[1].valueFreight as number;
-      const ajuste = igualarConFlete(lineas);
-      const suma = lineas.reduce((a, l) => a + (l.valueFOB ?? 0) + (l.valueFreight ?? 0) + (l.valueSure ?? 0) + (l.expensesOther ?? 0), 0);
-      expect(round2(suma)).toBe(round2(1785 + 848.1));
-      expect(lineas[1].valueFreight).toBe(round2(fleteAntes + ajuste));
-      expect(lineas[1].subTotal).toBe(round2(848.1 - (lineas[1].valueFreight as number)));
-      expect(igualarConFlete(lineas)).toBe(0); // ya cuadra
-    });
-
-    it('igualarConFlete: sin flete (FOB/FCA) no toca nada', () => {
-      const l = [{ precio: 2, kilosTotal: 100, valueTotal: 200, valueFOB: 199.99, valueFreight: 0 }];
-      expect(igualarConFlete(l)).toBe(0);
-      expect(l[0].valueFreight).toBe(0);
     });
 
     it('noQuedarPorDebajo: ajusta SOLO el último ítem de la PF', () => {

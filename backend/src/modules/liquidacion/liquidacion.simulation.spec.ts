@@ -143,7 +143,7 @@ const USA_CHARGES = { inlandFreight: 900, destinationCharges: 150 };
 
 /** Los avisos de partida, arancel y redondeo son ajenos a lo que prueban los ajustes de tarifas (el redondeo se prueba aparte). */
 const deTarifas = (a: string) =>
-  !a.startsWith('Sin partida en la tabla') && !a.startsWith('Sin tipo de película') && !a.startsWith('Arancel de importación') && !a.startsWith('Redondeo') && !a.startsWith('Cuadre');
+  !a.startsWith('Sin partida en la tabla') && !a.startsWith('Sin tipo de película') && !a.startsWith('Arancel de importación') && !a.startsWith('Redondeo');
 
 function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: boolean; requiereAprobacion?: boolean } = {}) {
   const sim = new ObenSim();
@@ -649,7 +649,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.simulated).toBe(true);
       // DAP de ejemplo sobre la PF 11357 real (ver liquidacion-value-calculator.spec.ts).
       expect(draft.incoterm).toBe('DAP');
-      expect(draft.lines[0]).toMatchObject({ valueFreight: 679.08, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15285.81 });
+      expect(draft.lines[0]).toMatchObject({ valueFreight: 679.34, valueSure: 8.19, expensesOther: 161.34, valueFOB: 15285.81 });
     });
 
     it('USA con cargos del maestro + digitados: también completo y simulado', async () => {
@@ -664,7 +664,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       const res = await service.submit('11357', { header: HEADER_CO });
 
       expect(res).toMatchObject({ dryRun: true, simulated: true });
-      expect(res.payloads?.details[0]).toMatchObject({ valueFreight: 679.08 });
+      expect(res.payloads?.details[0]).toMatchObject({ valueFreight: 679.34 });
       expect(sim.writes()).toHaveLength(0);
       expect(idem.rows.size).toBe(0);
     });
@@ -828,10 +828,12 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
         kilosTotalUnit: 1.9831,
         valueFOB: 35472.03,
       });
-      // 16-oct: FOB + flete + seguro + otros = valor de la mercancía EXACTO; el flete absorbe los centavos.
+      // 16-oct (Hernán): el flete en dólares NO se toca; el ajuste es al flete por unidad (−0.0001) y al precio
+      // final (+0.0001), y el FOB = precio final × kilos. La suma queda lo más cerca posible sin quedar por debajo.
       const l = draft.lines[0];
-      expect(Math.round(((l.valueFOB ?? 0) + (l.valueFreight ?? 0) + (l.valueSure ?? 0) + (l.expensesOther ?? 0)) * 100) / 100).toBe(39709.5);
-      expect(l.valueFreight).toBe(3148.76); // 39709.50 − 35472.03 − 19.37 − 1069.34
+      expect(l.valueFreight).toBe(3150);
+      const suma = Math.round(((l.valueFOB ?? 0) + (l.valueFreight ?? 0) + (l.valueSure ?? 0) + (l.expensesOther ?? 0)) * 100) / 100;
+      expect(suma).toBeGreaterThanOrEqual(39709.5);
       expect(draft.ajustes).toEqual(
         expect.arrayContaining([
           expect.stringContaining('Harbor Maintenance Fee = 0.125 % del FOB final'),
@@ -1081,7 +1083,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
         ]),
       );
       expect(draft.totales.flete).toBe(941); // la tarifa
-      expect(draft.lines[0].valueFreight).toBe(940.85); // con los centavos del cuadre (16-oct)
+      expect(draft.lines[0].valueFreight).toBe(941); // el flete en dólares no se toca (16-oct)
       expect(draft.missing).toEqual([]);
     });
 

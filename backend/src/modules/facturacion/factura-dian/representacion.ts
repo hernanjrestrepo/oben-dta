@@ -69,6 +69,19 @@ export function descripcionMaterial(codigo: string): string {
 }
 
 /**
+ * Texto de la partida en las observaciones ("ES // NCM EN"). Primero la
+ * DescripcionSKU que entrega Oben ("PELÍCULA … / BIAXIALLY …", 16-oct); si no
+ * viene, la de la tabla de partidas por tipo de película.
+ */
+export function descripcionNcm(ncm: string | null, descripcionSku: string | null, desc: PartidaArancelaria | null): string {
+  if (descripcionSku) {
+    const [es, en] = descripcionSku.split(/\s+\/\s+/);
+    return en ? ` ${es.trim()} // ${ncm ?? ''} ${en.trim()}` : ` ${descripcionSku}`;
+  }
+  return desc ? ` ${desc.descripcionEs} // ${ncm} ${desc.descripcionEn}` : '';
+}
+
+/**
  * Descripción de la partida para las observaciones. Primero la de los
  * materiales (BOPP y BOPP metalizado comparten 3920.20.19 pero se describen
  * distinto); si no se sabe el tipo, solo cuando la partida identifica UN tipo.
@@ -198,7 +211,7 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
       `PESO BRUTO / GROSS WEIGHT: ${e?.pesoBrutoKg ?? ''} KG`,
       `PALETAS / PALLETS: ${e?.pallets ?? ''}`,
       `BOBINAS / ROLLS: ${e?.bobinas ?? ''}`,
-      `PA NCM: ${ncm ?? ''}${desc ? ` ${desc.descripcionEs} // ${ncm} ${desc.descripcionEn}` : ''}`,
+      `PA NCM: ${ncm ?? ''}${descripcionNcm(ncm, liquidacion?.descripcionSku ?? null, desc)}`,
       `PA NALADI: ${naladi ?? ''} `,
       `TOTAL FOB: US$ ${enUS(subtotal)}`,
       `TOTAL FLETE / FREIGHT: US$ ${enUS(flete)}`,

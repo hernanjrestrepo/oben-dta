@@ -12,7 +12,7 @@ import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { LiquidacionRatesService, ciudadDe, type OpcionInland } from '../freight-rates/liquidacion-rates.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
-import { LIQUIDACION_VALUE_CALCULATOR, igualarConFlete, noQuedarPorDebajo, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
+import { LIQUIDACION_VALUE_CALCULATOR, noQuedarPorDebajo, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
 import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-settlement-defaults';
 import { SP_PROFORMAS_COMEX, incotermDeCheck, incotermDeProforma, paisDeProforma, parsearProformasComex } from './incoterm-de-oben';
@@ -223,8 +223,10 @@ export class LiquidacionService {
       paisDeDireccion(defaultsDeOben(check).direccion);
     const esUSA = isUSA(pais);
 
-    // Partida arancelaria de Colombia por SKU (campo Parida de spCheckSettlement, 6-oct).
-    const paridas = check.Detalle.map((l) => String(l.Parida ?? '').trim());
+    // Partida arancelaria de Colombia por SKU (spCheckSettlement: 'Parida' el 6-oct, 'Partida' desde el 16-oct).
+    const paridas = check.Detalle.map((l) => String(l.Partida ?? l.Parida ?? '').trim());
+    const descripciones = check.Detalle.map((l) => String(l.DescripcionSKU ?? '').trim());
+    const descripcionSku = descripciones.every((d) => d && d === descripciones[0]) ? descripciones[0] : null;
     const paridasDistintas = [...new Set(paridas.filter(Boolean))];
     const paridaComun = paridasDistintas.length === 1 && paridas.every(Boolean) ? paridasDistintas[0] : null;
     const paridaMezcla = paridasDistintas.length > 1;
@@ -434,13 +436,12 @@ export class LiquidacionService {
       const r = this.calcularLineas(baseLines, input.lines, (l, indice) =>
         this.calculator.compute({ ...envio, indice, pais, esUSA, incoterm, totales: t, line: l }),
       );
-      // Si el usuario sobrescribió el último ítem, lo suyo manda: no se ajusta.
+      // José: si por los decimales la suma queda por debajo del valor de la mercancía, al último ítem se le
+      // resta 0.0001 al flete por unidad y se le suma al precio final (el FOB final = precio final × kilos
+      // sube). El flete en dólares NO se toca (Hernán, 16-oct). Si el usuario sobrescribió el último ítem, manda lo suyo.
       const ultimo = baseLines.at(-1);
-      const editado = !ultimo || !!input.lines?.[String(ultimo.codSecLineFilm)];
-      const pasosAjuste = editado ? 0 : noQuedarPorDebajo(r.lines);
-      // Hernán (16-oct): la suma debe ser IGUAL al valor de la mercancía; los centavos van al flete.
-      const ajusteFlete = editado ? 0 : igualarConFlete(r.lines);
-      return { ...r, pasosAjuste, ajusteFlete };
+      const pasosAjuste = ultimo && !input.lines?.[String(ultimo.codSecLineFilm)] ? noQuedarPorDebajo(r.lines) : 0;
+      return { ...r, pasosAjuste };
     };
     // USA con DAP/DDP sin "otros costos destino" digitados: la primera pasada
     // usa 0 para poder calcular el FOB (y con él el HMF); después se toman de
@@ -517,16 +518,10 @@ export class LiquidacionService {
       }
     }
 
-    if (calculo.ajusteFlete !== 0) {
-      const ultima = calculo.lines.at(-1)!;
-      ajustes.push(
-        `Cuadre con el valor de la mercancía: el flete de la línea ${ultima.codSecLineFilm} se ajustó en USD ${calculo.ajusteFlete.toFixed(2)} para que FOB + flete + seguro + otros sea igual al valor total.`,
-      );
-    }
     if (calculo.pasosAjuste > 0) {
       const ultima = calculo.lines.at(-1)!;
       ajustes.push(
-        `Redondeo (José, 15-oct): al último ítem (línea ${ultima.codSecLineFilm}) se le restaron ${(calculo.pasosAjuste * 0.0001).toFixed(4)} al flete por unidad para que la liquidación no quede por debajo del valor de la mercancía.`,
+        `Redondeo (José, 15-oct): al último ítem (línea ${ultima.codSecLineFilm}) se le restaron ${(calculo.pasosAjuste * 0.0001).toFixed(4)} al flete por unidad y se sumaron al precio final, para que la liquidación no quede por debajo del valor de la mercancía.`,
       );
     }
 
@@ -571,7 +566,7 @@ export class LiquidacionService {
       headerOrigen,
       totales,
       totalesOrigen,
-      lines: calculo.lines,
+      lines: calculo.lines.map((l, i) => ({ ...l, descripcion: descripciones[i] || null })),
       ajustes,
       missing,
       readyToSubmit: missing.length === 0,
@@ -579,6 +574,7 @@ export class LiquidacionService {
       simulated: this.calculator.simulated,
       sinConfirmar,
       partidaTipo: partida,
+      descripcionSku,
       ruta: opcionesRuta
         ? {
             opciones: opcionesRuta,

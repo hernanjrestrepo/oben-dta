@@ -10,8 +10,11 @@ export interface CheckSettlementLine {
   TipoPelicula: string;
   Precio: number;
   KilosTotales: number;
-  /** Partida arancelaria de Colombia del SKU (José agregó Parida y TipoMaterial, 6-oct). */
+  /** Partida arancelaria de Colombia del SKU (José agregó Parida y TipoMaterial, 6-oct; el 16-oct Oben la renombró a Partida). */
+  Partida?: string | null;
   Parida?: string | null;
+  /** Descripción oficial del SKU en español / inglés (Oben, 16-oct). */
+  DescripcionSKU?: string | null;
   TipoMaterial?: string | null;
   /** Línea de película en OBEN MAS: BOPP, BOPET o PET-S (José, 7-oct). */
   Linea?: string | null;
@@ -104,6 +107,8 @@ export interface LiquidacionDraftLine extends LiquidacionLineValues {
   codSecLineFilm: number;
   tipoPelicula: string;
   precio: number;
+  /** DescripcionSKU de Oben (español / inglés), si viene. */
+  descripcion?: string | null;
 }
 
 export interface LiquidacionDraft {
@@ -151,6 +156,8 @@ export interface LiquidacionDraft {
   partidaTipo?: import('./partidas-arancelarias').PartidaArancelaria | null;
   /** Ruta y tarifas: opciones del tarifario, la sugerida (más barata vigente) y la escogida por COMEX. */
   ruta?: RutaLiquidacion | null;
+  /** DescripcionSKU común a todas las líneas (va en la observación de la partida de la factura), o null. */
+  descripcionSku?: string | null;
 }
 
 /** Un cambio de ruta de COMEX (orden de compra interna). */
