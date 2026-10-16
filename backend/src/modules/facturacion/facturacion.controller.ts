@@ -65,6 +65,13 @@ export class FacturacionController {
     return this.facturacion.destinatarios();
   }
 
+  /** Proformas de exportación pendientes de aprobación de COMEX (16-oct). */
+  @Get('proformas-pendientes')
+  @RequirePermission('invoices.read')
+  proformasPendientes() {
+    return this.facturacion.proformasPendientes();
+  }
+
   /** Órdenes de venta de una proforma: la pantalla busca por PF (reunión del 15-oct). */
   @Get('proforma/:numberPF')
   @RequirePermission('invoices.read')

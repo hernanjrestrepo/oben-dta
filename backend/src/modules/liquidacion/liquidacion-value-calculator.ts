@@ -181,6 +181,31 @@ export function noQuedarPorDebajo(lines: Array<LiquidacionLineValues & { precio:
 }
 
 /**
+ * Hernán (16-oct): la suma FOB final + flete + seguro + otros gastos debe ser
+ * IGUAL al valor de la mercancía, no solo "no menor"; la diferencia que dejan
+ * los decimales se absorbe en el flete (en dólares) del último ítem. Va
+ * después de `noQuedarPorDebajo`: los unitarios y el FOB quedan como Oben los
+ * calcula y solo se mueven los centavos del flete. Ej. PF 11237 con flete
+ * 3151.50: FOB 35470.24 + 3151.50 + 19.37 + 1069.34 = 39710.45 → el flete
+ * del último ítem queda en 3150.55 y la suma da 39709.50.
+ *
+ * Modifica `lines` y devuelve el ajuste aplicado al flete (USD; 0 = nada).
+ */
+export function igualarConFlete(lines: Array<LiquidacionLineValues & { precio: number }>): number {
+  const ultimo = lines.at(-1);
+  if (!ultimo || !lines.every((l) => esNum(l.valueFOB) && esNum(l.valueTotal)) || !esNum(ultimo.valueFreight)) return 0;
+  const valorMercancia = round2(lines.reduce((a, l) => a + (l.valueTotal as number), 0));
+  const liquidado = round2(lines.reduce((a, l) => a + (l.valueFOB as number) + (l.valueFreight ?? 0) + (l.valueSure ?? 0) + (l.expensesOther ?? 0), 0));
+  const diferencia = round2(valorMercancia - liquidado);
+  const nuevoFlete = round2(ultimo.valueFreight + diferencia);
+  // Sin flete (FOB/FCA) no hay de dónde ajustar; un flete negativo no tiene sentido.
+  if (diferencia === 0 || ultimo.valueFreight === 0 || nuevoFlete < 0) return 0;
+  ultimo.valueFreight = nuevoFlete;
+  if (esNum(ultimo.valueTotal)) ultimo.subTotal = round2(ultimo.valueTotal - nuevoFlete);
+  return diferencia;
+}
+
+/**
  * Datos del envío de EJEMPLO para la simulación. NO son de Oben ni de ningún
  * forwarder: solo existen para poder probar el flujo completo de Liquidación
  * → Facturación en dev/demo sin que alguien digite flete/póliza.

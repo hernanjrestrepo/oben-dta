@@ -11,10 +11,10 @@ import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { LiquidacionRatesService, ciudadDe, type OpcionInland } from '../freight-rates/liquidacion-rates.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
-import { LIQUIDACION_VALUE_CALCULATOR, noQuedarPorDebajo, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
+import { LIQUIDACION_VALUE_CALCULATOR, igualarConFlete, noQuedarPorDebajo, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
 import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-settlement-defaults';
-import { SP_PROFORMAS_COMEX, incotermDeCheck, incotermDeProforma, paisDeProforma } from './incoterm-de-oben';
+import { SP_PROFORMAS_COMEX, incotermDeCheck, incotermDeProforma, paisDeProforma, parsearProformasComex } from './incoterm-de-oben';
 import { unwrapCheckSettlement } from './check-settlement-respuesta';
 import { ARANCEL_USA_PCT, partidaComun } from './partidas-arancelarias';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
@@ -31,6 +31,7 @@ import type {
   LiquidacionSubmitOptions,
   LiquidacionSubmitResult,
   LiquidacionTotalesInput,
+  ProformaPendienteComex,
 } from './liquidacion.types';
 
 const WORKFLOW_NAME = 'liquidacion';
@@ -431,8 +432,11 @@ export class LiquidacionService {
       );
       // Si el usuario sobrescribió el último ítem, lo suyo manda: no se ajusta.
       const ultimo = baseLines.at(-1);
-      const pasosAjuste = ultimo && !input.lines?.[String(ultimo.codSecLineFilm)] ? noQuedarPorDebajo(r.lines) : 0;
-      return { ...r, pasosAjuste };
+      const editado = !ultimo || !!input.lines?.[String(ultimo.codSecLineFilm)];
+      const pasosAjuste = editado ? 0 : noQuedarPorDebajo(r.lines);
+      // Hernán (16-oct): la suma debe ser IGUAL al valor de la mercancía; los centavos van al flete.
+      const ajusteFlete = editado ? 0 : igualarConFlete(r.lines);
+      return { ...r, pasosAjuste, ajusteFlete };
     };
     // USA con DAP/DDP sin "otros costos destino" digitados: la primera pasada
     // usa 0 para poder calcular el FOB (y con él el HMF); después se toman de
@@ -509,6 +513,12 @@ export class LiquidacionService {
       }
     }
 
+    if (calculo.ajusteFlete !== 0) {
+      const ultima = calculo.lines.at(-1)!;
+      ajustes.push(
+        `Cuadre con el valor de la mercancía: el flete de la línea ${ultima.codSecLineFilm} se ajustó en USD ${calculo.ajusteFlete.toFixed(2)} para que FOB + flete + seguro + otros sea igual al valor total.`,
+      );
+    }
     if (calculo.pasosAjuste > 0) {
       const ultima = calculo.lines.at(-1)!;
       ajustes.push(
@@ -591,6 +601,31 @@ export class LiquidacionService {
           }
         : null,
     };
+  }
+
+  /**
+   * Proformas pendientes de aprobación de COMEX (pedido de Hernán, 16-oct): las de
+   * EXPORTACIÓN del reporte de proformas abiertas de Oben que todavía no tienen
+   * aprobación en Oben Xmart. Las más nuevas primero.
+   */
+  async proformasPendientesComex(): Promise<ProformaPendienteComex[]> {
+    const res = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: SP_PROFORMAS_COMEX, numberOrderSales: '0' }, OBEN_QUERY_OPTIONS);
+    if (!res.ok) throw new BadRequestException(res.error ?? 'Oben no respondió el reporte de proformas.');
+    const aprobadas = new Set((this.aprobaciones ? await this.aprobaciones.find({ where: { tenantId: this.ctx.tenantId } }) : []).map((a) => a.numberPF));
+    const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+    return parsearProformasComex(res.data)
+      .filter((f) => /EXPORT/i.test(String(f.Mercado ?? '')))
+      .map((f) => ({
+        numberPF: String(f.NroProforma ?? f.Proforma ?? '').trim(),
+        cliente: texto(f.Cliente),
+        pais: texto(f.Pais),
+        incoterm: texto(f.Incoterms),
+        ordenesVenta: (Array.isArray(f.OrdenesVenta) ? (f.OrdenesVenta as Array<Record<string, unknown>>) : [])
+          .map((o) => Number(o?.NroOrdenVenta))
+          .filter((n) => Number.isInteger(n) && n > 0),
+      }))
+      .filter((p) => p.numberPF && !aprobadas.has(p.numberPF))
+      .sort((a, b) => Number(b.numberPF) - Number(a.numberPF));
   }
 
   /** Ruta vigente que escogió COMEX para la PF (su último cambio), o null = la sugerida. */

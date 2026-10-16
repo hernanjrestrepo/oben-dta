@@ -10,12 +10,11 @@ import type {
   IncotermRegla,
   LiquidacionDraft,
   LiquidacionHeaderValues,
-  LiquidacionSimulacion,
   OrigenValor,
 } from '@/types';
 import { IncotermGuia } from './IncotermGuia';
 import { OtrosGastosCard, RutaMaritimaCard } from './RutaPanel';
-import { AlertCircle, ArrowRight, BadgeCheck, FlaskConical, Loader2, Lock, Ship, Sparkles, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, BadgeCheck, Loader2, Ship, Sparkles } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -106,8 +105,6 @@ export function LiquidacionPanel({
   const [liq, setLiq] = useState<LiquidacionDraft | null>(null);
   const [calculando, setCalculando] = useState(true);
   const [error, setError] = useState('');
-  const [sim, setSim] = useState<LiquidacionSimulacion | null>(null);
-  const [simulando, setSimulando] = useState(false);
   const reqId = useRef(0);
   const primera = useRef(true);
   const onEstadoRef = useRef(onEstado);
@@ -149,7 +146,6 @@ export function LiquidacionPanel({
           if (id !== reqId.current) return;
           setLiq(d);
           setError('');
-          setSim(null);
           onEstadoRef.current({ calculada: true, faltan: agruparFaltantes(d.missing).visibles.length, pendientes: d.sinConfirmar.length, incoterm: d.incoterm });
         })
         .catch((err) => {
@@ -166,7 +162,6 @@ export function LiquidacionPanel({
   function alGuardarRuta(d: LiquidacionDraft) {
     reqId.current++;
     setLiq(d);
-    setSim(null);
   }
 
   const puedeAprobar = !!useAuthStore.getState().user?.permissions?.includes('exportations.approve');
@@ -185,18 +180,6 @@ export function LiquidacionPanel({
     }
   }
 
-  async function simular() {
-    if (!pf) return;
-    try {
-      setSimulando(true);
-      setError('');
-      setSim(await api.simulateLiquidacion(pf, payload));
-    } catch (err) {
-      setError(extractMessage(err, 'No se pudo simular el envío.'));
-    } finally {
-      setSimulando(false);
-    }
-  }
 
   if (!pf) {
     return (
@@ -227,12 +210,6 @@ export function LiquidacionPanel({
   const textoValor = (k: TextoKey) => textos[k] ?? String(liq?.header[k] ?? '');
   const origen = (k: keyof LiquidacionHeaderValues) => (textos[k as TextoKey] !== undefined || montos[k as MontoKey] !== undefined ? 'usuario' : liq?.headerOrigen[k]);
   const faltantes = agruparFaltantes(liq?.missing ?? []);
-  const bloqueos = [
-    ...(faltantes.visibles.length ? [`Faltan ${faltantes.visibles.length} datos`] : []),
-    ...(liq?.sinConfirmar.length ? ['Pendiente de validar con Oben'] : []),
-    ...(liq?.simulated ? ['Datos del envío simulados'] : []),
-    ...(liq?.readyToSubmit && !liq.aprobacion?.vigente ? ['Falta la aprobación de COMEX'] : []),
-  ];
 
   return (
     <div className="space-y-5">
@@ -444,10 +421,6 @@ export function LiquidacionPanel({
 
           {liq && (
             <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap items-center gap-2 bg-gray-50/50 rounded-b-xl">
-              <button className={btnSecondary} onClick={() => void simular()} disabled={simulando || !liq.readyToSubmit}>
-                {simulando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
-                Simular envío a Oben
-              </button>
               {liq.aprobacion?.vigente ? (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
                   <BadgeCheck className="w-4 h-4" /> Aprobada por COMEX{liq.aprobacion.por ? ` · ${liq.aprobacion.por}` : ''}
@@ -458,55 +431,14 @@ export function LiquidacionPanel({
                   {liq.aprobacion?.existe ? 'Aprobar de nuevo (COMEX)' : 'Aprobar liquidación (COMEX)'}
                 </button>
               ) : null}
-              <button className={`${btnSecondary} cursor-not-allowed`} disabled title={bloqueos.join(' · ') || 'Se habilita al validar con Oben'}>
-                <Lock className="w-4 h-4" /> Enviar al ERP de Oben
-              </button>
-              <span className="text-[11px] text-gray-500">{bloqueos.length ? bloqueos.join(' · ') : 'Envío real pendiente de validación con Oben'}</span>
+              {liq.readyToSubmit && !liq.aprobacion?.vigente && <span className="text-[11px] text-amber-700">Falta la aprobación de COMEX</span>}
               <button className={`${btnPrimary} ml-auto`} onClick={onContinuar}>
-                Continuar al documento <ArrowRight className="w-4 h-4" />
+                Continuar al envío <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           )}
         </Card>
 
-        {sim?.payloads && (
-          <Card className="border-emerald-200">
-            <CardHeader
-              icon={<FlaskConical className="w-4 h-4 text-emerald-600" />}
-              title="Simulación del envío al ERP de Oben"
-              subtitle={`Se crearía 1 encabezado (spSettlement_Head) y ${sim.payloads.details.length} detalle${sim.payloads.details.length === 1 ? '' : 's'} (spSettlement_Detail). No se escribió nada.`}
-              right={
-                <button onClick={() => setSim(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar">
-                  <X className="w-4 h-4 text-gray-400" />
-                </button>
-              }
-            />
-            <div className="overflow-x-auto">
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="bg-gray-50 text-gray-500">
-                    {['CodSecLineFilm', 'KilosTotal', 'KilosTotalUnit', 'ValueTotal', 'ValueFreight', 'SubTotal', 'ValueSure', 'ExpensesOther', 'ValueFOB', 'Total', 'TotalUnidad'].map((h) => (
-                      <th key={h} className="px-3 py-2 text-right font-mono font-medium first:text-left">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 font-mono">
-                  {sim.payloads.details.map((d) => (
-                    <tr key={String(d.codSecLineFilm)}>
-                      {['codSecLineFilm', 'kilosTotal', 'kilosTotalUnit', 'valueTotal', 'valueFreight', 'subTotal', 'valueSure', 'expensesOther', 'valueFOB', 'total', 'totalUnidad'].map((k) => (
-                        <td key={k} className="px-3 py-1.5 text-right first:text-left tabular-nums text-gray-700">
-                          {String(d[k] ?? '—')}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        )}
       </div>
     </div>
     </div>

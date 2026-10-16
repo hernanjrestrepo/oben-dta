@@ -668,6 +668,11 @@ export class FacturacionService {
     return { liquidacion, trm, cliente: c ? { correo: c.email, telefono: c.phone, direccion: c.address } : null };
   }
 
+  /** Proformas de exportación pendientes de aprobación de COMEX (la pantalla las lista para escoger). */
+  async proformasPendientes() {
+    return this.liquidacion ? this.liquidacion.proformasPendientesComex() : [];
+  }
+
   /**
    * Órdenes de venta de una proforma: Comex busca por PF, no por OV (reunión
    * del 15-oct). Primero el reporte de proformas de Oben, que trae TODAS las

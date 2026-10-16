@@ -262,3 +262,12 @@ export interface CierreEnvioResult {
   missing?: string[];
   error?: string;
 }
+
+/** Proforma de exportación abierta en Oben que COMEX aún no aprobó en Oben Xmart. */
+export interface ProformaPendienteComex {
+  numberPF: string;
+  cliente: string | null;
+  pais: string | null;
+  incoterm: string | null;
+  ordenesVenta: number[];
+}

@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
-import type { FacturacionDraft, FacturacionHistorial, FacturacionInput, OrdenReciente, ProformaOrdenes } from '@/types';
+import type { FacturacionDraft, FacturacionHistorial, FacturacionInput, ProformaOrdenes, ProformaPendienteComex } from '@/types';
 import {
   AlertCircle,
   CheckCircle2,
-  Clock,
-  FileText,
+  ClipboardList,
   Globe2,
   Loader2,
   MapPin,
@@ -21,11 +20,11 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { LiquidacionPanel, type LiquidacionEstado } from './LiquidacionPanel';
-import { DocumentoPanel, TIPO_LABEL } from './DocumentoPanel';
+import { TIPO_LABEL } from './DocumentoPanel';
 import { EnvioPanel } from './EnvioPanel';
 import { Card, SimuladoBadge, btnSecondary, fecha, usd } from './ui';
 
-type Paso = 'liquidacion' | 'documento' | 'envio';
+type Paso = 'liquidacion' | 'envio';
 type Tono = 'ok' | 'warn' | 'info' | 'idle' | 'na';
 
 const TONO: Record<Tono, string> = {
@@ -51,10 +50,11 @@ export default function FacturacionPage() {
   const [historial, setHistorial] = useState<FacturacionHistorial | null>(null);
   const [input, setInput] = useState<FacturacionInput>({});
   const [loading, setLoading] = useState(false);
-  const [actualizando, setActualizando] = useState(false);
+  const [, setActualizando] = useState(false);
   const [error, setError] = useState('');
   const [paso, setPaso] = useState<Paso>('liquidacion');
-  const [recientes, setRecientes] = useState<OrdenReciente[] | null>(null);
+  // Proformas de exportación pendientes de aprobación de COMEX (Hernán, 16-oct): reemplazan las "órdenes recientes".
+  const [pendientes, setPendientes] = useState<ProformaPendienteComex[] | null>(null);
   const [liqEstado, setLiqEstado] = useState<LiquidacionEstado | null>(null);
   const reqId = useRef(0);
   const primeraCarga = useRef(true);
@@ -86,7 +86,7 @@ export default function FacturacionPage() {
       setDraft(d);
       setHistorial(h);
       if (!pf && d.proforma) setPfInput(d.proforma);
-      setPaso(d.kind === 'exportacion' ? 'liquidacion' : 'documento');
+      setPaso(d.kind === 'exportacion' ? 'liquidacion' : 'envio');
     } catch (err) {
       if (id === reqId.current) setError(extractMessage(err, `No se pudo consultar la orden de venta ${n} en el ERP de Oben.`));
     } finally {
@@ -119,9 +119,9 @@ export default function FacturacionPage() {
 
   useEffect(() => {
     api
-      .getOrdenesRecientes()
-      .then(setRecientes)
-      .catch(() => setRecientes([]));
+      .getProformasPendientes()
+      .then(setPendientes)
+      .catch(() => setPendientes([]));
     // Enlace directo (/facturacion?pf=11208, o el viejo /facturacion?ov=11147): se carga fuera del render del efecto.
     const params = new URLSearchParams(window.location.search);
     const pf = (params.get('pf') ?? '').trim();
@@ -198,17 +198,8 @@ export default function FacturacionPage() {
                   : { estado: 'Lista', tono: 'ok' as Tono }),
         },
         {
-          key: 'documento',
-          n: 2,
-          titulo: 'Documento',
-          icon: FileText,
-          ...(draft.readyToGenerate
-            ? { estado: 'Listo para generar', tono: 'ok' as Tono }
-            : { estado: `Faltan ${draft.missing.length} dato${draft.missing.length === 1 ? '' : 's'}`, tono: 'warn' as Tono }),
-        },
-        {
           key: 'envio',
-          n: 3,
+          n: 2,
           titulo: 'Envío a Facturación',
           icon: Send,
           ...(envioOk ? { estado: `Enviado ${fecha(envioOk.fecha)}`, tono: 'ok' as Tono } : { estado: 'Pendiente', tono: 'idle' as Tono }),
@@ -280,33 +271,34 @@ export default function FacturacionPage() {
             ))}
           </div>
         )}
-        {recientes && recientes.length > 0 && (
+        {pendientes && pendientes.length > 0 && (
           <div className="mt-3">
             <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1.5 flex items-center gap-1">
-              <Clock className="w-3 h-3" /> Órdenes recientes — aprobadas en corte
+              <ClipboardList className="w-3 h-3" /> Proformas pendientes de aprobación de COMEX ({pendientes.length})
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {recientes.map((r) => {
-                const activa = draft?.numberOrderSales === r.numberOrderSales;
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+              {pendientes.map((p) => {
+                const activa = proforma?.numberPF === p.numberPF || draft?.proforma === p.numberPF;
                 return (
                   <button
-                    key={r.numberOrderSales}
-                    onClick={() => void cargar(r.numberOrderSales)}
+                    key={p.numberPF}
+                    onClick={() => void cargarProforma(p.numberPF)}
                     disabled={loading}
                     className={`group inline-flex items-center gap-1.5 pl-2.5 pr-3 py-1 rounded-full border text-xs transition ${
                       activa ? 'border-[#F47735] bg-orange-50 text-[#C4521A]' : 'border-gray-200 bg-white text-gray-700 hover:border-[#F47735]/50 hover:bg-orange-50/50'
                     }`}
-                    title={`Aprobada ${fecha(r.fecha)}`}
-                    aria-label={`Cargar OV ${r.numberOrderSales}${r.cliente ? ` · ${r.cliente}` : ''}`}
+                    title={[p.cliente, p.pais, p.incoterm, p.ordenesVenta.length ? `OV ${p.ordenesVenta.join(', ')}` : null].filter(Boolean).join(' · ')}
+                    aria-label={`Cargar PF ${p.numberPF}${p.cliente ? ` · ${p.cliente}` : ''}`}
                   >
-                    <span className="font-semibold">OV {r.numberOrderSales}</span>
-                    {r.cliente && <span className="text-gray-500 max-w-[180px] truncate">{r.cliente}</span>}
+                    <span className="font-semibold">PF {p.numberPF}</span>
+                    {p.cliente && <span className="text-gray-500 max-w-[180px] truncate">{p.cliente}</span>}
                   </button>
                 );
               })}
             </div>
           </div>
         )}
+        {pendientes && pendientes.length === 0 && <p className="mt-3 text-[11px] text-gray-400">No hay proformas de exportación pendientes de aprobación de COMEX.</p>}
       </Card>
 
       {error && (
@@ -380,7 +372,7 @@ export default function FacturacionPage() {
           </Card>
 
           {/* Pasos */}
-          <nav ref={pasosRef} className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <nav ref={pasosRef} className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {pasos.map((p) => {
               const activo = paso === p.key;
               const Icon = p.icon;
@@ -415,26 +407,17 @@ export default function FacturacionPage() {
           {/* Paneles: se mantienen montados para no perder lo digitado al cambiar de paso */}
           <div className={paso === 'liquidacion' ? '' : 'hidden'}>
             {exportacion ? (
-              <LiquidacionPanel factura={draft} onEstado={setLiqEstado} onContinuar={() => irA('documento')} />
+              <LiquidacionPanel factura={draft} onEstado={setLiqEstado} onContinuar={() => irA('envio')} />
             ) : (
               <Card className="p-8 text-center">
                 <MapPin className="w-8 h-8 text-teal-600 mx-auto" />
                 <p className="mt-3 font-semibold text-gray-900">La liquidación de comercio exterior aplica a pedidos de exportación</p>
-                <p className="text-sm text-gray-500 mt-1">Este pedido es {draft.kind ? TIPO_LABEL[draft.kind].toLowerCase() : 'sin clasificar'}: pasa directo al documento de facturación.</p>
-                <button className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg text-sm font-medium" onClick={() => irA('documento')}>
-                  Ir al documento
+                <p className="text-sm text-gray-500 mt-1">Este pedido es {draft.kind ? TIPO_LABEL[draft.kind].toLowerCase() : 'sin clasificar'}: pasa directo al envío a Facturación.</p>
+                <button className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg text-sm font-medium" onClick={() => irA('envio')}>
+                  Ir al envío
                 </button>
               </Card>
             )}
-          </div>
-          <div className={paso === 'documento' ? '' : 'hidden'}>
-            <DocumentoPanel
-              draft={draft}
-              input={input}
-              onInput={(patch) => setInput((prev) => ({ ...prev, ...patch }))}
-              actualizando={actualizando}
-              onContinuar={() => irA('envio')}
-            />
           </div>
           <div className={paso === 'envio' ? '' : 'hidden'}>
             <EnvioPanel draft={draft} input={input} historial={historial} onEnviado={() => void refrescarHistorial()} />
@@ -456,14 +439,13 @@ function Dato({ label, valor }: { label: string; valor: string | null }) {
 function Bienvenida() {
   const pasos = [
     { icon: Ship, titulo: 'Liquidación', texto: 'Incoterm, flete, seguro y otros gastos con la fórmula de Oben; FOB final por línea.' },
-    { icon: FileText, titulo: 'Documento', texto: 'Borrador de facturación con precios y kilos reales del ERP, listo en PDF.' },
     { icon: Send, titulo: 'Envío', texto: 'A Facturación/COMEX con la factura electrónica, una sola vez por orden.' },
   ];
   return (
     <Card className="p-8">
       <div className="text-center max-w-2xl mx-auto">
         <p className="text-lg font-semibold text-gray-900">Carga una proforma para empezar</p>
-        <p className="text-sm text-gray-500 mt-1">El sistema consulta la proforma y sus órdenes de venta en el ERP de Oben, la clasifica (exportación o nacional) y te guía en tres pasos.</p>
+        <p className="text-sm text-gray-500 mt-1">El sistema consulta la proforma y sus órdenes de venta en el ERP de Oben, la clasifica (exportación o nacional) y te guía en dos pasos.</p>
       </div>
       <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
         {pasos.map((p, i) => (

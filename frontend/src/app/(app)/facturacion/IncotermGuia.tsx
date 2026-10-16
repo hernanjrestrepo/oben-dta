@@ -1,13 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import type { ConceptoLiquidacion, IncotermRegla } from '@/types';
 import {
   Anchor,
   ArrowDownToLine,
   ArrowUpFromLine,
   Check,
-  ChevronDown,
   FileCheck,
   Landmark,
   Package,
@@ -96,7 +94,6 @@ export function IncotermGuia({
   delErp: boolean;
   onSeleccionar: (codigo: string) => void;
 }) {
-  const [verTabla, setVerTabla] = useState(false);
   const codigos = Object.keys(INCOTERMS_2020);
   const info = seleccionado ? INCOTERMS_2020[seleccionado] : undefined;
   const regla = reglas?.find((r) => r.codigo === seleccionado);
@@ -179,14 +176,6 @@ export function IncotermGuia({
         </div>
       )}
 
-      <button
-        onClick={() => setVerTabla((v) => !v)}
-        className="inline-flex items-center gap-1 text-xs font-medium text-[#C4521A] hover:underline"
-      >
-        <ChevronDown className={`w-3.5 h-3.5 transition ${verTabla ? 'rotate-180' : ''}`} />
-        {verTabla ? 'Ocultar' : 'Ver'} los 11 Incoterms lado a lado
-      </button>
-      {verTabla && <TablaIncoterms seleccionado={seleccionado} onSeleccionar={onSeleccionar} />}
     </div>
   );
 }
@@ -243,57 +232,6 @@ function BarraEtapas({ info }: { info: IncotermInfo }) {
           </span>
         </div>
       </div>
-    </div>
-  );
-}
-
-/** Matriz clásica de Incoterms: 11 filas × 12 etapas. */
-function TablaIncoterms({ seleccionado, onSeleccionar }: { seleccionado: string | null; onSeleccionar: (c: string) => void }) {
-  return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full min-w-[820px] text-[11px] border-collapse">
-        <thead>
-          <tr className="bg-gray-50">
-            <th className="px-2 py-2 text-left font-semibold text-gray-600 w-16">Incoterm</th>
-            {ETAPAS.map((e, i) => {
-              const Icon = e.icon;
-              return (
-                <th key={i} className="px-1 py-2 font-medium text-gray-600 align-bottom">
-                  <div className="flex flex-col items-center gap-1">
-                    <Icon className="w-3.5 h-3.5 text-gray-500" />
-                    <span className="leading-tight">{e.corto}</span>
-                  </div>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {Object.entries(INCOTERMS_2020).map(([c, info]) => (
-            <tr
-              key={c}
-              onClick={() => onSeleccionar(c)}
-              className={`cursor-pointer border-t border-gray-100 ${seleccionado === c ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
-            >
-              <td className="px-2 py-1.5 font-bold tracking-wider text-gray-900" title={`${info.nombre} · ${info.es}`}>
-                {c}
-              </td>
-              {ETAPAS.map((_, i) => (
-                <td key={i} className="px-0.5 py-1">
-                  <div
-                    className={`h-5 rounded-sm ${info.vendedor.includes(i) ? 'bg-emerald-500' : 'bg-gray-100'} ${
-                      i === info.entrega ? 'border-r-[3px] border-[#F47735]' : ''
-                    }`}
-                  />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="px-3 py-2 text-[10px] text-gray-500 border-t border-gray-100">
-        Incoterms® 2020 (Cámara de Comercio Internacional). Verde: lo paga Oben. La línea naranja marca dónde se entrega y pasa el riesgo al comprador.
-      </p>
     </div>
   );
 }

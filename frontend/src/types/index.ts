@@ -800,6 +800,15 @@ export interface OrdenReciente {
   fecha: string;
 }
 
+/** Proforma de exportación abierta en Oben que COMEX aún no aprobó. */
+export interface ProformaPendienteComex {
+  numberPF: string;
+  cliente: string | null;
+  pais: string | null;
+  incoterm: string | null;
+  ordenesVenta: number[];
+}
+
 /** Una proforma y sus órdenes de venta según Oben (la pantalla busca por PF). */
 export interface ProformaOrdenes {
   numberPF: string;

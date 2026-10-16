@@ -9,7 +9,7 @@ import {
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
-  FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, OrdenReciente, ProformaOrdenes,
+  FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, OrdenReciente, ProformaOrdenes, ProformaPendienteComex,
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
@@ -231,6 +231,12 @@ class ApiClient {
 
   async getOrdenesRecientes(): Promise<OrdenReciente[]> {
     const { data } = await this.client.get<OrdenReciente[]>('/facturacion/ordenes-recientes');
+    return data;
+  }
+
+  /** Proformas de exportación pendientes de aprobación de COMEX. */
+  async getProformasPendientes(): Promise<ProformaPendienteComex[]> {
+    const { data } = await this.client.get<ProformaPendienteComex[]>('/facturacion/proformas-pendientes', this.OBEN_LIVE);
     return data;
   }
 
