@@ -3,12 +3,13 @@ import { BadRequestException, ConflictException, ForbiddenException, Inject, Inj
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { LiquidacionAprobacion } from '../../entities/liquidacion-aprobacion.entity';
+import { LiquidacionRuta } from '../../entities/liquidacion-ruta.entity';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { IdempotencyService } from '../idempotency/idempotency.service';
-import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.service';
+import { LiquidacionRatesService, ciudadDe, type OpcionInland } from '../freight-rates/liquidacion-rates.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { LIQUIDACION_VALUE_CALCULATOR, noQuedarPorDebajo, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
@@ -18,8 +19,10 @@ import { unwrapCheckSettlement } from './check-settlement-respuesta';
 import { ARANCEL_USA_PCT, partidaComun } from './partidas-arancelarias';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
+  CambioRuta,
   CheckSettlementResponse,
   LiquidacionDraft,
+  RutaLiquidacion,
   LiquidacionDraftLine,
   LiquidacionHeaderValues,
   LiquidacionInput,
@@ -118,6 +121,30 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const isUSA = (pais: string | null) =>
   !!pais && /^(usa|us|u\.s\.a?\.?|united states|estados unidos|eeuu)\b/i.test(pais.trim());
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** Marítimo + Inland de una ruta, por todos los contenedores; null si no hay ninguno. */
+function costoRuta(r: { maritima: number | null; inland: number | null }, contenedores: number): number | null {
+  if (r.maritima === null && r.inland === null) return null;
+  return round2(((r.maritima ?? 0) + (r.inland ?? 0)) * contenedores);
+}
+
+/** El Inland más barato (vigente primero) que sale del puerto/rampa donde llega el marítimo. */
+function mejorInlandDesde(opciones: OpcionInland[], puerto: string): OpcionInland | null {
+  const ciudad = ciudadDe(puerto)?.toLowerCase();
+  const delPuerto = opciones.filter((o) => o.puerto === puerto || (!!ciudad && ciudadDe(o.puerto)?.toLowerCase() === ciudad));
+  return [...delPuerto].sort((a, b) => Number(a.vencida) - Number(b.vencida) || a.valor - b.valor)[0] ?? null;
+}
+
+/** "Cartagena → Cincinnati, OH (Ramp) · Trading / HAPAG LLOYD USD 3150.00 + Inland Trading USD 860.00". */
+function describirRuta(ruta: RutaLiquidacion, ids: { maritimaId: string | null; inlandId: string | null }): string {
+  const m = ruta.opciones.maritimas.find((o) => o.id === ids.maritimaId);
+  const i = ruta.opciones.inland.find((o) => o.id === ids.inlandId);
+  const partes = [
+    m ? `${ciudadDe(m.origen) ?? m.origen} → ${m.destino} · ${[m.forwarder, m.naviera].filter(Boolean).join(' / ')} USD ${m.flete.toFixed(2)}` : null,
+    i ? `Inland ${i.forwarder ?? ''} desde ${i.puerto} USD ${i.valor.toFixed(2)}` : null,
+  ].filter(Boolean);
+  return partes.join(' + ') || 'Sin tarifa del tarifario';
+}
 /** Número desde la respuesta de Oben: `Number(null)`/`Number('')` darían 0 — un precio o kilos ausente NO es 0. */
 const toNum = (v: unknown): number =>
   typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
@@ -163,6 +190,9 @@ export class LiquidacionService {
     @Optional()
     @InjectRepository(LiquidacionAprobacion)
     private readonly aprobaciones?: Repository<LiquidacionAprobacion>,
+    @Optional()
+    @InjectRepository(LiquidacionRuta)
+    private readonly rutas?: Repository<LiquidacionRuta>,
   ) {}
 
   /** Borrador + estado de la aprobación de COMEX (si la PF ya está lista para aprobarse). */
@@ -246,15 +276,49 @@ export class LiquidacionService {
     // destino que trae Oben en Direccion/PuertoArribo (lo digitado manda). Va
     // antes del flete marítimo: la pata 2 tiene que llegar al puerto del que
     // sale el Inland.
+    // Ruta (patas 2 y 3). Sugerida: la más barata vigente al puerto de la PF. COMEX puede escoger otra
+    // DEL TARIFARIO (reunión del 15-oct: puerto de origen/destino, agente, naviera, transportador
+    // terrestre); nada se digita. Lo escogido se guarda en liquidacion_rutas (POST /liquidacion/:pf/ruta).
+    const guardada = await this.rutaGuardada(pf);
+    const opcionesRuta =
+      (esUSA || conceptos?.includes('flete')) && this.rates.opcionesDeRuta
+        ? await this.rates.opcionesDeRuta(this.ctx.tenantId, { direccion: header.direccion, puertoArribo: header.puertoArribo })
+        : null;
+    const maritimaComex = guardada?.maritimaId ? (opcionesRuta?.maritimas.find((o) => o.id === guardada.maritimaId) ?? null) : null;
+    const inlandComex = guardada?.inlandId ? (opcionesRuta?.inland.find((o) => o.id === guardada.inlandId) ?? null) : null;
+    if ((guardada?.maritimaId && !maritimaComex) || (guardada?.inlandId && !inlandComex)) {
+      ajustes.push('La ruta que había escogido COMEX ya no está en el tarifario (se cargó uno nuevo): se usó la sugerida. Escógela de nuevo.');
+    }
+    const sug = { maritimaId: null as string | null, inlandId: null as string | null, maritima: null as number | null, inland: null as number | null };
+    const act = { maritimaId: null as string | null, inlandId: null as string | null, maritima: null as number | null, inland: null as number | null };
+
     let puertoInland: string | null = null;
+    let puertoInlandSugerido: string | null = null;
     if (esUSA && pais && headerOrigen.inlandFreight !== 'usuario') {
       const destino = [header.direccion, header.puertoArribo].filter((v): v is string => typeof v === 'string').join(' ');
       // El puerto de arribo de la PF manda (15-oct: la PF 11237 dice Cincinnati y se había ido por Columbus).
       const inland = await this.rates.resolveInlandByAddress(this.ctx.tenantId, 'USA', destino, undefined, header.puertoArribo);
       if (isNum(inland.inlandFreight)) {
+        Object.assign(sug, { inlandId: inland.id ?? null, inland: inland.inlandFreight });
+        puertoInlandSugerido = inland.destinationPort;
+      }
+      // Si COMEX escogió solo el marítimo, el Inland más barato vigente que sale de su puerto de destino.
+      const conectado = !inlandComex && maritimaComex && opcionesRuta ? mejorInlandDesde(opcionesRuta.inland, maritimaComex.destino) : null;
+      const elegido = inlandComex ?? conectado;
+      if (elegido) {
+        header.inlandFreight = round2(elegido.valor * contenedores);
+        headerOrigen.inlandFreight = inlandComex ? 'comex' : 'maestro';
+        puertoInland = elegido.puerto;
+        Object.assign(act, { inlandId: elegido.id, inland: elegido.valor });
+        ajustes.push(
+          `Inland Freight ${inlandComex ? 'escogido por COMEX' : 'que sale del puerto del marítimo escogido por COMEX'}: ${elegido.puerto} → ${elegido.direccion} (${[elegido.forwarder, "contenedor 40'"].filter(Boolean).join(', ')}), USD ${elegido.valor.toFixed(2)}${porContenedores}.` +
+            (elegido.vencida ? ` OJO: esa tarifa venció el ${elegido.validUntil}.` : ''),
+        );
+      } else if (isNum(inland.inlandFreight)) {
         header.inlandFreight = round2(inland.inlandFreight * contenedores);
         headerOrigen.inlandFreight = 'maestro';
         puertoInland = inland.destinationPort;
+        Object.assign(act, { inlandId: inland.id ?? null, inland: inland.inlandFreight });
         ajustes.push(
           `Inland Freight de la tabla de fletes: ${inland.destinationPort} → ${inland.destinationAddress} (${[inland.forwarder, "contenedor 40'"].filter(Boolean).join(', ')}), USD ${inland.inlandFreight.toFixed(2)}${porContenedores}.` +
             (inland.vencida ? ` OJO: esa tarifa venció el ${inland.validUntil} — pedir la actualización al forwarder.` : ''),
@@ -264,8 +328,23 @@ export class LiquidacionService {
 
     // Flete (pata 2, marítimo) de la tabla de fletes; lo digitado manda.
     if (conceptos?.includes('flete') && !esMonto(totales.flete)) {
-      const mar = await this.rates.resolveOceanFreight?.(this.ctx.tenantId, header.puertoEmbarque, puertoInland, header.puertoArribo);
-      if (mar && isNum(mar.flete)) {
+      const marSugerido = await this.rates.resolveOceanFreight?.(this.ctx.tenantId, header.puertoEmbarque, puertoInlandSugerido, header.puertoArribo);
+      if (marSugerido && isNum(marSugerido.flete)) Object.assign(sug, { maritimaId: marSugerido.id ?? null, maritima: marSugerido.flete });
+      const mar = maritimaComex
+        ? null
+        : puertoInland === puertoInlandSugerido
+          ? marSugerido
+          : await this.rates.resolveOceanFreight?.(this.ctx.tenantId, header.puertoEmbarque, puertoInland, header.puertoArribo);
+      if (maritimaComex) {
+        totales = { ...totales, flete: round2(maritimaComex.flete * contenedores) };
+        totalesOrigen.flete = 'comex';
+        Object.assign(act, { maritimaId: maritimaComex.id, maritima: maritimaComex.flete });
+        ajustes.push(
+          `Flete marítimo escogido por COMEX: ${maritimaComex.origen} → ${maritimaComex.destino} (${[maritimaComex.forwarder, maritimaComex.naviera].filter(Boolean).join(' / ')}, contenedor 40'), USD ${maritimaComex.flete.toFixed(2)}${porContenedores}.` +
+            (maritimaComex.vencida ? ` OJO: esa tarifa venció el ${maritimaComex.validUntil}.` : ''),
+        );
+      } else if (mar && isNum(mar.flete)) {
+        Object.assign(act, { maritimaId: mar.id ?? null, maritima: mar.flete });
         totales = { ...totales, flete: round2(mar.flete * contenedores) };
         totalesOrigen.flete = 'maestro';
         ajustes.push(
@@ -472,7 +551,113 @@ export class LiquidacionService {
       simulated: this.calculator.simulated,
       sinConfirmar,
       partidaTipo: partida,
+      ruta: opcionesRuta
+        ? {
+            opciones: opcionesRuta,
+            contenedores,
+            sugerida: { maritimaId: sug.maritimaId, inlandId: sug.inlandId, costo: costoRuta(sug, contenedores) },
+            actual: {
+              maritimaId: act.maritimaId,
+              inlandId: act.inlandId,
+              costo: costoRuta(act, contenedores),
+              escogidaPorComex: !!(maritimaComex || inlandComex),
+            },
+            sobrecosto:
+              isNum(costoRuta(act, contenedores)) && isNum(costoRuta(sug, contenedores))
+                ? round2(costoRuta(act, contenedores)! - costoRuta(sug, contenedores)!)
+                : null,
+            historial: await this.historialRuta(pf),
+          }
+        : null,
     };
+  }
+
+  /** Ruta vigente que escogió COMEX para la PF (su último cambio), o null = la sugerida. */
+  private async rutaGuardada(pf: string): Promise<LiquidacionRuta | null> {
+    if (!this.rutas) return null;
+    return this.rutas.findOne({ where: { tenantId: this.ctx.tenantId, numberPF: pf }, order: { createdAt: 'DESC', numero: 'DESC' } });
+  }
+
+  private async historialRuta(pf: string): Promise<CambioRuta[]> {
+    if (!this.rutas) return [];
+    const filas = await this.rutas.find({ where: { tenantId: this.ctx.tenantId, numberPF: pf }, order: { createdAt: 'DESC', numero: 'DESC' }, take: 20 });
+    return filas.map((f) => {
+      const d = (f.detalle ?? {}) as { antes?: string; despues?: string; sobrecosto?: number | null };
+      return {
+        numero: f.numero,
+        fecha: f.createdAt.toISOString(),
+        por: f.usuarioNombre,
+        motivo: f.motivo,
+        antes: d.antes ?? '',
+        despues: d.despues ?? '',
+        sobrecosto: d.sobrecosto ?? null,
+      };
+    });
+  }
+
+  /**
+   * COMEX escoge la ruta de la PF entre las opciones del tarifario (nunca un
+   * valor digitado). Cada cambio queda como orden de compra interna numerada:
+   * antes → después, sobrecosto frente a la sugerida, usuario y motivo
+   * (opcional, decisión de Hernán). Ids en null = volver a la sugerida. La
+   * aprobación anterior deja de valer sola: cambian los valores.
+   */
+  async cambiarRuta(
+    numberPF: string,
+    cambio: { maritimaId?: string | null; inlandId?: string | null; motivo?: string | null },
+    input: LiquidacionInput,
+    usuario: { nombre: string | null },
+  ): Promise<LiquidacionDraft> {
+    if (!this.rutas) throw new BadRequestException('El registro de rutas no está disponible en este ambiente.');
+    const pf = this.parsePF(numberPF);
+    const antes = await this.armarDraft(pf, input);
+    if (!antes.ruta) throw new BadRequestException(`La PF ${pf} no lleva flete ni Inland que escoger con su Incoterm.`);
+    const maritimaId = cambio.maritimaId || null;
+    const inlandId = cambio.inlandId || null;
+    if (maritimaId && !antes.ruta.opciones.maritimas.some((o) => o.id === maritimaId)) {
+      throw new BadRequestException('Ese flete marítimo no es una opción del tarifario para esta PF.');
+    }
+    if (inlandId && !antes.ruta.opciones.inland.some((o) => o.id === inlandId)) {
+      throw new BadRequestException('Ese Inland no es una opción del tarifario para esta PF.');
+    }
+    const motivo = cambio.motivo?.trim() || null;
+    const fila = await this.rutas.save(
+      this.rutas.create({
+        tenantId: this.ctx.tenantId,
+        numberPF: pf,
+        maritimaId,
+        inlandId,
+        motivo,
+        usuarioId: this.ctx.userId ?? null,
+        usuarioNombre: usuario.nombre,
+        detalle: { antes: describirRuta(antes.ruta, antes.ruta.actual) },
+      }),
+    );
+    const despues = await this.getDraft(pf, input);
+    const detalle = {
+      antes: describirRuta(antes.ruta, antes.ruta.actual),
+      despues: despues.ruta ? describirRuta(despues.ruta, despues.ruta.actual) : '',
+      sugerida: despues.ruta ? describirRuta(despues.ruta, despues.ruta.sugerida) : '',
+      costoAntes: antes.ruta.actual.costo,
+      costoDespues: despues.ruta?.actual.costo ?? null,
+      sobrecosto: despues.ruta?.sobrecosto ?? null,
+      contenedores: antes.ruta.contenedores,
+    };
+    fila.detalle = detalle;
+    await this.rutas.save(fila);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: 'liquidacion_ruta_cambiada',
+      entityType: 'liquidacion',
+      entityId: pf,
+      actorId: this.ctx.userId,
+      inputData: { maritimaId, inlandId, motivo },
+      outputData: detalle,
+    });
+    // El historial del borrador ya trae este cambio con su detalle completo.
+    if (despues.ruta) despues.ruta.historial = await this.historialRuta(pf);
+    return despues;
   }
 
   /**

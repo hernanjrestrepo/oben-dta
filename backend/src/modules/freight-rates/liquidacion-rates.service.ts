@@ -21,8 +21,44 @@ export interface LiquidacionInlandFreightResult {
   missing: string[];
 }
 
+/** Una tarifa marítima (pata 2) que Comex puede escoger para la PF. */
+export interface OpcionMaritima {
+  id: string;
+  origen: string;
+  destino: string;
+  forwarder: string | null;
+  naviera: string | null;
+  /** Puerto de transbordo ("New York, NJ…"), si lo hay. */
+  transito: string | null;
+  dias: number | null;
+  /** USD por contenedor de 40'. */
+  flete: number;
+  validUntil: string | null;
+  vencida: boolean;
+}
+
+/** Una tarifa de Inland (pata 3) que Comex puede escoger para la PF. */
+export interface OpcionInland {
+  id: string;
+  forwarder: string | null;
+  /** Puerto o rampa de donde sale el camión (empalma con el destino del marítimo). */
+  puerto: string;
+  direccion: string;
+  /** USD por contenedor de 40'. */
+  valor: number;
+  validUntil: string | null;
+  vencida: boolean;
+}
+
+export interface OpcionesDeRuta {
+  maritimas: OpcionMaritima[];
+  inland: OpcionInland[];
+}
+
 /** Inland Freight resuelto por la dirección de destino (código postal) contra la tabla de fletes. */
 export interface LiquidacionInlandByAddressResult {
+  /** Fila del tarifario escogida (para mostrarla como "sugerida"). */
+  id?: string | null;
   inlandFreight: number | null;
   /** Transportador terrestre (Shapiro, Trading, Transborder…). */
   forwarder?: string | null;
@@ -35,6 +71,8 @@ export interface LiquidacionInlandByAddressResult {
 
 /** Flete marítimo (pata 2) de la tabla de fletes, por puerto de embarque y puerto/rampa de destino. */
 export interface LiquidacionOceanFreightResult {
+  /** Fila del tarifario escogida (para mostrarla como "sugerida"). */
+  id?: string | null;
   /** USD por contenedor de 40'. */
   flete: number | null;
   origen: string | null;
@@ -224,6 +262,7 @@ export class LiquidacionRatesService {
       if (!row) continue;
       const validUntil = row.validUntil ? String(row.validUntil).slice(0, 10) : null;
       return {
+        ...(row.id ? { id: row.id } : {}),
         inlandFreight: toAmount(row.rate40hc),
         forwarder: row.forwarder ?? null,
         destinationPort: row.destinationPort,
@@ -269,6 +308,7 @@ export class LiquidacionRatesService {
       if (!row) continue;
       const validUntil = row.validUntil ? String(row.validUntil).slice(0, 10) : null;
       return {
+        ...(row.id ? { id: row.id } : {}),
         flete: toAmount(row.rateTotal),
         origen: row.origin,
         destino: row.destinationPort,
@@ -279,6 +319,66 @@ export class LiquidacionRatesService {
       };
     }
     return vacio;
+  }
+
+  /**
+   * Todas las tarifas que Comex puede escoger para una PF (reunión del
+   * 15-oct: cambia puerto de origen o destino, agente, naviera o transportador
+   * terrestre, y la tarifa SIEMPRE sale de aquí, nunca se digita):
+   *  - Inland: todas las filas del código postal de destino (cualquier puerto/rampa).
+   *  - Marítimas: contenedor de 40' desde cualquier puerto de Colombia hacia
+   *    los puertos de donde sale ese Inland y hacia la ciudad de arribo de la PF.
+   * Ordenadas de la más barata a la más cara.
+   */
+  async opcionesDeRuta(
+    tenantId: string,
+    destino: { direccion?: unknown; puertoArribo?: unknown },
+    hoy: Date = new Date(),
+  ): Promise<OpcionesDeRuta> {
+    const hoyIso = hoy.toISOString().slice(0, 10);
+    const fecha = (v: unknown) => (v ? String(v).slice(0, 10) : null);
+    const texto = [destino.direccion, destino.puertoArribo].filter((v): v is string => typeof v === 'string').join(' ');
+    const zips = [...new Set(texto.match(/\b\d{5}\b/g) ?? [])];
+
+    const inland: OpcionInland[] = [];
+    for (const zip of zips) {
+      const rows = await this.inlandRates.find({ where: { tenantId, destinationAddress: ILike(`%${zip}%`) }, take: 100 });
+      for (const r of rows) {
+        const valor = toAmount(r.rate40hc);
+        if (valor === null || inland.some((o) => o.id === r.id)) continue;
+        const validUntil = fecha(r.validUntil);
+        inland.push({ id: r.id, forwarder: r.forwarder ?? null, puerto: r.destinationPort, direccion: r.destinationAddress, valor, validUntil, vencida: !!validUntil && validUntil < hoyIso });
+      }
+    }
+
+    const maritimas: OpcionMaritima[] = [];
+    const ciudadArribo = ciudadDe(destino.puertoArribo);
+    const destinos = [...new Set(inland.map((o) => o.puerto))].map((p) => ILike(sinComodines(p)));
+    if (ciudadArribo) destinos.push(ILike(`${sinComodines(ciudadArribo)}%`));
+    if (this.oceanRates && destinos.length) {
+      const rows = await this.oceanRates.find({
+        where: destinos.map((destinationPort) => ({ tenantId, origin: ILike('%Colombia%'), destinationPort, containerType: ILike('%40%') })),
+        take: 300,
+      });
+      for (const r of rows) {
+        const flete = toAmount(r.rateTotal);
+        if (flete === null || maritimas.some((o) => o.id === r.id)) continue;
+        const validUntil = fecha(r.validUntil);
+        maritimas.push({
+          id: r.id,
+          origen: r.origin,
+          destino: r.destinationPort,
+          forwarder: r.forwarder ?? null,
+          naviera: r.shippingLine ?? null,
+          transito: r.transitPoints || null,
+          dias: r.transitDays ?? null,
+          flete,
+          validUntil,
+          vencida: !!validUntil && validUntil < hoyIso,
+        });
+      }
+    }
+    return { maritimas: maritimas.sort((a, b) => a.flete - b.flete), inland: inland.sort((a, b) => a.valor - b.valor) };
   }
 
   private parsePercentFormula(formula: string): number | null {

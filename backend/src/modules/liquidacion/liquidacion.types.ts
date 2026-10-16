@@ -33,7 +33,7 @@ export interface CheckSettlementResponse {
 }
 
 /** De dónde salió cada valor del encabezado — se muestra en pantalla, nada queda "de la nada". */
-export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional';
+export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional' | 'comex';
 
 /** Valores del encabezado (spSettlement_Head). Todo opcional en la entrada — lo que falte bloquea el envío. */
 export interface LiquidacionHeaderValues {
@@ -149,6 +149,31 @@ export interface LiquidacionDraft {
    * descripción oficial para la factura; null si la PF mezcla tipos o no se sabe.
    */
   partidaTipo?: import('./partidas-arancelarias').PartidaArancelaria | null;
+  /** Ruta y tarifas: opciones del tarifario, la sugerida (más barata vigente) y la escogida por COMEX. */
+  ruta?: RutaLiquidacion | null;
+}
+
+/** Un cambio de ruta de COMEX (orden de compra interna). */
+export interface CambioRuta {
+  numero: number;
+  fecha: string;
+  por: string | null;
+  motivo: string | null;
+  antes: string;
+  despues: string;
+  /** Costo de la ruta escogida − costo de la sugerida (USD, todos los contenedores). */
+  sobrecosto: number | null;
+}
+
+export interface RutaLiquidacion {
+  opciones: import('../freight-rates/liquidacion-rates.service').OpcionesDeRuta;
+  contenedores: number;
+  /** La que propone el sistema: la más barata vigente al puerto de la PF. */
+  sugerida: { maritimaId: string | null; inlandId: string | null; costo: number | null };
+  /** La que se está usando en esta liquidación. */
+  actual: { maritimaId: string | null; inlandId: string | null; costo: number | null; escogidaPorComex: boolean };
+  sobrecosto: number | null;
+  historial: CambioRuta[];
 }
 
 export interface LiquidacionSubmitOptions {

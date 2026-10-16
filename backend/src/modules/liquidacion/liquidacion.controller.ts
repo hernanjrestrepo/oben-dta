@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
-import { IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsPositive } from 'class-validator';
+import { IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
@@ -11,6 +11,32 @@ import type { LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotales
 export const LIQUIDACION_PERMISSION = 'exportations.liquidate';
 /** Aprobar la liquidación (COMEX): exigido para enviarla a Oben. */
 export const LIQUIDACION_APROBAR_PERMISSION = 'exportations.approve';
+
+/** COMEX escoge la ruta del tarifario: solo ids de tarifas, nunca montos. */
+class LiquidacionRutaDto {
+  @IsOptional()
+  @IsUUID()
+  maritimaId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  inlandId?: string | null;
+
+  /** Justificación (opcional, decisión de Hernán del 15-oct). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  motivo?: string | null;
+
+  /** Lo que el usuario tiene en pantalla (Incoterm, encabezado) para recalcular igual. */
+  @IsOptional()
+  @IsObject()
+  header?: LiquidacionHeaderValues;
+
+  @IsOptional()
+  @IsObject()
+  totales?: LiquidacionTotalesInput;
+}
 
 class LiquidacionInputDto {
   @IsOptional()
@@ -105,6 +131,28 @@ export class LiquidacionController {
     const u = req.user ?? {};
     const nombre = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || null;
     return this.liquidacion.aprobar(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines }, { nombre });
+  }
+
+  /**
+   * COMEX cambia la ruta (puerto, agente, naviera, transportador terrestre)
+   * escogiendo tarifas del tarifario. Queda como orden de compra interna con
+   * auditoría; ids en null = volver a la sugerida.
+   */
+  @Post(':numberPF/ruta')
+  @RequirePermission(LIQUIDACION_PERMISSION)
+  ruta(
+    @Param('numberPF') numberPF: string,
+    @Body() dto: LiquidacionRutaDto,
+    @Req() req: { user?: { email?: string; firstName?: string; lastName?: string } },
+  ) {
+    const u = req.user ?? {};
+    const nombre = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || null;
+    return this.liquidacion.cambiarRuta(
+      numberPF,
+      { maritimaId: dto.maritimaId, inlandId: dto.inlandId, motivo: dto.motivo },
+      { header: dto.header, totales: dto.totales },
+      { nombre },
+    );
   }
 
   /** Simula por defecto; con `confirm:true` crea encabezado + detalles reales en Oben. */

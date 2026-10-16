@@ -176,6 +176,18 @@ function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: 
       return x;
     }),
   };
+  // Cambios de ruta de COMEX en memoria (la vigente = el último).
+  const filasRutas: Array<Record<string, unknown>> = [];
+  const ultimas = (where: { numberPF: string }) => filasRutas.filter((f) => f.numberPF === where.numberPF).reverse();
+  const rutas = {
+    findOne: jest.fn(async ({ where }: { where: { numberPF: string } }) => ultimas(where)[0] ?? null),
+    find: jest.fn(async ({ where }: { where: { numberPF: string } }) => ultimas(where)),
+    create: jest.fn((x: Record<string, unknown>) => ({ ...x })),
+    save: jest.fn(async (x: Record<string, unknown>) => {
+      if (!filasRutas.includes(x)) filasRutas.push(Object.assign(x, { id: `r${filasRutas.length + 1}`, numero: filasRutas.length + 1, createdAt: new Date() }));
+      return x;
+    }),
+  };
   const service = new LiquidacionService(
     sim as never,
     { tenantId: 't1', userId: 'u1' } as never,
@@ -186,8 +198,9 @@ function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: 
     cierre as never,
     { valoresProvisionales: !!opts.provisionales, requiereAprobacion: !!opts.requiereAprobacion },
     aprobaciones as never,
+    rutas as never,
   );
-  return { service, sim, idem, audit, rates, cierre, aprobaciones };
+  return { service, sim, idem, audit, rates, cierre, aprobaciones, rutas, filasRutas };
 }
 
 /**
@@ -805,6 +818,79 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
           expect.stringContaining('Redondeo (José, 15-oct): al último ítem (línea 1) se le restaron 0.0001'),
         ]),
       );
+    });
+
+    describe('COMEX escoge la ruta del tarifario (PF 11237, reunión del 15-oct)', () => {
+      const mar = (id: string, destino: string, forwarder: string, flete: number, vencida = false) => ({
+        id, origen: 'Cartagena, Colombia (COCTG) - Port', destino, forwarder, naviera: 'HAPAG LLOYD', transito: null, dias: null, flete, validUntil: null, vencida,
+      });
+      const inl = (id: string, puerto: string, forwarder: string, valor: number, vencida = false) => ({
+        id, forwarder, puerto, direccion: 'Cincinnati, OH 45240', valor, validUntil: null, vencida,
+      });
+      const OPCIONES = {
+        maritimas: [mar('m-shapiro', 'Cincinnati, OH (Ramp)', 'Shapiro', 2804), mar('m-trading', 'Cincinnati, OH (Ramp)', 'Trading', 3150), mar('m-columbus', 'Columbus, OH (Ramp)', 'Trading', 2900)],
+        inland: [inl('i-shapiro', 'Cincinnati, OH (Ramp)', 'Shapiro', 523), inl('i-trading-col', 'Columbus, OH (Ramp)', 'Trading', 770), inl('i-trading', 'Cincinnati, OH (Ramp)', 'Trading', 860)],
+      };
+      const preparar = () => {
+        const b = jose();
+        Object.assign(b.rates, { opcionesDeRuta: jest.fn().mockResolvedValue(OPCIONES) });
+        b.rates.resolveInlandByAddress.mockResolvedValue({ id: 'i-shapiro', inlandFreight: 523, forwarder: 'Shapiro', destinationPort: 'Cincinnati, OH (Ramp)', destinationAddress: 'Cincinnati, OH 45240', validUntil: null, vencida: false });
+        b.rates.resolveOceanFreight.mockImplementation(async (_t: string, _e: unknown, puerto: string | null) =>
+          puerto === 'Columbus, OH (Ramp)'
+            ? { id: 'm-columbus', flete: 2900, origen: 'Cartagena', destino: 'Columbus, OH (Ramp)', forwarder: 'Trading', naviera: 'HAPAG LLOYD', validUntil: null, vencida: false }
+            : { id: 'm-shapiro', flete: 2804, origen: 'Cartagena', destino: 'Cincinnati, OH (Ramp)', forwarder: 'Shapiro', naviera: 'HAPAG LLOYD', validUntil: null, vencida: false },
+        );
+        return b;
+      };
+      const input = { header: { ...HEADER_USER, puertoArribo: 'CINCINNATI OH 45240' }, totales: { incoterm: 'DAP' } };
+
+      it('sin cambios: la sugerida (Shapiro 2804 + 523) con todas las opciones del tarifario', async () => {
+        const { service } = preparar();
+        const d = await service.getDraft('11237', input);
+        expect(d.totales.flete).toBe(2804);
+        expect(d.header.inlandFreight).toBe(523);
+        expect(d.ruta).toMatchObject({
+          sugerida: { maritimaId: 'm-shapiro', inlandId: 'i-shapiro', costo: 3327 },
+          actual: { maritimaId: 'm-shapiro', inlandId: 'i-shapiro', costo: 3327, escogidaPorComex: false },
+          sobrecosto: 0,
+          historial: [],
+        });
+        expect(d.ruta?.opciones.maritimas).toHaveLength(3);
+      });
+
+      it('COMEX escoge Trading (3150 + 860): queda registrado con antes, después, sobrecosto, usuario y motivo', async () => {
+        const { service, audit, filasRutas } = preparar();
+        const d = await service.cambiarRuta('11237', { maritimaId: 'm-trading', inlandId: 'i-trading', motivo: 'Espacio en el booking' }, input, { nombre: 'María Escobar' });
+        expect(d.totales.flete).toBe(3150);
+        expect(d.totalesOrigen.flete).toBe('comex');
+        expect(d.header.inlandFreight).toBe(860);
+        expect(d.headerOrigen.inlandFreight).toBe('comex');
+        expect(d.ruta).toMatchObject({ actual: { costo: 4010, escogidaPorComex: true }, sugerida: { costo: 3327 }, sobrecosto: 683 });
+        expect(d.ruta?.historial[0]).toMatchObject({ numero: 1, por: 'María Escobar', motivo: 'Espacio en el booking', sobrecosto: 683 });
+        expect(d.ruta?.historial[0].antes).toContain('Shapiro');
+        expect(d.ruta?.historial[0].despues).toContain('Trading');
+        expect(filasRutas).toHaveLength(1);
+        expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'liquidacion_ruta_cambiada', entityId: '11237' }));
+        // Se queda: la próxima vez que se abre la PF sale con la ruta de COMEX.
+        expect((await service.getDraft('11237', input)).totales.flete).toBe(3150);
+      });
+
+      it('si COMEX escoge solo el marítimo, el Inland sale del puerto donde llega ese marítimo', async () => {
+        const { service } = preparar();
+        const d = await service.cambiarRuta('11237', { maritimaId: 'm-columbus' }, input, { nombre: null });
+        expect(d.totales.flete).toBe(2900);
+        expect(d.header.inlandFreight).toBe(770); // Trading desde Columbus, no el 523 de Cincinnati
+        expect(d.headerOrigen.inlandFreight).toBe('maestro');
+      });
+
+      it('nunca acepta una tarifa que no esté en las opciones del tarifario; null vuelve a la sugerida', async () => {
+        const { service } = preparar();
+        await expect(service.cambiarRuta('11237', { maritimaId: 'otro-id' }, input, { nombre: null })).rejects.toThrow(BadRequestException);
+        await service.cambiarRuta('11237', { maritimaId: 'm-trading' }, input, { nombre: null });
+        const vuelta = await service.cambiarRuta('11237', { maritimaId: null, inlandId: null }, input, { nombre: null });
+        expect(vuelta.ruta).toMatchObject({ actual: { escogidaPorComex: false, maritimaId: 'm-shapiro' }, sobrecosto: 0 });
+        expect(vuelta.ruta?.historial).toHaveLength(2);
+      });
     });
 
     it('con un HMF de monto fijo (sin porcentaje) se respeta el del maestro', async () => {

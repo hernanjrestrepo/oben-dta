@@ -313,6 +313,16 @@ class ApiClient {
   }
 
   /** COMEX aprueba los valores que ve en pantalla; sin aprobación vigente no se envía a Oben. */
+  /** COMEX escoge la ruta del tarifario (solo ids de tarifas); null = volver a la sugerida. */
+  async cambiarRutaLiquidacion(
+    numberPF: string,
+    cambio: { maritimaId: string | null; inlandId: string | null; motivo?: string | null },
+    input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput },
+  ): Promise<LiquidacionDraft> {
+    const { data } = await this.client.post<LiquidacionDraft>(`/liquidacion/${numberPF}/ruta`, { ...cambio, ...input }, this.OBEN_LIVE);
+    return data;
+  }
+
   async approveLiquidacion(
     numberPF: string,
     input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput },

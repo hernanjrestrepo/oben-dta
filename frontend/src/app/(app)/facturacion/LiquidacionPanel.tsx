@@ -14,6 +14,7 @@ import type {
   OrigenValor,
 } from '@/types';
 import { IncotermGuia } from './IncotermGuia';
+import { RutaPanel } from './RutaPanel';
 import { AlertCircle, ArrowRight, BadgeCheck, Calculator, FlaskConical, Loader2, Lock, Ship, Sparkles, X } from 'lucide-react';
 import {
   Card,
@@ -51,6 +52,7 @@ const ORIGEN: Record<OrigenValor, { label: string; cls: string }> = {
   calculado: { label: 'Calculado', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
   usuario: { label: 'Digitado', cls: 'bg-gray-50 text-gray-600 border-gray-200' },
   provisional: { label: 'Provisional', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  comex: { label: 'Escogido por COMEX', cls: 'bg-orange-50 text-[#C4521A] border-orange-200' },
 };
 
 function OrigenBadge({ origen }: { origen?: OrigenValor }) {
@@ -100,12 +102,11 @@ export function LiquidacionPanel({
   const pf = factura.proforma;
   const [reglas, setReglas] = useState<IncotermRegla[] | null>(null);
   const [incoterm, setIncoterm] = useState<string | null>(null);
-  const [flete, setFlete] = useState('');
   const [otros, setOtros] = useState('');
   const [poliza, setPoliza] = useState('');
   // Solo lo que el usuario editó: lo demás lo resuelve el backend (ERP, maestro, cálculo) y se muestra con su origen.
   const [textos, setTextos] = useState<Partial<Record<TextoKey, string>>>({});
-  const [montos, setMontos] = useState<Partial<Record<MontoKey, string>>>({});
+  const [montos] = useState<Partial<Record<MontoKey, string>>>({});
 
   const [liq, setLiq] = useState<LiquidacionDraft | null>(null);
   const [calculando, setCalculando] = useState(true);
@@ -135,9 +136,10 @@ export function LiquidacionPanel({
     }
     return {
       header,
-      totales: { incoterm, flete: parseNum(flete), otrosGastos: parseNum(otros), valorPoliza: parseNum(poliza) },
+      // El flete nunca se digita: sale de la ruta escogida del tarifario (reunión del 15-oct).
+      totales: { incoterm, otrosGastos: parseNum(otros), valorPoliza: parseNum(poliza) },
     };
-  }, [textos, montos, incoterm, flete, otros, poliza]);
+  }, [textos, montos, incoterm, otros, poliza]);
 
   useEffect(() => {
     if (!pf) return;
@@ -254,35 +256,38 @@ export function LiquidacionPanel({
       {/* ── Datos ── */}
       <div className="xl:col-span-5 space-y-5">
 
+        {liq?.ruta && (
+          <RutaPanel
+            pf={pf}
+            ruta={liq.ruta}
+            esUSA={liq.esUSA}
+            input={payload}
+            onDraft={(d) => {
+              reqId.current++;
+              setLiq(d);
+              setSim(null);
+            }}
+          />
+        )}
+
         <Card>
           <CardHeader
             icon={<Calculator className="w-4 h-4 text-[#F47735]" />}
-            title="2 · Valores del envío"
-            subtitle="Se digitan una vez para todo el envío y se reparten por kilos entre las líneas."
+            title={`${liq?.ruta ? '3' : '2'} · Valores del envío`}
+            subtitle="Se calculan una vez para todo el envío y se reparten por kilos entre las líneas."
           />
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field
               label={
                 <>
-                  Flete total (USD) {!flete.trim() && <OrigenBadge origen={liq?.totalesOrigen?.flete} />}
+                  Flete total (USD) <OrigenBadge origen={liq?.totalesOrigen?.flete} />
                 </>
               }
-              hint={
-                regla && !pide('flete')
-                  ? `No aplica en ${regla.codigo}`
-                  : !flete.trim() && liq?.totalesOrigen?.flete === 'maestro'
-                    ? 'Flete marítimo de la tabla de fletes (ver ajustes). Digita otro valor solo si COMEX cotizó distinto.'
-                    : undefined
-              }
+              hint={regla && !pide('flete') ? `No aplica en ${regla.codigo}` : 'Sale de la ruta escogida del tarifario; no se digita.'}
             >
-              <input
-                value={flete}
-                onChange={(e) => setFlete(e.target.value)}
-                disabled={!!regla && !pide('flete')}
-                inputMode="decimal"
-                placeholder={!flete.trim() && isNum(liq?.totales.flete) ? `${usd(liq!.totales.flete)} (${liq?.totalesOrigen?.flete === 'maestro' ? 'tabla de fletes' : 'provisional'})` : '0,00'}
-                className={`${inputCls} w-full disabled:bg-gray-50 disabled:text-gray-400`}
-              />
+              <div className={`${inputCls} w-full bg-gray-50 text-gray-900 font-semibold tabular-nums`}>
+                {regla && !pide('flete') ? '—' : usd(liq?.totales.flete)}
+              </div>
             </Field>
             <Field
               label={liq?.esUSA ? 'Otros costos destino (USD)' : 'Otros gastos (USD)'}
@@ -314,7 +319,7 @@ export function LiquidacionPanel({
         </Card>
 
         <Card>
-          <CardHeader title="3 · Encabezado" subtitle="Dirección y puertos vienen del ERP de Oben; se pueden modificar." />
+          <CardHeader title={`${liq?.ruta ? '4' : '3'} · Encabezado`} subtitle="Dirección y puertos vienen del ERP de Oben; se pueden modificar." />
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field
               className="sm:col-span-2"
@@ -362,9 +367,16 @@ export function LiquidacionPanel({
                           {label} <OrigenBadge origen={origen(k)} />
                         </>
                       }
-                      hint={k === 'harborMaintenanceFee' ? '0.125% del FOB final (José)' : undefined}
+                      hint={
+                        k === 'harborMaintenanceFee'
+                          ? '0.125% del FOB final (José)'
+                          : k === 'inlandFreight'
+                            ? 'Del transportador escogido en la ruta'
+                            : 'Fijo negociado en aduana (tarifario)'
+                      }
                     >
-                      <input value={montoValor(k)} onChange={(e) => setMontos((m) => ({ ...m, [k]: e.target.value }))} inputMode="decimal" className={`${inputCls} w-full`} placeholder="USD" />
+                      {/* Tarifas: nunca se digitan (Hernán, 15-oct). */}
+                      <div className={`${inputCls} w-full bg-white text-gray-900 tabular-nums`}>{montoValor(k) ? usd(Number(montoValor(k))) : '—'}</div>
                     </Field>
                   ))}
                 </div>
@@ -491,7 +503,7 @@ export function LiquidacionPanel({
                   </table>
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  Montos en USD. Unitarios por kg con 4 decimales truncados. Total y TotalUnidad se envían en 0 (José). Valor de la póliza aplicado:{' '}
+                  Montos en USD. Unitarios por kg con 4 decimales redondeados; si la liquidación queda por debajo del valor de la mercancía, se ajusta el último ítem (José). Total y TotalUnidad se envían en 0 (José). Valor de la póliza aplicado:{' '}
                   {isNum(liq.totales.valorPoliza) ? liq.totales.valorPoliza : '—'}.
                 </p>
 

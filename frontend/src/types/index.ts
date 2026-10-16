@@ -813,7 +813,7 @@ export interface ProformaOrdenes {
 export type ConceptoLiquidacion = 'flete' | 'seguro' | 'otrosGastos';
 
 /** De dónde salió un valor del encabezado: ERP de Oben, maestro de tarifas, calculado o digitado. */
-export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional';
+export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional' | 'comex';
 
 export interface IncotermRegla {
   codigo: string;
@@ -883,6 +883,50 @@ export interface LiquidacionDraft {
   aprobacion?: { existe: boolean; vigente: boolean; por: string | null; en: string | null } | null;
   simulated: boolean;
   sinConfirmar: string[];
+  /** Ruta y tarifas del tarifario: opciones, sugerida, la de COMEX e historial de cambios. */
+  ruta?: RutaLiquidacion | null;
+}
+
+export interface OpcionMaritima {
+  id: string;
+  origen: string;
+  destino: string;
+  forwarder: string | null;
+  naviera: string | null;
+  transito: string | null;
+  dias: number | null;
+  flete: number;
+  validUntil: string | null;
+  vencida: boolean;
+}
+
+export interface OpcionInland {
+  id: string;
+  forwarder: string | null;
+  puerto: string;
+  direccion: string;
+  valor: number;
+  validUntil: string | null;
+  vencida: boolean;
+}
+
+export interface CambioRuta {
+  numero: number;
+  fecha: string;
+  por: string | null;
+  motivo: string | null;
+  antes: string;
+  despues: string;
+  sobrecosto: number | null;
+}
+
+export interface RutaLiquidacion {
+  opciones: { maritimas: OpcionMaritima[]; inland: OpcionInland[] };
+  contenedores: number;
+  sugerida: { maritimaId: string | null; inlandId: string | null; costo: number | null };
+  actual: { maritimaId: string | null; inlandId: string | null; costo: number | null; escogidaPorComex: boolean };
+  sobrecosto: number | null;
+  historial: CambioRuta[];
 }
 
 export interface LiquidacionSimulacion {
