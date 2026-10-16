@@ -189,6 +189,20 @@ function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: 
       return x;
     }),
   };
+  // Soportes de los cambios de ruta, en memoria.
+  const filasAdjuntos: Array<Record<string, unknown>> = [];
+  const adjuntos = {
+    find: jest.fn(async ({ where }: { where: { rutaId: { _value?: string[]; value?: string[] } } }) => {
+      const ids = where.rutaId._value ?? where.rutaId.value ?? [];
+      return filasAdjuntos.filter((a) => ids.includes(a.rutaId as string));
+    }),
+    findOne: jest.fn(async ({ where }: { where: { id: string; numberPF: string } }) => filasAdjuntos.find((a) => a.id === where.id && a.numberPF === where.numberPF) ?? null),
+    create: jest.fn((x: Record<string, unknown>) => ({ ...x })),
+    save: jest.fn(async (x: Record<string, unknown>) => {
+      filasAdjuntos.push(Object.assign(x, { id: `a${filasAdjuntos.length + 1}`, createdAt: new Date() }));
+      return x;
+    }),
+  };
   const service = new LiquidacionService(
     sim as never,
     { tenantId: 't1', userId: 'u1' } as never,
@@ -200,6 +214,7 @@ function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: 
     { valoresProvisionales: !!opts.provisionales, requiereAprobacion: !!opts.requiereAprobacion },
     aprobaciones as never,
     rutas as never,
+    adjuntos as never,
   );
   return { service, sim, idem, audit, rates, cierre, aprobaciones, rutas, filasRutas };
 }
@@ -891,6 +906,21 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
         await expect(service.cambiarRuta('11237', { aduanaId: 'i-sin-aduana' }, input, { nombre: null })).rejects.toThrow(BadRequestException);
       });
 
+      it('la justificación del cambio lleva soportes adjuntos (16-oct) y se pueden descargar', async () => {
+        const { service } = preparar();
+        const d = await service.cambiarRuta('11237', { maritimaId: 'm-trading', motivo: 'Booking con Trading' }, input, { nombre: 'María' });
+        const numero = d.ruta!.historial[0].numero;
+        const historial = await service.adjuntarARuta('11237', numero, [
+          { originalname: 'cotizaciÃ³n.pdf', mimetype: 'application/pdf', size: 4, buffer: Buffer.from('%PDF') },
+        ]);
+        expect(historial[0].adjuntos).toEqual([{ id: 'a1', nombre: 'cotización.pdf', tamano: 4 }]);
+        const a = await service.adjuntoDeRuta('11237', 'a1');
+        expect(a).toMatchObject({ nombre: 'cotización.pdf', tipo: 'application/pdf' });
+        expect(a.contenido.toString()).toBe('%PDF');
+        await expect(service.adjuntarARuta('11237', 999, [])).rejects.toThrow(BadRequestException);
+        await expect(service.adjuntoDeRuta('11208', 'a1')).rejects.toThrow(BadRequestException); // de otra PF, no
+      });
+
       it('si COMEX escoge solo el marítimo, el Inland sale del puerto donde llega ese marítimo', async () => {
         const { service } = preparar();
         const d = await service.cambiarRuta('11237', { maritimaId: 'm-columbus' }, input, { nombre: null });
@@ -1172,6 +1202,8 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     const p = await built.service.proformasPendientesComex();
     expect(p.map((x) => x.numberPF)).toEqual(['11640', '11351']);
     expect(p[1]).toEqual({ numberPF: '11351', cliente: 'SOLEFILMES', pais: 'BRASIL', incoterm: 'CIF', ordenesVenta: [11123, 11124] });
+    // Solo las listas (alguna OV con lista de empaque aprobada en corte); las demás se buscan a mano.
+    expect((await built.service.proformasPendientesComex(new Set([11124]))).map((x) => x.numberPF)).toEqual(['11351']);
   });
 
   describe('Incoterm desde el ERP de Oben (spCheckSalesOrderComex_Paradixe)', () => {

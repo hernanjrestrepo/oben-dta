@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
@@ -7,6 +9,10 @@ import { LiquidacionService } from './liquidacion.service';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import { CONCEPTOS_POR_INCOTERM } from './incoterm-rules';
 import type { LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotalesInput } from './liquidacion.types';
+
+/** Soportes de un cambio de ruta: hasta 5 archivos de 10 MB (cotizaciones, correos, PDF). */
+export const MAX_ADJUNTOS_RUTA = 5;
+export const MAX_BYTES_ADJUNTO_RUTA = 10 * 1024 * 1024;
 
 export const LIQUIDACION_PERMISSION = 'exportations.liquidate';
 /** Aprobar la liquidación (COMEX): exigido para enviarla a Oben. */
@@ -158,6 +164,29 @@ export class LiquidacionController {
       { header: dto.header, totales: dto.totales },
       { nombre },
     );
+  }
+
+  /** Adjunta soportes (cotización, correo del booking…) a la justificación del cambio de ruta #numero (16-oct). */
+  @Post(':numberPF/ruta/:numero/adjuntos')
+  @RequirePermission(LIQUIDACION_PERMISSION)
+  @UseInterceptors(FilesInterceptor('archivos', MAX_ADJUNTOS_RUTA, { limits: { fileSize: MAX_BYTES_ADJUNTO_RUTA } }))
+  adjuntarRuta(
+    @Param('numberPF') numberPF: string,
+    @Param('numero', ParseIntPipe) numero: number,
+    @UploadedFiles() archivos: Array<{ originalname: string; mimetype: string; size: number; buffer: Buffer }> | undefined,
+  ) {
+    if (!archivos?.length) throw new BadRequestException('Adjunta al menos un archivo (campo "archivos").');
+    return this.liquidacion.adjuntarARuta(numberPF, numero, archivos);
+  }
+
+  /** Descarga un soporte de un cambio de ruta. */
+  @Get(':numberPF/ruta/adjuntos/:id')
+  @RequirePermission(LIQUIDACION_PERMISSION)
+  async adjuntoRuta(@Param('numberPF') numberPF: string, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const a = await this.liquidacion.adjuntoDeRuta(numberPF, id);
+    res.setHeader('Content-Type', a.tipo);
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(a.nombre)}`);
+    res.send(a.contenido);
   }
 
   /** Simula por defecto; con `confirm:true` crea encabezado + detalles reales en Oben. */

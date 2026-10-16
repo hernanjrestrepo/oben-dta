@@ -670,7 +670,11 @@ export class FacturacionService {
 
   /** Proformas de exportación pendientes de aprobación de COMEX (la pantalla las lista para escoger). */
   async proformasPendientes() {
-    return this.liquidacion ? this.liquidacion.proformasPendientesComex() : [];
+    if (!this.liquidacion) return [];
+    // OV "listas": su lista de empaque ya se aprobó en corte y salió (mismo evento que las órdenes recientes).
+    const eventos = await this.audit.listByAction('ov_approved_lista_empaque_enviada', 5000);
+    const listas = new Set(eventos.filter((e) => e.outputData?.ok !== false).map((e) => Number(e.entityId)).filter((n) => Number.isInteger(n) && n > 0));
+    return this.liquidacion.proformasPendientesComex(listas);
   }
 
   /**

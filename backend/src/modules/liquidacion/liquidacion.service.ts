@@ -1,9 +1,10 @@
 import { createHash } from 'crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { LiquidacionAprobacion } from '../../entities/liquidacion-aprobacion.entity';
 import { LiquidacionRuta } from '../../entities/liquidacion-ruta.entity';
+import { LiquidacionRutaAdjunto } from '../../entities/liquidacion-ruta-adjunto.entity';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -198,6 +199,9 @@ export class LiquidacionService {
     @Optional()
     @InjectRepository(LiquidacionRuta)
     private readonly rutas?: Repository<LiquidacionRuta>,
+    @Optional()
+    @InjectRepository(LiquidacionRutaAdjunto)
+    private readonly adjuntos?: Repository<LiquidacionRutaAdjunto>,
   ) {}
 
   /** Borrador + estado de la aprobación de COMEX (si la PF ya está lista para aprobarse). */
@@ -606,9 +610,10 @@ export class LiquidacionService {
   /**
    * Proformas pendientes de aprobación de COMEX (pedido de Hernán, 16-oct): las de
    * EXPORTACIÓN del reporte de proformas abiertas de Oben que todavía no tienen
-   * aprobación en Oben Xmart. Las más nuevas primero.
+   * aprobación en Oben Xmart y, si se pasa `ovsListas`, con alguna OV lista
+   * (lista de empaque aprobada en corte). Las más nuevas primero.
    */
-  async proformasPendientesComex(): Promise<ProformaPendienteComex[]> {
+  async proformasPendientesComex(ovsListas?: ReadonlySet<number>): Promise<ProformaPendienteComex[]> {
     const res = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: SP_PROFORMAS_COMEX, numberOrderSales: '0' }, OBEN_QUERY_OPTIONS);
     if (!res.ok) throw new BadRequestException(res.error ?? 'Oben no respondió el reporte de proformas.');
     const aprobadas = new Set((this.aprobaciones ? await this.aprobaciones.find({ where: { tenantId: this.ctx.tenantId } }) : []).map((a) => a.numberPF));
@@ -625,6 +630,9 @@ export class LiquidacionService {
           .filter((n) => Number.isInteger(n) && n > 0),
       }))
       .filter((p) => p.numberPF && !aprobadas.has(p.numberPF))
+      // Solo las listas para liquidar: alguna OV con la lista de empaque ya aprobada en corte (Hernán, 16-oct;
+      // las demás se buscan a mano por número).
+      .filter((p) => !ovsListas || p.ordenesVenta.some((ov) => ovsListas.has(ov)))
       .sort((a, b) => Number(b.numberPF) - Number(a.numberPF));
   }
 
@@ -637,6 +645,14 @@ export class LiquidacionService {
   private async historialRuta(pf: string): Promise<CambioRuta[]> {
     if (!this.rutas) return [];
     const filas = await this.rutas.find({ where: { tenantId: this.ctx.tenantId, numberPF: pf }, order: { createdAt: 'DESC', numero: 'DESC' }, take: 20 });
+    const soportes =
+      this.adjuntos && filas.length
+        ? await this.adjuntos.find({
+            where: { tenantId: this.ctx.tenantId, rutaId: In(filas.map((f) => f.id)) },
+            select: ['id', 'rutaId', 'nombre', 'tamano'],
+            order: { createdAt: 'ASC' },
+          })
+        : [];
     return filas.map((f) => {
       const d = (f.detalle ?? {}) as { antes?: string; despues?: string; sobrecosto?: number | null };
       return {
@@ -647,8 +663,63 @@ export class LiquidacionService {
         antes: d.antes ?? '',
         despues: d.despues ?? '',
         sobrecosto: d.sobrecosto ?? null,
+        adjuntos: soportes.filter((a) => a.rutaId === f.id).map((a) => ({ id: a.id, nombre: a.nombre, tamano: a.tamano })),
       };
     });
+  }
+
+  /**
+   * Soportes de la justificación de un cambio de ruta (cotización, correo del
+   * booking…; Hernán, 16-oct). Se adjuntan al cambio número `numero` de la PF.
+   */
+  async adjuntarARuta(
+    numberPF: string,
+    numero: number,
+    archivos: Array<{ originalname: string; mimetype: string; size: number; buffer: Buffer }>,
+  ): Promise<CambioRuta[]> {
+    if (!this.rutas || !this.adjuntos) throw new BadRequestException('Los adjuntos no están disponibles en este ambiente.');
+    const pf = this.parsePF(numberPF);
+    const cambio = await this.rutas.findOne({ where: { tenantId: this.ctx.tenantId, numberPF: pf, numero } });
+    if (!cambio) throw new BadRequestException(`La PF ${pf} no tiene el cambio de ruta #${numero}.`);
+    if (!archivos.length) throw new BadRequestException('No llegó ningún archivo.');
+    for (const a of archivos) {
+      await this.adjuntos.save(
+        this.adjuntos.create({
+          tenantId: this.ctx.tenantId,
+          rutaId: cambio.id,
+          numberPF: pf,
+          // multer entrega el nombre en latin1: se pasa a UTF-8 para que las tildes no se dañen.
+          nombre: Buffer.from(a.originalname, 'latin1').toString('utf8').slice(0, 255),
+          tipo: (a.mimetype || 'application/octet-stream').slice(0, 120),
+          tamano: a.size,
+          contenido: a.buffer,
+          subidoPor: this.ctx.userId ?? null,
+        }),
+      );
+    }
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: 'liquidacion_ruta_adjuntos',
+      entityType: 'liquidacion',
+      entityId: pf,
+      actorId: this.ctx.userId,
+      inputData: { numero, archivos: archivos.map((a) => ({ nombre: a.originalname, tamano: a.size })) },
+    });
+    return this.historialRuta(pf);
+  }
+
+  /** Un soporte para descargar (solo de la PF y el tenant indicados). */
+  async adjuntoDeRuta(numberPF: string, id: string): Promise<{ nombre: string; tipo: string; contenido: Buffer }> {
+    const pf = this.parsePF(numberPF);
+    const a = this.adjuntos
+      ? await this.adjuntos.findOne({
+          where: { tenantId: this.ctx.tenantId, numberPF: pf, id },
+          select: ['id', 'nombre', 'tipo', 'contenido'],
+        })
+      : null;
+    if (!a) throw new BadRequestException('Ese adjunto no existe.');
+    return { nombre: a.nombre, tipo: a.tipo, contenido: a.contenido };
   }
 
   /**

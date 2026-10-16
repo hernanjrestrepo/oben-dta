@@ -163,6 +163,8 @@ export interface CambioRuta {
   despues: string;
   /** Costo de la ruta escogida − costo de la sugerida (USD, todos los contenedores). */
   sobrecosto: number | null;
+  /** Soportes de la justificación (cotización, correo del booking…). */
+  adjuntos: Array<{ id: string; nombre: string; tamano: number }>;
 }
 
 export interface RutaLiquidacion {

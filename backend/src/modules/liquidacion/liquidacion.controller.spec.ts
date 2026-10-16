@@ -25,8 +25,8 @@ describe('LiquidacionController — control de acceso', () => {
     expect(LIQUIDACION_PERMISSION).toBe('exportations.liquidate');
   });
 
-  it('tiene exactamente las 8 rutas esperadas (incoterms, draft GET/POST, aprobar, ruta de COMEX, submit, vista previa y envío del correo de cierre)', () => {
-    expect(routes.sort()).toEqual(['approve', 'cierreEnviar', 'cierrePreview', 'draft', 'draftWithInput', 'incoterms', 'ruta', 'submit']);
+  it('tiene exactamente las 10 rutas esperadas (incoterms, draft GET/POST, aprobar, ruta de COMEX y sus adjuntos, submit, vista previa y envío del correo de cierre)', () => {
+    expect(routes.sort()).toEqual(['adjuntarRuta', 'adjuntoRuta', 'approve', 'cierreEnviar', 'cierrePreview', 'draft', 'draftWithInput', 'incoterms', 'ruta', 'submit']);
   });
 
   it('aprobar exige exportations.approve (COMEX), distinto de liquidar', () => {
@@ -35,7 +35,7 @@ describe('LiquidacionController — control de acceso', () => {
     expect(req).toEqual({ permissions: ['exportations.approve'], mode: 'all' });
   });
 
-  it.each(['incoterms', 'draft', 'draftWithInput', 'ruta', 'submit', 'cierrePreview', 'cierreEnviar'])('la ruta %s exige exportations.liquidate', (name) => {
+  it.each(['incoterms', 'draft', 'draftWithInput', 'ruta', 'adjuntarRuta', 'adjuntoRuta', 'submit', 'cierrePreview', 'cierreEnviar'])('la ruta %s exige exportations.liquidate', (name) => {
     const req = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto[name] as object) as {
       permissions: string[];
       mode: string;

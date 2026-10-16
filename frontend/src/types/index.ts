@@ -928,6 +928,8 @@ export interface CambioRuta {
   antes: string;
   despues: string;
   sobrecosto: number | null;
+  /** Soportes de la justificación (cotización, correo del booking…). */
+  adjuntos: Array<{ id: string; nombre: string; tamano: number }>;
 }
 
 export interface RutaLiquidacion {

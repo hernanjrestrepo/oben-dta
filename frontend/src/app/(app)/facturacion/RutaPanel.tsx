@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
 import type { LiquidacionDraft, LiquidacionHeaderValues, LiquidacionTotalesInput, OpcionInland, OpcionMaritima, RutaLiquidacion } from '@/types';
-import { AlertCircle, Anchor, CheckCircle2, History, Landmark, Loader2, Receipt, RotateCcw, Truck } from 'lucide-react';
+import { AlertCircle, Anchor, CheckCircle2, History, Landmark, Loader2, Paperclip, X, Receipt, RotateCcw, Truck } from 'lucide-react';
 import { Card, CardHeader, btnPrimary, btnSecondary, fecha, inputCls, isNum, usd } from './ui';
 
 const ciudad = (puerto: string) => puerto.split(/,| - |\(/)[0].trim().toLowerCase();
@@ -16,11 +16,22 @@ type Entrada = { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesI
 function useGuardarRuta(pf: string, input: Entrada, onDraft: (d: LiquidacionDraft) => void) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
-  async function guardar(cambio: { maritimaId: string | null; inlandId: string | null; aduanaId?: string | null; motivo: string | null }) {
+  async function guardar(cambio: { maritimaId: string | null; inlandId: string | null; aduanaId?: string | null; motivo: string | null }, archivos: File[] = []) {
     try {
       setGuardando(true);
       setError('');
-      onDraft(await api.cambiarRutaLiquidacion(pf, cambio, input));
+      const d = await api.cambiarRutaLiquidacion(pf, cambio, input);
+      const nuevo = d.ruta?.historial[0];
+      if (archivos.length && nuevo) {
+        try {
+          d.ruta!.historial = await api.subirAdjuntosRuta(pf, nuevo.numero, archivos);
+        } catch (err) {
+          onDraft(d);
+          setError(extractMessage(err, 'El cambio quedó guardado, pero los adjuntos no se pudieron subir.'));
+          return true;
+        }
+      }
+      onDraft(d);
       return true;
     } catch (err) {
       setError(extractMessage(err, 'No se pudo guardar la ruta.'));
@@ -41,6 +52,7 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
   const { opciones, actual, sugerida, contenedores } = ruta;
   const [sel, setSel] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [archivos, setArchivos] = useState<File[]>([]);
   const [filtro, setFiltro] = useState({ origen: TODOS, destino: TODOS, agente: TODOS, naviera: TODOS });
   const { guardar, guardando, error } = useGuardarRuta(pf, input, onDraft);
 
@@ -66,10 +78,12 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
       volver
         ? { maritimaId: null, inlandId: actual.inlandPorComex ? actual.inlandId : null, aduanaId: actual.aduanaPorComex ? actual.aduanaId : null, motivo: motivo.trim() || null }
         : { maritimaId: marSel, inlandId: inlandOk ? actual.inlandId : null, aduanaId: actual.aduanaPorComex ? actual.aduanaId : null, motivo: motivo.trim() || null },
+      archivos,
     );
     if (ok) {
       setSel(null);
       setMotivo('');
+      setArchivos([]);
     }
   }
 
@@ -139,13 +153,15 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
               sobrecosto={pendiente ? sobrecosto : null}
               motivo={motivo}
               setMotivo={setMotivo}
+              archivos={archivos}
+              setArchivos={setArchivos}
               guardando={guardando}
               error={error}
               onAplicar={() => void aplicar()}
               onDescartar={() => setSel(null)}
               onVolver={() => void aplicar(true)}
             />
-            <Historial ruta={ruta} />
+            <Historial pf={pf} ruta={ruta} />
           </>
         )}
       </div>
@@ -181,6 +197,7 @@ export function OtrosGastosCard({
   const [sel, setSel] = useState<string | null>(null);
   const [selAduana, setSelAduana] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [archivos, setArchivos] = useState<File[]>([]);
   const { guardar, guardando, error } = useGuardarRuta(pf, input, onDraft);
 
   const h = liq.header;
@@ -213,11 +230,12 @@ export function OtrosGastosCard({
       inlandId: volver ? null : inlSel,
       aduanaId,
       motivo: motivo.trim() || null,
-    });
+    }, archivos);
     if (ok) {
       setSel(null);
       setSelAduana(null);
       setMotivo('');
+      setArchivos([]);
     }
   }
 
@@ -329,6 +347,8 @@ export function OtrosGastosCard({
               sobrecosto={sobre}
               motivo={motivo}
               setMotivo={setMotivo}
+              archivos={archivos}
+              setArchivos={setArchivos}
               guardando={guardando}
               error={error}
               onAplicar={() => void aplicar()}
@@ -370,6 +390,8 @@ function Aplicar(p: {
   sobrecosto: number | null;
   motivo: string;
   setMotivo: (v: string) => void;
+  archivos: File[];
+  setArchivos: (v: File[]) => void;
   guardando: boolean;
   error: string;
   onAplicar: () => void;
@@ -388,6 +410,7 @@ function Aplicar(p: {
         Justificación del cambio <span className="text-gray-400 font-normal">(opcional)</span>
         <input value={p.motivo} onChange={(e) => p.setMotivo(e.target.value)} maxLength={500} placeholder="Ej: espacio en el booking, tiempo de tránsito, pedido del cliente" className={`${inputCls} w-full mt-1`} />
       </label>
+      {p.pendiente && <Clip archivos={p.archivos} setArchivos={p.setArchivos} />}
       <div className="flex flex-wrap gap-2">
         {p.pendiente && (
           <>
@@ -415,7 +438,7 @@ function Aplicar(p: {
   );
 }
 
-function Historial({ ruta }: { ruta: RutaLiquidacion }) {
+function Historial({ pf, ruta }: { pf: string; ruta: RutaLiquidacion }) {
   const [ver, setVer] = useState(false);
   if (ruta.historial.length === 0) return null;
   return (
@@ -440,6 +463,7 @@ function Historial({ ruta }: { ruta: RutaLiquidacion }) {
               <p className={c.motivo ? '' : 'text-red-600'}>
                 <span className="text-gray-400">Motivo:</span> {c.motivo ?? 'sin justificación'}
               </p>
+              <Soportes pf={pf} adjuntos={c.adjuntos ?? []} />
             </li>
           ))}
         </ul>
@@ -483,5 +507,71 @@ function Marcas({ id, sugeridaId, actualId, vencida, validUntil }: { id: string;
       {id === actualId && id !== sugeridaId && <span className="px-1 rounded bg-amber-100 text-amber-800 text-[9px] font-semibold">EN USO</span>}
       {vencida && <span className="px-1 rounded bg-red-50 text-red-700 text-[9px] font-semibold">venció {validUntil}</span>}
     </span>
+  );
+}
+
+const MAX_ADJUNTOS = 5;
+const MAX_MB = 10;
+const kb = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+/** Clip: soportes de la justificación (cotización del forwarder, correo del booking…). Hasta 5 archivos de 10 MB. */
+function Clip({ archivos, setArchivos }: { archivos: File[]; setArchivos: (v: File[]) => void }) {
+  const [aviso, setAviso] = useState('');
+  function agregar(lista: FileList | null) {
+    const nuevos = Array.from(lista ?? []);
+    const grandes = nuevos.filter((f) => f.size > MAX_MB * 1024 * 1024);
+    const todos = [...archivos, ...nuevos.filter((f) => f.size <= MAX_MB * 1024 * 1024)].slice(0, MAX_ADJUNTOS);
+    setAviso(grandes.length ? `${grandes.map((f) => f.name).join(', ')}: supera ${MAX_MB} MB.` : archivos.length + nuevos.length > MAX_ADJUNTOS ? `Máximo ${MAX_ADJUNTOS} archivos.` : '');
+    setArchivos(todos);
+  }
+  return (
+    <div>
+      <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[#C4521A] hover:underline cursor-pointer">
+        <Paperclip className="w-3.5 h-3.5" /> Adjuntar soporte <span className="text-gray-400 font-normal">(cotización, correo del booking…)</span>
+        <input type="file" multiple className="hidden" onChange={(e) => { agregar(e.target.files); e.target.value = ''; }} />
+      </label>
+      {archivos.length > 0 && (
+        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+          {archivos.map((f, i) => (
+            <li key={`${f.name}-${i}`} className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white pl-2 pr-1 py-0.5 text-[11px] text-gray-700">
+              <Paperclip className="w-3 h-3 text-gray-400" /> {f.name} <span className="text-gray-400">{kb(f.size)}</span>
+              <button onClick={() => setArchivos(archivos.filter((_, j) => j !== i))} className="p-0.5 rounded hover:bg-gray-100" aria-label={`Quitar ${f.name}`}>
+                <X className="w-3 h-3 text-gray-400" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {aviso && <p className="mt-1 text-[11px] text-amber-700">{aviso}</p>}
+    </div>
+  );
+}
+
+/** Soportes de un cambio de ruta: clic abre el archivo en otra pestaña. */
+function Soportes({ pf, adjuntos }: { pf: string; adjuntos: Array<{ id: string; nombre: string; tamano: number }> }) {
+  const [abriendo, setAbriendo] = useState<string | null>(null);
+  if (!adjuntos.length) return null;
+  async function abrir(id: string) {
+    const ventana = window.open('', '_blank');
+    try {
+      setAbriendo(id);
+      const url = URL.createObjectURL(await api.abrirAdjuntoRuta(pf, id));
+      if (ventana) ventana.location.href = url;
+      else window.open(url, '_blank');
+    } catch {
+      ventana?.close();
+    } finally {
+      setAbriendo(null);
+    }
+  }
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-1.5">
+      <span className="text-gray-400">Soportes:</span>
+      {adjuntos.map((a) => (
+        <button key={a.id} onClick={() => void abrir(a.id)} className="inline-flex items-center gap-1 text-[#C4521A] hover:underline" disabled={abriendo === a.id}>
+          {abriendo === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />} {a.nombre} <span className="text-gray-400">({kb(a.tamano)})</span>
+        </button>
+      ))}
+    </p>
   );
 }

@@ -9,7 +9,7 @@ import {
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
-  FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, OrdenReciente, ProformaOrdenes, ProformaPendienteComex,
+  FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, CambioRuta, OrdenReciente, ProformaOrdenes, ProformaPendienteComex,
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
@@ -327,6 +327,24 @@ class ApiClient {
   ): Promise<LiquidacionDraft> {
     const { data } = await this.client.post<LiquidacionDraft>(`/liquidacion/${numberPF}/ruta`, { ...cambio, ...input }, this.OBEN_LIVE);
     return data;
+  }
+
+  /** Sube soportes (cotización, correo del booking…) a la justificación del cambio de ruta #numero. */
+  async subirAdjuntosRuta(numberPF: string, numero: number, archivos: File[]): Promise<CambioRuta[]> {
+    const form = new FormData();
+    for (const a of archivos) form.append('archivos', a, a.name);
+    const { data } = await this.client.post<CambioRuta[]>(`/liquidacion/${numberPF}/ruta/${numero}/adjuntos`, form, {
+      ...this.OBEN_LIVE,
+      // El cliente manda JSON por defecto y axios convertiría el FormData a JSON: los archivos van como multipart.
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  }
+
+  /** Un soporte de un cambio de ruta, para abrirlo o descargarlo. */
+  async abrirAdjuntoRuta(numberPF: string, id: string): Promise<Blob> {
+    const { data } = await this.client.get(`/liquidacion/${numberPF}/ruta/adjuntos/${id}`, { responseType: 'blob' });
+    return data as Blob;
   }
 
   async approveLiquidacion(
