@@ -14,7 +14,7 @@ import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { LIQUIDACION_VALUE_CALCULATOR, noQuedarPorDebajo, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
 import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-settlement-defaults';
-import { SP_PROFORMAS_COMEX, incotermDeProforma, paisDeProforma } from './incoterm-de-oben';
+import { SP_PROFORMAS_COMEX, incotermDeCheck, incotermDeProforma, paisDeProforma } from './incoterm-de-oben';
 import { unwrapCheckSettlement } from './check-settlement-respuesta';
 import { ARANCEL_USA_PCT, partidaComun } from './partidas-arancelarias';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
@@ -241,7 +241,9 @@ export class LiquidacionService {
     // Incoterm: lo escogido por el usuario manda; si no, el que trae Oben para la proforma.
     let incotermOrigen: LiquidacionDraft['incotermOrigen'] = digitados.incoterm ? 'usuario' : null;
     if (!digitados.incoterm) {
-      const deOben = (await this.proformaDeOben(pf)).incoterm;
+      // Primero el campo Incoterms de spCheckSettlement (Oben lo agregó el 16-oct; trae también las PF
+      // cerradas, como la 11237); si no viene, el reporte de proformas (solo las abiertas).
+      const deOben = incotermDeCheck(check) ?? (await this.proformaDeOben(pf)).incoterm;
       if (deOben) {
         digitados.incoterm = deOben;
         incotermOrigen = 'oben';

@@ -1171,6 +1171,21 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
       expect(draft.missing.some((m) => m.startsWith('Incoterm'))).toBe(false);
     });
 
+    it('16-oct: el campo Incoterms de spCheckSettlement manda, aunque la PF ya no esté en el reporte de proformas (PF 11237)', async () => {
+      const { service, sim, comex } = armar(comexCon(null));
+      const original = sim.call.bind(sim);
+      sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) => {
+        const r = await original(system, op, args, options);
+        return op === 'liquidacion.consultar' && args.numberPF === '11237' ? { ...r, data: { ...(r.data as object), Incoterms: 'DDP' } } : r;
+      };
+      const draft = await service.getDraft('11237', { totales: { flete: 3150 } });
+      expect(draft).toMatchObject({ incoterm: 'DDP', incotermOrigen: 'oben' });
+      expect(draft.missing.some((m) => m.startsWith('Incoterm'))).toBe(false);
+      expect(comex).toHaveLength(0); // ni hizo falta el reporte
+      // Lo escogido por el usuario sigue mandando.
+      expect((await service.getDraft('11237', { totales: { incoterm: 'DAP', flete: 3150 } })).incoterm).toBe('DAP');
+    });
+
     it('lo escogido por el usuario manda y ni se consulta a Oben', async () => {
       const { service, comex } = armar(comexCon('CFR'));
       const draft = await service.getDraft('11357', { totales: { incoterm: 'FCA' } });

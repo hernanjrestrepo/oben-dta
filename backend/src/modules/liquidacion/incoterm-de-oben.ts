@@ -36,6 +36,15 @@ function incotermEn(obj: Record<string, unknown>): string | null {
   return null;
 }
 
+/**
+ * Incoterm que trae spCheckSettlement (APILiquidacionParadixe) en el campo
+ * "Incoterms" — Oben lo agregó el 16-oct (PF 11237 → DDP, 11208 → CIF). Es
+ * la fuente principal: el reporte de proformas solo trae las abiertas.
+ */
+export function incotermDeCheck(check: unknown): string | null {
+  return check && typeof check === 'object' && !Array.isArray(check) ? incotermEn(check as Record<string, unknown>) : null;
+}
+
 /** País de destino de la proforma en el mismo reporte (campo "Pais", p. ej. "USA"). */
 export function paisDeProforma(data: unknown, numberPF: string): string | null {
   const pf = parsearProformasComex(data).find((r) => String(r.NroProforma ?? r.Proforma ?? '').trim() === numberPF);
