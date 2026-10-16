@@ -175,6 +175,8 @@ class LiquidacionStepError extends Error {
 @Injectable()
 export class LiquidacionService {
   private readonly logger = new Logger(LiquidacionService.name);
+  /** País por OV (no cambia): cada recálculo de la pantalla volvía a pedir el reporte de empaque a Oben. */
+  private readonly paisCache = new Map<string, { pais: string; hasta: number }>();
   private readonly proformaCache = new Map<string, { valor: { incoterm: string | null; pais: string | null }; hasta: number }>();
 
   constructor(
@@ -1110,6 +1112,9 @@ export class LiquidacionService {
   private async resolvePais(ordenVenta: string): Promise<string | null> {
     const n = Number(ordenVenta);
     if (!Number.isFinite(n) || n <= 0) return null;
+    const clave = `${this.ctx.tenantId}:${n}`;
+    const cache = this.paisCache.get(clave);
+    if (cache && cache.hasta > Date.now()) return cache.pais;
     // La Lista de Empaque es un reporte de PRODUCCIÓN (no del servidor de liquidación).
     try {
       const res = await this.hub.call<Record<string, unknown>>(
@@ -1119,6 +1124,7 @@ export class LiquidacionService {
         OBEN_QUERY_OPTIONS,
       );
       const pais = String((res.ok ? res.data : null)?.Pais ?? '').trim();
+      if (pais) this.paisCache.set(clave, { pais, hasta: Date.now() + INCOTERM_CACHE_MS });
       return pais || null;
     } catch {
       return null;
