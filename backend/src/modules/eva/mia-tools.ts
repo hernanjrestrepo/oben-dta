@@ -21,7 +21,7 @@ export const MIA_PANTALLAS: Record<string, string> = {
 
 /** Documentos que MIA puede ofrecer para descargar: el PDF de factura y los reportes Excel de Oben. */
 export const MIA_DOCUMENTOS: Record<string, string> = {
-  factura_pdf: 'PDF de la factura (borrador)',
+  factura_pdf: 'Vista previa de la factura en PDF (no es factura del ERP)',
   ...Object.fromEntries(OBEN_REPORTS.map((r) => [r.key, `${r.label} (Excel)`])),
 };
 
@@ -77,7 +77,7 @@ export const MIA_TOOLS: Array<{
     tool: {
       name: 'consultar_facturacion_orden',
       description:
-        'Datos de facturación de una OV consultados en vivo al ERP de Oben (cliente, país, proforma, orden de compra, contenedor, líneas con kilos y precios, valor total, tipo exportación/nacional, datos faltantes) y su historial de envíos de factura. Puede tardar unos segundos.',
+        'Estado de facturación de una OV: facturaEnErp dice si Oben Xmart creó la factura en el ERP de Oben (y si no, por qué); vistaPreviaOxmart es una vista previa calculada con los datos del ERP (cliente, país, proforma, OC, contenedor, líneas con kilos y precios, valor total, tipo exportación/nacional, datos faltantes) que NO es una factura del ERP; y el historial de envíos de factura. Puede tardar unos segundos.',
       input_schema: {
         type: 'object',
         properties: { ov },

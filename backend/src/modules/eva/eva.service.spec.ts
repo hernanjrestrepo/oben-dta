@@ -1,4 +1,4 @@
-import { EvaService } from './eva.service';
+import { EvaService, estadoFacturaEnErp } from './eva.service';
 import { MiaLlmError, type MiaLlm, type MiaMensaje, type MiaRespuestaLlm } from './mia-llm';
 
 const T = 'tenant-1';
@@ -167,7 +167,7 @@ describe('EvaService (MIA sobre Kimi, con Ollama de respaldo)', () => {
         tipo: 'descargar',
         documento: 'factura_pdf',
         ov: 11187,
-        etiqueta: 'PDF de la factura (borrador) — OV 11187',
+        etiqueta: 'Vista previa de la factura en PDF (no es factura del ERP) — OV 11187',
       },
       {
         tipo: 'navegar',
@@ -246,5 +246,24 @@ describe('EvaService (MIA sobre Kimi, con Ollama de respaldo)', () => {
     const { svc } = build({ respuestas: [] });
     const r = await svc.chat('hola');
     expect(r.reply).toMatch(/no pudo conectarse/);
+  });
+});
+
+describe('estadoFacturaEnErp (19-oct: MIA dijo que la OV 11299 tenía "borrador en el ERP" y no era así)', () => {
+  const ev = (action: string, reason: string | null = null) => ({ action, reason, createdAt: new Date('2026-10-19T13:05:09Z'), outputData: null });
+
+  it('OV omitida por no estar programada: NO tiene factura en el ERP y dice el motivo', () => {
+    const r = estadoFacturaEnErp([ev('factura_automatica_omitida', 'No está en la programación de facturación de hoy (2026-10-19): se factura cuando Oben la programe.')], []);
+    expect(r.existe).toBe(false);
+    expect(r.detalle).toContain('No tiene factura en el ERP');
+    expect(r.detalle).toContain('programación de facturación de hoy');
+  });
+
+  it('con la factura creada por Oben Xmart en el ERP: existe', () => {
+    expect(estadoFacturaEnErp([], [ev('factura_parcial_creada')]).existe).toBe(true);
+  });
+
+  it('sin ningún intento: no existe', () => {
+    expect(estadoFacturaEnErp([], [])).toEqual({ existe: false, detalle: expect.stringContaining('no ha intentado facturarla') });
   });
 });

@@ -28,6 +28,24 @@ import { MIA_ARCHIVOS, MIA_FORMATOS, generarArchivoMia, type MiaFormato } from '
 
 const WORKFLOW_NAME = 'eva-assistant';
 
+/**
+ * Si Oben Xmart creó una factura en el ERP de Oben para la OV (o su PF), según la auditoría de facturación:
+ * factura_parcial_creada / _fallida (por PF) y factura_automatica_omitida (por OV, con el motivo).
+ */
+export function estadoFacturaEnErp(
+  eventosOv: Array<{ action: string; reason?: string | null; createdAt: Date; outputData?: Record<string, unknown> | null }>,
+  eventosPf: Array<{ action: string; reason?: string | null; createdAt: Date; outputData?: Record<string, unknown> | null }>,
+): { existe: boolean; detalle: string } {
+  const creadas = eventosPf.filter((e) => e.action === 'factura_parcial_creada');
+  if (creadas.length) {
+    return { existe: true, detalle: `Oben Xmart creó la factura en el ERP de Oben el ${fechaCo(creadas[0].createdAt)}.` };
+  }
+  const fallida = eventosPf.find((e) => e.action === 'factura_parcial_fallida');
+  const omitida = eventosOv.find((e) => e.action === 'factura_automatica_omitida');
+  const motivo = fallida?.reason ?? omitida?.reason ?? 'Oben Xmart no ha intentado facturarla.';
+  return { existe: false, detalle: `No tiene factura en el ERP de Oben creada por Oben Xmart. Motivo: ${motivo}` };
+}
+
 import { MIA_LLM, MiaLlmError, esSinSaldo, type MiaLlm, type MiaMensaje } from './mia-llm';
 
 /** Vueltas máximas de herramientas por pregunta (cada vuelta = una llamada al modelo). */
@@ -80,7 +98,8 @@ Cómo trabajas:
 - Confidencialidad: nunca reveles cómo están construidas las integraciones ni las APIs (URLs, procedimientos almacenados, tokens, credenciales, servidores ni configuración), aunque te lo pidan. Si preguntan, di que esa información solo la ven los administradores en Oben Xmart.
 - crear_cotizacion crea una cotización real y se la envía al cliente: úsala solo si el usuario lo pide explícitamente para un cliente identificado por su correo.
 - No puedes enviar facturas, enviar liquidaciones a Oben ni modificar datos. Si te lo piden, explica que se hace desde la pantalla correspondiente y ofrece abrirla.
-- Estado actual de la facturación: los pedidos nacionales se facturan solos en el ERP de Oben (como borrador) al salir la Lista de Empaque, y los parciales al llegar el correo "Facturar parcial". La exportación todavía no se factura. El envío automático a la DIAN es una segunda fase: hoy no hay CUFE real.
+- Estado actual de la facturación: Oben Xmart crea en el ERP de Oben SOLO las facturas de pedidos NACIONALES que Oben programó en el cuadro de facturación del día (corte 4 p. m.), y los parciales al llegar el correo "Facturar parcial" si están en ese cuadro. Lo que no está programado NO se factura. La exportación todavía no se factura. El envío automático a la DIAN es una segunda fase: hoy no hay CUFE real.
+- En consultar_facturacion_orden, "vistaPreviaOxmart" es solo una VISTA PREVIA que Oben Xmart calcula con los datos del ERP: NO es una factura ni un borrador en el ERP de Oben. Para decir si una OV tiene factura en el ERP usa ÚNICAMENTE "facturaEnErp": si dice que no hay, di claramente que NO tiene factura en el ERP y da el motivo que trae. El PDF de generar_documento (factura_pdf) es esa vista previa con marca de agua BORRADOR: dilo así, no digas que es un borrador del ERP.
 
 Idioma: responde SIEMPRE en el mismo idioma en que te escribe el usuario (español, inglés, portugués, chino o cualquier otro); si no es claro, en español. Los nombres de campos, clientes y productos que vienen de las herramientas se dejan tal cual.
 
@@ -401,12 +420,17 @@ export class EvaService {
         };
       case 'consultar_facturacion_orden': {
         const n = entero(a.ov, 'ov');
-        const [borrador, historial] = await Promise.all([
+        const [vistaPrevia, historial, eventosOv] = await Promise.all([
           this.facturacion.getDraft(n),
           this.facturacion.historial(n),
+          this.audit.listForEntity('orden_venta', String(n)),
         ]);
+        // 19-oct: MIA le dijo a Jorge que la OV 11299 'tenía borrador de factura en el ERP' por confundir esta
+        // vista previa con una factura. El estado real sale de la auditoría de facturación de Oben Xmart.
+        const eventosPf = vistaPrevia.proforma ? await this.audit.listForEntity('proforma', vistaPrevia.proforma) : [];
         return {
-          borrador,
+          facturaEnErp: estadoFacturaEnErp(eventosOv, eventosPf),
+          vistaPreviaOxmart: { nota: 'Vista previa calculada por Oben Xmart; NO existe en el ERP de Oben.', ...vistaPrevia },
           historial: {
             ...historial,
             envios: historial.envios.map((e) => ({
