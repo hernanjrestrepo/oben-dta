@@ -88,6 +88,36 @@ export function valorEnLetras(valor: number, moneda: 'COP' | 'USD'): string {
   return centavos ? `${base} CON ${enteroEnLetras(centavos)} CENTAVOS` : base;
 }
 
+/**
+ * Pesos en letras como los escribe Facture en las OBSERVACIONES (FV-242518, 19-oct): "TREINTA Y UNO MILLONES
+ *  OCHOCIENTOS …" — sin apócope ("UNO MILLONES") y con doble espacio después de "MILLONES", tal cual.
+ */
+function pesosComoFacture(n: number): string {
+  const millones = Math.floor(n / 1_000_000);
+  const resto = n % 1_000_000;
+  if (!millones) return enteroEnLetras(resto);
+  const m = millones === 1 ? 'UN MILLON' : `${enteroEnLetras(millones)} MILLONES`;
+  return resto ? `${m}  ${enteroEnLetras(resto)}` : m;
+}
+
+/**
+ * Factura NACIONAL en moneda distinta de COP (José Guzmán, 19-oct, modelo FV-242518): en OBSERVACIONES van
+ * los totales pasados a pesos con la TRM de la factura y en letras, una línea por concepto:
+ * "SUBTOTAL 31835654.2534 COP - TREINTA Y UNO MILLONES  OCHOCIENTOS … CON 25/100 COP".
+ * El valor va con 4 decimales y sin separador de miles; los centavos de la letra son los 2 primeros, redondeados.
+ * Los conceptos en 0 (p. ej. sin ReteIVA) no se escriben.
+ */
+export function totalesEnPesos(totales: Array<[concepto: string, valorUsd: number]>, trm: number): string[] {
+  return totales
+    .filter(([, v]) => v !== 0)
+    .map(([concepto, v]) => {
+      const cop = Math.round(v * trm * 10_000) / 10_000;
+      const centavos = Math.round(cop * 100);
+      const entero = Math.floor(centavos / 100);
+      return `${concepto} ${cop.toFixed(4)} COP - ${pesosComoFacture(entero)} CON ${String(centavos % 100).padStart(2, '0')}/100 COP`;
+    });
+}
+
 /** "ARE: ... PESOS" (la factura nacional repite el valor en inglés). */
 export function valueInWords(valor: number, moneda: 'COP' | 'USD'): string {
   const { entero, centavos } = partes(valor);
