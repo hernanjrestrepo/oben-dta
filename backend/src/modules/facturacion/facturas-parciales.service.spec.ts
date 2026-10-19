@@ -220,6 +220,30 @@ describe('Factura AUTOMÁTICA de pedidos nacionales (Hernán, 7-oct)', () => {
     expect(crearCalls(hub)).toBe(2);
   });
 
+  it('19-oct (OV 11299): timeout y luego "ya ha sido procesado en otra instancia" → "revisar", nunca "rechazada" (no se reintenta a ciegas)', async () => {
+    const { svc, hub } = build();
+    let n = 0;
+    hub.call.mockImplementation(async (_s: string, op: string, args: { procedure?: string }) => {
+      if (op === 'query.run' && args?.procedure === 'spEmpaqueUnificada_Paradixe') return { ok: true, mode: 'real', data: { Pais: 'COLOMBIA', Proforma: '11503' } };
+      if (op === 'query.run') return { ok: true, mode: 'real', data: [{ NroProforma: '11503', Mercado: 'NACIONAL' }] };
+      if (op !== 'factura.crear') return { ok: true, mode: 'real', data: {} };
+      n += 1;
+      return n === 1
+        ? { ok: false, mode: 'real', error: 'This operation was aborted' }
+        : {
+            ok: false,
+            mode: 'real',
+            error: 'Oben rechazó la operación (Code 500): Orden de venta #CLOP_9891_OV ya ha sido procesado en otra instancia del navegador o por otro usuario. Vuelva a abrir la transacción para ver el estado actual. _ ',
+          };
+    });
+    const f = await svc.registrarManual('11503', '1');
+    const r = await svc.facturar(f.id);
+    expect(r.estado).toBe('revisar');
+    expect(r.error).toMatch(/lo más probable es que la factura SÍ se creó/);
+    await expect(svc.facturar(f.id)).rejects.toThrow(/verifícalo en OBEN MAS/);
+    expect(crearCalls(hub)).toBe(2);
+  });
+
   it('si la verificación tampoco aclara (otro timeout), queda en "revisar"', async () => {
     const { svc, hub } = build({ hub: { ok: false, error: 'This operation was aborted' } });
     const f = await svc.registrarManual('11250', '11084');

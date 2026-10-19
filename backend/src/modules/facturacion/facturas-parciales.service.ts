@@ -31,6 +31,13 @@ export function numeroDeRespuesta(data: unknown): string | null {
   return /^\d{4,}$/.test(m) ? m : null;
 }
 const YA_FACTURADA = /NO SE ENCUENTRA EN LA ORDEN DE VENTA|se encuentra en estado:\s*Facturada/i;
+/**
+ * 19-oct, OV 11299: la primera llamada no respondió en 35 s y la verificación devolvió "Orden de venta
+ * #CLOP_9891_OV ya ha sido procesado en otra instancia del navegador o por otro usuario". Eso NO es un rechazo:
+ * casi seguro la primera llamada la facturó (o la está procesando). Queda en "revisar" para que nadie la
+ * reintente a ciegas y la duplique.
+ */
+const PROCESADA_EN_OTRA = /ya ha sido procesad[oa] en otra instancia|procesad[oa] por otro usuario/i;
 
 /** true solo si Oben confirma el éxito: `isSuccessful` verdadero o `Code` 200 (mayúsculas/minúsculas y texto/número indistintos). */
 export function confirmaExito(data: unknown): boolean {
@@ -229,9 +236,18 @@ export class FacturasParcialesService {
     const errorCliente = esErrorCliente(r);
     const confirmada = esExito(r) || yaFacturada;
     const enEspera = !confirmada && !r.ok && EN_ESPERA_OBEN.test(r.error ?? '');
-    const estado: EstadoFacturaParcial = confirmada ? 'facturada' : enEspera ? 'en_espera' : r.ok || (!rechazo && !errorCliente) ? 'revisar' : 'rechazada';
+    const procesadaEnOtra = !confirmada && !r.ok && PROCESADA_EN_OTRA.test(r.error ?? '');
+    const estado: EstadoFacturaParcial = confirmada
+      ? 'facturada'
+      : enEspera
+        ? 'en_espera'
+        : procesadaEnOtra || r.ok || (!rechazo && !errorCliente)
+          ? 'revisar'
+          : 'rechazada';
     const errorTexto = confirmada
       ? null
+      : procesadaEnOtra
+        ? `Oben dice que la orden ${verificada ? 'ya fue procesada (la primera solicitud no respondió a tiempo)' : 'la está procesando otro usuario'}: lo más probable es que la factura SÍ se creó. Verificar en OBEN MAS antes de reintentar. Respuesta de Oben: ${r.error}`
       : r.ok
         ? `Respuesta de Oben sin confirmación de éxito (${JSON.stringify(r.data ?? null).slice(0, 160)}). Verificar en OBEN MAS si la factura existe antes de reintentar.`
         : (r.error ?? 'Error desconocido');
