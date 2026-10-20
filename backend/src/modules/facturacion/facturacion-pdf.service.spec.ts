@@ -108,7 +108,8 @@ describe('FacturacionPdfService — formato de la factura electrónica de Oben (
     expect(text).toContain(squash('Representación Gráfica De Factura Electrónica De Venta Exportación'));
     expect(text).toContain(squash('BORRADOR'));
     // Como FastReport: observaciones+subtotal y valor en letras+neto van enteros, cada uno donde quepa (la FEXP3190 los lleva a las páginas 8 y 9).
-    expect(paginas).toBe(3);
+    // Con la línea "TOTAL VALOR … INCOTERM 2020" en un solo renglón (20-oct) las observaciones caben en 2 páginas.
+    expect(paginas).toBe(2);
   });
 
   it('con materiales SC (OPP Seal Film) la descripción de la partida sale de la tabla de Oben', async () => {

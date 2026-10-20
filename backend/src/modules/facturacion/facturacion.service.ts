@@ -30,9 +30,9 @@ import type {
 import { SP_PROFORMAS_COMEX, parsearProformasComex } from '../liquidacion/incoterm-de-oben';
 import { FacturacionPdfService } from './facturacion-pdf.service';
 import { LiquidacionService } from '../liquidacion/liquidacion.service';
-import type { LiquidacionDraft } from '../liquidacion/liquidacion.types';
+import type { LiquidacionDraft, LiquidacionInput } from '../liquidacion/liquidacion.types';
 import { TrmService } from './trm.service';
-import type { DatosFacturaDian } from './factura-dian/representacion';
+import { construirFacturaDian, type DatosFacturaDian } from './factura-dian/representacion';
 
 const WORKFLOW_NAME = 'facturacion';
 /** Una factura electrónica es permanente: la clave de idempotencia de su emisión no debe expirar nunca en la práctica. */
@@ -649,12 +649,16 @@ export class FacturacionService {
   }
 
   /** Lo que la factura necesita además del borrador: liquidación (exportación), TRM y datos del maestro de clientes. */
-  private async datosFactura(draft: FacturacionDraft, factura: FacturaElectronica | null): Promise<Omit<DatosFacturaDian, 'draft' | 'factura'>> {
+  private async datosFactura(
+    draft: FacturacionDraft,
+    factura: FacturaElectronica | null,
+    liquidacionInput?: LiquidacionInput,
+  ): Promise<Omit<DatosFacturaDian, 'draft' | 'factura'>> {
     const exportacion = draft.kind === 'exportacion';
     let liquidacion: LiquidacionDraft | null = null;
     if (exportacion && draft.proforma && this.liquidacion) {
       try {
-        liquidacion = await this.liquidacion.getDraft(draft.proforma);
+        liquidacion = await this.liquidacion.getDraft(draft.proforma, liquidacionInput);
       } catch (err) {
         this.logger.warn(`Factura OV ${draft.numberOrderSales}: no se pudo calcular la liquidación de la PF ${draft.proforma}: ${(err as Error).message}`);
       }
@@ -666,6 +670,33 @@ export class FacturacionService {
       : [];
     const c = matches.length === 1 ? matches[0] : null;
     return { liquidacion, trm, cliente: c ? { correo: c.email, telefono: c.phone, direccion: c.address } : null };
+  }
+
+  /**
+   * Cómo saldrá la factura (observaciones, totales, término de pago) con lo que COMEX tiene en pantalla en la
+   * liquidación (María, 20-oct: "que podamos ver aquí las observaciones" antes de aprobar). No emite nada.
+   */
+  async vistaFactura(numberOrderSales: number, liquidacionInput?: LiquidacionInput) {
+    const draft = await this.getDraft(numberOrderSales);
+    const emitida = await this.facturaElectronicaEmitida(numberOrderSales);
+    const datos = await this.datosFactura(draft, emitida, liquidacionInput);
+    const { factura: f, avisos } = construirFacturaDian({ draft, factura: emitida, ...datos });
+    return {
+      numberOrderSales,
+      tipo: f.tipo,
+      moneda: f.moneda,
+      incoterm: f.incoterm,
+      terminosPago: f.terminosPago,
+      ordenCompra: f.ordenCompra,
+      observaciones: f.observaciones,
+      lineas: f.lineas.map((l) => ({ codigo: l.codigo, descripcion: l.descripcion, cantidad: l.cantidad, valorUnitario: l.valorUnitario, total: l.total })),
+      subtotal: f.subtotal,
+      flete: f.flete,
+      seguro: f.seguro,
+      otrosGastos: f.otrosGastos,
+      neto: f.neto,
+      avisos,
+    };
   }
 
   /** Proformas de exportación pendientes de aprobación de COMEX (la pantalla las lista para escoger). */

@@ -45,6 +45,9 @@ import { FacturaParcial } from './entities/factura-parcial.entity';
 import { FacturaProgramada } from './entities/factura-programada.entity';
 import { LiquidacionAprobacion } from './entities/liquidacion-aprobacion.entity';
 import { LiquidacionRuta } from './entities/liquidacion-ruta.entity';
+import { LiquidacionPreferenciaCliente } from './entities/liquidacion-preferencia-cliente.entity';
+import { LiquidacionDescarte } from './entities/liquidacion-descarte.entity';
+import { FreightRateCarga } from './entities/freight-rate-carga.entity';
 import { LiquidacionRutaAdjunto } from './entities/liquidacion-ruta-adjunto.entity';
 import { Tenant } from './entities/tenant.entity';
 import { ModuleCatalog } from './entities/module-catalog.entity';
@@ -178,6 +181,9 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
           LiquidacionAprobacion,
           LiquidacionRuta,
           LiquidacionRutaAdjunto,
+          LiquidacionPreferenciaCliente,
+          LiquidacionDescarte,
+          FreightRateCarga,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',
         logging: config.get('NODE_ENV') === 'development',

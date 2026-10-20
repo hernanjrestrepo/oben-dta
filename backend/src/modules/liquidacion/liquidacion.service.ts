@@ -5,6 +5,9 @@ import { In, Repository } from 'typeorm';
 import { LiquidacionAprobacion } from '../../entities/liquidacion-aprobacion.entity';
 import { LiquidacionRuta } from '../../entities/liquidacion-ruta.entity';
 import { LiquidacionRutaAdjunto } from '../../entities/liquidacion-ruta-adjunto.entity';
+import { LiquidacionPreferenciaCliente } from '../../entities/liquidacion-preferencia-cliente.entity';
+import { LiquidacionDescarte } from '../../entities/liquidacion-descarte.entity';
+import { descripcionNcm, descripcionPartida } from '../facturacion/factura-dian/representacion';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -32,8 +35,26 @@ import type {
   LiquidacionSubmitOptions,
   LiquidacionSubmitResult,
   LiquidacionTotalesInput,
+  OrigenValor,
   ProformaPendienteComex,
 } from './liquidacion.types';
+
+/** "Videplast Indústria de Embalagens Ltda." → "VIDEPLAST INDUSTRIA DE EMBALAGENS LTDA" (para las preferencias por cliente). */
+export function claveCliente(nombre: string | null | undefined): string {
+  return String(nombre ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim();
+}
+
+/** Sin nulos ni textos vacíos: lo que de verdad se digitó. */
+function soloDigitado<T extends object>(o: T | null | undefined): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(o ?? {}).filter(([, v]) => v !== null && v !== undefined && !(typeof v === 'string' && !v.trim())),
+  ) as Partial<T>;
+}
 
 const WORKFLOW_NAME = 'liquidacion';
 /** Una liquidación es permanente: la clave de idempotencia no debe expirar nunca en la práctica. */
@@ -202,6 +223,12 @@ export class LiquidacionService {
     @Optional()
     @InjectRepository(LiquidacionRutaAdjunto)
     private readonly adjuntos?: Repository<LiquidacionRutaAdjunto>,
+    @Optional()
+    @InjectRepository(LiquidacionPreferenciaCliente)
+    private readonly preferencias?: Repository<LiquidacionPreferenciaCliente>,
+    @Optional()
+    @InjectRepository(LiquidacionDescarte)
+    private readonly descartes?: Repository<LiquidacionDescarte>,
   ) {}
 
   /** Borrador + estado de la aprobación de COMEX (si la PF ya está lista para aprobarse). */
@@ -216,6 +243,10 @@ export class LiquidacionService {
   private async armarDraft(numberPF: string, input: LiquidacionInput = {}): Promise<LiquidacionDraft> {
     const pf = this.parsePF(numberPF);
     const check = await this.fetchCheck(pf);
+    // Lo que COMEX dejó al aprobar se vuelve a aplicar (20-oct: se perdía al recargar y en la factura); lo
+    // que se digita ahora manda sobre eso.
+    const aprobada = await this.entradaAprobada(pf);
+    const lineasDigitadas = input.lines ?? aprobada?.lines;
     // País: Lista de Empaque (producción) → reporte de proformas de Oben → dirección de destino.
     const pais =
       (await this.resolvePais(check.OrdenVenta)) ??
@@ -246,7 +277,7 @@ export class LiquidacionService {
     const totalKilos = round2(baseLines.reduce((a, l) => a + l.kilosTotal, 0));
     const envio = { totalValor, totalKilos, kilosPorLinea: baseLines.map((l) => l.kilosTotal) };
 
-    const digitados: LiquidacionTotalesInput = { ...(input.totales ?? {}) };
+    const digitados: LiquidacionTotalesInput = { ...soloDigitado(aprobada?.totales), ...soloDigitado(input.totales) };
     // Incoterm: lo escogido por el usuario manda; si no, el que trae Oben para la proforma.
     let incotermOrigen: LiquidacionDraft['incotermOrigen'] = digitados.incoterm ? 'usuario' : null;
     if (!digitados.incoterm) {
@@ -275,8 +306,24 @@ export class LiquidacionService {
       (header as Record<string, unknown>)[key] = value;
       headerOrigen[key] = 'usuario';
     }
+    for (const [key, value] of Object.entries(aprobada?.header ?? {}) as Array<[keyof LiquidacionHeaderValues, unknown]>) {
+      if (this.isBlank(value) || headerOrigen[key] === 'usuario') continue;
+      (header as Record<string, unknown>)[key] = value;
+      headerOrigen[key] = 'comex';
+    }
+    // Preferencias del cliente (lo que COMEX dejó para este cliente y esta partida en otra proforma).
+    const partidaOben = paridaComun ?? [...new Set(check.Detalle.map((l) => String(l.TipoPelicula ?? '').trim()).filter(Boolean))].sort().join('+');
+    const preferencia = await this.preferenciaDe(check.Cliente, partidaOben);
+    const ajustesCliente: string[] = [];
+    for (const key of ['paNcm', 'paNaladi'] as const) {
+      const v = preferencia?.[key];
+      if (!v || headerOrigen[key] === 'usuario' || headerOrigen[key] === 'comex') continue;
+      header[key] = v;
+      headerOrigen[key] = 'cliente';
+      ajustesCliente.push(`${key === 'paNcm' ? 'Partida NCM' : 'Partida NALADI'} ${v}: la que COMEX dejó para este cliente${preferencia?.numberPF ? ` (PF ${preferencia.numberPF})` : ''}.`);
+    }
 
-    const ajustes: string[] = [];
+    const ajustes: string[] = [...ajustesCliente];
     const prov = this.opciones?.valoresProvisionales === true;
     const totalesOrigen: LiquidacionDraft['totalesOrigen'] = {};
     if (esMonto(digitados.flete)) totalesOrigen.flete = 'usuario';
@@ -433,14 +480,14 @@ export class LiquidacionService {
     }
 
     const calcular = (t: LiquidacionTotalesInput) => {
-      const r = this.calcularLineas(baseLines, input.lines, (l, indice) =>
+      const r = this.calcularLineas(baseLines, lineasDigitadas, (l, indice) =>
         this.calculator.compute({ ...envio, indice, pais, esUSA, incoterm, totales: t, line: l }),
       );
       // José: si por los decimales la suma queda por debajo del valor de la mercancía, al último ítem se le
       // resta 0.0001 al flete por unidad y se le suma al precio final (el FOB final = precio final × kilos
       // sube). El flete en dólares NO se toca (Hernán, 16-oct). Si el usuario sobrescribió el último ítem, manda lo suyo.
       const ultimo = baseLines.at(-1);
-      const pasosAjuste = ultimo && !input.lines?.[String(ultimo.codSecLineFilm)] ? noQuedarPorDebajo(r.lines) : 0;
+      const pasosAjuste = ultimo && !lineasDigitadas?.[String(ultimo.codSecLineFilm)] ? noQuedarPorDebajo(r.lines) : 0;
       return { ...r, pasosAjuste };
     };
     // USA con DAP/DDP sin "otros costos destino" digitados: la primera pasada
@@ -575,6 +622,9 @@ export class LiquidacionService {
       sinConfirmar,
       partidaTipo: partida,
       descripcionSku,
+      terminoPago: typeof check.TerminoPago === 'string' && check.TerminoPago.trim() ? check.TerminoPago.trim() : null,
+      factura: this.textoFactura(input, aprobada, preferencia, header.paNcm ?? null, descripcionSku, partida, check.Detalle.map((l) => l.TipoPelicula)),
+      partidaOben,
       ruta: opcionesRuta
         ? {
             opciones: opcionesRuta,
@@ -613,6 +663,8 @@ export class LiquidacionService {
     const res = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: SP_PROFORMAS_COMEX, numberOrderSales: '0' }, OBEN_QUERY_OPTIONS);
     if (!res.ok) throw new BadRequestException(res.error ?? 'Oben no respondió el reporte de proformas.');
     const aprobadas = new Set((this.aprobaciones ? await this.aprobaciones.find({ where: { tenantId: this.ctx.tenantId } }) : []).map((a) => a.numberPF));
+    // Las que COMEX ya liquidó por fuera (20-oct, p. ej. la 11166) no son pendientes.
+    const descartadas = new Set((this.descartes ? await this.descartes.find({ where: { tenantId: this.ctx.tenantId } }) : []).map((d) => d.numberPF));
     const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
     return parsearProformasComex(res.data)
       .filter((f) => /EXPORT/i.test(String(f.Mercado ?? '')))
@@ -625,7 +677,7 @@ export class LiquidacionService {
           .map((o) => Number(o?.NroOrdenVenta))
           .filter((n) => Number.isInteger(n) && n > 0),
       }))
-      .filter((p) => p.numberPF && !aprobadas.has(p.numberPF))
+      .filter((p) => p.numberPF && !aprobadas.has(p.numberPF) && !descartadas.has(p.numberPF))
       // Solo las listas para liquidar: alguna OV con la lista de empaque ya aprobada en corte (Hernán, 16-oct;
       // las demás se buscan a mano por número).
       .filter((p) => !ovsListas || p.ordenesVenta.some((ov) => ovsListas.has(ov)))
@@ -1099,7 +1151,11 @@ export class LiquidacionService {
         : Array.isArray(v)
           ? v.map(orden)
           : v;
-    return createHash('sha256').update(JSON.stringify(orden(this.buildPayloads(draft)))).digest('hex');
+    // El texto de la factura junto a la partida también lo aprueba COMEX; solo entra si cambió (las aprobaciones
+    // anteriores al 20-oct siguen valiendo).
+    const f = draft.factura;
+    const extra = f && (f.ncmDescripcion || f.ncmConDescripcion === false) ? { factura: { ncmDescripcion: f.ncmDescripcion, ncmConDescripcion: f.ncmConDescripcion } } : {};
+    return createHash('sha256').update(JSON.stringify(orden({ ...this.buildPayloads(draft), ...extra }))).digest('hex');
   }
 
   private async estadoAprobacion(draft: LiquidacionDraft): Promise<import('./liquidacion.types').AprobacionEstado> {
@@ -1153,7 +1209,9 @@ export class LiquidacionService {
     fila.huella = this.huella(draft);
     fila.aprobadoPor = this.ctx.userId ?? null;
     fila.aprobadoPorNombre = aprobador.nombre;
+    fila.entrada = this.entradaParaGuardar(input, (fila.entrada ?? null) as LiquidacionInput | null);
     await this.aprobaciones.save(fila);
+    await this.guardarPreferencia(draft, aprobador.nombre);
     await this.audit.log({
       workflowName: WORKFLOW_NAME,
       eventType: WorkflowEventType.ACTION_EXECUTED,
@@ -1259,6 +1317,134 @@ export class LiquidacionService {
    */
   private isAmbiguous(error?: string): boolean {
     return /timeout|time-out|timed out|econnreset|econnrefused|socket|network|fetch failed|abort|\bHTTP 50[24]\b/i.test(error ?? '');
+  }
+
+  /** Lo que COMEX dejó al aprobar la PF (null si nunca se aprobó o la aprobación es anterior al 20-oct). */
+  private async entradaAprobada(pf: string): Promise<LiquidacionInput | null> {
+    if (!this.aprobaciones) return null;
+    const fila = await this.aprobaciones.findOne({ where: { tenantId: this.ctx.tenantId, numberPF: pf } });
+    return (fila?.entrada as LiquidacionInput | null | undefined) ?? null;
+  }
+
+  /** Lo digitado al aprobar, encima de lo que ya se había guardado (sin vacíos: nada se borra por omisión). */
+  private entradaParaGuardar(input: LiquidacionInput, anterior: LiquidacionInput | null): Record<string, unknown> {
+    const header = { ...soloDigitado(anterior?.header), ...soloDigitado(input.header) };
+    const totales = { ...soloDigitado(anterior?.totales), ...soloDigitado(input.totales) };
+    const factura = { ...soloDigitado(anterior?.factura), ...soloDigitado(input.factura) };
+    const lines = input.lines ?? anterior?.lines;
+    return { header, totales, factura, ...(lines ? { lines } : {}) };
+  }
+
+  private async preferenciaDe(cliente: string | null | undefined, partidaOben: string): Promise<LiquidacionPreferenciaCliente | null> {
+    const clave = claveCliente(cliente);
+    if (!this.preferencias || !clave) return null;
+    try {
+      return await this.preferencias.findOne({ where: { tenantId: this.ctx.tenantId, clienteClave: clave, partidaOben } });
+    } catch (err) {
+      this.logger.warn(`No se pudieron leer las preferencias del cliente ${clave}: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
+  /** Texto que va junto a la partida NCM en la factura: lo digitado → lo aprobado → lo del cliente → el de Oben. */
+  private textoFactura(
+    input: LiquidacionInput,
+    aprobada: LiquidacionInput | null,
+    preferencia: LiquidacionPreferenciaCliente | null,
+    ncm: string | null,
+    descripcionSku: string | null,
+    partida: import('./partidas-arancelarias').PartidaArancelaria | null,
+    tipos: string[],
+  ): NonNullable<LiquidacionDraft['factura']> {
+    const primero = <T>(...c: Array<[T | null | undefined, OrigenValor]>) =>
+      c.find(([v]) => v !== null && v !== undefined && !(typeof v === 'string' && !v.trim())) ?? null;
+    const d = primero<string>([input.factura?.ncmDescripcion, 'usuario'], [aprobada?.factura?.ncmDescripcion, 'comex'], [preferencia?.ncmDescripcion, 'cliente']);
+    const c = primero<boolean>([input.factura?.ncmConDescripcion, 'usuario'], [aprobada?.factura?.ncmConDescripcion, 'comex'], [preferencia?.ncmConDescripcion, 'cliente']);
+    const porDefecto = descripcionNcm(ncm, descripcionSku, partida ?? descripcionPartida(ncm, tipos)).trim() || null;
+    return {
+      ncmDescripcion: d ? String(d[0]).trim() : null,
+      ncmConDescripcion: c ? c[0] !== false : true,
+      ncmDescripcionPorDefecto: porDefecto,
+      origen: d?.[1] ?? c?.[1] ?? null,
+    };
+  }
+
+  /** Al aprobar: lo que COMEX dejó distinto de Oben queda como preferencia del cliente para esa partida. */
+  private async guardarPreferencia(draft: LiquidacionDraft, por: string | null): Promise<void> {
+    const clave = claveCliente(draft.cliente);
+    if (!this.preferencias || !clave) return;
+    const propio = (o: OrigenValor | null | undefined) => o === 'usuario' || o === 'comex' || o === 'cliente';
+    const paNcm = propio(draft.headerOrigen.paNcm) ? (draft.header.paNcm ?? null) : null;
+    const paNaladi = propio(draft.headerOrigen.paNaladi) ? (draft.header.paNaladi ?? null) : null;
+    const f = draft.factura;
+    const conTexto = !!f && propio(f.origen);
+    if (!paNcm && !paNaladi && !conTexto) return;
+    try {
+      const partidaOben = draft.partidaOben ?? '';
+      const fila =
+        (await this.preferencias.findOne({ where: { tenantId: this.ctx.tenantId, clienteClave: clave, partidaOben } })) ??
+        this.preferencias.create({ tenantId: this.ctx.tenantId, clienteClave: clave, partidaOben });
+      Object.assign(fila, {
+        cliente: draft.cliente,
+        paNcm,
+        paNaladi,
+        ncmDescripcion: conTexto ? (f!.ncmDescripcion ?? null) : null,
+        ncmConDescripcion: conTexto ? f!.ncmConDescripcion : null,
+        numberPF: draft.numberPF,
+        actualizadoPor: por,
+      });
+      await this.preferencias.save(fila);
+    } catch (err) {
+      this.logger.warn(`PF ${draft.numberPF}: no se pudo guardar la preferencia del cliente: ${(err as Error).message}`);
+    }
+  }
+
+  /** COMEX ya la liquidó por fuera: sale de la lista de pendientes (se puede seguir abriendo por número). */
+  async descartarPendiente(numberPF: string, motivo: string | null, usuario: { nombre: string | null }): Promise<{ numberPF: string; descartada: boolean }> {
+    const pf = this.parsePF(numberPF);
+    if (!this.descartes) throw new BadRequestException('No disponible en este ambiente.');
+    const tenantId = this.ctx.tenantId;
+    const fila = (await this.descartes.findOne({ where: { tenantId, numberPF: pf } })) ?? this.descartes.create({ tenantId, numberPF: pf });
+    Object.assign(fila, { motivo: motivo?.trim() || null, usuarioId: this.ctx.userId ?? null, usuarioNombre: usuario.nombre });
+    await this.descartes.save(fila);
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: 'liquidacion_pendiente_descartada',
+      entityType: 'liquidacion',
+      entityId: pf,
+      actorId: this.ctx.userId,
+      inputData: { motivo: fila.motivo, usuario: usuario.nombre },
+    });
+    return { numberPF: pf, descartada: true };
+  }
+
+  async restaurarPendiente(numberPF: string): Promise<{ numberPF: string; descartada: boolean }> {
+    const pf = this.parsePF(numberPF);
+    if (this.descartes) await this.descartes.delete({ tenantId: this.ctx.tenantId, numberPF: pf });
+    return { numberPF: pf, descartada: false };
+  }
+
+  /**
+   * La proforma tal como la tiene Oben (María, 20-oct: "cuando vamos a liquidar consultamos la proforma"):
+   * encabezado y detalle de spCheckSettlement y la fila del reporte de proformas COMEX. Solo lectura.
+   */
+  async proformaCompleta(numberPF: string): Promise<{ numberPF: string; campos: Record<string, unknown>; detalle: Array<Record<string, unknown>>; reporte: Record<string, unknown> | null }> {
+    const pf = this.parsePF(numberPF);
+    const check = await this.fetchCheck(pf);
+    const { Detalle, ...campos } = check;
+    let reporte: Record<string, unknown> | null = null;
+    for (const target of [undefined, 'liquidacion'] as const) {
+      try {
+        const res = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf, ...(target ? { target } : {}) }, INCOTERM_QUERY_OPTIONS);
+        if (!res.ok) continue;
+        reporte = parsearProformasComex(res.data).find((r) => String(r.NroProforma ?? r.Proforma ?? '').trim() === pf) ?? null;
+        if (reporte) break;
+      } catch {
+        /* se prueba el siguiente servidor */
+      }
+    }
+    return { numberPF: pf, campos, detalle: Detalle as unknown as Array<Record<string, unknown>>, reporte };
   }
 
   private isBlank(v: unknown): boolean {

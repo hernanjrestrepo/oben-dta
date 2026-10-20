@@ -4,6 +4,8 @@ import { ComercialCase } from '../../entities/comercial-case.entity';
 import { LiquidacionAprobacion } from '../../entities/liquidacion-aprobacion.entity';
 import { LiquidacionRuta } from '../../entities/liquidacion-ruta.entity';
 import { LiquidacionRutaAdjunto } from '../../entities/liquidacion-ruta-adjunto.entity';
+import { LiquidacionPreferenciaCliente } from '../../entities/liquidacion-preferencia-cliente.entity';
+import { LiquidacionDescarte } from '../../entities/liquidacion-descarte.entity';
 import { IntegrationHubModule } from '../integrations/hub/integration-hub.module';
 import { AuthModule } from '../auth/auth.module';
 import { FreightRatesModule } from '../freight-rates/freight-rates.module';
@@ -18,7 +20,7 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ComercialCase, LiquidacionAprobacion, LiquidacionRuta, LiquidacionRutaAdjunto]),
+    TypeOrmModule.forFeature([ComercialCase, LiquidacionAprobacion, LiquidacionRuta, LiquidacionRutaAdjunto, LiquidacionPreferenciaCliente, LiquidacionDescarte]),
     IntegrationHubModule,
     AuthModule,
     FreightRatesModule,

@@ -178,6 +178,7 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
     };
   });
   if (sinPrecio.size) avisos.push(`Sin precio para: ${[...sinPrecio].join(', ')}.`);
+  if (exportacion && liquidacion) cuadrarConLiquidacion(lineas, liquidacion, avisos);
 
   const subtotal = round2(lineas.reduce((a, l) => a + l.total, 0));
   const iva = round2(lineas.reduce((a, l) => a + l.ivaValor, 0));
@@ -211,21 +212,21 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
       `PESO BRUTO / GROSS WEIGHT: ${e?.pesoBrutoKg ?? ''} KG`,
       `PALETAS / PALLETS: ${e?.pallets ?? ''}`,
       `BOBINAS / ROLLS: ${e?.bobinas ?? ''}`,
-      `PA NCM: ${ncm ?? ''}${descripcionNcm(ncm, liquidacion?.descripcionSku ?? null, desc)}`,
+      `PA NCM: ${ncm ?? ''}${textoJuntoAPartida(liquidacion, descripcionNcm(ncm, liquidacion?.descripcionSku ?? null, desc))}`,
       `PA NALADI: ${naladi ?? ''} `,
       `TOTAL FOB: US$ ${enUS(subtotal)}`,
       `TOTAL FLETE / FREIGHT: US$ ${enUS(flete)}`,
       `TOTAL SEGURO / INSURANCE: US$ ${enUS(seguro)} - `,
       ...(otrosGastos ? [`TOTAL OTROS GASTOS / OTHER EXPENSES: US$ ${enUS(otrosGastos)}`] : []),
-      `TOTAL VALOR ${[incoterm, arribo].filter(Boolean).join(' ')} -`,
-      ` INCOTERM 2020 US$ ${enUS(neto)}`,
+      // En UNA sola línea (María, 20-oct): "TOTAL VALOR CFR PUERTO ITAPOA INCOTERM 2020 US$ 61,120.00".
+      lineaTotalValor(incoterm, arribo, neto),
       `PUERTO DE ORIGEN / ORIGEM: ${embarque ?? ''}`,
       `PUERTO DE DESTINO / DESTINATION:  ${arribo ?? ''}`,
       'PAIS DE PROCEDENCIA / COUNTRY OF ORIGIN: Colombia **PAIS DE ADQUISICION/COUNTRY OF ACQUISITION: COLOMBIA',
       `FABRICANTE EXPORTADOR / EXPORTING MANUFACTURER: ${EMISOR_OBEN.razonSocial}`,
     );
     if (!trm) avisos.push('Tipo de cambio (TRM) no disponible: no se pudo consultar datos.gov.co.');
-    avisos.push('Forma de pago del cliente (p. ej. "20% IN ADVANCE/ 80% AT SIGHT") sin fuente todavía: va en blanco.');
+    if (!texto(liquidacion?.terminoPago)) avisos.push('Oben no trajo el término de pago de la proforma (TerminoPago de spCheckSettlement): va en blanco.');
   } else if (draft.observaciones) {
     observaciones.push(draft.observaciones);
   }
@@ -270,10 +271,58 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
     valorLetras: valorEnLetras(neto, moneda),
     valorLetrasIngles: exportacion ? null : valueInWords(neto, moneda),
     incoterm,
-    terminosPago: null,
+    terminosPago: exportacion ? texto(liquidacion?.terminoPago) : null,
     cufe: factura?.cufe ?? null,
     cufeSimulado: !!factura?.simulated,
     marcaAgua: !factura ? 'BORRADOR' : factura.simulated || draft.simulated ? 'SIMULADO' : null,
   };
   return { factura: { ...base, qr: contenidoQr(base, emision, exportacion ? (trm?.valor ?? null) : null) }, avisos };
+}
+
+/** "TOTAL VALOR CFR PUERTO ITAPOA INCOTERM 2020 US$ 61,120.00" — una sola línea, como la pide COMEX. */
+export function lineaTotalValor(incoterm: string | null, arribo: string | null, neto: number): string {
+  return `TOTAL VALOR ${[incoterm, arribo].filter(Boolean).join(' ')} INCOTERM 2020 US$ ${enUS(neto)}`;
+}
+
+/**
+ * Texto que va junto a la partida NCM en las observaciones. COMEX lo puede cambiar o quitar por cliente
+ * (reunión del 20-oct: "hay clientes que piden que al lado de la partida aparezca el nombre del producto y
+ * otros no"); sin cambio, la descripción de Oben.
+ */
+export function textoJuntoAPartida(liquidacion: LiquidacionDraft | null | undefined, porDefecto: string): string {
+  const f = liquidacion?.factura;
+  if (f?.ncmConDescripcion === false) return '';
+  const propio = texto(f?.ncmDescripcion);
+  return propio ? ` ${propio}` : porDefecto;
+}
+
+/**
+ * La factura debe sumar EXACTAMENTE lo liquidado (María y José, 20-oct: PF 11166 salía 61,120.01 y debía
+ * dar 61,120.00 = FOB final 60,796.00 + flete 324). La liquidación va por tipo de película; la factura, por
+ * rollo de la Lista de Empaque: al redondear cada rollo por separado la suma se corría un centavo. Por cada
+ * tipo de película, los centavos de diferencia se ajustan en el ÚLTIMO ítem (José, 6-oct: "centavos al
+ * último ítem"), siempre que los kilos de la Lista de Empaque coincidan con los liquidados.
+ */
+export function cuadrarConLiquidacion(lineas: FacturaDianLinea[], liquidacion: LiquidacionDraft, avisos: string[]): void {
+  for (const l of liquidacion.lines) {
+    if (!isNum(l.valueFOB) || !isNum(l.kilosTotal)) continue;
+    const grupo = lineas.filter((x) => x.codigo.startsWith(l.tipoPelicula));
+    if (grupo.length === 0) continue;
+    const kilos = grupo.reduce((a, x) => a + x.cantidad, 0);
+    if (Math.abs(kilos - l.kilosTotal) > 0.005) {
+      avisos.push(
+        `Los kilos de la Lista de Empaque de ${l.tipoPelicula} (${kilos.toFixed(2)}) no coinciden con los liquidados (${l.kilosTotal.toFixed(2)}): el total de la factura puede diferir de la liquidación.`,
+      );
+      continue;
+    }
+    const diferencia = round2(l.valueFOB - grupo.reduce((a, x) => a + x.total, 0));
+    if (diferencia === 0) continue;
+    if (Math.abs(diferencia) > 0.05 * grupo.length) {
+      avisos.push(`La factura de ${l.tipoPelicula} difiere ${diferencia.toFixed(2)} de la liquidación: no se ajustó (revisar precios).`);
+      continue;
+    }
+    const ultima = grupo[grupo.length - 1];
+    ultima.total = round2(ultima.total + diferencia);
+    ultima.ivaValor = round2((ultima.total * ultima.ivaPct) / 100);
+  }
 }

@@ -13,6 +13,7 @@ import {
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
+  LiquidacionFacturaInput, LiquidacionInputPantalla, VistaFactura, ProformaCompleta, ResultadoCargaTarifario, CargaTarifario,
 } from '@/types';
 
 // Misma dirección desde la que se abrió la app (Next la reenvía al backend, ver
@@ -303,7 +304,7 @@ class ApiClient {
 
   async getLiquidacionDraft(
     numberPF: string,
-    input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput },
+    input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput; factura?: LiquidacionFacturaInput },
   ): Promise<LiquidacionDraft> {
     const { data } = await this.client.post<LiquidacionDraft>(`/liquidacion/${numberPF}/draft`, input, this.OBEN_LIVE);
     return data;
@@ -349,10 +350,55 @@ class ApiClient {
 
   async approveLiquidacion(
     numberPF: string,
-    input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput },
+    input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput; factura?: LiquidacionFacturaInput },
   ): Promise<LiquidacionDraft> {
     const { data } = await this.client.post<LiquidacionDraft>(`/liquidacion/${numberPF}/approve`, input, this.OBEN_LIVE);
     return data;
+  }
+
+  /** Cómo saldrá la factura (observaciones y totales) con lo que COMEX tiene en la liquidación. No emite nada. */
+  async getVistaFactura(numberOrderSales: number, liquidacion: LiquidacionInputPantalla): Promise<VistaFactura> {
+    const { data } = await this.client.post<VistaFactura>(`/facturacion/${numberOrderSales}/vista-factura`, { liquidacion }, this.OBEN_LIVE);
+    return data;
+  }
+
+  /** La proforma tal como la tiene Oben, para revisarla antes de liquidar. */
+  async getProformaCompleta(numberPF: string): Promise<ProformaCompleta> {
+    const { data } = await this.client.get<ProformaCompleta>(`/liquidacion/${numberPF}/proforma`, this.OBEN_LIVE);
+    return data;
+  }
+
+  /** COMEX ya la liquidó por fuera: sale de la lista de pendientes. */
+  async descartarPendienteComex(numberPF: string, motivo: string | null): Promise<void> {
+    await this.client.post(`/liquidacion/${numberPF}/descartar`, { motivo });
+  }
+
+  async restaurarPendienteComex(numberPF: string): Promise<void> {
+    await this.client.delete(`/liquidacion/${numberPF}/descartar`);
+  }
+
+  /** Sube el tarifario de exportación de COMEX: sin `confirmar` solo muestra lo que cambiaría. */
+  async cargarTarifarioExportacion(archivo: File, confirmar: boolean): Promise<ResultadoCargaTarifario> {
+    const form = new FormData();
+    form.append('archivo', archivo, archivo.name);
+    form.append('confirmar', confirmar ? 'true' : 'false');
+    const { data } = await this.client.post<ResultadoCargaTarifario>('/freight-rates/tarifario-exportacion', form, {
+      timeout: 180_000,
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  }
+
+  /** Histórico de cuadros de tarifas subidos. */
+  async getHistorialTarifario(): Promise<CargaTarifario[]> {
+    const { data } = await this.client.get<CargaTarifario[]>('/freight-rates/tarifario-exportacion/cargas');
+    return data;
+  }
+
+  /** El Excel original de una carga del histórico. */
+  async descargarCargaTarifario(id: string): Promise<Blob> {
+    const { data } = await this.client.get(`/freight-rates/tarifario-exportacion/cargas/${id}/archivo`, { responseType: 'blob' });
+    return data as Blob;
   }
 
   // Lista de Empaque retenida por cartera (regla PND)

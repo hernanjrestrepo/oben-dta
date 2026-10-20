@@ -18,6 +18,7 @@ import {
   Ship,
   ShieldCheck,
   TriangleAlert,
+  X,
 } from 'lucide-react';
 import { LiquidacionPanel, type LiquidacionEstado } from './LiquidacionPanel';
 import { TIPO_LABEL } from './DocumentoPanel';
@@ -160,6 +161,18 @@ export default function FacturacionPage() {
     return () => clearTimeout(t);
   }, [ov, input]);
 
+  /** COMEX ya la liquidó por fuera (20-oct, p. ej. la 11166): sale de las pendientes. Se puede seguir abriendo por número. */
+  async function descartar(p: ProformaPendienteComex) {
+    const motivo = window.prompt(`¿Quitar la PF ${p.numberPF}${p.cliente ? ` (${p.cliente})` : ''} de las pendientes porque COMEX ya la liquidó por fuera?\n\nMotivo (opcional):`, 'Ya liquidada en OBEN MAS');
+    if (motivo === null) return;
+    try {
+      await api.descartarPendienteComex(p.numberPF, motivo || null);
+      setPendientes((lista) => (lista ?? []).filter((x) => x.numberPF !== p.numberPF));
+    } catch (err) {
+      setError(extractMessage(err, `No se pudo quitar la PF ${p.numberPF} de las pendientes.`));
+    }
+  }
+
   function buscar() {
     const pf = pfInput.trim();
     if (!/^\d+$/.test(pf) || Number(pf) <= 0) {
@@ -280,19 +293,31 @@ export default function FacturacionPage() {
               {pendientes.map((p) => {
                 const activa = proforma?.numberPF === p.numberPF || draft?.proforma === p.numberPF;
                 return (
-                  <button
+                  <span
                     key={p.numberPF}
-                    onClick={() => void cargarProforma(p.numberPF)}
-                    disabled={loading}
-                    className={`group inline-flex items-center gap-1.5 pl-2.5 pr-3 py-1 rounded-full border text-xs transition ${
+                    className={`group inline-flex items-center rounded-full border text-xs transition ${
                       activa ? 'border-[#F47735] bg-orange-50 text-[#C4521A]' : 'border-gray-200 bg-white text-gray-700 hover:border-[#F47735]/50 hover:bg-orange-50/50'
                     }`}
-                    title={[p.cliente, p.pais, p.incoterm, p.ordenesVenta.length ? `OV ${p.ordenesVenta.join(', ')}` : null].filter(Boolean).join(' · ')}
-                    aria-label={`Cargar PF ${p.numberPF}${p.cliente ? ` · ${p.cliente}` : ''}`}
                   >
-                    <span className="font-semibold">PF {p.numberPF}</span>
-                    {p.cliente && <span className="text-gray-500 max-w-[180px] truncate">{p.cliente}</span>}
-                  </button>
+                    <button
+                      onClick={() => void cargarProforma(p.numberPF)}
+                      disabled={loading}
+                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1"
+                      title={[p.cliente, p.pais, p.incoterm, p.ordenesVenta.length ? `OV ${p.ordenesVenta.join(', ')}` : null].filter(Boolean).join(' · ')}
+                      aria-label={`Cargar PF ${p.numberPF}${p.cliente ? ` · ${p.cliente}` : ''}`}
+                    >
+                      <span className="font-semibold">PF {p.numberPF}</span>
+                      {p.cliente && <span className="text-gray-500 max-w-[180px] truncate">{p.cliente}</span>}
+                    </button>
+                    <button
+                      onClick={() => void descartar(p)}
+                      className="pr-2 pl-0.5 py-1 text-gray-300 hover:text-red-600"
+                      title="Ya la liquidó COMEX por fuera: quitarla de las pendientes"
+                      aria-label={`Quitar la PF ${p.numberPF} de las pendientes`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
                 );
               })}
             </div>
@@ -356,6 +381,7 @@ export default function FacturacionPage() {
                   <Dato label="Orden de compra" valor={draft.ordenCompra} />
                   <Dato label="Contenedor" valor={draft.contenedor} />
                   <Dato label="Material" valor={draft.codigoMaterial} />
+                  {exportacion && <Dato label="Término de pago" valor={liqEstado ? (liqEstado.terminoPago ?? 'Oben no lo trae') : null} />}
                 </div>
               </div>
               <div className="flex gap-6 lg:pl-6 lg:border-l border-gray-100">
@@ -367,6 +393,12 @@ export default function FacturacionPage() {
                   <p className="text-[11px] uppercase tracking-wide text-gray-500">Valor</p>
                   <p className="text-lg font-bold tabular-nums text-[#C4521A]">{usd(draft.totalValor)}</p>
                 </div>
+                {exportacion && liqEstado?.totalFactura != null && (
+                  <div title="FOB final + flete + seguro + otros gastos: el total de la factura">
+                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Total {liqEstado.incoterm ?? 'factura'}</p>
+                    <p className="text-lg font-bold tabular-nums text-emerald-700">{usd(liqEstado.totalFactura)}</p>
+                  </div>
+                )}
               </div>
             </div>
           </Card>

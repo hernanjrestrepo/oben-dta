@@ -822,7 +822,7 @@ export interface ProformaOrdenes {
 export type ConceptoLiquidacion = 'flete' | 'seguro' | 'otrosGastos';
 
 /** De dónde salió un valor del encabezado: ERP de Oben, maestro de tarifas, calculado o digitado. */
-export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional' | 'comex';
+export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional' | 'comex' | 'cliente';
 
 export interface IncotermRegla {
   codigo: string;
@@ -849,6 +849,83 @@ export interface LiquidacionTotalesInput {
   flete?: number | null;
   otrosGastos?: number | null;
   valorPoliza?: number | null;
+}
+
+/** Texto que va junto a la partida NCM en la factura (por cliente, reunión del 20-oct). */
+export interface LiquidacionFacturaInput {
+  ncmDescripcion?: string | null;
+  ncmConDescripcion?: boolean | null;
+}
+
+export interface LiquidacionInputPantalla {
+  header?: LiquidacionHeaderValues;
+  totales?: LiquidacionTotalesInput;
+  factura?: LiquidacionFacturaInput;
+}
+
+/** Cómo saldrá la factura con lo que COMEX tiene en pantalla (POST /facturacion/:ov/vista-factura). */
+export interface VistaFactura {
+  numberOrderSales: number;
+  tipo: 'nacional' | 'exportacion';
+  moneda: string;
+  incoterm: string | null;
+  terminosPago: string | null;
+  ordenCompra: string | null;
+  observaciones: string[];
+  lineas: Array<{ codigo: string; descripcion: string; cantidad: number; valorUnitario: number; total: number }>;
+  subtotal: number;
+  flete: number;
+  seguro: number;
+  otrosGastos: number;
+  neto: number;
+  avisos: string[];
+}
+
+/** La proforma tal como la tiene Oben (GET /liquidacion/:pf/proforma). */
+export interface ProformaCompleta {
+  numberPF: string;
+  campos: Record<string, unknown>;
+  detalle: Array<Record<string, unknown>>;
+  reporte: Record<string, unknown> | null;
+}
+
+export interface CambioTarifa {
+  tipo: 'maritima' | 'inland';
+  ruta: string;
+  proveedor: string;
+  antes: number | null;
+  despues: number | null;
+  vigenteHasta: string | null;
+}
+
+export interface ResumenTarifas {
+  total: number;
+  nuevas: number;
+  cambiadas: number;
+  iguales: number;
+  quitadas: number;
+  vencidas: number;
+}
+
+export interface ResultadoCargaTarifario {
+  archivo: string;
+  aplicado: boolean;
+  maritimas: ResumenTarifas;
+  inland: ResumenTarifas;
+  cambios: CambioTarifa[];
+  descartadas: Array<{ hoja: string; fila: number; motivo: string }>;
+  avisos: string[];
+  cargaId?: string;
+}
+
+export interface CargaTarifario {
+  id: string;
+  archivo: string;
+  tamano: number | null;
+  usuario: string | null;
+  fecha: string;
+  resumen: { maritimas?: ResumenTarifas; inland?: ResumenTarifas; descartadas?: number };
+  vigente: boolean;
 }
 
 export interface LiquidacionDraftLine {
@@ -896,6 +973,10 @@ export interface LiquidacionDraft {
   sinConfirmar: string[];
   /** Ruta y tarifas del tarifario: opciones, sugerida, la de COMEX e historial de cambios. */
   ruta?: RutaLiquidacion | null;
+  /** Término de pago de la proforma (TerminoPago de Oben). */
+  terminoPago?: string | null;
+  /** Lo que va junto a la partida NCM en la factura. */
+  factura?: { ncmDescripcion: string | null; ncmConDescripcion: boolean; ncmDescripcionPorDefecto: string | null; origen: OrigenValor | null };
 }
 
 export interface OpcionMaritima {

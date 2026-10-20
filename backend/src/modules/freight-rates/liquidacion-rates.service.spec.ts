@@ -223,6 +223,17 @@ describe('LiquidacionRatesService.resolveOceanFreight (pata 2 del archivo de fle
     });
   });
 
+  it('una tarifa en 0 nunca se sugiere (20-oct: Cartagena → New Orleans de Transborder venía en 0 y sin vencimiento)', async () => {
+    const filas = [
+      fila({ destinationPort: 'New Orleans, LA (Port)', forwarder: 'Transborder', shippingLine: 'Hapag-Lloyd', rateTotal: '0.00', validUntil: null }),
+      fila({ destinationPort: 'New Orleans, LA (Port)', forwarder: 'Shapiro', shippingLine: 'HAPAG LLOYD', rateTotal: '1750.00', validUntil: '2026-10-30' }),
+    ];
+    const r = await servicio(filas).resolveOceanFreight(TENANT_ID, 'CARTAGENA - COLOMBIA', 'New Orleans, LA (Port)', 'NEW ORLEANS', HOY);
+    expect(r).toMatchObject({ flete: 1750, forwarder: 'Shapiro' });
+    const solo0 = await servicio([filas[0]]).resolveOceanFreight(TENANT_ID, 'CARTAGENA - COLOMBIA', 'New Orleans, LA (Port)', 'NEW ORLEANS', HOY);
+    expect(solo0.flete).toBeNull();
+  });
+
   it('PF 11237: con el Inland desde la rampa de Cincinnati, el marítimo va a Cincinnati (no el 2900 a Columbus)', async () => {
     const filas = [
       fila({ destinationPort: 'Columbus, OH (Ramp)', forwarder: 'Trading', shippingLine: 'HAPAG LLOYD', rateTotal: '2900.00', validUntil: '2026-09-30' }),

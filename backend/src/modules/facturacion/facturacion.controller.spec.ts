@@ -22,7 +22,7 @@ describe('FacturacionController — control de acceso', () => {
     expect(guards).toEqual(expect.arrayContaining([JwtAuthGuard, PermissionsGuard]));
   });
 
-  it('tiene exactamente las 10 rutas esperadas', () => {
+  it('tiene exactamente las 11 rutas esperadas', () => {
     expect(routes.sort()).toEqual([
       'destinatarios',
       'downloadPdf',
@@ -34,10 +34,11 @@ describe('FacturacionController — control de acceso', () => {
       'proforma',
       'proformasPendientes',
       'send',
+      'vistaFactura',
     ]);
   });
 
-  it.each(['draft', 'draftWithInput', 'downloadPdf', 'downloadPdfWithInput', 'historial', 'destinatarios', 'ordenesRecientes', 'proforma', 'proformasPendientes'])(
+  it.each(['draft', 'draftWithInput', 'downloadPdf', 'downloadPdfWithInput', 'historial', 'destinatarios', 'ordenesRecientes', 'proforma', 'proformasPendientes', 'vistaFactura'])(
     'la ruta %s exige invoices.read',
     (name) => {
     const req = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto[name] as object) as {

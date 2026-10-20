@@ -36,7 +36,8 @@ export interface CheckSettlementResponse {
 }
 
 /** De dónde salió cada valor del encabezado — se muestra en pantalla, nada queda "de la nada". */
-export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional' | 'comex';
+/** `cliente` = lo que COMEX dejó para ese cliente en una liquidación anterior (20-oct). */
+export type OrigenValor = 'oben' | 'maestro' | 'calculado' | 'usuario' | 'provisional' | 'comex' | 'cliente';
 
 /** Valores del encabezado (spSettlement_Head). Todo opcional en la entrada — lo que falte bloquea el envío. */
 export interface LiquidacionHeaderValues {
@@ -92,6 +93,24 @@ export interface LiquidacionInput {
   totales?: LiquidacionTotalesInput;
   /** Sobrescrituras por línea, indexadas por `codSecLineFilm`. */
   lines?: Record<string, LiquidacionLineValues>;
+  /** Solo para la factura (no va a Oben en la liquidación). */
+  factura?: LiquidacionFacturaInput;
+}
+
+/** Texto que va junto a la partida NCM en las observaciones de la factura (por cliente, reunión del 20-oct). */
+export interface LiquidacionFacturaInput {
+  /** Texto propio; vacío = el de Oben (DescripcionSKU). */
+  ncmDescripcion?: string | null;
+  /** false = la partida va sola, sin nombre del producto. */
+  ncmConDescripcion?: boolean | null;
+}
+
+export interface LiquidacionFacturaTexto {
+  ncmDescripcion: string | null;
+  ncmConDescripcion: boolean;
+  /** El texto que va si COMEX no escribe otro (descripción de Oben). */
+  ncmDescripcionPorDefecto: string | null;
+  origen: OrigenValor | null;
 }
 
 export interface AprobacionEstado {
@@ -158,6 +177,12 @@ export interface LiquidacionDraft {
   ruta?: RutaLiquidacion | null;
   /** DescripcionSKU común a todas las líneas (va en la observación de la partida de la factura), o null. */
   descripcionSku?: string | null;
+  /** Término de pago de la proforma (TerminoPago de spCheckSettlement, p. ej. "30 DAYS FROM INVOICE DATE"). */
+  terminoPago?: string | null;
+  /** Lo que va junto a la partida NCM en la factura. */
+  factura?: LiquidacionFacturaTexto;
+  /** Partida (o tipos de película) de Oben con que se guardan las preferencias del cliente. */
+  partidaOben?: string;
 }
 
 /** Un cambio de ruta de COMEX (orden de compra interna). */

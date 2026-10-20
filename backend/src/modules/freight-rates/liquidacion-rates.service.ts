@@ -94,6 +94,14 @@ const toAmount = (v: unknown): number | null => {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : null;
 };
+/**
+ * Una tarifa de flete en 0 no es una tarifa (20-oct: el archivo de octubre trae Cartagena → New Orleans de
+ * Transborder en 0 y sin vencimiento; como se sugiere la más barata vigente, la liquidación salía con flete 0).
+ */
+const tarifa = (v: unknown): number | null => {
+  const n = toAmount(v);
+  return n !== null && n > 0 ? n : null;
+};
 
 const ENTRY_FEE_NAME = 'Entry Fee';
 const ISF_NAME = 'Importer Security Filing';
@@ -240,7 +248,7 @@ export class LiquidacionRatesService {
           where: { tenantId, country, destinationAddress: ILike(`%${zip}%`) },
           take: 50,
         })
-      ).filter((r) => toAmount(r.rate40hc) !== null);
+      ).filter((r) => tarifa(r.rate40hc) !== null);
       // Si la tabla tiene tarifas desde el puerto/rampa de la ciudad de arribo
       // de la PF, solo esas: la PF 11237 dice Cincinnati y, como el 523 de
       // Shapiro desde Cincinnati había vencido, se fue por la rampa de Columbus
@@ -305,7 +313,7 @@ export class LiquidacionRatesService {
         take: 200,
       });
       const row = rows
-        .filter((r) => toAmount(r.rateTotal) !== null)
+        .filter((r) => tarifa(r.rateTotal) !== null)
         .sort((a, b) => Number(vigente(b)) - Number(vigente(a)) || (toAmount(a.rateTotal) as number) - (toAmount(b.rateTotal) as number))[0];
       if (!row) continue;
       const validUntil = row.validUntil ? String(row.validUntil).slice(0, 10) : null;
@@ -346,7 +354,7 @@ export class LiquidacionRatesService {
     for (const zip of zips) {
       const rows = await this.inlandRates.find({ where: { tenantId, destinationAddress: ILike(`%${zip}%`) }, take: 100 });
       for (const r of rows) {
-        const valor = toAmount(r.rate40hc);
+        const valor = tarifa(r.rate40hc);
         if (valor === null || inland.some((o) => o.id === r.id)) continue;
         const validUntil = fecha(r.validUntil);
         inland.push({ id: r.id, forwarder: r.forwarder ?? null, puerto: r.destinationPort, direccion: r.destinationAddress, valor, comisionAduanera: toAmount(r.customsCommission), validUntil, vencida: !!validUntil && validUntil < hoyIso });
@@ -363,7 +371,7 @@ export class LiquidacionRatesService {
         take: 300,
       });
       for (const r of rows) {
-        const flete = toAmount(r.rateTotal);
+        const flete = tarifa(r.rateTotal);
         if (flete === null || maritimas.some((o) => o.id === r.id)) continue;
         const validUntil = fecha(r.validUntil);
         maritimas.push({

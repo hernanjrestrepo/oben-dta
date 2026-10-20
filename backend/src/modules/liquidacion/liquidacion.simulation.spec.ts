@@ -203,6 +203,30 @@ function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: 
       return x;
     }),
   };
+  // Preferencias por cliente y pendientes descartadas (20-oct), en memoria.
+  const filasPref: Array<Record<string, unknown>> = [];
+  const preferencias = {
+    findOne: jest.fn(async ({ where }: { where: Record<string, unknown> }) => filasPref.find((f) => f.clienteClave === where.clienteClave && f.partidaOben === where.partidaOben) ?? null),
+    create: jest.fn((x: Record<string, unknown>) => ({ ...x })),
+    save: jest.fn(async (x: Record<string, unknown>) => {
+      if (!filasPref.includes(x)) filasPref.push(x);
+      return x;
+    }),
+  };
+  const filasDescartes: Array<Record<string, unknown>> = [];
+  const descartes = {
+    find: jest.fn(async () => filasDescartes),
+    findOne: jest.fn(async ({ where }: { where: { numberPF: string } }) => filasDescartes.find((f) => f.numberPF === where.numberPF) ?? null),
+    create: jest.fn((x: Record<string, unknown>) => ({ ...x })),
+    save: jest.fn(async (x: Record<string, unknown>) => {
+      if (!filasDescartes.includes(x)) filasDescartes.push(x);
+      return x;
+    }),
+    delete: jest.fn(async ({ numberPF }: { numberPF: string }) => {
+      const i = filasDescartes.findIndex((f) => f.numberPF === numberPF);
+      if (i >= 0) filasDescartes.splice(i, 1);
+    }),
+  };
   const service = new LiquidacionService(
     sim as never,
     { tenantId: 't1', userId: 'u1' } as never,
@@ -215,8 +239,10 @@ function build(opts: { calculator?: LiquidacionValueCalculator; provisionales?: 
     aprobaciones as never,
     rutas as never,
     adjuntos as never,
+    preferencias as never,
+    descartes as never,
   );
-  return { service, sim, idem, audit, rates, cierre, aprobaciones, rutas, filasRutas };
+  return { service, sim, idem, audit, rates, cierre, aprobaciones, rutas, filasRutas, filasAprob, filasPref, filasDescartes };
 }
 
 /**
@@ -1420,5 +1446,82 @@ describe('COMEX aprueba la liquidación antes de enviarla a Oben (Hernán, 6-oct
     const { service, audit } = build({ requiereAprobacion: true });
     await service.aprobar('99001', usaInput(), comex);
     expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'liquidacion_aprobada_comex', entityId: '99001' }));
+  });
+});
+
+describe('Reunión de pruebas con COMEX (20-oct): lo corregido se conserva y se aprende por cliente', () => {
+  const comex = { nombre: 'María Escobar' };
+
+  it('lo que COMEX corrigió al aprobar se vuelve a aplicar al recalcular (antes se perdía): la aprobación sigue vigente', async () => {
+    const { service, filasAprob } = build({ requiereAprobacion: true });
+    const entrada = usaInput({ header: { ...HEADER_USER, ...USA_CHARGES, paNcm: '3920.62.19' } });
+    await service.aprobar('99001', entrada, comex);
+    expect(filasAprob[0].entrada).toMatchObject({ header: { paNcm: '3920.62.19' } });
+    // Sin enviar nada (como al recargar la pantalla o al armar la factura):
+    const d = await service.getDraft('99001');
+    expect(d.header.paNcm).toBe('3920.62.19');
+    expect(d.headerOrigen.paNcm).toBe('comex');
+    expect(d.aprobacion).toMatchObject({ existe: true, vigente: true });
+    // Lo que se digita ahora manda sobre lo aprobado.
+    const nuevo = await service.getDraft('99001', { header: { paNcm: '3920.62.00' } });
+    expect(nuevo.header.paNcm).toBe('3920.62.00');
+    expect(nuevo.headerOrigen.paNcm).toBe('usuario');
+  });
+
+  it('la partida y el texto junto a la partida que COMEX dejó para un cliente se proponen en su siguiente proforma', async () => {
+    const { service, filasPref } = build({ requiereAprobacion: true });
+    await service.aprobar(
+      '99001',
+      usaInput({ header: { ...HEADER_USER, ...USA_CHARGES, paNcm: '3920.62.19' }, factura: { ncmDescripcion: 'PELICULA DE POLIETILENO TEREFTALATO' } }),
+      comex,
+    );
+    expect(filasPref).toHaveLength(1);
+    expect(filasPref[0]).toMatchObject({ clienteClave: 'OBEN US LLC', paNcm: '3920.62.19', ncmDescripcion: 'PELICULA DE POLIETILENO TEREFTALATO', numberPF: '99001' });
+    // Otra proforma del mismo cliente con los mismos tipos de película:
+    CHECK['99002'] = { ...(CHECK['99001'] as Record<string, unknown>), Proforma: '99002' };
+    const d = await service.getDraft('99002');
+    expect(d.header.paNcm).toBe('3920.62.19');
+    expect(d.headerOrigen.paNcm).toBe('cliente');
+    expect(d.factura).toMatchObject({ ncmDescripcion: 'PELICULA DE POLIETILENO TEREFTALATO', ncmConDescripcion: true, origen: 'cliente' });
+    expect(d.ajustes.some((a) => a.includes('la que COMEX dejó para este cliente (PF 99001)'))).toBe(true);
+    // Se puede cambiar como siempre.
+    expect((await service.getDraft('99002', { factura: { ncmConDescripcion: false } })).factura?.ncmConDescripcion).toBe(false);
+    delete CHECK['99002'];
+  });
+
+  it('sin nada propio (todo de Oben) no se crea preferencia del cliente', async () => {
+    const { service, filasPref } = build({ requiereAprobacion: true });
+    await service.aprobar('99001', usaInput({ header: { direccion: '1 Port Rd, Miami FL', puertoArribo: 'Miami', puertoEmbarque: 'Cartagena', ...USA_CHARGES } }), comex).catch(() => null);
+    expect(filasPref.filter((f) => f.paNcm || f.ncmDescripcion)).toHaveLength(0);
+  });
+
+  it('el término de pago de la proforma viene de Oben (TerminoPago)', async () => {
+    const { service } = build();
+    CHECK['99003'] = { ...(CHECK['99001'] as Record<string, unknown>), Proforma: '99003', TerminoPago: '30 DAYS FROM INVOICE DATE' };
+    expect((await service.getDraft('99003')).terminoPago).toBe('30 DAYS FROM INVOICE DATE');
+    expect((await service.getDraft('99001')).terminoPago).toBeNull();
+    delete CHECK['99003'];
+  });
+
+  it('cambiar el texto de la factura después de aprobar pide aprobar de nuevo; las aprobaciones sin texto propio siguen valiendo', async () => {
+    const { service } = build({ requiereAprobacion: true });
+    await service.aprobar('99001', usaInput(), comex);
+    expect((await service.getDraft('99001', usaInput())).aprobacion?.vigente).toBe(true);
+    expect((await service.getDraft('99001', usaInput({ factura: { ncmDescripcion: 'OTRO' } }))).aprobacion?.vigente).toBe(false);
+  });
+
+  it('una proforma que COMEX ya liquidó por fuera sale de las pendientes (y puede volver)', async () => {
+    const built = build();
+    const original = built.sim.call.bind(built.sim);
+    built.sim.call = async (system: string, op: string, args: Record<string, unknown>, options?: unknown) =>
+      op === 'query.run' && args.procedure
+        ? { ok: true, data: '{"NroProforma":"11166","Mercado":"EXPORTACION","Cliente":"VIDEPLAST","Pais":"BRASIL","Incoterms":"CFR","OrdenesVenta":[]},{"NroProforma":"11351","Mercado":"EXPORTACION","Cliente":"SOLEFILMES","Pais":"BRASIL","Incoterms":"CIF","OrdenesVenta":[]}' }
+        : original(system, op, args, options);
+    expect((await built.service.proformasPendientesComex()).map((p) => p.numberPF)).toEqual(['11351', '11166']);
+    await built.service.descartarPendiente('11166', 'Ya liquidada por María en OBEN MAS', comex);
+    expect((await built.service.proformasPendientesComex()).map((p) => p.numberPF)).toEqual(['11351']);
+    expect(built.audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'liquidacion_pendiente_descartada', entityId: '11166' }));
+    await built.service.restaurarPendiente('11166');
+    expect((await built.service.proformasPendientesComex()).map((p) => p.numberPF)).toEqual(['11351', '11166']);
   });
 });

@@ -14,7 +14,8 @@ import type {
 } from '@/types';
 import { IncotermGuia } from './IncotermGuia';
 import { OtrosGastosCard, RutaMaritimaCard } from './RutaPanel';
-import { AlertCircle, ArrowRight, BadgeCheck, Loader2, Ship, Sparkles } from 'lucide-react';
+import { ProformaModal, TarifarioCard, VistaFacturaCard } from './ComexExtras';
+import { AlertCircle, ArrowRight, BadgeCheck, FileText, Loader2, Ship, Sparkles } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -41,6 +42,9 @@ export interface LiquidacionEstado {
   faltan: number;
   pendientes: number;
   incoterm: string | null;
+  /** Término de pago de la proforma (Oben) y total de la factura (FOB final + flete + seguro + otros). */
+  terminoPago?: string | null;
+  totalFactura?: number | null;
 }
 
 const CONCEPTO_LABEL: Record<ConceptoLiquidacion, string> = { flete: 'Flete', seguro: 'Seguro', otrosGastos: 'Otros' };
@@ -52,6 +56,7 @@ const ORIGEN: Record<OrigenValor, { label: string; cls: string }> = {
   usuario: { label: 'Digitado', cls: 'bg-gray-50 text-gray-600 border-gray-200' },
   provisional: { label: 'Provisional', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   comex: { label: 'Escogido por COMEX', cls: 'bg-orange-50 text-[#C4521A] border-orange-200' },
+  cliente: { label: 'Del cliente', cls: 'bg-teal-50 text-teal-700 border-teal-200' },
 };
 
 function OrigenBadge({ origen }: { origen?: OrigenValor }) {
@@ -101,6 +106,10 @@ export function LiquidacionPanel({
   // Solo lo que el usuario editó: lo demás lo resuelve el backend (ERP, maestro, cálculo) y se muestra con su origen.
   const [textos, setTextos] = useState<Partial<Record<TextoKey, string>>>({});
   const [montos] = useState<Partial<Record<MontoKey, string>>>({});
+  // Texto junto a la partida NCM en la factura (por cliente, 20-oct): undefined = lo que trae el sistema.
+  const [ncmTexto, setNcmTexto] = useState<string | undefined>(undefined);
+  const [ncmSin, setNcmSin] = useState<boolean | undefined>(undefined);
+  const [verProforma, setVerProforma] = useState(false);
 
   const [liq, setLiq] = useState<LiquidacionDraft | null>(null);
   const [calculando, setCalculando] = useState(true);
@@ -130,8 +139,12 @@ export function LiquidacionPanel({
       header,
       // El flete nunca se digita: sale de la ruta escogida del tarifario (reunión del 15-oct).
       totales: { incoterm, otrosGastos: parseNum(otros), valorPoliza: parseNum(poliza) },
+      factura: {
+        ...(ncmTexto !== undefined && ncmTexto.trim() ? { ncmDescripcion: ncmTexto.trim() } : {}),
+        ...(ncmSin !== undefined ? { ncmConDescripcion: !ncmSin } : {}),
+      },
     };
-  }, [textos, montos, incoterm, otros, poliza]);
+  }, [textos, montos, incoterm, otros, poliza, ncmTexto, ncmSin]);
 
   useEffect(() => {
     if (!pf) return;
@@ -146,7 +159,18 @@ export function LiquidacionPanel({
           if (id !== reqId.current) return;
           setLiq(d);
           setError('');
-          onEstadoRef.current({ calculada: true, faltan: agruparFaltantes(d.missing).visibles.length, pendientes: d.sinConfirmar.length, incoterm: d.incoterm });
+          const n = (v?: number | null) => (isNum(v) ? v : 0);
+          const totalFactura = d.lines.every((l) => isNum(l.valueFOB))
+            ? Math.round(d.lines.reduce((a, l) => a + n(l.valueFOB) + n(l.valueFreight) + n(l.valueSure) + n(l.expensesOther), 0) * 100) / 100
+            : null;
+          onEstadoRef.current({
+            calculada: true,
+            faltan: agruparFaltantes(d.missing).visibles.length,
+            pendientes: d.sinConfirmar.length,
+            incoterm: d.incoterm,
+            terminoPago: d.terminoPago ?? null,
+            totalFactura,
+          });
         })
         .catch((err) => {
           if (id === reqId.current) setError(extractMessage(err, 'No se pudo calcular la liquidación con los datos de Oben.'));
@@ -207,6 +231,8 @@ export function LiquidacionPanel({
     otros: suma((l) => l.expensesOther),
     fob: suma((l) => l.valueFOB),
   };
+  // Total de la factura = FOB final + flete + seguro + otros (José, 20-oct: 60,796 + 324 = 61,120 cerrado).
+  const totalFactura = isNum(tot.fob) ? Math.round((tot.fob + (tot.flete ?? 0) + (tot.seguro ?? 0) + (tot.otros ?? 0)) * 100) / 100 : null;
   const textoValor = (k: TextoKey) => textos[k] ?? String(liq?.header[k] ?? '');
   const origen = (k: keyof LiquidacionHeaderValues) => (textos[k as TextoKey] !== undefined || montos[k as MontoKey] !== undefined ? 'usuario' : liq?.headerOrigen[k]);
   const faltantes = agruparFaltantes(liq?.missing ?? []);
@@ -218,6 +244,11 @@ export function LiquidacionPanel({
           icon={<Ship className="w-4 h-4 text-[#F47735]" />}
           title="1 · Incoterm de la proforma"
           subtitle="Qué incluye y hasta dónde va (Incoterms 2020). Define qué se liquida."
+          right={
+            <button className={btnSecondary} onClick={() => setVerProforma(true)} title="La proforma tal como está en OBEN MAS (puertos, Incoterm, término de pago, precios)">
+              <FileText className="w-4 h-4" /> Ver proforma
+            </button>
+          }
         />
         <div className="p-4">
           <IncotermGuia
@@ -283,11 +314,39 @@ export function LiquidacionPanel({
                 <input value={textoValor(k)} onChange={(e) => setTextos((t) => ({ ...t, [k]: e.target.value }))} className={`${inputCls} w-full`} placeholder={ph} />
               </Field>
             ))}
+            <Field
+              className="sm:col-span-2"
+              label={
+                <>
+                  Junto a la partida NCM en la factura <OrigenBadge origen={ncmTexto !== undefined || ncmSin !== undefined ? 'usuario' : (liq?.factura?.origen ?? undefined)} />
+                </>
+              }
+              hint={
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ncmSin ?? liq?.factura?.ncmConDescripcion === false}
+                    onChange={(e) => setNcmSin(e.target.checked)}
+                  />
+                  Sin nombre del producto (la partida va sola). Lo que dejes queda para este cliente.
+                </label>
+              }
+            >
+              <input
+                value={ncmTexto ?? liq?.factura?.ncmDescripcion ?? ''}
+                onChange={(e) => setNcmTexto(e.target.value)}
+                disabled={ncmSin ?? liq?.factura?.ncmConDescripcion === false}
+                className={`${inputCls} w-full disabled:bg-gray-50 disabled:text-gray-400`}
+                placeholder={liq?.factura?.ncmDescripcionPorDefecto ? `Por defecto: ${liq.factura.ncmDescripcionPorDefecto}` : 'Descripción de la película (por defecto la de Oben)'}
+              />
+            </Field>
             <Field label="Notas (opcional)" className="sm:col-span-2">
               <input value={textoValor('notes')} onChange={(e) => setTextos((t) => ({ ...t, notes: e.target.value }))} className={`${inputCls} w-full`} />
             </Field>
           </div>
         </Card>
+
+        <TarifarioCard puedeCargar={puedeAprobar} onCargado={() => setTextos((t) => ({ ...t }))} />
       </div>
 
       {/* ── Resultado ── */}
@@ -320,12 +379,22 @@ export function LiquidacionPanel({
             )}
             {liq && (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
                   <Kpi label="Valor mercancía" value={usd(tot.valor)} />
                   <Kpi label="Flete" value={usd(tot.flete)} tone={isNum(tot.flete) ? 'default' : 'muted'} />
                   <Kpi label="Seguro" value={usd(tot.seguro)} tone={isNum(tot.seguro) ? 'default' : 'muted'} />
                   <Kpi label="Otros gastos" value={usd(tot.otros)} tone={isNum(tot.otros) ? 'default' : 'muted'} />
                   <Kpi label="FOB final" value={usd(tot.fob)} tone={isNum(tot.fob) ? 'brand' : 'muted'} />
+                  <Kpi label={`Total ${liq.incoterm ?? 'factura'}`} value={usd(totalFactura)} tone={isNum(totalFactura) ? 'brand' : 'muted'} />
+                </div>
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600">
+                  <span>
+                    <span className="text-gray-400">Término de pago:</span>{' '}
+                    <span className={liq.terminoPago ? 'font-medium text-gray-900' : 'text-amber-700'}>{liq.terminoPago ?? 'Oben no lo trae para esta proforma'}</span>
+                  </span>
+                  <span>
+                    <span className="text-gray-400">Orden de compra del cliente:</span> <span className="font-medium text-gray-900">{liq.ordenCompra || '—'}</span>
+                  </span>
                 </div>
 
                 {isNum(tot.fob) && (
@@ -440,8 +509,10 @@ export function LiquidacionPanel({
           )}
         </Card>
 
+        {liq && <VistaFacturaCard ov={factura.numberOrderSales} input={payload} version={`${tot.fob}-${tot.flete}-${tot.otros}-${liq.header.paNcm}-${liq.aprobacion?.vigente}`} />}
       </div>
     </div>
+    {verProforma && <ProformaModal pf={pf} onClose={() => setVerProforma(false)} />}
     </div>
   );
 }

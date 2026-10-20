@@ -4,6 +4,8 @@ import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
 import { FreightOceanRate } from '../../entities/freight-ocean-rate.entity';
 import { FreightTransloadRate } from '../../entities/freight-transload-rate.entity';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
+import { FreightRateCarga } from '../../entities/freight-rate-carga.entity';
+import { TarifarioExportacionService } from './tarifario-exportacion.service';
 import { FreightRateImportService } from './freight-rate-import.service';
 import { LiquidacionRatesService } from './liquidacion-rates.service';
 import { FreightRatesController } from './freight-rates.controller';
@@ -16,11 +18,12 @@ import { AuthModule } from '../auth/auth.module';
       FreightOceanRate,
       FreightTransloadRate,
       FreightDestinationSurcharge,
+      FreightRateCarga,
     ]),
     AuthModule,
   ],
   controllers: [FreightRatesController],
-  providers: [FreightRateImportService, LiquidacionRatesService],
+  providers: [FreightRateImportService, LiquidacionRatesService, TarifarioExportacionService],
   exports: [FreightRateImportService, LiquidacionRatesService],
 })
 export class FreightRatesModule {}

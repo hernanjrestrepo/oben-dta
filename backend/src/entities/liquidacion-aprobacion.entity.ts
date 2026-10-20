@@ -24,6 +24,13 @@ export class LiquidacionAprobacion extends TenantScopedEntity {
   @Column({ name: 'aprobado_por_nombre', type: 'varchar', nullable: true })
   aprobadoPorNombre: string | null;
 
+  /**
+   * Lo que COMEX digitó o escogió en pantalla al aprobar (encabezado, Incoterm, otros gastos, texto de la
+   * factura). Se vuelve a aplicar al recalcular la PF, para que la factura y la aprobación no lo pierdan.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  entrada: Record<string, unknown> | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

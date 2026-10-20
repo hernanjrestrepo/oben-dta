@@ -70,8 +70,8 @@ describe('construirFacturaDian', () => {
         'BOBINAS / ROLLS: 7',
         'TOTAL FOB: US$ 4,204.22',
         'TOTAL OTROS GASTOS / OTHER EXPENSES: US$ 1,787.49',
-        'TOTAL VALOR DDP DALLAS, TX 75212 -',
-        ' INCOTERM 2020 US$ 6,935.89',
+        // En una sola línea (María, 20-oct).
+        'TOTAL VALOR DDP DALLAS, TX 75212 INCOTERM 2020 US$ 6,935.89',
         'PUERTO DE ORIGEN / ORIGEM: CARTAGENA - COLOMBIA',
       ]),
     );
@@ -154,5 +154,81 @@ describe('descripcionNcm (DescripcionSKU de Oben, 16-oct)', () => {
   it('sin DescripcionSKU usa la tabla de partidas; sin nada, vacío', () => {
     expect(descripcionNcm('3920.20.19', null, { descripcionEs: 'ES', descripcionEn: 'EN' } as never)).toBe(' ES // 3920.20.19 EN');
     expect(descripcionNcm('3920.20.19', null, null)).toBe('');
+  });
+});
+
+describe('factura de exportación = liquidación exacta (reunión de pruebas con COMEX, 20-oct)', () => {
+  // PF 11166 / OV 10999 (Videplast, CFR Puerto Itapoa), datos reales de producción del 20-oct.
+  const ITEMS: Array<[string, number]> = [
+    ['ET---0012RT0890S0760', 2853.12],
+    ['ET---0012RT0910S0760', 3982.94],
+    ['ET---0012RT0960S0760', 3149],
+    ['ET---0012RT1000S0760', 3358.62],
+    ['ET---0012RT1110S0760', 2965.65],
+    ['ET---0012RT1150S0760', 3073.25],
+    ['ET---0012RT1190S0760', 3254.35],
+  ];
+  const draft11166: FacturacionDraft = {
+    ...DRAFT,
+    numberOrderSales: 10999,
+    cliente: 'VIDEPLAST INDUSTRIA DE EMBALAGENS LTDA',
+    pais: 'Brasil',
+    proforma: '11166',
+    ordenCompra: '7700003576',
+    lines: [{ codSecLineFilm: 1, tipoPelicula: 'ET---0012RT', precio: 2.7, kilosTotal: 22636.93, valorLinea: 61119.71 }],
+    empaque: { pallets: 34, bobinas: 41, pesoNetoKg: 22636.93, pesoBrutoKg: 24187.1, items: ITEMS.map(([codigo, kilos]) => ({ codigo, kilos, bobinas: 1 })) },
+    totalValor: 61119.71,
+    totalKilos: 22636.93,
+  };
+  const liq11166 = (extra: Partial<LiquidacionDraft> = {}) =>
+    ({
+      incoterm: 'CFR',
+      header: { puertoEmbarque: 'CARTAGENA - COLOMBIA', puertoArribo: 'PUERTO ITAPOA', paNcm: '3920620010', paNaladi: '3920.62.00' },
+      headerOrigen: { paNcm: 'oben' },
+      totales: { incoterm: 'CFR', flete: 324, valorPoliza: 1.00053 },
+      lines: [{ tipoPelicula: 'ET---0012RT', kilosTotal: 22636.93, kilosTotalUnit: 2.6857, valueFOB: 60796, valueFreight: 324, valueSure: 0, expensesOther: 0 }],
+      sinConfirmar: [],
+      descripcionSku: 'PELÍCULA DE POLIÉSTER BIORIENTADA / BIAXIALLY ORIENTED POLYESTER FILM',
+      terminoPago: '30 DAYS FROM INVOICE DATE',
+      ...extra,
+    }) as unknown as LiquidacionDraft;
+
+  it('PF 11166: FOB 60,796.00 + flete 324 = 61,120.00 cerrado (antes 60,796.01 / 61,120.01): el centavo se ajusta en el último rollo', () => {
+    const { factura: f } = construirFacturaDian({ draft: draft11166, factura: null, liquidacion: liq11166(), ahora: AHORA });
+    expect(f.subtotal).toBe(60796);
+    expect(f.neto).toBe(61120);
+    // Precio unitario de 4 decimales en todos los rollos; solo el último absorbe el centavo.
+    expect(f.lineas.every((l) => l.valorUnitario === 2.6857)).toBe(true);
+    expect(f.lineas.slice(0, -1).map((l) => l.total)).toEqual([7662.62, 10696.98, 8457.27, 9020.25, 7964.85, 8253.83]);
+    expect(f.lineas.at(-1)!.total).toBe(8740.2);
+    expect(f.observaciones).toContain('TOTAL FOB: US$ 60,796.00');
+    expect(f.observaciones).toContain('TOTAL VALOR CFR PUERTO ITAPOA INCOTERM 2020 US$ 61,120.00');
+    expect(f.observaciones.some((o) => o.trim().startsWith('INCOTERM 2020'))).toBe(false); // ya no en otro renglón
+    expect(f.valorLetras).toContain('SESENTA Y UN MIL CIENTO VEINTE DOLARES');
+  });
+
+  it('el término de pago de la proforma (TerminoPago de Oben) va en la factura', () => {
+    const { factura: f, avisos } = construirFacturaDian({ draft: draft11166, factura: null, liquidacion: liq11166(), ahora: AHORA });
+    expect(f.terminosPago).toBe('30 DAYS FROM INVOICE DATE');
+    expect(avisos.join(' ')).not.toMatch(/término de pago|Forma de pago/i);
+    const sin = construirFacturaDian({ draft: draft11166, factura: null, liquidacion: liq11166({ terminoPago: null }), ahora: AHORA });
+    expect(sin.factura.terminosPago).toBeNull();
+    expect(sin.avisos.join(' ')).toMatch(/no trajo el término de pago/);
+  });
+
+  it('si los kilos de la Lista de Empaque no coinciden con los liquidados no se fuerza nada: se avisa', () => {
+    const otro = { ...draft11166, empaque: { ...draft11166.empaque!, items: draft11166.empaque!.items.slice(1) } };
+    const { factura: f, avisos } = construirFacturaDian({ draft: otro, factura: null, liquidacion: liq11166(), ahora: AHORA });
+    expect(avisos.join(' ')).toMatch(/no coinciden con los liquidados/);
+    expect(f.subtotal).not.toBe(60796);
+  });
+
+  it('junto a la partida: la descripción de Oben, un texto propio del cliente o nada', () => {
+    const ncm = (liq: LiquidacionDraft) => construirFacturaDian({ draft: draft11166, factura: null, liquidacion: liq, ahora: AHORA }).factura.observaciones.find((o) => o.startsWith('PA NCM'));
+    expect(ncm(liq11166())).toBe('PA NCM: 3920620010 PELÍCULA DE POLIÉSTER BIORIENTADA // 3920620010 BIAXIALLY ORIENTED POLYESTER FILM');
+    const propio = liq11166({ header: { ...liq11166().header, paNcm: '3920.62.19' }, factura: { ncmDescripcion: 'PELICULA DE POLIETILENO TEREFTALATO', ncmConDescripcion: true, ncmDescripcionPorDefecto: null, origen: 'cliente' } });
+    expect(ncm(propio)).toBe('PA NCM: 3920.62.19 PELICULA DE POLIETILENO TEREFTALATO');
+    const sola = liq11166({ factura: { ncmDescripcion: null, ncmConDescripcion: false, ncmDescripcionPorDefecto: null, origen: 'usuario' } });
+    expect(ncm(sola)).toBe('PA NCM: 3920620010');
   });
 });

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
@@ -8,7 +8,7 @@ import { RequirePermission } from '../security/require-permission.decorator';
 import { LiquidacionService } from './liquidacion.service';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import { CONCEPTOS_POR_INCOTERM } from './incoterm-rules';
-import type { LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotalesInput } from './liquidacion.types';
+import type { LiquidacionFacturaInput, LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotalesInput } from './liquidacion.types';
 
 /** Soportes de un cambio de ruta: hasta 5 archivos de 10 MB (cotizaciones, correos, PDF). */
 export const MAX_ADJUNTOS_RUTA = 5;
@@ -63,6 +63,11 @@ class LiquidacionInputDto {
   @IsObject()
   lines?: Record<string, LiquidacionLineValues>;
 
+  /** Texto junto a la partida NCM en la factura (por cliente, 20-oct). */
+  @IsOptional()
+  @IsObject()
+  factura?: LiquidacionFacturaInput;
+
   /** Sin `confirm: true` solo se simula: no se escribe nada en Oben. */
   @IsOptional()
   @IsBoolean()
@@ -85,6 +90,13 @@ class LiquidacionInputDto {
   @IsArray()
   @IsInt({ each: true })
   detailsDone?: number[];
+}
+
+class DescartarDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  motivo?: string | null;
 }
 
 class CierreDto {
@@ -125,7 +137,7 @@ export class LiquidacionController {
   @Post(':numberPF/draft')
   @RequirePermission(LIQUIDACION_PERMISSION)
   draftWithInput(@Param('numberPF') numberPF: string, @Body() dto: LiquidacionInputDto) {
-    return this.liquidacion.getDraft(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines });
+    return this.liquidacion.getDraft(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines, factura: dto.factura });
   }
 
   /**
@@ -141,7 +153,7 @@ export class LiquidacionController {
   ) {
     const u = req.user ?? {};
     const nombre = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || null;
-    return this.liquidacion.aprobar(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines }, { nombre });
+    return this.liquidacion.aprobar(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines, factura: dto.factura }, { nombre });
   }
 
   /**
@@ -195,7 +207,7 @@ export class LiquidacionController {
   submit(@Param('numberPF') numberPF: string, @Body() dto: LiquidacionInputDto) {
     return this.liquidacion.submit(
       numberPF,
-      { header: dto.header, totales: dto.totales, lines: dto.lines },
+      { header: dto.header, totales: dto.totales, lines: dto.lines, factura: dto.factura },
       {
         confirm: dto.confirm,
         resume: dto.resume,
@@ -204,6 +216,33 @@ export class LiquidacionController {
         detailsDone: dto.detailsDone,
       },
     );
+  }
+
+  /** La proforma tal como la tiene Oben (encabezado, detalle y reporte COMEX), para revisarla antes de liquidar (20-oct). */
+  @Get(':numberPF/proforma')
+  @RequirePermission(LIQUIDACION_PERMISSION)
+  proforma(@Param('numberPF') numberPF: string) {
+    return this.liquidacion.proformaCompleta(numberPF);
+  }
+
+  /** COMEX ya la liquidó por fuera: sale de la lista de pendientes (20-oct). */
+  @Post(':numberPF/descartar')
+  @RequirePermission(LIQUIDACION_PERMISSION)
+  descartar(
+    @Param('numberPF') numberPF: string,
+    @Body() dto: DescartarDto,
+    @Req() req: { user?: { email?: string; firstName?: string; lastName?: string } },
+  ) {
+    const u = req.user ?? {};
+    const nombre = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || null;
+    return this.liquidacion.descartarPendiente(numberPF, dto.motivo ?? null, { nombre });
+  }
+
+  /** La vuelve a poner en la lista de pendientes. */
+  @Delete(':numberPF/descartar')
+  @RequirePermission(LIQUIDACION_PERMISSION)
+  restaurar(@Param('numberPF') numberPF: string) {
+    return this.liquidacion.restaurarPendiente(numberPF);
   }
 
   /** Vista previa del correo de cierre (OBEN MAS §1.2): destinatarios, adjuntos, qué es simulado y si puede salir. No envía nada. */

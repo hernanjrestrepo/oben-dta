@@ -1,10 +1,18 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Res, UseGuards } from '@nestjs/common';
-import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsOptional, IsString } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsObject, IsOptional, IsString } from 'class-validator';
+import type { LiquidacionInput } from '../liquidacion/liquidacion.types';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { FacturacionService } from './facturacion.service';
+
+class VistaFacturaDto {
+  /** Lo que COMEX tiene en pantalla en la liquidación (encabezado, Incoterm, texto junto a la partida). */
+  @IsOptional()
+  @IsObject()
+  liquidacion?: LiquidacionInput;
+}
 
 class FacturacionInputDto {
   @IsOptional()
@@ -96,6 +104,13 @@ export class FacturacionController {
   @RequirePermission('invoices.read')
   historial(@Param('numberOrderSales') numberOrderSales: string) {
     return this.facturacion.historial(this.parseOrderNumber(numberOrderSales));
+  }
+
+  /** Cómo saldrá la factura (observaciones y totales) con lo que hay en pantalla. No emite nada. */
+  @Post(':numberOrderSales/vista-factura')
+  @RequirePermission('invoices.read')
+  vistaFactura(@Param('numberOrderSales') numberOrderSales: string, @Body() dto: VistaFacturaDto) {
+    return this.facturacion.vistaFactura(this.parseOrderNumber(numberOrderSales), dto.liquidacion);
   }
 
   @Get(':numberOrderSales/pdf')
