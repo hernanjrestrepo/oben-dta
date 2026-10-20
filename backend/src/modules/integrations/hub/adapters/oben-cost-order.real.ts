@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { RealAdapterBase } from '../real-adapter-base';
 import { AdapterCapability, BaseAdapterConfig } from '../adapter.types';
+import { APIS_COMERCIALES, COMERCIAL_URL_PRUEBAS, esMaestroComercial } from './oben-comercial';
 
 /**
  * APICrearInvoiceParadixe en PRODUCCIÓN: José (2026-10-06) pidió cambiar de
@@ -31,6 +32,8 @@ export interface ObenCostOrderAdapterConfig extends BaseAdapterConfig {
   liquidacionUrl?: string;
   /** URL de APICrearInvoiceParadixe (crea la factura en OBEN MAS). Por defecto, producción (api.obengroup.co). */
   crearInvoiceUrl?: string;
+  /** Base de las APIs comerciales (maestros). Por defecto, el servidor de pruebas: hoy solo existen allí (20-oct). */
+  comercialUrl?: string;
   authToken?: string;
 }
 
@@ -130,6 +133,11 @@ export class ObenCostOrderRealAdapter extends RealAdapterBase {
         method: 'write',
         description: 'Crea la factura de una proforma en OBEN MAS, completa o parcial por número de distribución (API real Oben)',
       },
+      {
+        operation: 'comercial.consultar',
+        method: 'read',
+        description: 'Maestros comerciales de Oben: clientes, referencias, partidas, ciudades, validación de empaque y parametrización (API real Oben)',
+      },
     ];
   }
 
@@ -152,7 +160,18 @@ export class ObenCostOrderRealAdapter extends RealAdapterBase {
       'liquidacion.consultar': (args: Record<string, unknown>) =>
         this.consultarLiquidacion(args),
       'factura.crear': (args: Record<string, unknown>) => this.crearFactura(args),
+      'comercial.consultar': (args: Record<string, unknown>) => this.consultarComercial(args),
     };
+  }
+
+  /** Consulta una API comercial (solo lectura); los parámetros van como encabezados, como en el resto de Oben. */
+  private async consultarComercial(args: Record<string, unknown>): Promise<unknown> {
+    this.assertConfigured();
+    if (!esMaestroComercial(args.maestro)) throw new Error('BUSINESS_ERROR: maestro comercial desconocido');
+    const def = APIS_COMERCIALES[args.maestro];
+    const params = (args.parametros && typeof args.parametros === 'object' ? args.parametros : {}) as Record<string, unknown>;
+    const base = String(this.cfg.comercialUrl ?? COMERCIAL_URL_PRUEBAS).replace(/\/+$/, '');
+    return this.httpJson(`${base}/${def.api}`, { method: 'POST' }, { Authtoken: this.cfg.authToken!, ...pickHeaders(params, def.parametros) });
   }
 
   /**

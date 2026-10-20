@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { MockAdapterBase } from '../mock-adapter-base';
 import { AdapterCapability } from '../adapter.types';
 import { SCENARIO_PROVIDER, ScenarioProvider } from '../scenario.types';
+import { esMaestroComercial } from './oben-comercial';
 
 /** En el simulador, Proforma = Orden de venta + este desfase (biyectivo: Liquidación resuelve el país desde la OV). */
 const PF_OFFSET = 200;
@@ -57,6 +58,11 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
         method: 'write',
         description: 'Crea la factura de una proforma (APICrearInvoiceParadixe) — mock, no factura nada real',
       },
+      {
+        operation: 'comercial.consultar',
+        method: 'read',
+        description: 'Maestros comerciales de Oben (clientes, referencias, partidas, ciudades) — mock con datos ficticios',
+      },
     ];
   }
 
@@ -76,6 +82,24 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
         const dist = String((args.numberDistribucion as string | number | undefined) ?? '');
         return { isSuccessful: true, Code: '200', message: `SIMULADO: factura ${dist ? `parcial (distribución ${dist})` : 'completa'} de la PF ${pf}` };
       }, 'factura.crear'),
+      'comercial.consultar': this.wrap(async (args) => {
+        if (!esMaestroComercial(args.maestro)) throw new Error('BUSINESS_ERROR: maestro comercial desconocido');
+        // Misma forma que las APIs reales del servidor de pruebas (20-oct), con datos ficticios.
+        switch (args.maestro) {
+          case 'clientes':
+            return [1, 2, 3].map((i) => ({ CodSec_Entity: 900 + i, Nombre_Cliente: `CLIENTE DEMO ${i} S.A.S.`, Tipo_Documento: 'NIT', Nro_Documento: `90000000${i}`, Pais_Cliente: i === 3 ? 'USA' : 'COLOMBIA', CodSed_CustomerAddress: 5000 + i, Cliente_Destino: `CLIENTE DEMO ${i} S.A.S.`, Direccion_Destino: `Calle ${i} # 1-23` }));
+          case 'productos':
+            return [1, 2].map((i) => ({ CodSec_Prod: 7000 + i, CodSec_LineFilm: 100 + i, Linea: i === 1 ? 'BOPP' : 'PET', Pelicula: i === 1 ? 'SC---0015TN' : 'ET---0012RT', Referencia: `REF-DEMO-${i}`, Ancho: 600 + i * 100, CodSec_Core: 1, Core: '6', CodSec_Diametro: 1, Diametro: '760' }));
+          case 'partidas':
+            return [{ CodSec_TariffDeparture: 1, Valor: '3920.20.90.00', Descripcion: 'PELICULA DE POLIPROPILENO BIORIENTADO', CodSec_Line: 1, Linea: 'BOPP' }];
+          case 'ciudades':
+            return [{ CodSec_City: 1, Ciudad: 'BARRANQUILLA', CodSec_State: 1, Estado: 'ATLANTICO', CodSec_Country: 1, Pais: 'COLOMBIA' }];
+          case 'validarEmpaque':
+            return 'OK';
+          default:
+            return [];
+        }
+      }, 'comercial.consultar'),
     };
   }
 

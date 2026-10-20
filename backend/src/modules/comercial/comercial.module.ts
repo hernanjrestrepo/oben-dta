@@ -16,6 +16,8 @@ import { ComercialIntakeService } from './comercial-intake.service';
 import { ComercialFlujoService } from './comercial-flujo.service';
 import { ComercialProcessorService } from './comercial-processor.service';
 import { ComercialSimuladorService } from './comercial-simulador.service';
+import { ComercialMaestrosService } from './comercial-maestros.service';
+import { ComercialMaestrosController } from './comercial-maestros.controller';
 
 @Module({
   imports: [
@@ -27,8 +29,8 @@ import { ComercialSimuladorService } from './comercial-simulador.service';
     DistributionListsModule,
     IdempotencyModule,
   ],
-  controllers: [ComercialController, ComercialCasosController],
-  providers: [ComercialService, ComercialIntakeService, ComercialFlujoService, ComercialProcessorService, ComercialSimuladorService],
-  exports: [ComercialService, ComercialFlujoService],
+  controllers: [ComercialController, ComercialCasosController, ComercialMaestrosController],
+  providers: [ComercialService, ComercialIntakeService, ComercialFlujoService, ComercialProcessorService, ComercialSimuladorService, ComercialMaestrosService],
+  exports: [ComercialService, ComercialFlujoService, ComercialMaestrosService],
 })
 export class ComercialModule {}
