@@ -565,6 +565,23 @@ export class FacturasParcialesService {
         continue;
       }
       try {
+        // Regla de José (13-oct): un PARCIAL ("Facturar Parcial") se factura sin esperar el cierre ni la Lista de Empaque,
+        // apenas su orden está en el cuadro del día. Si el correo llegó ANTES de cargar el cuadro, quedó pendiente: se
+        // factura aquí. Siguen las guardas de siempre (solo Colombia, una vez por distribución, aviso por correo).
+        let parcialesProcesados = 0;
+        if (await this.automatica()) {
+          const pendientes = (await this.repo.find({ where: { tenantId: this.ctx.tenantId, numberPF: p.numberPF } })).filter((x) => x.estado === 'pendiente' && x.numeroDistribucion);
+          for (const x of pendientes) {
+            parcialesProcesados += 1;
+            try {
+              const r = await this.facturar(x.id);
+              resultados.push({ ...base, resultado: r.estado, detalle: `distribución ${x.numeroDistribucion}${r.error ? `: ${r.error}` : ''}` });
+            } catch (err) {
+              resultados.push({ ...base, resultado: 'omitida', detalle: `distribución ${x.numeroDistribucion}: ${(err as Error).message}` });
+            }
+          }
+        }
+        if (parcialesProcesados > 0 && p.tipo === 'parcial') continue;
         const cierre = await this.cierreDe(p.numberOrderSales);
         if (!cierre) {
           resultados.push({ ...base, resultado: 'espera_cierre', detalle: 'Aún no ha salido su Lista de Empaque: se factura sola cuando cierre (antes del corte).' });

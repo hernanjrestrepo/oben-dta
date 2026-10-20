@@ -192,16 +192,16 @@ describe('Facturación programada: parciales ("Facturar Parcial") esperan el cie
     expect(facturasPedidas()).toEqual([]);
   });
 
-  it('un parcial pedido DESPUÉS del último cierre de la orden espera su propio cierre', async () => {
-    // La orden cerró el viernes a las 3:22 p. m.; hoy Oben pide otro parcial (otra distribución) que aún no cierra.
+  it('un parcial pedido DESPUÉS del último cierre de la orden también se factura de una vez (regla de José 13-oct: los parciales no esperan cierre)', async () => {
+    // La orden cerró el viernes a las 3:22 p. m.; hoy Oben pide otro parcial (otra distribución).
     const { svc, facturasPedidas } = armar({
       programadas: [{ ov: 11052, tipo: 'parcial' }],
       cerradas: { 11052: { en: VIERNES_1522 } },
       solicitudes: [parcial('11228', '11199', new Date('2026-10-13T15:00:00Z'))],
     });
     const r = await svc.facturarProgramadasDeHoy();
-    expect(r[0]).toMatchObject({ resultado: 'omitida', detalle: expect.stringMatching(/posterior al último cierre/) });
-    expect(facturasPedidas()).toEqual([]);
+    expect(r[0]).toMatchObject({ resultado: 'facturada', detalle: 'distribución 11199' });
+    expect(facturasPedidas()).toEqual([{ numberPF: '11228', numberDistribucion: '11199' }]);
   });
 
   it('llega el correo y la orden AÚN no cierra: se factura de una vez (José 13-oct: el parcial ya está montado, no espera cierre)', async () => {
@@ -305,14 +305,43 @@ describe('facturarProgramadasDeHoy: factura lo que ya cerró y deja esperando lo
     expect(de(11235)?.resultado).toBe('facturada'); // completa
     expect(de(11256)).toMatchObject({ resultado: 'omitida', detalle: expect.stringMatching(/solo se facturan pedidos nacionales/) });
     expect(de(11039)?.resultado).toBe('espera_cierre'); // POR CERRAR, sin parcial
-    expect(de(10963)?.resultado).toBe('espera_cierre'); // POR CERRAR, con parcial pedido: espera el cierre
-    expect(de(11052)).toMatchObject({ resultado: 'facturada', detalle: 'distribución 11140: facturada' }); // saldo pendiente: su parcial
+    expect(de(10963)).toMatchObject({ resultado: 'facturada', detalle: 'distribución 11144' }); // POR CERRAR, con parcial pedido: el parcial no espera el cierre (José)
+    expect(de(11052)).toMatchObject({ resultado: 'facturada', detalle: 'distribución 11140' }); // saldo pendiente: su parcial
     expect(de(11031)).toMatchObject({ resultado: 'omitida', detalle: expect.stringMatching(/saldo pendiente \(factura PARCIAL\)/) }); // sin correo parcial
     expect(
       facturasPedidas()
         .map((f) => `${f.numberPF}/${f.numberDistribucion}`)
         .sort(),
-    ).toEqual(['11228/11140', '11374/', '11546/']);
+    ).toEqual(['11126/11144', '11228/11140', '11374/', '11546/']);
+  });
+
+  it('regla de José: un parcial pendiente (llegó antes de cargar el cuadro) de una orden SIN cerrar se factura al cargar el cuadro, sin esperar la Lista de Empaque', async () => {
+    const { svc, facturasPedidas } = armar({
+      programadas: [{ ov: 11039, tipo: 'parcial' }],
+      solicitudes: [{ numberPF: '11235', numeroDistribucion: '11160', origen: 'correo', estado: 'pendiente', createdAt: VIERNES_1226 }],
+    });
+    const r = await svc.facturarProgramadasDeHoy();
+    expect(r[0]).toMatchObject({ resultado: 'facturada', detalle: 'distribución 11160' });
+    expect(facturasPedidas()).toEqual([{ numberPF: '11235', numberDistribucion: '11160' }]);
+  });
+
+  it('ese parcial pendiente no se factura si la orden está marcada NO facturar, ni si la facturación está suspendida', async () => {
+    const a = armar({
+      ajustes: { noFacturarOv: [11039] },
+      programadas: [{ ov: 11039, tipo: 'parcial' }],
+      solicitudes: [{ numberPF: '11235', numeroDistribucion: '11160', origen: 'correo', estado: 'pendiente', createdAt: VIERNES_1226 }],
+    });
+    await a.svc.programarDia(HOY, [{ ov: 11039, pf: '11235', tipo: 'parcial' }]);
+    await a.svc.facturarProgramadasDeHoy();
+    expect(a.facturasPedidas()).toEqual([]);
+
+    const b = armar({
+      ajustes: { suspendida: true },
+      programadas: [{ ov: 11039, tipo: 'parcial' }],
+      solicitudes: [{ numberPF: '11235', numeroDistribucion: '11160', origen: 'correo', estado: 'pendiente', createdAt: VIERNES_1226 }],
+    });
+    await b.svc.facturarProgramadasDeHoy();
+    expect(b.facturasPedidas()).toEqual([]);
   });
 
   it('volver a correrla no repite facturas', async () => {
