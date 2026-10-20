@@ -72,6 +72,21 @@ export default function FacturasParcialesPage() {
     }
   }
 
+  async function enviarmeAviso(f: FacturaParcial) {
+    if (!user?.email) return;
+    if (!confirm(`Se enviará solo a ${user.email} el correo de resultado de la PF ${f.numberPF}${f.estado === 'facturada' ? ' con la factura en PDF' : ' con la explicación'}. No se pide nada a Oben. ¿Continuar?`)) return;
+    try {
+      setFacturando(f.id);
+      setError('');
+      const r = await api.reenviarAvisoFactura(f.id, [user.email]);
+      alert(r.enviado ? `Listo: te lo envié a ${user.email} (${r.detalle}).` : `No se pudo enviar: ${r.detalle}`);
+    } catch (err) {
+      setError(errMsg(err, 'No se pudo reenviar el aviso.'));
+    } finally {
+      setFacturando(null);
+    }
+  }
+
   async function facturar(f: FacturaParcial) {
     const confirmo = f.estado === 'revisar';
     const pregunta = confirmo
@@ -190,6 +205,16 @@ export default function FacturasParcialesPage() {
                       {f.error && <p className="text-xs text-red-600 mt-1 max-w-md">{f.error}</p>}
                     </td>
                     <td className="px-4 py-3 text-right">
+                      {puedeFacturar && ['facturada', 'rechazada', 'revisar'].includes(f.estado) && (
+                        <button
+                          onClick={() => enviarmeAviso(f)}
+                          disabled={facturando !== null}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-xs font-medium disabled:opacity-50 whitespace-nowrap mr-2"
+                          title="Te envía a tu correo el resultado de esta factura (con el PDF si se creó o con la explicación si falló)"
+                        >
+                          <Mail className="w-3.5 h-3.5" /> Enviarme el aviso
+                        </button>
+                      )}
                       {puede && (
                         <button
                           onClick={() => facturar(f)}

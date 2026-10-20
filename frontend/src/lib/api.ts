@@ -557,6 +557,12 @@ class ApiClient {
     return data;
   }
 
+  /** Reenvía el correo de resultado de una factura (con el PDF o la explicación); `para` = solo a esas personas. */
+  async reenviarAvisoFactura(id: string, para?: string[]): Promise<{ enviado: boolean; detalle: string }> {
+    const { data } = await this.client.post<{ enviado: boolean; detalle: string }>(`/facturacion/parciales/${id}/reenviar-aviso`, para?.length ? { para } : {}, { timeout: 180000 });
+    return data;
+  }
+
   async facturarParcial(id: string, confirmoQueNoExiste = false): Promise<FacturaParcial> {
     const { data } = await this.client.post<FacturaParcial>(`/facturacion/parciales/${id}/facturar`, { confirmoQueNoExiste }, { timeout: 120000 });
     return data;

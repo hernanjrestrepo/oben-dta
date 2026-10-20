@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsOptional, Matches } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsOptional, Matches } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
@@ -17,6 +17,15 @@ class FacturarParcialDto {
   @IsOptional()
   @IsBoolean()
   confirmoQueNoExiste?: boolean;
+}
+
+class ReenviarAvisoDto {
+  /** Sin esto el aviso va a la lista de Facturación; con esto, solo a esas personas. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsEmail({}, { each: true })
+  para?: string[];
 }
 
 /**
@@ -44,5 +53,12 @@ export class FacturasParcialesController {
   @RequirePermission('invoices.create')
   facturar(@Param('id') id: string, @Body() dto: FacturarParcialDto) {
     return this.parciales.facturar(id, dto.confirmoQueNoExiste === true);
+  }
+
+  /** Reenvía el correo de resultado (con la factura en PDF o la explicación de la falla). No pide nada a Oben. */
+  @Post(':id/reenviar-aviso')
+  @RequirePermission('invoices.send')
+  reenviarAviso(@Param('id') id: string, @Body() dto: ReenviarAvisoDto) {
+    return this.parciales.reenviarAviso(id, dto.para);
   }
 }

@@ -9,6 +9,8 @@ import { IntegrationHubService } from '../integrations/hub/integration-hub.servi
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
+import { FacturacionService } from './facturacion.service';
+import { explicarFalla, explicacionHtml } from './factura-explicaciones';
 
 /**
  * Formato REAL del correo de Oben (leído del buzón el 2026-10-01, ejemplo
@@ -139,6 +141,7 @@ export class FacturasParcialesService {
     private readonly audit: WorkflowAuditService,
     @Optional() private readonly distributionLists?: DistributionListsService,
     @Optional() @InjectRepository(FacturaProgramada) private readonly programadas?: Repository<FacturaProgramada>,
+    @Optional() private readonly facturacion?: FacturacionService,
   ) {}
 
   listar(limite = 50): Promise<FacturaParcial[]> {
@@ -280,52 +283,178 @@ export class FacturasParcialesService {
   }
 
   /**
-   * Aviso por correo a la lista "Facturación" con el resultado de cada factura pedida a Oben (facturada, rechazada
-   * o por revisar). Antes (7-oct) el flujo automático facturaba y NO avisaba a nadie. Oben no devuelve el número de
-   * factura por la API: el correo lo dice y manda a consultarlo en OBEN MAS. Nunca tumba la facturación.
+   * Aviso por correo a la lista "Facturación" con el resultado de cada factura pedida a Oben. Si se creó, lleva la
+   * factura en PDF; si no, una explicación clara de qué pasó, qué significa y qué se hace (pedido de Hernán, 20-oct).
+   * Nunca tumba la facturación.
    */
-  private async avisarResultado(fila: FacturaParcial, estado: EstadoFacturaParcial, errorTexto: string | null, modo: string | undefined, yaFacturada: boolean, numeroOben: string | null = null): Promise<void> {
-    if (!this.distributionLists) return;
+  private async avisarResultado(
+    fila: FacturaParcial,
+    estado: EstadoFacturaParcial,
+    errorTexto: string | null,
+    modo: string | undefined,
+    yaFacturada: boolean,
+    numeroOben: string | null = null,
+    destino?: { para: string[] },
+  ): Promise<{ enviado: boolean; detalle: string }> {
+    if (!this.distributionLists) return { enviado: false, detalle: 'Sin listas de distribución.' };
     try {
-      const dest = await this.distributionLists.resolveRecipients('document', 'facturacion');
-      if (dest.to.length === 0) {
-        this.logger.warn(`PF ${fila.numberPF}: no hay lista "facturacion" con destinatarios: no se avisó por correo.`);
-        return;
+      let para: string;
+      let cc: string[] = [];
+      let bcc: string[] = [];
+      if (destino?.para?.length) {
+        [para, ...cc] = destino.para;
+      } else {
+        const dest = await this.distributionLists.resolveRecipients('document', 'facturacion');
+        if (dest.to.length === 0) {
+          this.logger.warn(`PF ${fila.numberPF}: no hay lista "facturacion" con destinatarios: no se avisó por correo.`);
+          return { enviado: false, detalle: 'La lista "facturacion" no tiene destinatarios.' };
+        }
+        const [primero, ...resto] = dest.to;
+        para = primero;
+        cc = [...resto, ...dest.cc];
+        bcc = dest.bcc;
       }
       const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const [para, ...resto] = dest.to;
-      const cc = [...resto, ...dest.cc];
-      const titulo = { facturada: 'Factura creada en OBEN MAS', rechazada: 'Factura RECHAZADA por Oben', revisar: 'Factura por REVISAR en OBEN MAS', pendiente: 'Factura pendiente', facturando: 'Factura en proceso' }[estado];
       const simulado = modo === 'mock';
       const origen = fila.origen === 'automatico' ? `Automática (${fila.remitente ?? 'pedido nacional'})` : fila.origen === 'correo' ? 'Correo "Facturar Parcial" de Oben' : 'Digitada en pantalla';
-      const detalle =
-        estado === 'facturada'
-          ? yaFacturada
-            ? 'Oben indica que esa factura ya existía (sus artículos ya estaban cerrados): no se duplicó nada.'
-            : 'Oben confirmó la creación.'
-          : errorTexto ?? '';
-      const html =
-        `<p><b>${titulo}</b></p>` +
+      const ok = estado === 'facturada';
+      const ctx = await this.contextoDeFalla(fila, errorTexto);
+      const expl = ok ? null : explicarFalla(estado, errorTexto, ctx);
+      const titulo = { facturada: 'Factura creada en OBEN MAS', rechazada: 'Factura RECHAZADA por Oben', revisar: 'Factura por REVISAR en OBEN MAS', en_espera: 'Factura en espera de aprobación en Oben', pendiente: 'Factura pendiente', facturando: 'Factura en proceso' }[estado];
+      const pdf = ok ? await this.pdfDeLaFactura(fila) : null;
+      const resumen =
         `<table cellpadding="4" style="border-collapse:collapse">` +
         `<tr><td>Proforma</td><td><b>${esc(fila.numberPF)}</b></td></tr>` +
+        (ctx.cliente ? `<tr><td>Cliente</td><td>${esc(ctx.cliente)}</td></tr>` : '') +
+        (ctx.ov ? `<tr><td>Orden de venta</td><td>${ctx.ov}</td></tr>` : '') +
         `<tr><td>Distribución</td><td>${fila.numeroDistribucion ? esc(fila.numeroDistribucion) : 'Pedido completo'}</td></tr>` +
         `<tr><td>Origen</td><td>${esc(origen)}</td></tr>` +
-        `<tr><td>Resultado</td><td>${esc(estado)}</td></tr>` +
+        `<tr><td>Resultado</td><td><b>${ok ? 'Factura creada' : estado === 'revisar' ? 'Por verificar en OBEN MAS' : 'No se creó la factura'}</b></td></tr>` +
         (numeroOben ? `<tr><td>Número que devolvió Oben</td><td><b>${esc(numeroOben)}</b></td></tr>` : '') +
-        `</table>` +
-        (detalle ? `<p>${esc(detalle)}</p>` : '') +
-        (estado === 'facturada' ? '<p>' + (numeroOben ? 'Este número lo devuelve la API de Oben al crear la factura (pendiente confirmar con José si es el número fiscal); confróntalo en OBEN MAS.' : 'La API de Oben no entregó número: consúltalo en OBEN MAS.') + '</p>' : '') +
-        (estado === 'revisar' ? '<p>No quedó claro si Oben la creó: verifica en OBEN MAS antes de reintentar.</p>' : '') +
-        (simulado ? '<p><b>SIMULADO:</b> no se creó ninguna factura real.</p>' : '');
+        `</table>`;
+      const cuerpoOk =
+        (yaFacturada ? '<p>Oben indica que esa factura ya existía (sus artículos ya estaban cerrados): no se duplicó nada.</p>' : '<p>Oben confirmó la creación de la factura.</p>') +
+        (numeroOben ? '<p>Este número lo devuelve la API de Oben al crear la factura (pendiente confirmar con José si es el número fiscal); confróntalo en OBEN MAS.</p>' : '<p>La API de Oben no entregó número: consúltalo en OBEN MAS.</p>') +
+        (pdf?.adjuntos.length
+          ? `<p><b>Se adjunta la factura en PDF.</b> ${esc(pdf.nota)}</p>`
+          : `<p><b>No se pudo adjuntar el PDF de la factura.</b> ${esc(pdf?.nota ?? 'No está disponible.')}</p>`);
+      const html = `<p><b>${esc(titulo)}${expl ? ` — ${esc(expl.titulo)}` : ''}</b></p>${resumen}${ok ? cuerpoOk : explicacionHtml(expl!)}${simulado ? '<p><b>SIMULADO:</b> no se creó ninguna factura real.</p>' : ''}`;
       const r = await this.hub.call<unknown>(
         'email',
         'send',
-        { to: para, ...(cc.length ? { cc: cc.join(',') } : {}), ...(dest.bcc.length ? { bcc: dest.bcc.join(',') } : {}), subject: `${simulado ? '[SIMULADO] ' : ''}${titulo} — PF ${fila.numberPF}`, body: html },
-        { maxAttempts: 1, timeoutMs: 30_000 },
+        {
+          to: para,
+          ...(cc.length ? { cc: cc.join(',') } : {}),
+          ...(bcc.length ? { bcc: bcc.join(',') } : {}),
+          subject: `${simulado ? '[SIMULADO] ' : ''}${titulo} — PF ${fila.numberPF}`,
+          body: html,
+          ...(pdf?.adjuntos.length ? { attachments: pdf.adjuntos } : {}),
+        },
+        { maxAttempts: 1, timeoutMs: 60_000 },
       );
-      if (!r.ok) this.logger.warn(`PF ${fila.numberPF}: no se pudo enviar el aviso por correo: ${r.error}`);
+      if (!r.ok) {
+        this.logger.warn(`PF ${fila.numberPF}: no se pudo enviar el aviso por correo: ${r.error}`);
+        return { enviado: false, detalle: String(r.error ?? 'Error desconocido al enviar el correo.') };
+      }
+      return { enviado: true, detalle: pdf?.adjuntos.length ? `con ${pdf.adjuntos.length} PDF` : ok ? `sin PDF (${pdf?.nota ?? ''})` : 'con la explicación' };
     } catch (err) {
       this.logger.warn(`PF ${fila.numberPF}: falló el aviso por correo: ${(err as Error).message}`);
+      return { enviado: false, detalle: (err as Error).message };
+    }
+  }
+
+  /**
+   * Reenvía el aviso de una solicitud ya procesada (por ejemplo, a una persona concreta que no lo recibió).
+   * Con `para` va solo a esas personas; sin él, a la lista de Facturación. No pide nada a Oben.
+   */
+  async reenviarAviso(id: string, para?: string[]): Promise<{ enviado: boolean; detalle: string }> {
+    const tenantId = this.ctx.tenantId;
+    const fila = await this.repo.findOne({ where: { id, tenantId } });
+    if (!fila) throw new NotFoundException('Solicitud de factura no encontrada.');
+    if (!['facturada', 'rechazada', 'revisar', 'en_espera'].includes(fila.estado)) {
+      throw new BadRequestException(`La solicitud está "${fila.estado}": todavía no hay resultado que avisar.`);
+    }
+    const limpios = (para ?? []).map((e) => e.trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    if ((para ?? []).length > 0 && limpios.length === 0) throw new BadRequestException('Los correos indicados no son válidos.');
+    const resp = (fila.respuesta ?? null) as Record<string, unknown> | null;
+    const yaFacturada = !!resp && resp.yaFacturada === true;
+    const numeroOben = fila.estado === 'facturada' && !yaFacturada ? numeroDeRespuesta(resp) : null;
+    const r = await this.avisarResultado(fila, fila.estado, fila.error, fila.modo ?? undefined, yaFacturada, numeroOben, limpios.length ? { para: limpios } : undefined);
+    await this.audit.log({
+      workflowName: 'facturacion',
+      eventType: WorkflowEventType.NOTIFICATION_SENT,
+      action: 'factura_aviso_reenviado',
+      entityType: 'proforma',
+      entityId: fila.numberPF,
+      actorId: this.ctx.userId,
+      inputData: { numberPF: fila.numberPF, numeroDistribucion: fila.numeroDistribucion, para: limpios },
+      outputData: r,
+    });
+    return r;
+  }
+
+  /** Cliente, orden y patrón de rechazos repetidos para explicar una falla con datos concretos. */
+  private async contextoDeFalla(fila: FacturaParcial, errorTexto: string | null) {
+    const ctx: { numberPF: string; numeroDistribucion: string; cliente: string | null; ov: number | null; otrasConMismoError: string[] } = {
+      numberPF: fila.numberPF,
+      numeroDistribucion: fila.numeroDistribucion,
+      cliente: null,
+      ov: null,
+      otrasConMismoError: [],
+    };
+    try {
+      const m = /^OV\s+(\d+)/i.exec(fila.remitente ?? '');
+      if (m) ctx.ov = Number(m[1]);
+      const prog = this.programadas ? await this.programadas.find({ where: { tenantId: this.ctx.tenantId, numberPF: fila.numberPF } }) : [];
+      const ultima = prog.sort((x, y) => String(y.fecha).localeCompare(String(x.fecha)))[0];
+      if (ultima) {
+        ctx.cliente = ultima.cliente ?? null;
+        ctx.ov ??= ultima.numberOrderSales;
+      }
+      const huella = (errorTexto ?? '').slice(0, 70);
+      if (huella) {
+        const rechazadas = await this.repo.find({ where: { tenantId: this.ctx.tenantId, estado: 'rechazada' } });
+        ctx.otrasConMismoError = rechazadas.filter((x) => x.numberPF !== fila.numberPF && (x.error ?? '').startsWith(huella)).map((x) => x.numberPF);
+      }
+    } catch {
+      /* el contexto es un extra: nunca impide el aviso */
+    }
+    return ctx;
+  }
+
+  /** PDF de la factura (réplica del formato de Oben con los datos de Oben). Nunca emite nada. */
+  private async pdfDeLaFactura(fila: FacturaParcial): Promise<{ adjuntos: Array<Record<string, unknown>>; nota: string }> {
+    if (!this.facturacion) return { adjuntos: [], nota: 'El generador de PDF no está disponible en este servicio.' };
+    try {
+      let ovs: number[] = [];
+      const m = /^OV\s+(\d+)/i.exec(fila.remitente ?? '');
+      if (m) ovs = [Number(m[1])];
+      if (ovs.length === 0) ovs = (await this.facturacion.ordenesDeProforma(fila.numberPF)).ordenesVenta;
+      if (ovs.length === 0) return { adjuntos: [], nota: 'Oben no devolvió la orden de venta de la proforma.' };
+      const adjuntos: Array<Record<string, unknown>> = [];
+      const avisos: string[] = [];
+      for (const ov of ovs.slice(0, 3)) {
+        const doc = await this.facturacion.generateDocument(ov, { parcial: !!fila.numeroDistribucion });
+        adjuntos.push({
+          filename: `Factura-PF${fila.numberPF}${fila.numeroDistribucion ? `-dist${fila.numeroDistribucion}` : ''}-OV${ov}.pdf`,
+          content: doc.pdf.toString('base64'),
+          encoding: 'base64',
+          contentType: 'application/pdf',
+        });
+        avisos.push(...(doc.avisos ?? []));
+      }
+      const parcial = fila.numeroDistribucion ? ' Es una factura parcial: el PDF toma la Lista de Empaque de la orden; las cantidades de la distribución las define Oben.' : '';
+      return {
+        adjuntos,
+        nota:
+          'Es la factura armada por Oben Xmart con los datos de Oben (mismo formato de Oben); el documento fiscal oficial es el de OBEN MAS.' +
+          parcial +
+          (avisos.length ? ` Avisos: ${[...new Set(avisos)].join(' · ')}` : ''),
+      };
+    } catch (err) {
+      const body = (err as { getResponse?: () => unknown }).getResponse?.() as { message?: string; missing?: string[] } | undefined;
+      const falta = body?.missing?.length ? ` Faltan datos: ${body.missing.join('; ')}.` : '';
+      return { adjuntos: [], nota: `No se pudo armar el PDF: ${body?.message ?? (err as Error).message}.${falta}` };
     }
   }
 
