@@ -736,6 +736,8 @@ export interface FacturacionInput {
   observaciones?: string;
   infoComercial?: string;
   parcial?: boolean;
+  /** TRM de la orden de compra (clientes que facturan con su propia TRM, p. ej. PPC FLEX). Vacía = TRM oficial. */
+  trmOrdenCompra?: number;
 }
 
 export interface FacturacionDraft {
@@ -1114,4 +1116,29 @@ export interface CuadroIntegracion {
   };
   balanceMasa: { consumoMpKg: number; productoKg: number; diferenciaKg: number; cuadra: boolean };
   avisos: string[];
+}
+
+// --- Conexión con Microsoft 365 (diagnóstico de SharePoint) ---------------
+
+export interface ConexionMicrosoft {
+  app: { clientId: string | null; azureTenantId: string | null; nombre: string | null; secreto: string; autenticacion: string };
+  buzonCorreo: string | null;
+  archivo: { nombre: string; sitio: string; url: string };
+}
+
+export interface PasoDiagnostico {
+  paso: string;
+  solicitud: string;
+  status: number | null;
+  ok: boolean;
+  detalle: string;
+}
+
+export interface DiagnosticoSharepoint extends ConexionMicrosoft {
+  probadoEn: string;
+  resultado: 'ok' | 'sin_credenciales' | 'sin_token' | 'sin_permiso' | 'no_encontrado' | 'error';
+  explicacion: { quePaso: string; queSignifica: string; queHacer: string };
+  token: { obtenido: boolean; emitido: string | null; permisos: string[]; permisosSharepoint: string[] } | null;
+  pasos: PasoDiagnostico[];
+  hojas: Array<{ nombre: string; rango: string | null; filas: number | null; columnas: number | null }>;
 }

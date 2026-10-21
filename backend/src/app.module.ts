@@ -35,6 +35,7 @@ import { FormatosModule } from './modules/formatos/formatos.module';
 import { EquivalencesModule } from './modules/equivalences/equivalences.module';
 import { FacturacionModule } from './modules/facturacion/facturacion.module';
 import { ComercialModule } from './modules/comercial/comercial.module';
+import { ConexionesModule } from './modules/conexiones/conexiones.module';
 
 // Import all entities
 import { Client } from './entities/client.entity';
@@ -218,6 +219,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
     EquivalencesModule,
     FacturacionModule,
     ComercialModule,
+    ConexionesModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_INTERCEPTOR, useClass: SlowRequestInterceptor }],

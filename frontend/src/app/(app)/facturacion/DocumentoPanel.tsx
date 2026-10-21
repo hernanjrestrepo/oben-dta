@@ -44,6 +44,8 @@ export function DocumentoPanel({
   const [error, setError] = useState('');
   const firma = JSON.stringify(input);
   const esNacional = draft.kind === 'nacional_completo' || draft.kind === 'nacional_parcial';
+  // Clientes que facturan con la TRM de su orden de compra (Hernán, 21-oct). Misma regla que el backend.
+  const trmPropia = /\bPPC\s*FLEX/i.test(draft.cliente ?? '');
 
   useEffect(
     () => () => {
@@ -120,6 +122,27 @@ export function DocumentoPanel({
                 </button>
               </div>
             )}
+            <Field label="TRM de la orden de compra">
+              <input
+                type="number"
+                inputMode="decimal"
+                min={1000}
+                max={20000}
+                step="0.01"
+                value={input.trmOrdenCompra ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value === '' ? undefined : Number(e.target.value);
+                  onInput({ trmOrdenCompra: v !== undefined && Number.isFinite(v) ? v : undefined });
+                }}
+                className={`${inputCls} w-full`}
+                placeholder={trmPropia ? 'Obligatoria: la que trae la orden de compra' : 'Vacía = TRM oficial del día'}
+              />
+              <p className={`mt-1 text-[11px] ${trmPropia && !input.trmOrdenCompra ? 'text-amber-700' : 'text-gray-500'}`}>
+                {trmPropia
+                  ? `${draft.cliente} factura con su propia TRM (la de su orden de compra${draft.ordenCompra ? ` ${draft.ordenCompra}` : ''}), nunca con la oficial.`
+                  : 'Solo si el cliente pactó su propia TRM en la orden de compra; si no, se usa la oficial del día.'}
+              </p>
+            </Field>
             <Field label="Observaciones">
               <textarea value={input.observaciones ?? ''} onChange={(e) => onInput({ observaciones: e.target.value })} rows={3} className={`${inputCls} w-full resize-none`} />
             </Field>

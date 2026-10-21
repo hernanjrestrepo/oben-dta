@@ -30,7 +30,8 @@ export class MicrosoftAppTokenService {
   private static readonly EXPIRY_SAFETY_MARGIN_MS = 60_000;
 
   async getAccessToken(creds: MicrosoftAppCredentials): Promise<string> {
-    const cacheKey = `${creds.azureTenantId}:${creds.clientId}`;
+    // El scope va en la clave: un token de correo (outlook.office365.com) no sirve para Graph y viceversa.
+    const cacheKey = `${creds.azureTenantId}:${creds.clientId}:${creds.scope ?? 'https://outlook.office365.com/.default'}`;
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       return cached.accessToken;

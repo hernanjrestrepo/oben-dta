@@ -669,13 +669,13 @@ export class FacturacionService {
     // Clientes con TRM propia (PPC FLEX): la de su orden de compra, nunca la oficial.
     const trmDeOrdenCompra = usaTrmDeOrdenCompra(draft.cliente);
     const trmOc = input.trmOrdenCompra;
-    const trm = trmDeOrdenCompra
-      ? typeof trmOc === 'number' && trmOc > 0
+    // Una TRM digitada (la de la OC) manda para cualquier cliente; sin ella, la oficial, salvo los de TRM propia.
+    const trm =
+      typeof trmOc === 'number' && trmOc > 0
         ? { valor: trmOc, fecha: 'orden de compra' }
-        : null
-      : this.trm
-        ? await this.trm.vigente(dia)
-        : null;
+        : trmDeOrdenCompra || !this.trm
+          ? null
+          : await this.trm.vigente(dia);
     const matches = draft.cliente
       ? await this.clients.find({ where: { tenantId: this.ctx.tenantId, name: ILike(escapeLike(draft.cliente)) }, take: 2 })
       : [];

@@ -28,6 +28,7 @@ import {
   UserCog,
   FilePenLine,
   KeyRound,
+  PlugZap,
   type LucideIcon,
 } from 'lucide-react';
 import { useMemo, useState, useSyncExternalStore } from 'react';
@@ -83,6 +84,7 @@ const GRUPOS: Array<{ titulo: string; items: NavItem[] }> = [
       { href: '/distribucion', label: 'Listas de Distribución', icon: Users2 },
       { href: '/formatos', label: 'Formatos de correo', icon: FilePenLine, permiso: 'configuracion.read' },
       { href: '/auditoria', label: 'Auditoría', icon: History, permiso: 'auditoria.read' },
+      { href: '/conexiones', label: 'Conexión Microsoft 365', icon: PlugZap, permiso: 'integrations.read' },
       { href: '/admin/users', label: 'Usuarios', icon: UserCog, permiso: 'users.read' },
       { href: '/admin/roles', label: 'Perfiles', icon: ShieldCheck, permiso: 'security.read' },
     ],

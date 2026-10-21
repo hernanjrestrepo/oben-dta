@@ -9,6 +9,7 @@ import {
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
+  ConexionMicrosoft, DiagnosticoSharepoint,
   FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, CambioRuta, OrdenReciente, ProformaOrdenes, ProformaPendienteComex,
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
@@ -960,6 +961,19 @@ class ApiClient {
 
   async getIntegrationsStatus(): Promise<IntegrationStatus[]> {
     const { data } = await this.client.get<IntegrationStatus[]>('/integrations/status');
+    return data;
+  }
+
+  // --- Conexión con Microsoft 365 (diagnóstico de SharePoint) ------------
+
+  async getConexionMicrosoft(): Promise<ConexionMicrosoft> {
+    const { data } = await this.client.get<ConexionMicrosoft>('/conexiones/microsoft');
+    return data;
+  }
+
+  /** Prueba en vivo contra Microsoft: solo lectura, queda en la auditoría. */
+  async probarSharepoint(): Promise<DiagnosticoSharepoint> {
+    const { data } = await this.client.post<DiagnosticoSharepoint>('/conexiones/microsoft/probar-sharepoint', {}, { timeout: 120_000 });
     return data;
   }
 
