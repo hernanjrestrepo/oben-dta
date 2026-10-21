@@ -32,6 +32,18 @@ describe('modelo de MIA', () => {
     expect(r).toMatchObject({ texto: 'ok', modelo: 'kimi:kimi-k2.6' });
   });
 
+  it('a Kimi K2.6 se le apaga el razonamiento; a K3 (que razona siempre) y a Ollama no', async () => {
+    const fetchMock = jest.fn(async (_url: string, _init: { body: string }) => respuestaChat('ok'));
+    global.fetch = fetchMock as never;
+    const [kimi, ollama] = proveedoresMia({ KIMI_API_KEY: 'k', OLLAMA_API_KEY: 'o' }).map((p) => new LlmCompatibleOpenAi(p));
+    const [k3] = proveedoresMia({ KIMI_API_KEY: 'k', MIA_KIMI_MODEL: 'kimi-k3' }).map((p) => new LlmCompatibleOpenAi(p));
+    for (const llm of [kimi, ollama, k3]) await llm.completar([{ role: 'user', content: 'hola' }], []);
+    const [cuerpoKimi, cuerpoOllama, cuerpoK3] = fetchMock.mock.calls.map((c) => JSON.parse(c[1].body));
+    expect(cuerpoKimi.thinking).toEqual({ type: 'disabled' });
+    expect(cuerpoOllama).not.toHaveProperty('thinking');
+    expect(cuerpoK3).not.toHaveProperty('thinking');
+  });
+
   it('si el primero falla, la misma vuelta se repite con el siguiente', async () => {
     const fallas: unknown[] = [];
     const sinSaldo: MiaLlm = { completar: jest.fn(async () => Promise.reject(new MiaLlmError('kimi HTTP 429: exceeded_current_quota_error', 429))) };

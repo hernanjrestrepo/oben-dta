@@ -116,6 +116,9 @@ export class LlmCompatibleOpenAi implements MiaLlm {
           model: modelo,
           max_tokens: 4000,
           ...(temperatura === undefined ? {} : { temperature: temperatura }),
+          // Sin razonar: con razonamiento Kimi cobra tokens ocultos en cada vuelta de herramientas
+          // (los otros repos ya lo apagan con K2.6). kimi-k3 razona siempre y rechaza "disabled".
+          ...(this.proveedor.nombre === 'kimi' && !modelo.startsWith('kimi-k3') ? { thinking: { type: 'disabled' } } : {}),
           messages: mensajes,
           tools: herramientas.map((h) => ({
             type: 'function',
