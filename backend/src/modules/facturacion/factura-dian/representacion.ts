@@ -22,6 +22,8 @@ export interface DatosFacturaDian {
   liquidacion?: LiquidacionDraft | null;
   /** TRM oficial del día de la factura (datos.gov.co): exportación y nacional en dólares. */
   trm?: { valor: number; fecha: string } | null;
+  /** El cliente factura con la TRM de su orden de compra (no la oficial): `trm` es la de la OC, o null si falta. */
+  trmDeOrdenCompra?: boolean;
   cliente?: ClienteMaestro | null;
   ahora?: Date;
 }
@@ -30,6 +32,16 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const enUS = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+
+/**
+ * Clientes que facturan con SU PROPIA TRM, la que viene en su orden de compra, y no con la TRM oficial
+ * (Hernán, 21-oct: PPC FLEX). Para ellos nunca se usa la de datos.gov.co.
+ */
+export const CLIENTES_TRM_ORDEN_COMPRA: RegExp[] = [/\bPPC\s*FLEX/i];
+
+export function usaTrmDeOrdenCompra(cliente: string | null | undefined): boolean {
+  return !!cliente && CLIENTES_TRM_ORDEN_COMPRA.some((r) => r.test(cliente));
+}
 
 /** Por encima de esto un precio por kilo solo puede ser en pesos (la película cuesta ~2–6 USD/kg o miles de COP/kg). */
 const PRECIO_KG_MAX_USD = 100;
@@ -243,13 +255,15 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
       'PAIS DE PROCEDENCIA / COUNTRY OF ORIGIN: Colombia **PAIS DE ADQUISICION/COUNTRY OF ACQUISITION: COLOMBIA',
       `FABRICANTE EXPORTADOR / EXPORTING MANUFACTURER: ${EMISOR_OBEN.razonSocial}`,
     );
-    if (!trm) avisos.push('Tipo de cambio (TRM) no disponible: no se pudo consultar datos.gov.co.');
+    if (!trm) avisos.push(datos.trmDeOrdenCompra ? `${draft.cliente} factura con la TRM de su orden de compra: digítala (no se usa la oficial).` : 'Tipo de cambio (TRM) no disponible: no se pudo consultar datos.gov.co.');
     if (!texto(liquidacion?.terminoPago)) avisos.push('Oben no trajo el término de pago de la proforma (TerminoPago de spCheckSettlement): va en blanco.');
   } else {
     if (draft.observaciones) observaciones.push(draft.observaciones);
     // Nacional en dólares (José, 19-oct, modelo FV-242518): los totales pasados a pesos con la TRM y en letras.
     if (moneda === 'USD') {
       if (trm) observaciones.push(...totalesEnPesos([['SUBTOTAL', subtotal], ['IVA', iva], ['RETEFUENTE', retefuente], ['TOTAL', neto]], trm.valor));
+      else if (datos.trmDeOrdenCompra)
+        avisos.push(`${draft.cliente} factura con la TRM de su orden de compra${draft.ordenCompra ? ` (OC ${draft.ordenCompra})` : ''}, no con la oficial: digítala para que salgan los totales en pesos.`);
       else avisos.push('Factura nacional en dólares sin TRM (no se pudo consultar datos.gov.co): faltan los totales en pesos de las observaciones.');
     }
   }

@@ -32,7 +32,7 @@ import { FacturacionPdfService } from './facturacion-pdf.service';
 import { LiquidacionService } from '../liquidacion/liquidacion.service';
 import type { LiquidacionDraft, LiquidacionInput } from '../liquidacion/liquidacion.types';
 import { TrmService } from './trm.service';
-import { construirFacturaDian, type DatosFacturaDian } from './factura-dian/representacion';
+import { construirFacturaDian, usaTrmDeOrdenCompra, type DatosFacturaDian } from './factura-dian/representacion';
 
 const WORKFLOW_NAME = 'facturacion';
 /** Una factura electrónica es permanente: la clave de idempotencia de su emisión no debe expirar nunca en la práctica. */
@@ -250,7 +250,7 @@ export class FacturacionService {
     const facturaElectronica = options.emit
       ? await this.emitirFacturaElectronica(draft)
       : await this.facturaElectronicaEmitida(numberOrderSales);
-    const { pdf, avisos } = await this.pdf.buildFactura({ draft, factura: facturaElectronica, ...(await this.datosFactura(draft, facturaElectronica)) });
+    const { pdf, avisos } = await this.pdf.buildFactura({ draft, factura: facturaElectronica, ...(await this.datosFactura(draft, facturaElectronica, undefined, input)) });
     const filename = `Factura_Borrador-OV${numberOrderSales}.pdf`;
     return { draft, filename, pdf, facturaElectronica, avisos };
   }
@@ -653,6 +653,7 @@ export class FacturacionService {
     draft: FacturacionDraft,
     factura: FacturaElectronica | null,
     liquidacionInput?: LiquidacionInput,
+    input: FacturacionInput = {},
   ): Promise<Omit<DatosFacturaDian, 'draft' | 'factura'>> {
     const exportacion = draft.kind === 'exportacion';
     let liquidacion: LiquidacionDraft | null = null;
@@ -665,12 +666,21 @@ export class FacturacionService {
     }
     const dia = (factura?.emitidaEn ? new Date(factura.emitidaEn) : new Date()).toISOString().slice(0, 10);
     // TRM también en nacional: los pedidos nacionales en dólares llevan los totales en pesos (FV-242518).
-    const trm = this.trm ? await this.trm.vigente(dia) : null;
+    // Clientes con TRM propia (PPC FLEX): la de su orden de compra, nunca la oficial.
+    const trmDeOrdenCompra = usaTrmDeOrdenCompra(draft.cliente);
+    const trmOc = input.trmOrdenCompra;
+    const trm = trmDeOrdenCompra
+      ? typeof trmOc === 'number' && trmOc > 0
+        ? { valor: trmOc, fecha: 'orden de compra' }
+        : null
+      : this.trm
+        ? await this.trm.vigente(dia)
+        : null;
     const matches = draft.cliente
       ? await this.clients.find({ where: { tenantId: this.ctx.tenantId, name: ILike(escapeLike(draft.cliente)) }, take: 2 })
       : [];
     const c = matches.length === 1 ? matches[0] : null;
-    return { liquidacion, trm, cliente: c ? { correo: c.email, telefono: c.phone, direccion: c.address } : null };
+    return { liquidacion, trm, trmDeOrdenCompra, cliente: c ? { correo: c.email, telefono: c.phone, direccion: c.address } : null };
   }
 
   /**

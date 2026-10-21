@@ -33,6 +33,11 @@ export interface FacturacionInput {
   infoComercial?: string | null;
   /** true = despacho parcial (Nacional Parcial); default false = completo. Solo aplica si el pedido es nacional. */
   parcial?: boolean;
+  /**
+   * TRM pactada en la orden de compra, para los clientes que facturan con su propia TRM y no con la oficial
+   * (PPC FLEX, Hernán 21-oct). Sin ella, la factura de esos clientes sale sin totales en pesos y con aviso.
+   */
+  trmOrdenCompra?: number | null;
 }
 
 export interface FacturacionDraft {

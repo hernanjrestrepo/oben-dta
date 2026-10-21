@@ -1,7 +1,7 @@
 import { PARTIDAS } from '../../liquidacion/partidas-arancelarias';
 import type { FacturacionDraft } from '../facturacion.types';
 import type { LiquidacionDraft } from '../../liquidacion/liquidacion.types';
-import { ciudadDeDireccion, construirFacturaDian, descripcionMaterial, descripcionNcm, fechaEmisionTxt, monedaNacional } from './representacion';
+import { ciudadDeDireccion, construirFacturaDian, descripcionMaterial, descripcionNcm, fechaEmisionTxt, monedaNacional, usaTrmDeOrdenCompra } from './representacion';
 
 const DRAFT: FacturacionDraft = {
   numberOrderSales: 11187,
@@ -146,6 +146,20 @@ describe('construirFacturaDian', () => {
     expect(monedaNacional([2.6, 9800]).aviso).toMatch(/escalas distintas/);
     const nacional: FacturacionDraft = { ...DRAFT, kind: 'nacional_completo', pais: 'Colombia', empaque: null, lines: [{ ...DRAFT.lines[0], precio: 2.6, kilosTotal: 10 }] };
     expect(construirFacturaDian({ draft: nacional, factura: null }).avisos.join(' ')).toMatch(/sin TRM/);
+  });
+
+  it('PPC FLEX factura con la TRM de su orden de compra: con ella, totales en pesos; sin ella, aviso y nada inventado', () => {
+    expect(usaTrmDeOrdenCompra('PPC FLEX S.A.S.')).toBe(true);
+    expect(usaTrmDeOrdenCompra('PPC FLEXI')).toBe(true);
+    expect(usaTrmDeOrdenCompra('POLIEMPAK SAS')).toBe(false);
+    const ppc: FacturacionDraft = { ...DRAFT, kind: 'nacional_completo', pais: 'Colombia', cliente: 'PPC FLEX S.A.S.', ordenCompra: 'OC-77', empaque: null, observaciones: null, lines: [{ ...DRAFT.lines[0], precio: 2.6, kilosTotal: 1000 }] };
+    const sin = construirFacturaDian({ draft: ppc, factura: null, trm: null, trmDeOrdenCompra: true });
+    expect(sin.factura.tipoCambio).toBeNull();
+    expect(sin.factura.observaciones).toEqual([]);
+    expect(sin.avisos.join(' ')).toMatch(/TRM de su orden de compra \(OC OC-77\)/);
+    const con = construirFacturaDian({ draft: ppc, factura: null, trm: { valor: 3900, fecha: 'orden de compra' }, trmDeOrdenCompra: true });
+    expect(con.factura.tipoCambio).toBe(3900);
+    expect(con.factura.observaciones[0]).toMatch(/^SUBTOTAL 10140000\.0000 COP/);
   });
 
   it('marca de agua: BORRADOR sin emisión, SIMULADO con CUFE simulado, ninguna con factura real', () => {

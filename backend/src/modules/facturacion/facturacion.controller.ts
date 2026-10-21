@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Res, UseGuards } from '@nestjs/common';
-import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsObject, IsOptional, IsString } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsNumber, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
 import type { LiquidacionInput } from '../liquidacion/liquidacion.types';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -34,6 +34,13 @@ class FacturacionInputDto {
   @IsOptional()
   @IsBoolean()
   force?: boolean;
+
+  /** TRM de la orden de compra (clientes con TRM propia, p. ej. PPC FLEX). */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(1000)
+  @Max(20000)
+  trmOrdenCompra?: number;
 
   /** Destinatarios explícitos (los que se ven en pantalla). Sin ellos: lista de distribución "facturacion". */
   @IsOptional()
