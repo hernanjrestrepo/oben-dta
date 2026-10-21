@@ -664,7 +664,8 @@ export class FacturacionService {
       }
     }
     const dia = (factura?.emitidaEn ? new Date(factura.emitidaEn) : new Date()).toISOString().slice(0, 10);
-    const trm = exportacion && this.trm ? await this.trm.vigente(dia) : null;
+    // TRM también en nacional: los pedidos nacionales en dólares llevan los totales en pesos (FV-242518).
+    const trm = this.trm ? await this.trm.vigente(dia) : null;
     const matches = draft.cliente
       ? await this.clients.find({ where: { tenantId: this.ctx.tenantId, name: ILike(escapeLike(draft.cliente)) }, take: 2 })
       : [];

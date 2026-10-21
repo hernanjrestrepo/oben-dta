@@ -567,7 +567,8 @@ function resumenNacional(doc: Doc, p: Plantilla, f: FacturaDian, obsTop: number,
   const nSon = texto(doc, f.valorLetras, x, top + 1.4 + lh, izq, s);
   if (f.valorLetrasIngles) texto(doc, f.valorLetrasIngles, x, top + 1.4 + (1 + nSon) * lh, izq, s);
   hLinea(doc, 28.4, 371.6, top + 31.1);
-  texto(doc, [{ t: 'INCOTERMS:', b: true }, { t: f.incoterm ? ` ${f.incoterm}` : '' }], x, top + 32.5, izq, s);
+  // Nacional: sin Incoterms (es de comercio exterior); en dólares va la tasa de cambio, como en la FV-242518.
+  if (f.tipoCambio) texto(doc, [{ t: 'TIPO DE CAMBIO / EXCHANGE RATE:', b: true }, { t: ` ${f.tipoCambio}` }], x, top + 32.5, izq, s);
   vLinea(doc, 371.6, top, top + 39.5);
   const xr = 371.6 + p.padX;
   const wr = 583.4 - 371.6 - 2 * p.padX;
@@ -577,7 +578,7 @@ function resumenNacional(doc: Doc, p: Plantilla, f: FacturaDian, obsTop: number,
   };
   relleno(doc, 484.6, top + 31.1, 583.4, top + 39.5, GRIS_CELDA);
   fila('SUBTOTAL', f.subtotal, 1.4);
-  fila(`I.V.A. ${pctTxt(f.ivaPct)}%  COP / TAXES`, f.iva, 15.5);
+  fila(`I.V.A. ${pctTxt(f.ivaPct)}%  ${f.moneda} / TAXES`, f.iva, 15.5);
   fila('RETEFUENTE', f.retefuente, 24.0);
   fila('NETO A PAGAR/ TOTAL VALUE', f.neto, 32.5, true);
   hLinea(doc, 28.4, 583.4, top + 39.5);

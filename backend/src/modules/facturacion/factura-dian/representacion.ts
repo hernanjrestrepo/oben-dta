@@ -2,7 +2,7 @@ import type { FacturaElectronica, FacturacionDraft } from '../facturacion.types'
 import type { LiquidacionDraft } from '../../liquidacion/liquidacion.types';
 import { EMISOR_OBEN, FAMILIA_PELICULA, RESOLUCIONES_DIAN } from './emisor';
 import { PARTIDAS, partidaComun, type PartidaArancelaria } from '../../liquidacion/partidas-arancelarias';
-import { valorEnLetras, valueInWords } from './letras';
+import { totalesEnPesos, valorEnLetras, valueInWords } from './letras';
 import type { FacturaDian, FacturaDianLinea, TipoFacturaDian } from './factura-dian.types';
 
 /** IVA de la venta nacional de película (las facturas reales de Oben llevan 19 %). */
@@ -20,7 +20,7 @@ export interface DatosFacturaDian {
   factura: FacturaElectronica | null;
   /** Exportación: la liquidación de la PF (precio FOB por kilo, flete, seguro, otros, partidas, puertos, Incoterm). */
   liquidacion?: LiquidacionDraft | null;
-  /** Exportación: TRM oficial del día de la factura (datos.gov.co). */
+  /** TRM oficial del día de la factura (datos.gov.co): exportación y nacional en dólares. */
   trm?: { valor: number; fecha: string } | null;
   cliente?: ClienteMaestro | null;
   ahora?: Date;
@@ -30,6 +30,22 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const enUS = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+
+/** Por encima de esto un precio por kilo solo puede ser en pesos (la película cuesta ~2–6 USD/kg o miles de COP/kg). */
+const PRECIO_KG_MAX_USD = 100;
+
+/**
+ * Moneda de una factura nacional. Oben no manda la moneda en ninguna API (spCheckSettlement trae solo `Precio`),
+ * pero el precio por kilo la delata: 2.60 es USD; un pedido en pesos vendría en miles por kilo (FV11363). Con
+ * precios mezclados o sin precio se queda en COP y avisa.
+ */
+export function monedaNacional(precios: number[]): { moneda: 'COP' | 'USD'; aviso: string | null } {
+  const con = precios.filter((p) => p > 0);
+  if (con.length === 0) return { moneda: 'COP', aviso: 'Sin precios: no se pudo deducir la moneda; va en COP.' };
+  if (con.every((p) => p < PRECIO_KG_MAX_USD)) return { moneda: 'USD', aviso: null };
+  if (con.every((p) => p >= PRECIO_KG_MAX_USD)) return { moneda: 'COP', aviso: null };
+  return { moneda: 'COP', aviso: 'Precios por kilo en escalas distintas (unos parecen USD y otros COP): revisar la moneda con Oben.' };
+}
 
 /** Partes de una fecha en hora de Colombia. */
 function partesBogota(d: Date) {
@@ -135,7 +151,6 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
   const tipo: TipoFacturaDian = draft.kind === 'exportacion' ? 'exportacion' : 'nacional';
   const exportacion = tipo === 'exportacion';
   const resolucion = RESOLUCIONES_DIAN[tipo];
-  const moneda = exportacion ? 'USD' : 'COP';
   const avisos: string[] = [];
   const hoy = ahora.toISOString().slice(0, 10);
   if (resolucion.vigenteHasta < hoy) {
@@ -179,6 +194,9 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
   });
   if (sinPrecio.size) avisos.push(`Sin precio para: ${[...sinPrecio].join(', ')}.`);
   if (exportacion && liquidacion) cuadrarConLiquidacion(lineas, liquidacion, avisos);
+  const mn = exportacion ? { moneda: 'USD' as const, aviso: null } : monedaNacional(lineas.map((l) => l.valorUnitario));
+  const moneda = mn.moneda;
+  if (mn.aviso) avisos.push(mn.aviso);
 
   const subtotal = round2(lineas.reduce((a, l) => a + l.total, 0));
   const iva = round2(lineas.reduce((a, l) => a + l.ivaValor, 0));
@@ -227,8 +245,13 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
     );
     if (!trm) avisos.push('Tipo de cambio (TRM) no disponible: no se pudo consultar datos.gov.co.');
     if (!texto(liquidacion?.terminoPago)) avisos.push('Oben no trajo el término de pago de la proforma (TerminoPago de spCheckSettlement): va en blanco.');
-  } else if (draft.observaciones) {
-    observaciones.push(draft.observaciones);
+  } else {
+    if (draft.observaciones) observaciones.push(draft.observaciones);
+    // Nacional en dólares (José, 19-oct, modelo FV-242518): los totales pasados a pesos con la TRM y en letras.
+    if (moneda === 'USD') {
+      if (trm) observaciones.push(...totalesEnPesos([['SUBTOTAL', subtotal], ['IVA', iva], ['RETEFUENTE', retefuente], ['TOTAL', neto]], trm.valor));
+      else avisos.push('Factura nacional en dólares sin TRM (no se pudo consultar datos.gov.co): faltan los totales en pesos de las observaciones.');
+    }
   }
 
   const direccion = texto(cliente?.direccion) ?? draft.direccionEntrega;
@@ -259,7 +282,7 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
     moneda,
     lineas,
     observaciones,
-    tipoCambio: exportacion ? (trm?.valor ?? null) : null,
+    tipoCambio: moneda === 'USD' ? (trm?.valor ?? null) : null,
     subtotal,
     ivaPct,
     iva,
@@ -276,7 +299,7 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
     cufeSimulado: !!factura?.simulated,
     marcaAgua: !factura ? 'BORRADOR' : factura.simulated || draft.simulated ? 'SIMULADO' : null,
   };
-  return { factura: { ...base, qr: contenidoQr(base, emision, exportacion ? (trm?.valor ?? null) : null) }, avisos };
+  return { factura: { ...base, qr: contenidoQr(base, emision, moneda === 'USD' ? (trm?.valor ?? null) : null) }, avisos };
 }
 
 /** "TOTAL VALOR CFR PUERTO ITAPOA INCOTERM 2020 US$ 61,120.00" — una sola línea, como la pide COMEX. */

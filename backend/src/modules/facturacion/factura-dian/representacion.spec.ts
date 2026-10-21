@@ -1,7 +1,7 @@
 import { PARTIDAS } from '../../liquidacion/partidas-arancelarias';
 import type { FacturacionDraft } from '../facturacion.types';
 import type { LiquidacionDraft } from '../../liquidacion/liquidacion.types';
-import { ciudadDeDireccion, construirFacturaDian, descripcionMaterial, descripcionNcm, fechaEmisionTxt } from './representacion';
+import { ciudadDeDireccion, construirFacturaDian, descripcionMaterial, descripcionNcm, fechaEmisionTxt, monedaNacional } from './representacion';
 
 const DRAFT: FacturacionDraft = {
   numberOrderSales: 11187,
@@ -115,6 +115,37 @@ describe('construirFacturaDian', () => {
     expect(f.valorLetras).toBe('SON: UN MILLON CIENTO NOVENTA MIL PESOS');
     expect(f.valorLetrasIngles).toBe('ARE:  ONE MILLION ONE HUNDRED NINETY THOUSAND PESOS');
     expect(f.fechaEmision).toBe('2026-07-27 16:35:17-05:00');
+  });
+
+  it('nacional en dólares (precio por kilo de Oben 2.60, OV 11402): USD, TRM y totales en pesos en observaciones; sin Incoterm', () => {
+    const nacional: FacturacionDraft = {
+      ...DRAFT,
+      kind: 'nacional_completo',
+      pais: 'Colombia',
+      empaque: null,
+      observaciones: null,
+      lines: [{ ...DRAFT.lines[0], precio: 2.6, kilosTotal: 1000 }],
+    };
+    const { factura: f } = construirFacturaDian({ draft: nacional, factura: null, trm: { valor: 4000, fecha: '2026-10-21' }, ahora: new Date('2026-10-21T16:00:00Z') });
+    expect(f.moneda).toBe('USD');
+    expect(f.tipoCambio).toBe(4000);
+    expect(f.incoterm).toBeNull();
+    expect([f.subtotal, f.iva, f.neto]).toEqual([2600, 494, 3094]);
+    expect(f.valorLetras).toMatch(/DOLARES$/);
+    expect(f.observaciones).toEqual([
+      expect.stringMatching(/^SUBTOTAL 10400000\.0000 COP - .* CON 00\/100 COP$/),
+      expect.stringMatching(/^IVA 1976000\.0000 COP - /),
+      expect.stringMatching(/^TOTAL 12376000\.0000 COP - /),
+    ]);
+    expect(f.observaciones.join(' ')).not.toMatch(/NCM|INCOTERM|PUERTO|EXPORT/);
+  });
+
+  it('moneda nacional: precios en miles por kilo = COP; sin TRM un pedido en USD avisa', () => {
+    expect(monedaNacional([10000, 9800])).toEqual({ moneda: 'COP', aviso: null });
+    expect(monedaNacional([2.6, 2.48])).toEqual({ moneda: 'USD', aviso: null });
+    expect(monedaNacional([2.6, 9800]).aviso).toMatch(/escalas distintas/);
+    const nacional: FacturacionDraft = { ...DRAFT, kind: 'nacional_completo', pais: 'Colombia', empaque: null, lines: [{ ...DRAFT.lines[0], precio: 2.6, kilosTotal: 10 }] };
+    expect(construirFacturaDian({ draft: nacional, factura: null }).avisos.join(' ')).toMatch(/sin TRM/);
   });
 
   it('marca de agua: BORRADOR sin emisión, SIMULADO con CUFE simulado, ninguna con factura real', () => {
