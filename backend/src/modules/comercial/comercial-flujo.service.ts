@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, ILike, In, LessThanOrEqual, MoreThanOrEqual, Repository, type FindOptionsWhere } from 'typeorm';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
@@ -25,6 +25,8 @@ import { ComercialIntakeService, calcularMissing, esDestinoDePrueba, faltantesLi
 import { horasHastaSiguiente, leerConfig, parseSeguimiento, type ComercialConfig, type ConfigLeida } from './comercial-config';
 import { clasificarRespuesta, type TipoRespuesta } from './comercial-respuesta';
 import { construirLinea, type OcAdjunto } from './oc-extractor';
+import { ProformasObenService, type ProformaEntrada } from './proformas-oben.service';
+import type { ProformaOben } from '../../entities/proforma-oben.entity';
 
 const WORKFLOW = 'comercial';
 const HOUR_MS = 60 * 60 * 1000;
@@ -109,6 +111,7 @@ export class ComercialFlujoService {
     private readonly idempotency: IdempotencyService,
     private readonly clients: ClientsService,
     private readonly equivalences: EquivalencesService,
+    @Optional() private readonly proformas?: ProformasObenService,
   ) {}
 
   // ─── Configuración ───────────────────────────────────────────────────────
@@ -353,6 +356,29 @@ export class ComercialFlujoService {
     switch (accion.tipo) {
       case 'crear_proforma': {
         if (caso.estado !== 'oc_recibida') throw new BadRequestException(`El caso ya está "${caso.estado}".`);
+        const entradaReal = this.entradaReal(caso);
+        if (entradaReal && this.proformas) {
+          // Proforma REAL en OBEN MAS con las APIs comerciales (hoy el servidor de pruebas de Oben).
+          const usuario = opts.confirmadoPor ? await this.nombreUsuario(opts.confirmadoPor) : 'Oben Xmart (automático)';
+          const pfo = await this.proformas.crear(entradaReal, usuario, { casoId: caso.id, verificado: opts.verificadoEnObenMas });
+          if (!['creada', 'ov_creada', 'activa'].includes(pfo.estado)) {
+            throw new BadRequestException(pfo.error ?? `OBEN MAS no completó la Proforma (quedó "${pfo.estado}"). Revisa el caso y confirma de nuevo.`);
+          }
+          const pfReal = pfo.numeroPF ?? (pfo.codigoInterno ? String(pfo.codigoInterno) : null);
+          if (!pfReal) throw new BadRequestException('OBEN MAS creó la Proforma pero no devolvió su número — verifícalo allí.');
+          // Lo que Oben aún no tiene por API (cubicaje de Planeación, PDF, cartera) se simula sobre el mismo número.
+          await this.escribir(caso, 'proforma.crear', 'crear', { ...this.argsProforma(caso), numberPF: pfReal }, opts);
+          caso.numberPF = pfReal;
+          caso.estado = 'sin_cubicar';
+          caso.fechas = { ...caso.fechas, proformaCreada: ahora };
+          this.evento(
+            caso,
+            'proforma_creada',
+            `Proforma ${pfReal} creada en OBEN MAS (${pfo.servidor === 'pruebas' ? 'servidor de PRUEBAS de Oben' : 'producción'}, código interno ${pfo.codigoInterno}) con ${pfo.lineas.length} línea(s): ${pfo.lineas.map((l) => l.referencia).join(', ')}${quien}. El cubicaje de Planeación, el PDF y la cartera siguen simulados: Oben no tiene API para eso.`,
+            opts.confirmadoPor,
+          );
+          break;
+        }
         const r = await this.escribir<{ numberPF?: unknown }>(caso, 'proforma.crear', 'crear', this.argsProforma(caso), opts);
         const pf = typeof r.numberPF === 'string' || typeof r.numberPF === 'number' ? String(r.numberPF) : null;
         if (!pf) throw new BadRequestException('OBEN MAS creó la Proforma pero no devolvió su número — verifícalo allí.');
@@ -363,8 +389,19 @@ export class ComercialFlujoService {
         break;
       }
       case 'aprobar': {
-        const r = await this.escribir<{ numberOrderSales?: unknown }>(caso, 'proforma.aprobar', 'aprobar', { numberPF: caso.numberPF }, opts);
-        const ov = Number(r.numberOrderSales);
+        const real = await this.proformaReal(caso);
+        let ovReal: number | null = null;
+        if (real) {
+          const usuario = opts.confirmadoPor ? await this.nombreUsuario(opts.confirmadoPor) : 'Oben Xmart (automático)';
+          const conOV = real.estado === 'creada' ? await this.proformas!.crearOV(real.id, usuario) : real;
+          if (!['ov_creada', 'activa'].includes(conOV.estado)) {
+            throw new BadRequestException(conOV.error ?? `OBEN MAS no creó la orden de venta (la Proforma quedó "${conOV.estado}").`);
+          }
+          ovReal = conOV.ordenVenta;
+          this.evento(caso, 'ov_creada', `Orden de venta ${ovReal ?? '(Oben no informó su número)'} creada en OBEN MAS para la Proforma ${caso.numberPF}${quien}.`, opts.confirmadoPor);
+        }
+        const r = await this.escribir<{ numberOrderSales?: unknown }>(caso, 'proforma.aprobar', 'aprobar', { numberPF: caso.numberPF, ...(real ? { numberOrderSales: ovReal } : {}) }, opts);
+        const ov = real ? (ovReal ?? NaN) : Number(r.numberOrderSales);
         caso.numberOrderSales = Number.isInteger(ov) && ov > 0 ? ov : null;
         caso.estado = 'retenida';
         caso.fechas = { ...caso.fechas, aprobadaCliente: caso.fechas.aprobadaCliente ?? ahora, retenida: ahora };
@@ -375,6 +412,9 @@ export class ComercialFlujoService {
       }
       case 'rechazar': {
         await this.escribir(caso, 'proforma.anular', 'anular', { numberPF: caso.numberPF, motivo: accion.detalle }, opts);
+        if (await this.proformaReal(caso)) {
+          caso.atencion = [...caso.atencion, `La Proforma ${caso.numberPF} es real en OBEN MAS: anúlala también allá (Oben no tiene API para anular).`];
+        }
         caso.estado = 'rechazada';
         caso.fechas = { ...caso.fechas, rechazada: ahora };
         caso.seguimiento = { tipo: null, enviados: caso.seguimiento.enviados, proximoEn: null, ultimoEn: caso.seguimiento.ultimoEn };
@@ -387,12 +427,21 @@ export class ComercialFlujoService {
         const n = caso.eventos.filter((e) => e.tipo === 'modificada').length + 1;
         await this.escribir(caso, 'proforma.modificar', `modificar-${n}`, { numberPF: caso.numberPF, lineas: lineas.map(lineaArg) }, opts);
         caso.lineas = lineas;
+        if (await this.proformaReal(caso)) {
+          caso.atencion = [...caso.atencion, `La Proforma ${caso.numberPF} es real en OBEN MAS: cambia también allá las cantidades (Oben no tiene API para modificar).`];
+        }
         caso.estado = 'sin_cubicar';
         caso.seguimiento = { tipo: null, enviados: 0, proximoEn: null, ultimoEn: caso.seguimiento.ultimoEn };
         this.evento(caso, 'modificada', `Proforma modificada a pedido del cliente: vuelve a "sin cubicar" para que Planeación cubique de nuevo${quien}.`, opts.confirmadoPor);
         break;
       }
       case 'activar': {
+        const real = await this.proformaReal(caso);
+        if (real && real.estado !== 'activa') {
+          const usuario = opts.confirmadoPor ? await this.nombreUsuario(opts.confirmadoPor) : 'Oben Xmart (automático)';
+          const activa = await this.proformas!.activar(real.id, usuario);
+          if (activa.estado !== 'activa') throw new BadRequestException(activa.error ?? 'OBEN MAS no activó la orden de venta.');
+        }
         await this.escribir(caso, 'ov.activar', 'activar', { numberPF: caso.numberPF }, opts);
         caso.estado = 'activa';
         caso.fechas = { ...caso.fechas, activa: ahora };
@@ -459,6 +508,42 @@ export class ComercialFlujoService {
     }
     await this.idempotency.markCompleted(tenantId, key, { data: res.data });
     return (res.data ?? {}) as T;
+  }
+
+  /** La Proforma real en OBEN MAS de este caso (APIs comerciales), si la hay. */
+  async proformaReal(caso: Pick<ComercialCase, 'id'>): Promise<ProformaOben | null> {
+    return this.proformas ? this.proformas.porCaso(caso.id) : null;
+  }
+
+  /**
+   * Si el caso tiene todo lo que piden las APIs comerciales de Oben, la entrada para crear la Proforma REAL:
+   * cliente con código de Oben (CodSec_Entity), destino del maestro de Oben (CodSed_CustomerAddress) y líneas con
+   * referencia o película de Oben (no SIM-). Si no, null: el caso sigue por el simulador.
+   */
+  entradaReal(caso: ComercialCase): ProformaEntrada | null {
+    const cliente = Number(caso.codigoClienteOben);
+    const direccion = Number(caso.destino?.direccionId);
+    if (!/^\d+$/.test(caso.codigoClienteOben ?? '') || !Number.isInteger(direccion) || direccion <= 0) return null;
+    if (caso.lineas.length === 0 || caso.lineas.some((l) => !l.codigoOben || /^SIM-/i.test(l.codigoOben))) return null;
+    const hoy = new Date();
+    const dia = (d: Date) => d.toISOString().slice(0, 10);
+    const entrega = caso.fechaRequerida && /^\d{4}-\d{2}-\d{2}$/.test(caso.fechaRequerida) ? caso.fechaRequerida : dia(new Date(hoy.getTime() + 45 * 24 * HOUR_MS));
+    const despacho = dia(new Date(Math.max(hoy.getTime() + 5 * 24 * HOUR_MS, Date.parse(entrega) - 15 * 24 * HOUR_MS)));
+    const esReferencia = (c: string) => /^[A-Z]{2,4}-*\d{2,4}[A-Z]{2}\d{4}[A-Z]\d{4}$/i.test(c);
+    return {
+      cliente,
+      direccion,
+      ordenCompra: caso.ocNumero ?? `OXM-${caso.id.slice(0, 8)}`,
+      fechaEntrega: entrega,
+      fechaDespacho: despacho,
+      notas: `Oben Xmart · orden de compra ${caso.ocNumero ?? '(sin número)'}${caso.clienteFinal ? ` · cliente final ${caso.clienteFinal}` : ''}`,
+      lineas: caso.lineas.map((l) => ({
+        ...(esReferencia(l.codigoOben!) ? { referencia: l.codigoOben!.toUpperCase() } : { pelicula: l.codigoOben!.toUpperCase(), anchoMm: l.anchoMm ?? undefined }),
+        kilos: l.kilos ?? 0,
+        precio: l.precioUnitario ?? 0,
+        etiqueta: l.codigoCliente ?? undefined,
+      })),
+    };
   }
 
   private argsProforma(caso: ComercialCase): Record<string, unknown> {

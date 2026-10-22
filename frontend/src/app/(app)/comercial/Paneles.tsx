@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
-import type { ComercialConfig } from '@/types';
+import type { ComercialCaso, ComercialConfig } from '@/types';
 import { AlertCircle, CheckCircle2, FlaskConical, Loader2, Mail, Paperclip, Save } from 'lucide-react';
 import { btnPrimary, btnSecondary, inputCls } from './comun';
 
@@ -225,7 +225,7 @@ export function NuevaOc({ onCreada }: { onCreada: (id: string) => void }) {
 }
 
 /** Lo que en la vida real hacen Planeación, cartera y producción en OBEN MAS — solo existe mientras OBEN MAS está simulado. */
-export function SimuladorPanel({ onChange }: { onChange: () => void }) {
+export function SimuladorPanel({ casos, onChange }: { casos: ComercialCaso[]; onChange: () => void }) {
   const [pf, setPf] = useState('');
   const [fecha, setFecha] = useState('');
   const [busy, setBusy] = useState('');
@@ -246,51 +246,113 @@ export function SimuladorPanel({ onChange }: { onChange: () => void }) {
     }
   }
 
+  /** Hace lo de la persona en OBEN MAS y procesa el caso enseguida (sin esperar el ciclo de 1 minuto). */
+  const paso = (numberPF: string, control: 'cubicar' | 'liberar-cartera', label: string) =>
+    run(`${control}:${numberPF}`, async () => {
+      await api.comercialSimControl(numberPF, control);
+      return api.comercialSimProcesar();
+    }, () => `${label} la Proforma ${numberPF}: listo. El caso ya avanzó.`);
+
+  const sinCubicar = casos.filter((c) => c.estado === 'sin_cubicar' && c.numberPF);
+  const retenidas = casos.filter((c) => c.estado === 'retenida' && c.numberPF && !c.accionPendiente);
+
   return (
-    <div className="bg-purple-50 border border-purple-200 rounded-xl p-5 space-y-3">
-      <div className="flex items-center gap-2 text-purple-900">
-        <FlaskConical className="w-5 h-5" />
-        <h3 className="font-semibold">Simulador (OBEN MAS simulado)</h3>
+    <div className="space-y-4">
+      <div className="bg-purple-50 border border-purple-200 rounded-xl p-5 space-y-2">
+        <div className="flex items-center gap-2 text-purple-900">
+          <FlaskConical className="w-5 h-5" />
+          <h3 className="font-semibold">Simulador: lo que hacen personas en OBEN MAS y Oben aún no expone por API</h3>
+        </div>
+        <p className="text-sm text-purple-900">
+          La Proforma y la orden de venta se crean de verdad en OBEN MAS. Lo que todavía no tiene API se simula aquí: que Planeación cubique la Proforma y
+          que Cartera libere el crédito. Cada botón hace ese paso y procesa el caso de una vez.
+        </p>
       </div>
-      <p className="text-xs text-purple-900">
-        Mientras Oben no entrega sus APIs y Alejandra sus datos: cliente piloto y equivalencias SIMULADOS (dominio .example, referencias SIM-), órdenes de
-        ejemplo y las acciones que en la vida real hacen personas en OBEN MAS. Con OBEN MAS real conectado, todo esto se rechaza.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <button className={btnSecondary} disabled={!!busy} onClick={() => run('demo', () => api.comercialSimDatosDemo(), (r) => `Datos demo listos (${(r as { equivalenciasCreadas: number }).equivalenciasCreadas} equivalencias nuevas).`)}>
-          Cargar cliente y equivalencias demo
-        </button>
-        <button className={btnSecondary} disabled={!!busy} onClick={() => run('oc', () => api.comercialSimOcDemo(), () => 'Orden de compra de ejemplo recibida.')}>
-          Recibir una OC de ejemplo
-        </button>
-        <button className={btnSecondary} disabled={!!busy} onClick={() => run('procesar', () => api.comercialSimProcesar(), (r) => `Procesados ${(r as { procesados: number }).procesados} caso(s).`)}>
-          Procesar ahora
-        </button>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
+          <h4 className="text-sm font-semibold text-gray-900">Esperando a Planeación ({sinCubicar.length})</h4>
+          {sinCubicar.length === 0 ? (
+            <p className="text-xs text-gray-500">Ninguna Proforma sin cubicar.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {sinCubicar.map((c) => (
+                <li key={c.id} className="py-2 flex items-center justify-between gap-3">
+                  <span className="text-sm min-w-0">
+                    <span className="font-semibold tabular-nums">PF {c.numberPF}</span> <span className="text-gray-500 truncate">· {c.cliente} · OC {c.ocNumero ?? '—'}</span>
+                  </span>
+                  <button className={btnPrimary} disabled={!!busy} onClick={() => void paso(c.numberPF!, 'cubicar', 'Planeación cubicó')}>
+                    {busy === `cubicar:${c.numberPF}` ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Planeación cubica
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
+          <h4 className="text-sm font-semibold text-gray-900">Retenidas en cartera ({retenidas.length})</h4>
+          {retenidas.length === 0 ? (
+            <p className="text-xs text-gray-500">Ninguna orden de venta esperando a cartera.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {retenidas.map((c) => (
+                <li key={c.id} className="py-2 flex items-center justify-between gap-3">
+                  <span className="text-sm min-w-0">
+                    <span className="font-semibold tabular-nums">PF {c.numberPF}</span>
+                    {c.numberOrderSales ? <span className="tabular-nums"> · OV {c.numberOrderSales}</span> : null}{' '}
+                    <span className="text-gray-500 truncate">· {c.cliente}</span>
+                  </span>
+                  <button className={btnPrimary} disabled={!!busy} onClick={() => void paso(c.numberPF!, 'liberar-cartera', 'Cartera liberó')}>
+                    {busy === `liberar-cartera:${c.numberPF}` ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Cartera libera
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
-      <div className="flex flex-col md:flex-row gap-2 md:items-center">
-        <input value={pf} onChange={(e) => setPf(e.target.value)} placeholder="Proforma (ej. SIM-95001)" className={inputCls} />
-        {(
-          [
-            ['cubicar', 'Planeación cubica'],
-            ['liberar-cartera', 'Cartera libera'],
-            ['producir-no-despachar', 'Producir No Despachar'],
-          ] as const
-        ).map(([c, label]) => (
-          <button key={c} className={btnSecondary} disabled={!!busy || !pf.trim()} onClick={() => run(c, () => api.comercialSimControl(pf.trim(), c), () => `${label}: listo.`)}>
-            {label}
-          </button>
-        ))}
-        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} />
-        <button
-          className={btnSecondary}
-          disabled={!!busy || !pf.trim() || !fecha}
-          onClick={() => run('entrega', () => api.comercialSimControl(pf.trim(), 'cambiar-entrega', fecha), () => 'Fecha de entrega cambiada.')}
-        >
-          Cambiar entrega
-        </button>
-      </div>
-      {msg && <p className="text-sm text-green-700">{msg}</p>}
-      {error && <p className="text-sm text-red-700">{error}</p>}
+
+      {msg && <p className="text-sm text-green-700 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> {msg}</p>}
+      {error && <p className="text-sm text-red-700 flex items-center gap-1.5"><AlertCircle className="w-4 h-4" /> {error}</p>}
+
+      <details className="bg-white border border-gray-200 rounded-xl p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-gray-900">Más controles del simulador</summary>
+        <div className="mt-3 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button className={btnSecondary} disabled={!!busy} onClick={() => run('demo', () => api.comercialSimDatosDemo(), (r) => `Cliente piloto simulado listo (${(r as { equivalenciasCreadas: number }).equivalenciasCreadas} equivalencias nuevas).`)}>
+              Cargar cliente piloto simulado
+            </button>
+            <button className={btnSecondary} disabled={!!busy} onClick={() => run('oc', () => api.comercialSimOcDemo(), () => 'Orden de compra simulada recibida.')}>
+              Recibir una OC simulada
+            </button>
+            <button className={btnSecondary} disabled={!!busy} onClick={() => run('procesar', () => api.comercialSimProcesar(), (r) => `Procesados ${(r as { procesados: number }).procesados} caso(s).`)}>
+              Procesar ahora
+            </button>
+          </div>
+          <div className="flex flex-col md:flex-row gap-2 md:items-center">
+            <input value={pf} onChange={(e) => setPf(e.target.value)} placeholder="Proforma (ej. 11547)" className={inputCls} />
+            {(
+              [
+                ['cubicar', 'Planeación cubica'],
+                ['liberar-cartera', 'Cartera libera'],
+                ['producir-no-despachar', 'Producir No Despachar'],
+              ] as const
+            ).map(([c, label]) => (
+              <button key={c} className={btnSecondary} disabled={!!busy || !pf.trim()} onClick={() => run(c, () => api.comercialSimControl(pf.trim(), c), () => `${label}: listo.`)}>
+                {label}
+              </button>
+            ))}
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} />
+            <button
+              className={btnSecondary}
+              disabled={!!busy || !pf.trim() || !fecha}
+              onClick={() => run('entrega', () => api.comercialSimControl(pf.trim(), 'cambiar-entrega', fecha), () => 'Fecha de entrega cambiada.')}
+            >
+              Cambiar entrega
+            </button>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

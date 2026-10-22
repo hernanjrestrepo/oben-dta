@@ -179,7 +179,7 @@ export class ObenPlusMockAdapter extends MockAdapterBase {
       'cliente.consultar': this.wrap((args) => this.cliente(requireText(args, 'codigoCliente')), 'cliente.consultar'),
       'proforma.crear': this.wrap((args, ctx) => this.crear(ctx.tenantId, args), 'proforma.crear'),
       'proforma.modificar': this.wrap((args, ctx) => this.modificar(ctx.tenantId, args), 'proforma.modificar'),
-      'proforma.aprobar': this.wrap((args, ctx) => this.aprobar(ctx.tenantId, requirePF(args)), 'proforma.aprobar'),
+      'proforma.aprobar': this.wrap((args, ctx) => this.aprobar(ctx.tenantId, requirePF(args), args), 'proforma.aprobar'),
       'proforma.anular': this.wrap((args, ctx) => this.anular(ctx.tenantId, requirePF(args), args), 'proforma.anular'),
       'ov.activar': this.wrap((args, ctx) => this.activar(ctx.tenantId, requirePF(args)), 'ov.activar'),
       'sim.cubicar': this.wrap((args, ctx) => this.simCubicar(ctx.tenantId, requirePF(args)), 'sim.cubicar'),
@@ -339,9 +339,16 @@ export class ObenPlusMockAdapter extends MockAdapterBase {
     const direccionEntrega = requireText(args, 'direccionEntrega');
     const pais = requireText(args, 'pais').toUpperCase();
     const lineas = parseLineas(args.lineas);
+    // Proforma REAL ya creada en OBEN MAS (APIs comerciales, 22-oct): se registra con su número oficial para que
+    // lo que aún no tiene API (cubicaje de Planeación, PDF, cartera) se simule sobre ella. Idempotente.
+    const real = optText(args.numberPF);
+    if (real) {
+      const ya = await this.store.get(tenantId, real);
+      if (ya) return { simulated: true, numberPF: ya.numberPF, estado: ya.estado };
+    }
     const n = SIM_PF_BASE + 1 + (await this.store.count(tenantId));
     const rec: SimProformaRecord = {
-      numberPF: `SIM-${n}`,
+      numberPF: real ?? `SIM-${n}`,
       codigoCliente,
       cliente,
       exportacion: pais !== 'COLOMBIA',
@@ -378,14 +385,17 @@ export class ObenPlusMockAdapter extends MockAdapterBase {
     return { simulated: true, numberPF: rec.numberPF, estado: rec.estado };
   }
 
-  private async aprobar(tenantId: string, numberPF: string) {
+  private async aprobar(tenantId: string, numberPF: string, args: Record<string, unknown> = {}) {
     const rec = await this.mustGet(tenantId, numberPF);
     if (rec.estado !== 'cubicada') {
       throw new Error(`BUSINESS_ERROR: solo se aprueba una Proforma cubicada (está "${rec.estado}")`);
     }
     rec.estado = 'retenida';
-    rec.numberOrderSales = SIM_OV_BASE + (Number(numberPF.replace(/\D/g, '')) - SIM_PF_BASE);
-    rec.historial.push({ fecha: new Date().toISOString(), evento: `Aprobada por el cliente: OV ${rec.numberOrderSales} retenida` });
+    // Proforma real (APIs comerciales): la OV la creó Oben y viene en args; si no se conoce, no se inventa.
+    const ovReal = Number(args.numberOrderSales);
+    rec.numberOrderSales =
+      Number.isInteger(ovReal) && ovReal > 0 ? ovReal : numberPF.startsWith('SIM-') ? SIM_OV_BASE + (Number(numberPF.replace(/\D/g, '')) - SIM_PF_BASE) : null;
+    rec.historial.push({ fecha: new Date().toISOString(), evento: `Aprobada por el cliente: OV ${rec.numberOrderSales ?? '(número en OBEN MAS)'} retenida` });
     await this.store.save(tenantId, rec);
     return { simulated: true, numberPF, estado: rec.estado, numberOrderSales: rec.numberOrderSales };
   }

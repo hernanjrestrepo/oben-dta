@@ -58,6 +58,14 @@ export class ProformaOben extends TenantScopedEntity {
   @Column({ type: 'varchar', length: 30, default: 'pendiente' })
   estado: EstadoProformaOben;
 
+  /** Caso comercial (orden de compra) que la creó; null = creada a mano. */
+  @Column({ name: 'caso_id', type: 'uuid', nullable: true })
+  casoId: string | null;
+
+  /** Orden de venta que creó Oben al aprobar (la API no la devuelve: se lee del reporte de proformas). */
+  @Column({ name: 'orden_venta', type: 'int', nullable: true })
+  ordenVenta: number | null;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   cliente: string | null;
 

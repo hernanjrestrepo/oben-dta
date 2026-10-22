@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -8,6 +8,7 @@ import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import { ProformaOben, type LineaProformaOben, type PasoProformaOben } from '../../entities/proforma-oben.entity';
 import { COMERCIAL_URL_PRUEBAS, type EscrituraComercial } from '../integrations/hub/adapters/oben-comercial';
+import { SP_PROFORMAS_COMEX, parsearProformasComex } from '../liquidacion/incoterm-de-oben';
 import { ComercialMaestrosService } from './comercial-maestros.service';
 
 const WORKFLOW = 'comercial';
@@ -24,6 +25,12 @@ export interface LineaEntrada {
   /** CodSec_Prod del maestro de referencias, o la referencia (p. ej. "ET---0012RT0600S0760"). */
   codSecProduct?: number;
   referencia?: string;
+  /**
+   * O la película (p. ej. "SC---0015TN", lo que trae la tabla de equivalencias del cliente) y el ancho en mm: se
+   * busca la referencia de ese ancho (±1 mm) que tenga Maestro de Empaque para el cliente y su destino.
+   */
+  pelicula?: string;
+  anchoMm?: number;
   kilos: number;
   precio: number;
   etiqueta?: string;
@@ -141,14 +148,21 @@ export class ProformasObenService {
     // Líneas: referencia del maestro y partida de su línea de película.
     const lineas: LineaProformaOben[] = [];
     const productos = e.lineas?.length ? await this.productosDe(e.lineas) : new Map<string, Fila>();
+    const porAncho = new Map<number, Fila>();
+    for (const [i, l] of (e.lineas ?? []).entries()) {
+      if (l.codSecProduct || txt(l.referencia) || !txt(l.pelicula)) continue;
+      const r = await this.porPeliculaYAncho(txt(l.pelicula), num(l.anchoMm), filaCliente && par ? { cliente: Number(e.cliente), direccion: Number(e.direccion), ciudad: Number(par.CodSec_City) } : null);
+      if (r.producto) porAncho.set(i, r.producto);
+      else bloqueos.push(`Línea ${i + 1}: ${r.motivo}`);
+    }
     const partidas = (await this.maestros.maestro('partidas', { limite: 1000 })).items;
     const exporta = !/colombia/i.test(txt(par?.Pais ?? filaCliente?.Pais_Cliente));
     for (const [i, l] of (e.lineas ?? []).entries()) {
       const n = i + 1;
-      const p = productos.get(l.codSecProduct ? `#${l.codSecProduct}` : txt(l.referencia).toUpperCase());
+      const p = porAncho.get(i) ?? productos.get(l.codSecProduct ? `#${l.codSecProduct}` : txt(l.referencia).toUpperCase());
       const kilos = num(l.kilos);
       const precio = num(l.precio);
-      if (!p) bloqueos.push(`Línea ${n}: la referencia ${l.referencia ?? l.codSecProduct ?? '(vacía)'} no está en el maestro de referencias de Oben.`);
+      if (!p && !txt(l.pelicula)) bloqueos.push(`Línea ${n}: la referencia ${l.referencia ?? l.codSecProduct ?? '(vacía)'} no está en el maestro de referencias de Oben.`);
       if (!kilos || kilos <= 0) bloqueos.push(`Línea ${n}: faltan los kilos.`);
       if (precio === null || precio <= 0) bloqueos.push(`Línea ${n}: falta el precio por kilo.`);
       if (!p) continue;
@@ -263,16 +277,28 @@ export class ProformasObenService {
     };
   }
 
-  /** Crea el encabezado y las líneas en Oben (queda "creada", sin OV). Un reintento continúa donde quedó. */
-  async crear(e: ProformaEntrada, usuario: string | null): Promise<ProformaOben> {
-    const vista = await this.previsualizar(e);
-    if (vista.bloqueos.length) throw new BadRequestException({ message: 'No se puede crear la proforma todavía.', bloqueos: vista.bloqueos });
+  /** La proforma que creó un caso comercial (o null). */
+  async porCaso(casoId: string): Promise<ProformaOben | null> {
+    return this.repo.findOne({ where: { tenantId: this.ctx.tenantId, casoId } });
+  }
+
+  /**
+   * Crea el encabezado y las líneas en Oben (queda "creada", sin OV). Un reintento continúa donde quedó.
+   * Con `casoId` (flujo de casos comerciales) es idempotente por caso: si ya está creada, la devuelve tal cual.
+   */
+  async crear(e: ProformaEntrada, usuario: string | null, opts: { casoId?: string; verificado?: boolean } = {}): Promise<ProformaOben> {
     const tenantId = this.ctx.tenantId;
-    let p = await this.repo.findOne({ where: { tenantId, servidor: vista.servidor, ordenCompra: txt(e.ordenCompra) } });
+    const previa = opts.casoId ? await this.porCaso(opts.casoId) : null;
+    if (previa && ['creada', 'ov_creada', 'activa'].includes(previa.estado)) return previa;
+    if (previa?.estado === 'revisar') return this.reintentar(previa.id, usuario, !!opts.verificado);
+    if (previa?.estado === 'encabezado') return this.continuar(previa, usuario);
+    const vista = await this.previsualizar(e);
+    if (vista.bloqueos.length) throw new BadRequestException({ message: `No se puede crear la proforma todavía: ${vista.bloqueos.join(' ')}`, bloqueos: vista.bloqueos });
+    let p = previa ?? (opts.casoId ? null : await this.repo.findOne({ where: { tenantId, servidor: vista.servidor, ordenCompra: txt(e.ordenCompra), casoId: IsNull() } }));
     if (p && p.estado !== 'pendiente') {
       throw new ConflictException(`Ya existe la proforma ${this.nombrePF(p)} para la orden de compra ${p.ordenCompra} (estado: ${p.estado}). Ábrela y continúa desde allí.`);
     }
-    p ??= this.repo.create({ tenantId, servidor: vista.servidor, ordenCompra: txt(e.ordenCompra), estado: 'pendiente', pasos: [] });
+    p ??= this.repo.create({ tenantId, servidor: vista.servidor, ordenCompra: txt(e.ordenCompra), estado: 'pendiente', pasos: [], casoId: opts.casoId ?? null });
     Object.assign(p, {
       cliente: vista.cliente,
       destino: vista.destino,
@@ -302,7 +328,10 @@ export class ProformasObenService {
     const p = await this.obtener(id);
     if (p.estado !== 'creada') throw new BadRequestException(this.porQueNo(p, 'crear la orden de venta'));
     const r = await this.escribir(p, 'ov', { CodSecSalesOrderHeadPF: p.codigoInterno }, usuario);
-    if (r.ok) p.estado = 'ov_creada';
+    if (r.ok) {
+      p.estado = 'ov_creada';
+      p.ordenVenta = await this.ordenVentaDe(p);
+    }
     return this.guardar(p, `Orden de venta de la proforma ${this.nombrePF(p)} creada en OBEN MAS`, usuario);
   }
 
@@ -410,6 +439,61 @@ export class ProformasObenService {
       revisar: 'el último paso quedó sin respuesta de Oben: verifica en OBEN MAS',
     };
     return `No se puede ${accion}: ${estados[p.estado] ?? p.estado}.`;
+  }
+
+  /**
+   * Orden de venta que Oben creó para la proforma: la API de crear OV solo responde "OK", así que se lee del
+   * reporte de proformas de Oben (el del servidor de pruebas cuando la proforma es de pruebas). null si no aparece.
+   */
+  private async ordenVentaDe(p: ProformaOben): Promise<number | null> {
+    if (!p.numeroPF) return null;
+    try {
+      const r = await this.hub.call<unknown>(
+        'obenCostOrder',
+        'query.run',
+        { procedure: SP_PROFORMAS_COMEX, numberOrderSales: p.numeroPF, ...(p.servidor === 'pruebas' ? { target: 'liquidacion' } : {}) },
+        { maxAttempts: 1, timeoutMs: 60_000 },
+      );
+      if (!r.ok) return null;
+      const fila = parsearProformasComex(r.data).find((x) => txt(x.NroProforma ?? x.Proforma) === p.numeroPF);
+      const ovs = Array.isArray(fila?.OrdenesVenta) ? (fila.OrdenesVenta as Array<Record<string, unknown>>) : [];
+      const ov = num(ovs[0]?.NroOrdenVenta);
+      return ov && ov > 0 ? ov : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Referencia de una película a un ancho (±1 mm, la más cercana primero) que tenga Maestro de Empaque para el
+   * cliente y su destino. Así la tabla de equivalencias del cliente puede guardar solo la película ("SC---0015TN").
+   */
+  private async porPeliculaYAncho(
+    pelicula: string,
+    anchoMm: number | null,
+    destino: { cliente: number; direccion: number; ciudad: number } | null,
+  ): Promise<{ producto: Fila | null; motivo: string }> {
+    if (!anchoMm || anchoMm <= 0) return { producto: null, motivo: `falta el ancho para escoger la referencia de ${pelicula}.` };
+    const items = (await this.maestros.maestro('productos', { buscar: pelicula, limite: 1000 })).items;
+    const candidatos = items
+      .filter((x) => txt(x.Pelicula).toUpperCase() === pelicula.toUpperCase() && Math.abs(Number(x.Ancho) - anchoMm) <= 1)
+      .sort((a, b) => Math.abs(Number(a.Ancho) - anchoMm) - Math.abs(Number(b.Ancho) - anchoMm));
+    if (candidatos.length === 0) {
+      return { producto: null, motivo: `Oben no tiene referencia de ${pelicula} de ${anchoMm} mm en su maestro de referencias.` };
+    }
+    if (!destino) return { producto: candidatos[0], motivo: '' };
+    for (const c of candidatos.slice(0, 8)) {
+      try {
+        const v = await this.maestros.validarEmpaque({ codSecEntity: destino.cliente, codSecEntityAddress: destino.direccion, codSecProduct: Number(c.CodSec_Prod), codSecCity: destino.ciudad });
+        if (v.valido) return { producto: c, motivo: '' };
+      } catch {
+        /* se prueba la siguiente */
+      }
+    }
+    return {
+      producto: null,
+      motivo: `ninguna referencia de ${pelicula} de ${anchoMm} mm (${candidatos.map((c) => txt(c.Referencia)).join(', ')}) tiene Maestro de Empaque para este destino. Planeación debe crearlo.`,
+    };
   }
 
   private async productosDe(lineas: LineaEntrada[]): Promise<Map<string, Fila>> {

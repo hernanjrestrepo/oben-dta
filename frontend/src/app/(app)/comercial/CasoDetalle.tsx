@@ -3,9 +3,30 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
-import type { CasoLinea, ComercialCaso } from '@/types';
-import { AlertCircle, AlertTriangle, CheckCircle2, Download, Loader2, Send, ShieldAlert, X } from 'lucide-react';
+import type { CasoEstado, CasoLinea, ComercialCaso, ProformaOben } from '@/types';
+import { AlertCircle, AlertTriangle, Building2, Check, CheckCircle2, Download, FlaskConical, Loader2, Send, ShieldAlert, X } from 'lucide-react';
 import { ACCION_LABEL, EstadoBadge, SimuladoBadge, btnPrimary, btnSecondary, fecha, inputCls } from './comun';
+
+/** Etapas del caso, en orden, para la línea de progreso. */
+const PASOS: Array<{ estados: CasoEstado[]; titulo: string }> = [
+  { estados: ['oc_recibida'], titulo: 'OC recibida' },
+  { estados: ['sin_cubicar'], titulo: 'Proforma' },
+  { estados: ['cubicada'], titulo: 'Cubicada' },
+  { estados: ['enviada_cliente'], titulo: 'Con el cliente' },
+  { estados: ['retenida'], titulo: 'OV retenida' },
+  { estados: ['activa', 'cerrada'], titulo: 'OV activa' },
+];
+
+/** Qué hace el botón de confirmar según la acción pendiente (dicho exacto). */
+const BOTON_CONFIRMAR: Record<string, string> = {
+  crear_proforma: 'Crear la Proforma en OBEN MAS',
+  aprobar: 'Crear la orden de venta en OBEN MAS',
+  rechazar: 'Anular la Proforma',
+  modificar: 'Modificar la Proforma',
+  activar: 'Activar la orden de venta',
+};
+
+const PASO_OBEN: Record<string, string> = { encabezado: 'Encabezado', detalle: 'Línea', ov: 'Orden de venta', activar: 'Activar', validar: 'Validar' };
 
 const FASES: Array<[string, string]> = [
   ['ocRecibida', 'OC recibida'],
@@ -21,10 +42,11 @@ const FASES: Array<[string, string]> = [
   ['anulada', 'Anulada'],
 ];
 
-type EdicionLinea = { codigoOben: string; kilos: string; anchoMm: string; guardarEquivalencia: boolean };
+type EdicionLinea = { codigoOben: string; kilos: string; anchoMm: string; precio: string; guardarEquivalencia: boolean };
 
 export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: () => void; onChange: () => void }) {
   const [caso, setCaso] = useState<ComercialCaso | null>(null);
+  const [oben, setOben] = useState<ProformaOben | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [edits, setEdits] = useState<Record<number, EdicionLinea>>({});
@@ -38,8 +60,9 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
   async function cargar() {
     try {
       setError('');
-      const c = await api.getComercialCaso(id);
+      const [c, o] = await Promise.all([api.getComercialCaso(id), api.getComercialCasoOben(id).catch(() => null)]);
       setCaso(c);
+      setOben(o);
       setEdits({});
     } catch (err) {
       setError(extractMessage(err, 'No se pudo cargar el caso.'));
@@ -61,7 +84,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
   }
 
   function edit(l: CasoLinea): EdicionLinea {
-    return edits[l.n] ?? { codigoOben: l.codigoOben ?? '', kilos: l.kilos?.toString() ?? '', anchoMm: l.anchoMm?.toString() ?? '', guardarEquivalencia: !l.codigoOben };
+    return edits[l.n] ?? { codigoOben: l.codigoOben ?? '', kilos: l.kilos?.toString() ?? '', anchoMm: l.anchoMm?.toString() ?? '', precio: l.precioUnitario?.toString() ?? '', guardarEquivalencia: !l.codigoOben };
   }
 
   async function guardarLineas() {
@@ -70,6 +93,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
       ...(e.codigoOben.trim() ? { codigoOben: e.codigoOben.trim(), guardarEquivalencia: e.guardarEquivalencia } : {}),
       ...(e.kilos ? { kilos: Number(e.kilos) } : {}),
       ...(e.anchoMm ? { anchoMm: Number(e.anchoMm) } : {}),
+      ...(e.precio ? { precioUnitario: Number(e.precio.replace(',', '.')) } : {}),
     }));
     await accion('lineas', () => api.editComercialCaso(id, { lineas }));
   }
@@ -115,6 +139,10 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
           </p>
         </div>
 
+        <Progreso estado={caso.estado} />
+
+        {oben && <TarjetaOben p={oben} />}
+
         {error && (
           <p className="text-sm text-red-700 flex items-start gap-1.5">
             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {error}
@@ -135,12 +163,12 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
         {caso.accionPendiente && (
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
             <p className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4" /> Pendiente de tu confirmación: {ACCION_LABEL[caso.accionPendiente.tipo] ?? caso.accionPendiente.tipo}
+              <ShieldAlert className="w-4 h-4" /> Esperando tu confirmación: {ACCION_LABEL[caso.accionPendiente.tipo] ?? caso.accionPendiente.tipo}
             </p>
             <p className="text-xs text-amber-900">{caso.accionPendiente.detalle}</p>
             <div className="flex flex-wrap gap-2">
               <button className={btnPrimary} disabled={!!busy} onClick={() => accion('confirmar', () => api.confirmComercialCaso(id))}>
-                {busy === 'confirmar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Confirmar
+                {busy === 'confirmar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} {BOTON_CONFIRMAR[caso.accionPendiente.tipo] ?? 'Confirmar'}
               </button>
               <button
                 className={btnSecondary}
@@ -220,7 +248,15 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
                       <td className="px-2 py-1.5">
                         {editable ? <input value={e.anchoMm} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, anchoMm: ev.target.value } })} className={`${inputCls} w-20 !py-1`} /> : (l.anchoMm ?? '—')}
                       </td>
-                      <td className="px-2 py-1.5">{l.precioUnitario !== null ? `${l.precioUnitario} ${l.moneda ?? ''}` : '—'}</td>
+                      <td className="px-2 py-1.5">
+                        {editable ? (
+                          <input value={e.precio} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, precio: ev.target.value } })} className={`${inputCls} w-20 !py-1 tabular-nums`} placeholder="USD/kg" />
+                        ) : l.precioUnitario !== null ? (
+                          `${l.precioUnitario} ${l.moneda ?? ''}`
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td className="px-2 py-1.5 text-gray-500">
                         {l.conversiones.map((c) => (
                           <div key={c}>{c}</div>
@@ -360,6 +396,92 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
         </section>
       </div>
     </Panel>
+  );
+}
+
+/** Línea de etapas del caso: hechas, la actual y las que faltan. */
+function Progreso({ estado }: { estado: CasoEstado }) {
+  if (estado === 'rechazada' || estado === 'anulada') {
+    return <p className="text-sm font-medium text-red-700">Caso {estado === 'rechazada' ? 'rechazado por el cliente' : 'dado de baja'}.</p>;
+  }
+  const actual = PASOS.findIndex((p) => p.estados.includes(estado));
+  return (
+    <ol className="flex items-center gap-1 overflow-x-auto pb-1">
+      {PASOS.map((p, i) => {
+        const hecho = i < actual || estado === 'cerrada';
+        const ahora = i === actual && estado !== 'cerrada';
+        return (
+          <li key={p.titulo} className="flex items-center gap-1 shrink-0">
+            <span
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                hecho ? 'bg-emerald-100 text-emerald-800' : ahora ? 'bg-[#F47735] text-white' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {hecho ? <Check className="w-3.5 h-3.5" /> : <span className="tabular-nums">{i + 1}</span>}
+              {p.titulo}
+            </span>
+            {i < PASOS.length - 1 && <span className={`w-4 h-px ${hecho ? 'bg-emerald-400' : 'bg-gray-200'}`} />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** La Proforma REAL en OBEN MAS: números, estado y lo que respondió Oben en cada paso. */
+function TarjetaOben({ p }: { p: ProformaOben }) {
+  const estado: Record<ProformaOben['estado'], string> = {
+    pendiente: 'Sin crear',
+    encabezado: 'Faltan líneas',
+    creada: 'Creada (sin orden de venta)',
+    ov_creada: 'Orden de venta creada (sin activar)',
+    activa: 'Orden de venta activa',
+    revisar: 'Verificar en OBEN MAS',
+  };
+  return (
+    <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Building2 className="w-4 h-4 text-sky-700" />
+        <span className="text-sm font-semibold text-sky-900">Proforma en OBEN MAS</span>
+        {p.servidor === 'pruebas' && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">
+            <FlaskConical className="w-3 h-3" /> Servidor de pruebas de Oben
+          </span>
+        )}
+      </div>
+      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+        <div>
+          <dt className="text-[11px] text-gray-500">Proforma (oficial)</dt>
+          <dd className="font-bold text-gray-900 tabular-nums">{p.numeroPF ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-[11px] text-gray-500">Código interno</dt>
+          <dd className="text-gray-700 tabular-nums">{p.codigoInterno ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-[11px] text-gray-500">Orden de venta</dt>
+          <dd className="font-bold text-gray-900 tabular-nums">{p.ordenVenta ?? (p.estado === 'ov_creada' || p.estado === 'activa' ? 'creada' : '—')}</dd>
+        </div>
+        <div>
+          <dt className="text-[11px] text-gray-500">Estado en Oben</dt>
+          <dd className="text-gray-900">{estado[p.estado]}</dd>
+        </div>
+      </dl>
+      {p.error && <p className="text-xs text-red-700">{p.error}</p>}
+      <ul className="text-[11px] text-gray-600 space-y-0.5">
+        {p.pasos.map((x, i) => (
+          <li key={i} className="flex gap-2">
+            <span className={x.ok ? 'text-emerald-700' : 'text-red-700'}>{x.ok ? '✓' : '✗'}</span>
+            <span className="text-gray-400 whitespace-nowrap">{fecha(x.en)}</span>
+            <span>
+              {PASO_OBEN[x.paso] ?? x.paso}
+              {x.linea ? ` ${x.linea}` : ''}: {x.respuesta}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] text-gray-500">El cubicaje de Planeación, el PDF de la Proforma y la cartera aún se simulan: Oben no tiene API para eso.</p>
+    </div>
   );
 }
 

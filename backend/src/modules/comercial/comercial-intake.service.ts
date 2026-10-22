@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { ClientsService } from '../clients/clients.service';
@@ -7,6 +7,7 @@ import type { Client } from '../../entities/client.entity';
 import type { CasoDestino, CasoLinea, ComercialCase } from '../../entities/comercial-case.entity';
 import { extraerConIa, extraerConReglas, normTexto, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef, type OcAdjunto, type OcExtraccion } from './oc-extractor';
 import type { ComercialConfig } from './comercial-config';
+import { ComercialMaestrosService } from './comercial-maestros.service';
 
 export interface OcEntrada {
   from: string;
@@ -59,6 +60,7 @@ export class ComercialIntakeService {
     private readonly hub: IntegrationHubService,
     private readonly clients: ClientsService,
     private readonly equivalences: EquivalencesService,
+    @Optional() private readonly maestros?: ComercialMaestrosService,
   ) {}
 
   /** Arma los datos del caso (sin guardarlo). */
@@ -132,6 +134,8 @@ export class ComercialIntakeService {
   }
 
   async maestro(codigoCliente: string): Promise<MaestroCliente | { error: string }> {
+    // Código numérico = CodSec_Entity de Oben: los destinos salen del maestro de clientes REAL de Oben (22-oct).
+    if (/^\d+$/.test(codigoCliente.trim()) && this.maestros) return this.maestroOben(Number(codigoCliente));
     const res = await this.hub.call<Record<string, unknown>>('obenPlus', 'cliente.consultar', { codigoCliente }, OBEN_QUERY_OPTIONS);
     if (!res.ok) return { error: `Maestro del cliente ${codigoCliente}: no se pudo consultar OBEN MAS (${res.error ?? 'error desconocido'}).` };
     const d = res.data ?? {};
@@ -155,6 +159,34 @@ export class ComercialIntakeService {
       comercialEmail: typeof d.comercialEmail === 'string' && d.comercialEmail ? d.comercialEmail : null,
       simulated: res.mode === 'mock' || d.simulated === true,
     };
+  }
+
+  /**
+   * Maestro del cliente desde Oben (APICustomerParadixe): una fila por destino. El id de cada dirección es el
+   * CodSed_CustomerAddress, el mismo que pide la proforma en OBEN MAS.
+   */
+  private async maestroOben(codSecEntity: number): Promise<MaestroCliente | { error: string }> {
+    try {
+      const r = await this.maestros!.maestro('clientes', { buscar: String(codSecEntity), limite: 1000 });
+      const filas = r.items.filter((f) => Number(f.CodSec_Entity) === codSecEntity);
+      if (filas.length === 0) return { error: `Maestro del cliente ${codSecEntity}: Oben no lo tiene en su maestro de clientes.` };
+      const t = (v: unknown) => (v === null || v === undefined ? '' : String(v).trim());
+      const pais = t(filas[0].Pais_Cliente).toUpperCase() || 'SIN PAÍS';
+      return {
+        pais,
+        exportacion: pais !== 'COLOMBIA',
+        direcciones: filas.map((f) => ({
+          id: String(f.CodSed_CustomerAddress),
+          direccion: `${t(f.Target_Customer)} — ${t(f.Direccion_Destino).replace(/\s*[\r\n]+\s*/g, ', ')}`,
+          ciudad: null,
+          pais: (t(f.Pais_Cliente) || pais).toUpperCase(),
+        })),
+        comercialEmail: null,
+        simulated: r.simulado,
+      };
+    } catch (err) {
+      return { error: `Maestro del cliente ${codSecEntity}: no se pudo consultar el maestro de clientes de Oben (${(err as Error).message}).` };
+    }
   }
 
   /**
@@ -220,8 +252,11 @@ export function calcularMissing(
   }
   const lineas = caso.lineas ?? [];
   if (lineas.length === 0) missing.push('Líneas: la orden de compra no tiene ninguna línea de producto legible.');
+  // Cliente real de Oben (código numérico): la Proforma se crea en OBEN MAS y su API exige el precio de cada línea.
+  const real = /^\d+$/.test(caso.codigoClienteOben ?? '');
   for (const l of lineas) {
     for (const f of l.faltantes) missing.push(`Línea ${l.n} ("${l.textoCliente.slice(0, 50)}"): ${f}`);
+    if (real && !(Number(l.precioUnitario) > 0)) missing.push(`Línea ${l.n} ("${l.textoCliente.slice(0, 50)}"): precio por kilo (OBEN MAS lo pide para crear la Proforma)`);
   }
   return missing;
 }

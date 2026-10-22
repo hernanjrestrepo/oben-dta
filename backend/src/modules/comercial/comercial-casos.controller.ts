@@ -269,6 +269,13 @@ export class ComercialCasosController {
     return this.flujo.obtener(id);
   }
 
+  /** La Proforma real en OBEN MAS de este caso (números oficial e interno, OV, estado y cada respuesta de Oben), o null. */
+  @Get('casos/:id/oben')
+  @RequirePermission('orders.read')
+  proformaOben(@Param('id', ParseUUIDPipe) id: string) {
+    return this.flujo.proformaReal({ id });
+  }
+
   /** La Proforma aprobada/firmada que devolvió el cliente. */
   @Get('casos/:id/proforma-firmada')
   @RequirePermission('orders.read')

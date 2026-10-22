@@ -1156,6 +1156,10 @@ export interface ProformaOben {
   /** CodSec_SalesOrderHeadPF: código interno del encabezado en Oben. */
   codigoInterno: number | null;
   estado: 'pendiente' | 'encabezado' | 'creada' | 'ov_creada' | 'activa' | 'revisar';
+  /** Caso comercial que la creó (null = creada a mano). */
+  casoId: string | null;
+  /** Orden de venta que creó Oben al aprobar (leída del reporte de proformas). */
+  ordenVenta: number | null;
   cliente: string | null;
   destino: string | null;
   encabezado: Record<string, unknown>;
@@ -1178,30 +1182,6 @@ export interface LineaProformaOben {
   etiqueta: string;
   numeroParte: string;
   creada: boolean;
-}
-
-export interface ProformaObenEntrada {
-  cliente: number;
-  direccion: number;
-  ordenCompra: string;
-  fechaEntrega: string;
-  fechaDespacho: string;
-  contenedor?: string;
-  pesoBruto?: number;
-  notas?: string;
-  lineas: Array<{ referencia?: string; codSecProduct?: number; kilos: number; precio: number; codSecTariff?: number }>;
-}
-
-export interface ProformaObenVistaPrevia {
-  servidor: 'pruebas' | 'produccion';
-  simulado: boolean;
-  cliente: string;
-  destino: string;
-  encabezado: Record<string, unknown>;
-  lineas: LineaProformaOben[];
-  empaque: Array<{ referencia: string; valido: boolean; mensaje: string }>;
-  avisos: string[];
-  bloqueos: string[];
 }
 
 export interface MaestroComercialResultado {
