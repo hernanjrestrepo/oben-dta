@@ -8,9 +8,10 @@ import { AlertCircle, AlertTriangle, Briefcase, Loader2, RefreshCw, Search, Shie
 import { CasoDetalle } from './CasoDetalle';
 import { ConfigPanel, NuevaOc, SimuladorPanel } from './Paneles';
 import { ParametrizacionPanel } from './ParametrizacionPanel';
+import { Pipeline } from './Pipeline';
 import { ESTADOS, ESTADO_LABEL, EstadoBadge, SimuladoBadge, btnSecondary, fecha, inputCls } from './comun';
 
-type Tab = 'tablero' | 'casos' | 'nueva' | 'parametrizacion' | 'config';
+type Tab = 'pipeline' | 'tablero' | 'casos' | 'nueva' | 'parametrizacion' | 'config';
 
 const TIEMPOS: Array<[string, string]> = [
   ['ocAProforma', 'OC → Proforma'],
@@ -26,7 +27,7 @@ const TIEMPOS: Array<[string, string]> = [
  * fechas y cliente), casos con su bitácora, freno de mano y configuración.
  */
 export default function ComercialPage() {
-  const [tab, setTab] = useState<Tab>('tablero');
+  const [tab, setTab] = useState<Tab>('pipeline');
   const [filtros, setFiltros] = useState({ desde: '', hasta: '', cliente: '', estado: '' });
   const [tablero, setTablero] = useState<ComercialTablero | null>(null);
   const [casos, setCasos] = useState<ComercialCaso[]>([]);
@@ -59,7 +60,8 @@ export default function ComercialPage() {
   }, [aplicar, traer]);
 
   const tabs: Array<[Tab, string]> = [
-    ['tablero', 'Tablero'],
+    ['pipeline', 'Pipeline'],
+    ['tablero', 'Indicadores'],
     ['casos', `Casos${casos.length ? ` (${casos.length})` : ''}`],
     ['nueva', 'Nueva orden de compra'],
     ['parametrizacion', 'Parametrización de Oben'],
@@ -95,7 +97,7 @@ export default function ComercialPage() {
         ))}
       </div>
 
-      {(tab === 'tablero' || tab === 'casos') && (
+      {(tab === 'pipeline' || tab === 'tablero' || tab === 'casos') && (
         <div className="flex flex-col md:flex-row gap-2 md:items-end">
           <div>
             <label className="block text-xs text-gray-500">Desde</label>
@@ -267,6 +269,8 @@ export default function ComercialPage() {
           )}
         </div>
       )}
+
+      {tab === 'pipeline' && <Pipeline casos={casos} onAbrir={setAbierto} />}
 
       {tab === 'nueva' && (
         <NuevaOc
