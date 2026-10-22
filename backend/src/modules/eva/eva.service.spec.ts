@@ -65,6 +65,27 @@ function build(
     })),
   };
   const repo = { find: jest.fn(async () => []) };
+  const casosComercial = {
+    find: jest.fn(async () => [
+      {
+        cliente: 'PARADIXE — CLIENTE DEMO',
+        ocNumero: 'PARADIXE-0001',
+        estado: 'oc_recibida',
+        simulated: true,
+        numberPF: null,
+        numberOrderSales: null,
+        tipo: 'exportacion',
+        pais: 'PERU',
+        ocRecibidaEn: new Date('2026-10-22T20:00:00Z'),
+        fechaRequerida: '2026-11-21',
+        accionPendiente: { tipo: 'crear_proforma', detalle: 'Crear la Proforma en OBEN MAS' },
+        missing: [],
+        atencion: [],
+        lineas: [{ n: 1, codigoCliente: 'BOPP 15', codigoOben: 'SIM-SC15TN', kilos: 1000, anchoMm: 425 }],
+        eventos: [{ fecha: '2026-10-22T20:00:00.000Z', tipo: 'oc_recibida', detalle: 'Orden de compra recibida por correo' }],
+      },
+    ]),
+  };
   const ctx = {
     tenantId: T,
     tenantIdOrNull: T,
@@ -87,6 +108,7 @@ function build(
     ctx as never,
     audit as never,
     opts.sinCliente ? null : client,
+    casosComercial as never,
   );
   return { svc, pedidos, client, audit, authz, quotesService };
 }
@@ -131,6 +153,20 @@ describe('EvaService (MIA sobre Kimi, con Ollama de respaldo)', () => {
     expect(resultado.content).not.toMatch(/^ERROR/);
     expect(String(resultado.content)).toContain('11187');
     expect(String(resultado.content)).toContain('jose@oben.co');
+  });
+
+  it('consultar_casos_comercial: MIA ve la OC que llegó, su estado y que es simulada', async () => {
+    const { svc, pedidos } = build({
+      respuestas: [
+        respuesta([texto('Reviso.'), usar('consultar_casos_comercial', { buscar: 'paradixe' })], 'tool_use'),
+        respuesta([texto('Llegó la OC PARADIXE-0001: está "OC recibida" y es de prueba.')], 'end_turn'),
+      ],
+    });
+    const r = await svc.chat('¿llegó la orden de compra de Paradixe?');
+    expect(r.reply).toMatch(/PARADIXE-0001/);
+    const resultado = pedidos[1].at(-1) as { content: string };
+    expect(resultado.content).not.toMatch(/^ERROR/);
+    for (const dato of ['PARADIXE-0001', 'oc_recibida', '"simulado":true', 'SIM-SC15TN', 'Crear la Proforma']) expect(resultado.content).toContain(dato);
   });
 
   it('sin el permiso de la herramienta no consulta nada y se lo dice al modelo', async () => {

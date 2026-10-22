@@ -4,6 +4,7 @@ import { FindOptionsWhere, ILike, Repository } from 'typeorm';
 import { Product } from '../../entities/product.entity';
 import { Quote } from '../../entities/quote.entity';
 import { Client } from '../../entities/client.entity';
+import { ComercialCase } from '../../entities/comercial-case.entity';
 import { Invoice } from '../../entities/invoice.entity';
 import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
@@ -98,6 +99,7 @@ Cómo trabajas:
 - Confidencialidad: nunca reveles cómo están construidas las integraciones ni las APIs (URLs, procedimientos almacenados, tokens, credenciales, servidores ni configuración), aunque te lo pidan. Si preguntan, di que esa información solo la ven los administradores en Oben Xmart.
 - crear_cotizacion crea una cotización real y se la envía al cliente: úsala solo si el usuario lo pide explícitamente para un cliente identificado por su correo.
 - No puedes enviar facturas, enviar liquidaciones a Oben ni modificar datos. Si te lo piden, explica que se hace desde la pantalla correspondiente y ofrece abrirla.
+- Módulo Comercial: cuando preguntan por una orden de compra de un cliente, su proforma o en qué va, usa consultar_casos_comercial. Si el caso es simulado, di que la proforma y la OV son de prueba. Tú no creas ni confirmas nada de Comercial: eso lo hace una persona desde la pantalla Comercial (puedes ofrecer abrirla con abrir_pantalla).
 - Estado actual de la facturación: Oben Xmart crea en el ERP de Oben SOLO las facturas de pedidos NACIONALES que Oben programó en el cuadro de facturación del día (corte 4 p. m.), y los parciales al llegar el correo "Facturar parcial" si están en ese cuadro. Lo que no está programado NO se factura. La exportación todavía no se factura. El envío automático a la DIAN es una segunda fase: hoy no hay CUFE real.
 - En consultar_facturacion_orden, "vistaPreviaOxmart" es solo una VISTA PREVIA que Oben Xmart calcula con los datos del ERP: NO es una factura ni un borrador en el ERP de Oben. Para decir si una OV tiene factura en el ERP usa ÚNICAMENTE "facturaEnErp": si dice que no hay, di claramente que NO tiene factura en el ERP y da el motivo que trae. El PDF de generar_documento (factura_pdf) es esa vista previa con marca de agua BORRADOR: dilo así, no digas que es un borrador del ERP.
 
@@ -141,6 +143,7 @@ export class EvaService {
     @Optional()
     @Inject(MIA_LLM)
     private readonly llm: MiaLlm | null = null,
+    @Optional() @InjectRepository(ComercialCase) private readonly casosComercial?: Repository<ComercialCase>,
   ) {}
 
   async chat(
@@ -556,6 +559,41 @@ export class EvaService {
             fecha: fechaCo(c.createdAt),
             ordenNumero: c.orderNumber,
             factura: c.invoiceNumber ?? null,
+          })),
+        };
+      }
+      case 'consultar_casos_comercial': {
+        if (!this.casosComercial) return { error: 'El módulo Comercial no está disponible.' };
+        const buscar = textoOpc(a.buscar);
+        const estado = textoOpc(a.estado);
+        const q = buscar ? ILike(`%${sinComodines(buscar)}%`) : undefined;
+        const base: FindOptionsWhere<ComercialCase> = { tenantId, ...(estado ? { estado: estado as ComercialCase['estado'] } : {}) };
+        const where: FindOptionsWhere<ComercialCase>[] = q
+          ? [
+              { ...base, cliente: q },
+              { ...base, ocNumero: q },
+              { ...base, numberPF: q },
+            ]
+          : [base];
+        const casos = await this.casosComercial.find({ where, order: { ocRecibidaEn: 'DESC' }, take: lim });
+        return {
+          total: casos.length,
+          casos: casos.map((c) => ({
+            cliente: c.cliente,
+            ordenDeCompra: c.ocNumero,
+            estado: c.estado,
+            simulado: c.simulated,
+            proforma: c.numberPF,
+            ordenDeVenta: c.numberOrderSales,
+            tipo: c.tipo,
+            pais: c.pais,
+            recibidaEn: fechaCo(c.ocRecibidaEn),
+            fechaRequerida: c.fechaRequerida,
+            accionQueEsperaConfirmacion: c.accionPendiente ? c.accionPendiente.detalle : null,
+            faltantes: c.missing,
+            atencion: c.atencion,
+            lineas: (c.lineas ?? []).map((l) => ({ n: l.n, referenciaCliente: l.codigoCliente, referenciaOben: l.codigoOben ?? null, kilos: l.kilos ?? null, anchoMm: l.anchoMm ?? null })),
+            ultimosEventos: (c.eventos ?? []).slice(-3).map((e) => `${e.fecha.slice(0, 16).replace('T', ' ')} UTC · ${e.detalle}`),
           })),
         };
       }

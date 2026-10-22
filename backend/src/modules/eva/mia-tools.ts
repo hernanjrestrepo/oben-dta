@@ -177,6 +177,23 @@ export const MIA_TOOLS: Array<{
     },
   },
   {
+    permiso: 'orders.read',
+    tool: {
+      name: 'consultar_casos_comercial',
+      description:
+        'Casos del módulo Comercial: cada orden de compra (OC) que llega de un cliente y su recorrido hasta la orden de venta activa. Trae cliente, número de OC, estado (oc_recibida, sin_cubicar, cubicada, enviada_cliente, retenida, activa, cerrada, rechazada, anulada), proforma y OV si ya existen, la acción que espera confirmación, lo que falta o requiere atención, las líneas leídas de la orden (referencia de Oben, kilos, ancho) y los últimos eventos. Si "simulado" es true, la proforma y la OV son de prueba (OBEN MAS está simulado) y no existen en Oben. Úsala para "¿llegó la orden de compra de X?", "¿en qué va la OC-123?", "¿qué casos están esperando confirmación?".',
+      input_schema: {
+        type: 'object',
+        properties: {
+          buscar: { type: 'string', description: 'Cliente, número de OC o número de proforma.' },
+          estado: { type: 'string', description: 'Filtrar por estado del caso (p. ej. "retenida"). Vacío = los abiertos y los recientes.' },
+          limite,
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
     permiso: 'clients.read',
     tool: {
       name: 'consultar_clientes',
