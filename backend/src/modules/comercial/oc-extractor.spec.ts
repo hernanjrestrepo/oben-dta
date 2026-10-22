@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
 import { aKilos, aMicras, aMilimetros, parseNumero, unidadEspesor, unidadLongitud, unidadPeso } from './unidades';
-import { buscarEquivalencia, construirLinea, extraerConIa, extraerConReglas, textoDeAdjuntos, type EquivalenciaRef } from './oc-extractor';
+import { buscarEquivalencia, construirLinea, extraerConIa, extraerConReglas, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef } from './oc-extractor';
 
 const EQ: EquivalenciaRef[] = [
   { id: 'e1', clientCode: 'BOPP 3', obenCode: 'SC3' },
@@ -183,5 +183,21 @@ describe('extracción con IA (Ollama)', () => {
   it('si la IA no devuelve JSON válido, falla (y el servicio vuelve a la lectura por reglas)', async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ response: 'no es json' }) }) as never;
     await expect(extraerConIa(cfg, { texto: '', asunto: '', equivalencias: [], ejemplos: [] })).rejects.toThrow(/JSON válido/);
+  });
+});
+
+describe('sinLineasRepetidas (el correo y el adjunto traen las mismas líneas)', () => {
+  it('quita del adjunto lo que ya está igual en el cuerpo; lo distinto se queda', () => {
+    const cuerpo = ['Hola', '- BOPP 15, 1.000 kg, ancho 425 mm', '- BOPP MATE 20, 500 kg, ancho 60 cm'].join(String.fromCharCode(10));
+    const adjunto = ['ORDEN DE COMPRA', '- BOPP 15, 1.000 kg, ancho 425 mm', '   - bopp mate 20, 500 kg,  ancho 60 cm', '- CPP 25, 300 kg, ancho 500 mm'].join(String.fromCharCode(10));
+    const r = sinLineasRepetidas(cuerpo, adjunto);
+    expect(r.quitadas).toBe(2);
+    expect(r.texto).toContain('CPP 25, 300 kg');
+    expect(r.texto).not.toContain('BOPP 15');
+  });
+
+  it('dos líneas iguales DENTRO de la misma fuente no se tocan', () => {
+    const r = sinLineasRepetidas('Hola', ['- BOPP 15, 1.000 kg, ancho 425 mm', '- BOPP 15, 1.000 kg, ancho 425 mm'].join(String.fromCharCode(10)));
+    expect(r.quitadas).toBe(0);
   });
 });

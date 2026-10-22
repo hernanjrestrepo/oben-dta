@@ -53,6 +53,29 @@ export interface EjemploOc {
 
 const logger = new Logger('OcExtractor');
 
+/**
+ * Cuando el cliente escribe las líneas en el correo Y adjunta la orden con las mismas líneas, cada línea se leería
+ * dos veces (el doble de kilos). Se quitan del texto del adjunto las líneas que ya están, iguales, en el cuerpo.
+ * Devuelve el texto del adjunto sin repetidas y cuántas quitó.
+ */
+export function sinLineasRepetidas(cuerpo: string, textoAdjuntos: string): { texto: string; quitadas: number } {
+  const norm = (l: string) => l.trim().toLowerCase().replace(/^[\s\-*•\d.)|]+/, '').replace(/\s+/g, ' ');
+  const enCuerpo = new Set(cuerpo.split(/\r?\n/).map(norm).filter((l) => l.length > 8));
+  let quitadas = 0;
+  const texto = textoAdjuntos
+    .split(/\r?\n/)
+    .filter((l) => {
+      const n = norm(l);
+      if (n.length > 8 && enCuerpo.has(n)) {
+        quitadas++;
+        return false;
+      }
+      return true;
+    })
+    .join('\n');
+  return { texto, quitadas };
+}
+
 // ─── Texto de los adjuntos ─────────────────────────────────────────────────
 
 /** Texto legible de los adjuntos: PDF con texto, Excel y CSV/TXT. Imágenes y PDF escaneados NO (quedan "no leído"). */

@@ -5,7 +5,7 @@ import { ObenPlusMockAdapter } from '../integrations/hub/adapters/oben-plus.mock
 import { InMemoryObenPlusSimStore } from '../integrations/hub/oben-plus-sim.store';
 import type { ComercialCase } from '../../entities/comercial-case.entity';
 import { ComercialFlujoService, LISTA_CARTERA, LISTA_COPIA_PROFORMA, LISTA_CUSTOMER_SERVICE } from './comercial-flujo.service';
-import { ComercialIntakeService } from './comercial-intake.service';
+import { ComercialIntakeService, esDestinoDePrueba } from './comercial-intake.service';
 import { CLIENTE_DEMO, EQUIVALENCIAS_DEMO } from './comercial-simulador.service';
 
 const CTX = { tenantId: 't1', userId: 'u1' };
@@ -462,6 +462,11 @@ describe('ComercialFlujoService — flujo Comercial de punta a punta (reunión 2
       expect(caso.atencion.join(' ')).toMatch(/Candado: la Proforma o el caso son SIMULADOS/);
       expect(w.emails.some((e) => e.to === CLIENTE_DEMO.email)).toBe(false);
       expect(caso.nextCheckAt).toBeNull();
+    });
+
+    it('esDestinoDePrueba: dominios .example/.test y paradixe.xyz sí; un cliente o correo de Oben no', () => {
+      for (const ok of ['a@cliente-simulado.example', 'b@x.test', 'ceo@paradixe.xyz', 'CEO@PARADIXE.XYZ']) expect(esDestinoDePrueba(ok)).toBe(true);
+      for (const no of ['jorgerestrepo@obengroup.com', 'compras@amcor.com', 'x@paradixe.xyz.evil.com', 'sin-arroba']) expect(esDestinoDePrueba(no)).toBe(false);
     });
 
     it('idempotencia: un timeout al crear la Proforma exige verificar en OBEN MAS antes de reintentar', async () => {

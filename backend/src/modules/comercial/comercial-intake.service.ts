@@ -5,7 +5,7 @@ import { ClientsService } from '../clients/clients.service';
 import { EquivalencesService } from '../equivalences/equivalences.service';
 import type { Client } from '../../entities/client.entity';
 import type { CasoDestino, CasoLinea, ComercialCase } from '../../entities/comercial-case.entity';
-import { extraerConIa, extraerConReglas, normTexto, textoDeAdjuntos, type EquivalenciaRef, type OcAdjunto, type OcExtraccion } from './oc-extractor';
+import { extraerConIa, extraerConReglas, normTexto, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef, type OcAdjunto, type OcExtraccion } from './oc-extractor';
 import type { ComercialConfig } from './comercial-config';
 
 export interface OcEntrada {
@@ -28,6 +28,18 @@ export interface MaestroCliente {
 
 /** Dominios reservados para pruebas (RFC 2606): nunca pertenecen a un cliente real. */
 export const DOMINIO_DEMO_RE = /\.(example|test|invalid)$/i;
+
+/**
+ * Dominios PROPIOS de Paradixe: sirven para probar el ciclo con correos reales sin tocar a ningún cliente de Oben.
+ * El candado de "nunca enviar datos simulados a un cliente real" los trata como destinos de prueba.
+ */
+export const DOMINIOS_INTERNOS_PRUEBA = ['paradixe.xyz'];
+
+/** ¿Este correo es de un destino de prueba (dominio reservado o dominio interno de Paradixe)? */
+export function esDestinoDePrueba(email: string): boolean {
+  const dominio = (email.split('@')[1] ?? '').trim().toLowerCase();
+  return DOMINIO_DEMO_RE.test(dominio) || DOMINIOS_INTERNOS_PRUEBA.includes(dominio);
+}
 
 export const MAESTRO_SIMULADO_LABEL = 'Maestro del cliente (país y direcciones) desde el SIMULADOR de OBEN MAS';
 export const CLIENTE_DEMO_LABEL = 'Cliente de demostración (dominio de prueba): datos simulados';
@@ -64,7 +76,9 @@ export class ComercialIntakeService {
     }
 
     const adj = await textoDeAdjuntos(input.attachments ?? []);
-    const texto = [input.body, adj.texto].filter(Boolean).join('\n');
+    const unico = sinLineasRepetidas(input.body, adj.texto);
+    if (unico.quitadas > 0) adj.notas.push(`El correo y el adjunto traen las mismas líneas: se contaron una sola vez (${unico.quitadas} repetida(s) del adjunto).`);
+    const texto = [input.body, unico.texto].filter(Boolean).join('\n');
     const equivalencias: EquivalenciaRef[] = client
       ? (await this.equivalences.findAll(client.id)).map((e) => ({ id: e.id, clientCode: e.clientCode, obenCode: e.obenCode }))
       : [];

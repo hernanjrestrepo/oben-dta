@@ -21,7 +21,7 @@ import {
   type CasoLinea,
   ComercialCase,
 } from '../../entities/comercial-case.entity';
-import { ComercialIntakeService, DOMINIO_DEMO_RE, calcularMissing, faltantesLinea, type OcEntrada } from './comercial-intake.service';
+import { ComercialIntakeService, calcularMissing, esDestinoDePrueba, faltantesLinea, type OcEntrada } from './comercial-intake.service';
 import { horasHastaSiguiente, leerConfig, parseSeguimiento, type ComercialConfig, type ConfigLeida } from './comercial-config';
 import { clasificarRespuesta, type TipoRespuesta } from './comercial-respuesta';
 import { construirLinea, type OcAdjunto } from './oc-extractor';
@@ -499,7 +499,7 @@ export class ComercialFlujoService {
     const cc = uniq([caso.comercialEmail, ...copia.to, ...copia.cc].filter((x): x is string => !!x && x !== caso.contactoEmail));
     if (sim) {
       const { mode } = await this.hub.capabilities('email');
-      const destinatariosDemo = [caso.contactoEmail, ...cc].every((e) => DOMINIO_DEMO_RE.test(e.split('@')[1] ?? ''));
+      const destinatariosDemo = [caso.contactoEmail, ...cc].every((e) => esDestinoDePrueba(e));
       if (mode === 'real' && !destinatariosDemo) {
         return this.bloquearEnvio(
           caso,
