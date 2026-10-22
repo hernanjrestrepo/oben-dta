@@ -1154,3 +1154,24 @@ export interface MaestroComercialResultado {
   items: Array<Record<string, unknown>>;
   consultadoEn: string;
 }
+
+// --- Cuadro del día desde el Excel de SharePoint ----------------------------
+
+export interface FilaCuadroDia {
+  ov: number;
+  pf: string;
+  cliente: string;
+  statusOv: string;
+  kg: number | null;
+  tipo: 'completa' | 'parcial';
+  incluida: boolean;
+  motivo: string | null;
+}
+
+export interface CuadroDelDia {
+  fecha: string;
+  fuente: { archivo: string; hoja: string; encabezadoEnFila: number };
+  filas: FilaCuadroDia[];
+  incluidas: number;
+  excluidas: number;
+}

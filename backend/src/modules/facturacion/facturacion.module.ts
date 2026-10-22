@@ -17,6 +17,8 @@ import { FacturacionService } from './facturacion.service';
 import { FacturacionPdfService } from './facturacion-pdf.service';
 import { TrmService } from './trm.service';
 import { LiquidacionModule } from '../liquidacion/liquidacion.module';
+import { ConexionesModule } from '../conexiones/conexiones.module';
+import { CuadroDiarioService } from './cuadro-diario.service';
 
 @Module({
   imports: [
@@ -26,9 +28,10 @@ import { LiquidacionModule } from '../liquidacion/liquidacion.module';
     DistributionListsModule,
     IdempotencyModule,
     LiquidacionModule,
+    ConexionesModule,
   ],
   controllers: [FacturacionController, FacturasParcialesController, FacturacionProgramadaController],
-  providers: [FacturacionService, FacturacionPdfService, TrmService, FacturasParcialesService, FacturasEsperaProcessor],
+  providers: [FacturacionService, FacturacionPdfService, TrmService, FacturasParcialesService, FacturasEsperaProcessor, CuadroDiarioService],
   exports: [FacturacionService, FacturasParcialesService],
 })
 export class FacturacionModule {}

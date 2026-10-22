@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { FacturasParcialesService, fechaHoraBogota, type OrdenProgramada } from './facturas-parciales.service';
+import { CuadroDiarioService } from './cuadro-diario.service';
 
 class ProgramarDiaDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'La fecha debe venir como AAAA-MM-DD' })
@@ -23,7 +24,24 @@ class ProgramarDiaDto {
 export class FacturacionProgramadaController {
   private readonly logger = new Logger(FacturacionProgramadaController.name);
 
-  constructor(private readonly facturas: FacturasParcialesService) {}
+  constructor(
+    private readonly facturas: FacturasParcialesService,
+    private readonly cuadro: CuadroDiarioService,
+  ) {}
+
+  /** Cuadro del día leído del Excel de SharePoint (solo lectura). ?fecha=AAAA-MM-DD (por defecto hoy). */
+  @Get('desde-sharepoint')
+  @RequirePermission('invoices.read')
+  verCuadro(@Query('fecha') fecha?: string) {
+    return this.cuadro.ver(fecha || undefined);
+  }
+
+  /** Carga ese cuadro como programación del día. NO factura: facturar es una orden aparte. */
+  @Post('desde-sharepoint')
+  @RequirePermission('invoices.create')
+  cargarCuadro(@Body() dto: { fecha?: string }) {
+    return this.cuadro.cargar(dto?.fecha || undefined);
+  }
 
   @Get()
   @RequirePermission('invoices.read')

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type { EstadoFacturaParcial, FacturaParcial } from '@/types';
+import { CuadroDelDia } from './CuadroDelDia';
 import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Mail, Plus, ReceiptText, RefreshCw, Send } from 'lucide-react';
 
 function errMsg(err: unknown, fallback: string): string {
@@ -126,6 +127,8 @@ export default function FacturasParcialesPage() {
           <RefreshCw className="w-4 h-4" /> Actualizar
         </button>
       </div>
+
+      <CuadroDelDia puedeCargar={puedeFacturar} />
 
       {puedeFacturar && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-end gap-3">

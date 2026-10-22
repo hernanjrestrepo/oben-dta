@@ -9,7 +9,7 @@ import {
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
-  ConexionMicrosoft, DiagnosticoSharepoint, MaestroComercialResultado,
+  ConexionMicrosoft, CuadroDelDia, DiagnosticoSharepoint, MaestroComercialResultado,
   FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, CambioRuta, OrdenReciente, ProformaOrdenes, ProformaPendienteComex,
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
@@ -606,6 +606,18 @@ class ApiClient {
   }
 
   // Facturas parciales (WO-023)
+  /** Cuadro del día leído del Excel de SharePoint (solo lectura). */
+  async getCuadroDelDia(fecha?: string): Promise<CuadroDelDia> {
+    const { data } = await this.client.get<CuadroDelDia>('/facturacion-programada/desde-sharepoint', { params: { fecha: fecha || undefined }, timeout: 120_000 });
+    return data;
+  }
+
+  /** Carga ese cuadro como programación del día. NO factura. */
+  async cargarCuadroDelDia(fecha?: string): Promise<CuadroDelDia & { cargadas: number }> {
+    const { data } = await this.client.post<CuadroDelDia & { cargadas: number }>('/facturacion-programada/desde-sharepoint', { fecha }, { timeout: 120_000 });
+    return data;
+  }
+
   async getFacturasParciales(): Promise<FacturaParcial[]> {
     const { data } = await this.client.get<FacturaParcial[]>('/facturacion/parciales');
     return data;
