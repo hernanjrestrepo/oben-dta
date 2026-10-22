@@ -1146,6 +1146,64 @@ export interface DiagnosticoSharepoint extends ConexionMicrosoft {
 
 // --- Maestros comerciales de Oben ------------------------------------------
 
+/** Proforma creada en OBEN MAS con las APIs comerciales (POST /comercial/proformas-oben). */
+export interface ProformaOben {
+  id: string;
+  servidor: 'pruebas' | 'produccion';
+  ordenCompra: string;
+  /** Número OFICIAL de la proforma (Number PF): con el que Comercial hace seguimiento. */
+  numeroPF: string | null;
+  /** CodSec_SalesOrderHeadPF: código interno del encabezado en Oben. */
+  codigoInterno: number | null;
+  estado: 'pendiente' | 'encabezado' | 'creada' | 'ov_creada' | 'activa' | 'revisar';
+  cliente: string | null;
+  destino: string | null;
+  encabezado: Record<string, unknown>;
+  lineas: LineaProformaOben[];
+  pasos: Array<{ paso: string; linea?: number; ok: boolean; respuesta: string; en: string; por?: string | null }>;
+  error: string | null;
+  creadoPorNombre: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LineaProformaOben {
+  codSecProduct: number;
+  referencia: string;
+  linea: string | null;
+  kilos: number;
+  precio: number;
+  codSecTariff: number;
+  partida: string | null;
+  etiqueta: string;
+  numeroParte: string;
+  creada: boolean;
+}
+
+export interface ProformaObenEntrada {
+  cliente: number;
+  direccion: number;
+  ordenCompra: string;
+  fechaEntrega: string;
+  fechaDespacho: string;
+  contenedor?: string;
+  pesoBruto?: number;
+  notas?: string;
+  lineas: Array<{ referencia?: string; codSecProduct?: number; kilos: number; precio: number; codSecTariff?: number }>;
+}
+
+export interface ProformaObenVistaPrevia {
+  servidor: 'pruebas' | 'produccion';
+  simulado: boolean;
+  cliente: string;
+  destino: string;
+  encabezado: Record<string, unknown>;
+  lineas: LineaProformaOben[];
+  empaque: Array<{ referencia: string; valido: boolean; mensaje: string }>;
+  avisos: string[];
+  bloqueos: string[];
+}
+
 export interface MaestroComercialResultado {
   maestro: string;
   descripcion: string;

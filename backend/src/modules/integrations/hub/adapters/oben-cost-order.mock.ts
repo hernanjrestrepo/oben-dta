@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { MockAdapterBase } from '../mock-adapter-base';
 import { AdapterCapability } from '../adapter.types';
 import { SCENARIO_PROVIDER, ScenarioProvider } from '../scenario.types';
-import { esMaestroComercial } from './oben-comercial';
+import { esEscrituraComercial, esMaestroComercial } from './oben-comercial';
 
 /** En el simulador, Proforma = Orden de venta + este desfase (biyectivo: Liquidación resuelve el país desde la OV). */
 const PF_OFFSET = 200;
@@ -63,6 +63,11 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
         method: 'read',
         description: 'Maestros comerciales de Oben (clientes, referencias, partidas, ciudades) — mock con datos ficticios',
       },
+      {
+        operation: 'comercial.escribir',
+        method: 'write',
+        description: 'Crea la proforma (encabezado, detalle, OV, activar) — mock, no escribe nada real',
+      },
     ];
   }
 
@@ -107,6 +112,12 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
             return [];
         }
       }, 'comercial.consultar'),
+      'comercial.escribir': this.wrap(async (args) => {
+        if (!esEscrituraComercial(args.paso)) throw new Error('BUSINESS_ERROR: paso comercial desconocido');
+        // SIMULADO: el encabezado devuelve un código interno y un número de PF de ejemplo; los demás pasos, "OK".
+        const n = Math.floor(Math.random() * 9000);
+        return args.paso === 'encabezado' ? { ok: true, codigoInterno: 90000 + n, numeroPF: `SIM-${80000 + n}` } : { ok: true };
+      }, 'comercial.escribir'),
     };
   }
 

@@ -9,6 +9,7 @@ import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { ComercialCase } from '../../entities/comercial-case.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import { Client } from '../../entities/client.entity';
+import { ProformaOben } from '../../entities/proforma-oben.entity';
 import { ComercialController } from './comercial.controller';
 import { ComercialCasosController } from './comercial-casos.controller';
 import { ComercialService } from './comercial.service';
@@ -18,10 +19,12 @@ import { ComercialProcessorService } from './comercial-processor.service';
 import { ComercialSimuladorService } from './comercial-simulador.service';
 import { ComercialMaestrosService } from './comercial-maestros.service';
 import { ComercialMaestrosController } from './comercial-maestros.controller';
+import { ProformasObenService } from './proformas-oben.service';
+import { ProformasObenController } from './proformas-oben.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ComercialCase, Tenant, Client]),
+    TypeOrmModule.forFeature([ComercialCase, Tenant, Client, ProformaOben]),
     IntegrationHubModule,
     AuthModule,
     ClientsModule,
@@ -29,8 +32,8 @@ import { ComercialMaestrosController } from './comercial-maestros.controller';
     DistributionListsModule,
     IdempotencyModule,
   ],
-  controllers: [ComercialController, ComercialCasosController, ComercialMaestrosController],
-  providers: [ComercialService, ComercialIntakeService, ComercialFlujoService, ComercialProcessorService, ComercialSimuladorService, ComercialMaestrosService],
-  exports: [ComercialService, ComercialFlujoService, ComercialMaestrosService],
+  controllers: [ComercialController, ComercialCasosController, ComercialMaestrosController, ProformasObenController],
+  providers: [ComercialService, ComercialIntakeService, ComercialFlujoService, ComercialProcessorService, ComercialSimuladorService, ComercialMaestrosService, ProformasObenService],
+  exports: [ComercialService, ComercialFlujoService, ComercialMaestrosService, ProformasObenService],
 })
 export class ComercialModule {}

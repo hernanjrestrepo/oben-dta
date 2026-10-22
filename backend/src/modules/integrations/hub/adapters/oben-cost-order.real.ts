@@ -1,7 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { RealAdapterBase } from '../real-adapter-base';
 import { AdapterCapability, BaseAdapterConfig } from '../adapter.types';
-import { APIS_COMERCIALES, COMERCIAL_URL_PRUEBAS, esMaestroComercial } from './oben-comercial';
+import {
+  APIS_COMERCIALES,
+  COMERCIAL_URL_PRUEBAS,
+  ESCRITURAS_COMERCIALES,
+  esEscrituraComercial,
+  esMaestroComercial,
+  resultadoEscritura,
+  valorEncabezado,
+} from './oben-comercial';
 
 /**
  * APICrearInvoiceParadixe en PRODUCCIÓN: José (2026-10-06) pidió cambiar de
@@ -138,6 +146,11 @@ export class ObenCostOrderRealAdapter extends RealAdapterBase {
         method: 'read',
         description: 'Maestros comerciales de Oben: clientes, referencias, partidas, ciudades, validación de empaque y parametrización (API real Oben)',
       },
+      {
+        operation: 'comercial.escribir',
+        method: 'write',
+        description: 'Crea la proforma en OBEN MAS: encabezado, detalle, orden de venta y activación (API real Oben)',
+      },
     ];
   }
 
@@ -161,7 +174,25 @@ export class ObenCostOrderRealAdapter extends RealAdapterBase {
         this.consultarLiquidacion(args),
       'factura.crear': (args: Record<string, unknown>) => this.crearFactura(args),
       'comercial.consultar': (args: Record<string, unknown>) => this.consultarComercial(args),
+      'comercial.escribir': (args: Record<string, unknown>) => this.escribirComercial(args),
     };
+  }
+
+  /**
+   * Escritura comercial (encabezado, detalle, OV o activar). Envía solo los parámetros documentados, como
+   * encabezados limpios, y valida la respuesta: Oben contesta 200 aunque rechace (el motivo va en el texto).
+   */
+  private async escribirComercial(args: Record<string, unknown>): Promise<unknown> {
+    this.assertConfigured();
+    if (!esEscrituraComercial(args.paso)) throw new Error('BUSINESS_ERROR: paso comercial desconocido');
+    const def = ESCRITURAS_COMERCIALES[args.paso];
+    const valores = (args.valores && typeof args.valores === 'object' ? args.valores : {}) as Record<string, unknown>;
+    const faltan = def.parametros.filter((p) => valores[p] === undefined || valores[p] === null);
+    if (faltan.length) throw new Error(`BUSINESS_ERROR: faltan parámetros: ${faltan.join(', ')}`);
+    const headers = Object.fromEntries(def.parametros.map((p) => [p, valorEncabezado(valores[p])]));
+    const base = String(this.cfg.comercialUrl ?? COMERCIAL_URL_PRUEBAS).replace(/\/+$/, '');
+    const data = await this.httpJson<unknown>(`${base}/${def.api}`, { method: 'POST' }, { Authtoken: this.cfg.authToken!, ...headers });
+    return resultadoEscritura(args.paso, data);
   }
 
   /** Consulta una API comercial (solo lectura); los parámetros van como encabezados, como en el resto de Oben. */

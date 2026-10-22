@@ -9,7 +9,7 @@ import {
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
-  ConexionMicrosoft, CuadroDelDia, DiagnosticoSharepoint, MaestroComercialResultado,
+  ConexionMicrosoft, CuadroDelDia, DiagnosticoSharepoint, MaestroComercialResultado, ProformaOben, ProformaObenEntrada, ProformaObenVistaPrevia,
   FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, CambioRuta, OrdenReciente, ProformaOrdenes, ProformaPendienteComex,
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
@@ -500,6 +500,29 @@ class ApiClient {
   /** Maestro de Oben (clientes, productos, partidas, ciudades). ?buscar=texto */
   async getMaestroComercial(maestro: 'clientes' | 'productos' | 'partidas' | 'ciudades', buscar = '', limite = 100): Promise<MaestroComercialResultado> {
     const { data } = await this.client.get<MaestroComercialResultado>(`/comercial/maestros/${maestro}`, { params: { buscar: buscar || undefined, limite } });
+    return data;
+  }
+
+  /** Proformas creadas en OBEN MAS con las APIs comerciales. */
+  async getProformasOben(): Promise<ProformaOben[]> {
+    const { data } = await this.client.get<ProformaOben[]>('/comercial/proformas-oben');
+    return data;
+  }
+
+  /** Arma la proforma con los maestros de Oben y valida el empaque. No escribe nada en Oben. */
+  async vistaPreviaProformaOben(entrada: ProformaObenEntrada): Promise<ProformaObenVistaPrevia> {
+    const { data } = await this.client.post<ProformaObenVistaPrevia>('/comercial/proformas-oben/vista-previa', entrada, { timeout: 120_000 });
+    return data;
+  }
+
+  /** Crea encabezado y detalle en OBEN MAS. */
+  async crearProformaOben(entrada: ProformaObenEntrada): Promise<ProformaOben> {
+    const { data } = await this.client.post<ProformaOben>('/comercial/proformas-oben', entrada, { timeout: 180_000 });
+    return data;
+  }
+
+  async accionProformaOben(id: string, accion: 'reintentar' | 'orden-venta' | 'activar', verificado = false): Promise<ProformaOben> {
+    const { data } = await this.client.post<ProformaOben>(`/comercial/proformas-oben/${id}/${accion}`, accion === 'reintentar' ? { verificado } : {}, { timeout: 180_000 });
     return data;
   }
 

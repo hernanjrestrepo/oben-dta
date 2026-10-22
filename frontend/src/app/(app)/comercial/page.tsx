@@ -8,10 +8,11 @@ import { AlertCircle, AlertTriangle, Briefcase, Loader2, RefreshCw, Search, Shie
 import { CasoDetalle } from './CasoDetalle';
 import { ConfigPanel, NuevaOc, SimuladorPanel } from './Paneles';
 import { ParametrizacionPanel } from './ParametrizacionPanel';
+import { ProformasObenPanel } from './ProformasObenPanel';
 import { Pipeline } from './Pipeline';
 import { ESTADOS, ESTADO_LABEL, EstadoBadge, SimuladoBadge, btnSecondary, fecha, inputCls } from './comun';
 
-type Tab = 'pipeline' | 'tablero' | 'casos' | 'nueva' | 'parametrizacion' | 'config';
+type Tab = 'pipeline' | 'tablero' | 'casos' | 'nueva' | 'proformas' | 'parametrizacion' | 'config';
 
 const TIEMPOS: Array<[string, string]> = [
   ['ocAProforma', 'OC → Proforma'],
@@ -64,6 +65,7 @@ export default function ComercialPage() {
     ['tablero', 'Indicadores'],
     ['casos', `Casos${casos.length ? ` (${casos.length})` : ''}`],
     ['nueva', 'Nueva orden de compra'],
+    ['proformas', 'Proformas en OBEN MAS'],
     ['parametrizacion', 'Parametrización de Oben'],
     ['config', 'Configuración'],
   ];
@@ -281,6 +283,7 @@ export default function ComercialPage() {
         />
       )}
 
+      {tab === 'proformas' && <ProformasObenPanel />}
       {tab === 'parametrizacion' && <ParametrizacionPanel />}
 
       {tab === 'config' && <ConfigPanel />}
