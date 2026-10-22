@@ -72,6 +72,10 @@ services:
       MS_MAIL_OAUTH_CLIENT_ID: ${MS_MAIL_OAUTH_CLIENT_ID:-}
       MS_MAIL_OAUTH_CLIENT_SECRET: ${MS_MAIL_OAUTH_CLIENT_SECRET:-}
       MS_MAIL_OAUTH_TENANT_ID: ${MS_MAIL_OAUTH_TENANT_ID:-}
+      # App de Microsoft 365 SOLO para leer archivos de SharePoint (el cuadro diario). Distinta de la del correo.
+      MS_SHAREPOINT_CLIENT_ID: ${MS_SHAREPOINT_CLIENT_ID:-}
+      MS_SHAREPOINT_CLIENT_SECRET: ${MS_SHAREPOINT_CLIENT_SECRET:-}
+      MS_SHAREPOINT_TENANT_ID: ${MS_SHAREPOINT_TENANT_ID:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

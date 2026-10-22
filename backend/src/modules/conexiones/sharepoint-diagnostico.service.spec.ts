@@ -18,8 +18,11 @@ function armar(rutas: (url: string) => Response) {
 describe('SharepointDiagnosticoService', () => {
   const env = { ...process.env };
   beforeEach(() => {
+    process.env.MS_SHAREPOINT_CLIENT_ID = '480c69f5-d544-4413-be7b-cb2827e73c70';
+    process.env.MS_SHAREPOINT_CLIENT_SECRET = 'secreto-que-nunca-sale';
+    process.env.MS_SHAREPOINT_TENANT_ID = 'b8ea9857-a73b-4e03-9daa-0d39c6bcc284';
     process.env.MS_MAIL_OAUTH_CLIENT_ID = '7b76a249-a8d6-44a8-bc64-ee91b01e2e09';
-    process.env.MS_MAIL_OAUTH_CLIENT_SECRET = 'secreto-que-nunca-sale';
+    process.env.MS_MAIL_OAUTH_CLIENT_SECRET = 'otro-secreto';
     process.env.MS_MAIL_OAUTH_TENANT_ID = 'b8ea9857-a73b-4e03-9daa-0d39c6bcc284';
   });
   afterAll(() => {
@@ -33,7 +36,8 @@ describe('SharepointDiagnosticoService', () => {
     );
     const d = await svc.probar();
     expect(d.resultado).toBe('sin_permiso');
-    expect(d.app).toMatchObject({ clientId: '7b76a249-a8d6-44a8-bc64-ee91b01e2e09', nombre: 'og-smtp-oauth' });
+    expect(d.app).toMatchObject({ clientId: '480c69f5-d544-4413-be7b-cb2827e73c70', nombre: 'og-smtp-oauth' });
+    expect(d.appCorreo.clientId).toBe('7b76a249-a8d6-44a8-bc64-ee91b01e2e09'); // la del correo es OTRA app
     expect(d.buzonCorreo).toBe('oben.xmart@obengroup.com');
     expect(d.token?.permisos).toEqual(['Mail.ReadWrite', 'Mail.Read', 'Mail.Send']);
     expect(d.token?.permisosSharepoint).toEqual([]);

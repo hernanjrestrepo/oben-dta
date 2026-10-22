@@ -67,6 +67,18 @@ export class MicrosoftAppTokenService {
   }
 }
 
+/**
+ * App de Microsoft 365 SOLO para leer archivos de SharePoint (el cuadro diario de facturación). Es otra aplicación
+ * que la del correo (Hernán, 22-oct): permisos separados (Sites.Selected vs Mail.*). `null` si falta alguna variable.
+ */
+export function readSharepointAppCredentialsFromEnv(): MicrosoftAppCredentials | null {
+  const clientId = process.env.MS_SHAREPOINT_CLIENT_ID;
+  const clientSecret = process.env.MS_SHAREPOINT_CLIENT_SECRET;
+  const azureTenantId = process.env.MS_SHAREPOINT_TENANT_ID;
+  if (!clientId || !clientSecret || !azureTenantId) return null;
+  return { clientId, clientSecret, azureTenantId, scope: 'https://graph.microsoft.com/.default' };
+}
+
 /** Lee las credenciales de app Microsoft desde variables de entorno. `null` si falta alguna. */
 export function readMicrosoftAppCredentialsFromEnv(): MicrosoftAppCredentials | null {
   const clientId = process.env.MS_MAIL_OAUTH_CLIENT_ID;

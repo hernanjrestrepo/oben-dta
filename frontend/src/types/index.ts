@@ -1122,6 +1122,7 @@ export interface CuadroIntegracion {
 
 export interface ConexionMicrosoft {
   app: { clientId: string | null; azureTenantId: string | null; nombre: string | null; secreto: string; autenticacion: string };
+  appCorreo: { clientId: string | null; nombre: string };
   buzonCorreo: string | null;
   archivo: { nombre: string; sitio: string; url: string };
 }

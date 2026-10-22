@@ -81,13 +81,16 @@ export default function ConexionesPage() {
       <div className="grid md:grid-cols-2 gap-4">
         <section className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
-            <KeyRound className="w-4 h-4 text-[#F47735]" /> Aplicación con la que entra el sistema
+            <KeyRound className="w-4 h-4 text-[#F47735]" /> Aplicación que lee el archivo (SharePoint)
           </h2>
           <Dato k="Nombre en Microsoft" v={c?.app.nombre ?? (diag ? null : 'se ve al probar')} />
           <Dato k="Application (client) ID" v={c?.app.clientId ?? null} mono />
           <Dato k="Tenant de Microsoft" v={c?.app.azureTenantId ?? null} mono />
           <Dato k="Secreto" v={c?.app.secreto ?? null} />
           <p className="mt-3 text-xs text-gray-600 bg-gray-50 rounded-lg p-3">{c?.app.autenticacion}</p>
+          <p className="mt-2 text-xs text-gray-500">
+            El correo usa <b>otra</b> aplicación (ID <span className="font-mono">{c?.appCorreo.clientId ?? '—'}</span>) con permisos de correo; no sirve para SharePoint.
+          </p>
         </section>
 
         <section className="bg-white rounded-xl border border-gray-200 p-5">

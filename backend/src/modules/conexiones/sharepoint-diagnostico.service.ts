@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
-import { readMicrosoftAppCredentialsFromEnv } from '../../common/microsoft-oauth/microsoft-app-token.service';
+import { readMicrosoftAppCredentialsFromEnv, readSharepointAppCredentialsFromEnv } from '../../common/microsoft-oauth/microsoft-app-token.service';
 import { Tenant } from '../../entities/tenant.entity';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -32,6 +32,7 @@ export interface DiagnosticoSharepoint {
   resultado: 'ok' | 'sin_credenciales' | 'sin_token' | 'sin_permiso' | 'no_encontrado' | 'error';
   /** Qué pasó / qué significa / qué hacer (en palabras de negocio). */
   explicacion: { quePaso: string; queSignifica: string; queHacer: string };
+  /** App SOLO para leer el archivo en SharePoint (permiso Sites.Selected). */
   app: {
     clientId: string | null;
     azureTenantId: string | null;
@@ -40,6 +41,8 @@ export interface DiagnosticoSharepoint {
     secreto: string;
     autenticacion: string;
   };
+  /** App del correo (Mail.*): otra aplicación, con otros permisos. */
+  appCorreo: { clientId: string | null; nombre: string };
   buzonCorreo: string | null;
   archivo: { nombre: string; sitio: string; url: string };
   token: { obtenido: boolean; emitido: string | null; permisos: string[]; permisosSharepoint: string[] } | null;
@@ -68,8 +71,9 @@ export class SharepointDiagnosticoService {
   ) {}
 
   /** Lo que se puede mostrar sin llamar a Microsoft: qué app, qué buzón, qué archivo. */
-  async configuracion(): Promise<Pick<DiagnosticoSharepoint, 'app' | 'buzonCorreo' | 'archivo'>> {
-    const c = readMicrosoftAppCredentialsFromEnv();
+  async configuracion(): Promise<Pick<DiagnosticoSharepoint, 'app' | 'appCorreo' | 'buzonCorreo' | 'archivo'>> {
+    const c = readSharepointAppCredentialsFromEnv();
+    const correo = readMicrosoftAppCredentialsFromEnv();
     const t = await this.tenants.findOne({ where: { id: this.ctx.tenantId } });
     const email = (t?.integrationConfig as Record<string, unknown> | undefined)?.email as Record<string, unknown> | undefined;
     const imap = email?.imap as Record<string, unknown> | undefined;
@@ -80,10 +84,11 @@ export class SharepointDiagnosticoService {
         clientId: c?.clientId ?? null,
         azureTenantId: c?.azureTenantId ?? null,
         nombre: null,
-        secreto: c ? 'Configurado en el servidor de Oben Xmart (archivo .env, variable MS_MAIL_OAUTH_CLIENT_SECRET). No se muestra.' : 'NO configurado en el servidor.',
+        secreto: c ? 'Configurado en el servidor de Oben Xmart (archivo .env, variable MS_SHAREPOINT_CLIENT_SECRET). No se muestra.' : 'NO configurado en el servidor (MS_SHAREPOINT_*).',
         autenticacion:
           'La app entra como APLICACIÓN (OAuth2 client_credentials con Client ID + secreto), sin usuario ni contraseña. Por eso compartir el archivo con una persona no le da acceso: el permiso se le da a la app en Microsoft Entra ID.',
       },
+      appCorreo: { clientId: correo?.clientId ?? null, nombre: 'App del correo (Mail.Read / Mail.Send): otra aplicación, no se usa para SharePoint' },
       buzonCorreo: typeof imap?.user === 'string' ? imap.user : null,
       archivo: { nombre: ARCHIVO_CUADRO_POR_DEFECTO.nombre, sitio: `${ARCHIVO_CUADRO_POR_DEFECTO.host}${ARCHIVO_CUADRO_POR_DEFECTO.sitio}`, url },
     };
@@ -124,13 +129,13 @@ export class SharepointDiagnosticoService {
   }
 
   private async ejecutar(d: DiagnosticoSharepoint): Promise<void> {
-    const c = readMicrosoftAppCredentialsFromEnv();
+    const c = readSharepointAppCredentialsFromEnv();
     if (!c) {
       d.resultado = 'sin_credenciales';
       d.explicacion = {
-        quePaso: 'El servidor de Oben Xmart no tiene configurada la app de Microsoft 365 (faltan MS_MAIL_OAUTH_*).',
-        queSignifica: 'Sin app no se puede pedir permiso a Microsoft para nada (ni correo ni SharePoint).',
-        queHacer: 'Configurar Client ID, Tenant ID y secreto de la app en el .env del servidor.',
+        quePaso: 'El servidor de Oben Xmart no tiene configurada la app de SharePoint (faltan MS_SHAREPOINT_*).',
+        queSignifica: 'La app del correo es otra y no tiene permiso sobre SharePoint: hace falta la app de archivos.',
+        queHacer: 'Configurar Client ID, Tenant ID y secreto de la app de SharePoint en el .env del servidor.',
       };
       return;
     }
@@ -230,7 +235,7 @@ export class SharepointDiagnosticoService {
         : {
             quePaso: `Microsoft le entregó a la app solo estos permisos: ${permisos.join(', ') || '(ninguno)'}. Ninguno es de SharePoint, y SharePoint respondió "acceso denegado".`,
             queSignifica: 'El permiso para leer el Excel no está dado a ESTA app (puede estar dado a otra app, como permiso "delegado" de usuario, o sin consentimiento de administrador).',
-            queHacer: `TI de Oben: en Entra ID → App registrations → ${d.app.nombre ?? 'la app'} (${c.clientId}) → API permissions: agregar Microsoft Graph → Application → Sites.Selected, dar "Grant admin consent" y darle lectura sobre el sitio.`,
+            queHacer: `TI de Oben: en Entra ID → App registrations → ${d.app.nombre ?? 'la app'} (${c.clientId}) → API permissions: agregar Microsoft Graph → Application → Sites.Selected y dar "Grant admin consent"; después darle lectura sobre el sitio CO-OBC-Comercial-Pelicula.`,
           };
       return;
     }
