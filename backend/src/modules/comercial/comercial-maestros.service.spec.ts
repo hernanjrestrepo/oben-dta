@@ -46,9 +46,17 @@ describe('maestros comerciales de Oben (APIs del Excel comercial, servidor de pr
     await expect(armar(() => ({ ok: true, data: 'OK' })).svc.validarEmpaque({ codSecEntity: 0, codSecEntityAddress: 1, codSecProduct: 1, codSecCity: 1 })).rejects.toThrow(/codSecEntity/);
   });
 
-  it('la parametrización rechazada por Oben se explica (pendiente con José)', async () => {
+  it('la parametrización rechazada por Oben se explica: el destino debe ser exactamente el Target_Customer', async () => {
     const { svc } = armar(() => ({ ok: false, error: 'HTTP 400: No se pudo consultar con los parámetros suministrados' }));
-    await expect(svc.parametrizacion({ codSecEntity: 11, targetCustomer: 'X' })).rejects.toThrow(/TargetCustomer/);
+    await expect(svc.parametrizacion({ codSecEntity: 11, targetCustomer: 'X' })).rejects.toThrow(/Target_Customer/);
+  });
+
+  it('parametrización (ejemplo de José, 22-oct): devuelve la primera fila con condición comercial, moneda, Incoterm y puerto', async () => {
+    const fila = { CodSec_CommercialCondition: 25, Condicion_Comercial: '90 DAYS FROM DATE OF BL', CodSec_Currency: 1, Incoterms: 'DDP', CiudadPuertoDestino: 'NEW YORK' };
+    const { svc } = armar(() => ({ ok: true, data: [fila] }));
+    await expect(svc.parametrizacion({ codSecEntity: 9995, targetCustomer: 'ALADDIN PACKAGING LLC.' })).resolves.toEqual({ datos: fila, simulado: false });
+    const { svc: sinDatos } = armar(() => ({ ok: true, data: [] }));
+    await expect(sinDatos.parametrizacion({ codSecEntity: 9995, targetCustomer: 'X' })).resolves.toMatchObject({ datos: null });
   });
 });
 

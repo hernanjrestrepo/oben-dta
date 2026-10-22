@@ -1142,3 +1142,14 @@ export interface DiagnosticoSharepoint extends ConexionMicrosoft {
   pasos: PasoDiagnostico[];
   hojas: Array<{ nombre: string; rango: string | null; filas: number | null; columnas: number | null }>;
 }
+
+// --- Maestros comerciales de Oben ------------------------------------------
+
+export interface MaestroComercialResultado {
+  maestro: string;
+  descripcion: string;
+  simulado: boolean;
+  total: number;
+  items: Array<Record<string, unknown>>;
+  consultadoEn: string;
+}

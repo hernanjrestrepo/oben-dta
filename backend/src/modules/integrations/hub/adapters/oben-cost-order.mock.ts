@@ -87,7 +87,7 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
         // Misma forma que las APIs reales del servidor de pruebas (20-oct), con datos ficticios.
         switch (args.maestro) {
           case 'clientes':
-            return [1, 2, 3].map((i) => ({ CodSec_Entity: 900 + i, Nombre_Cliente: `CLIENTE DEMO ${i} S.A.S.`, Tipo_Documento: 'NIT', Nro_Documento: `90000000${i}`, Pais_Cliente: i === 3 ? 'USA' : 'COLOMBIA', CodSed_CustomerAddress: 5000 + i, Cliente_Destino: `CLIENTE DEMO ${i} S.A.S.`, Direccion_Destino: `Calle ${i} # 1-23` }));
+            return [1, 2, 3].map((i) => ({ CodSec_Entity: 900 + i, Nombre_Cliente: `CLIENTE DEMO ${i} S.A.S.`, Tipo_Documento: 'NIT', Nro_Documento: `90000000${i}`, Pais_Cliente: i === 3 ? 'USA' : 'COLOMBIA', CodSed_CustomerAddress: 5000 + i, Target_Customer: `CLIENTE DEMO ${i} S.A.S.`, Direccion_Destino: `Calle ${i} # 1-23` }));
           case 'productos':
             return [1, 2].map((i) => ({ CodSec_Prod: 7000 + i, CodSec_LineFilm: 100 + i, Linea: i === 1 ? 'BOPP' : 'PET', Pelicula: i === 1 ? 'SC---0015TN' : 'ET---0012RT', Referencia: `REF-DEMO-${i}`, Ancho: 600 + i * 100, CodSec_Core: 1, Core: '6', CodSec_Diametro: 1, Diametro: '760' }));
           case 'partidas':
@@ -96,6 +96,13 @@ export class ObenCostOrderMockAdapter extends MockAdapterBase {
             return [{ CodSec_City: 1, Ciudad: 'BARRANQUILLA', CodSec_State: 1, Estado: 'ATLANTICO', CodSec_Country: 1, Pais: 'COLOMBIA' }];
           case 'validarEmpaque':
             return 'OK';
+          case 'parametrizacion': {
+            // Misma forma que la real (ejemplo de José, 22-oct: CodSecEntity 9995 + TargetCustomer 'ALADDIN PACKAGING LLC.'), datos ficticios.
+            const destino = String((args.parametros as Record<string, unknown> | undefined)?.targetCustomer ?? 'CLIENTE DEMO');
+            return [
+              { CodSec_CommercialCondition: 25, Condicion_Comercial: '90 DAYS FROM DATE OF BL', CodSec_Currency: 1, Moneda: 'AMERICA (UNITED STATES OF AMERICA), DOLLARS', CodSec_EtiquetaBobina: 5, EtiquetaBobina: 'ETIQUETA ESTANDAR', CodSec_EtiquetaPallet: 1, EtiquetaPallet: 'ETIQUETA ESTANDAR', CodSec_Incoterms: 7, Incoterms: 'DDP', CodSec_CityPort: 1186, CiudadPuertoDestino: 'NEW YORK', CodSec_CountryPort: 19, PaisPuertoDestino: 'USA', CodSec_City: 1186, Ciudad: 'NEW YORK', CodSec_Country: 19, Pais: 'USA', Desde: 'CARTAGENA - COLOMBIA', Hasta: `${destino} (SIMULADO)`, Peso_Bruto_Maximo: 24000, Nota_Etiqueta: destino, Nota_Operativa: 'SIMULADO: MAXIMO 1 EMPALME POR BOBINA', Nota_Especial: 'SIMULADO', Consignado: '', Notificado: '', Correo_Cliente: 'cliente.demo@example.com', Correo_Comercial: 'comercial.demo@example.com' },
+            ];
+          }
           default:
             return [];
         }

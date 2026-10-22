@@ -7,9 +7,10 @@ import type { ComercialCaso, ComercialTablero } from '@/types';
 import { AlertCircle, AlertTriangle, Briefcase, Loader2, RefreshCw, Search, ShieldAlert } from 'lucide-react';
 import { CasoDetalle } from './CasoDetalle';
 import { ConfigPanel, NuevaOc, SimuladorPanel } from './Paneles';
+import { ParametrizacionPanel } from './ParametrizacionPanel';
 import { ESTADOS, ESTADO_LABEL, EstadoBadge, SimuladoBadge, btnSecondary, fecha, inputCls } from './comun';
 
-type Tab = 'tablero' | 'casos' | 'nueva' | 'config';
+type Tab = 'tablero' | 'casos' | 'nueva' | 'parametrizacion' | 'config';
 
 const TIEMPOS: Array<[string, string]> = [
   ['ocAProforma', 'OC → Proforma'],
@@ -61,6 +62,7 @@ export default function ComercialPage() {
     ['tablero', 'Tablero'],
     ['casos', `Casos${casos.length ? ` (${casos.length})` : ''}`],
     ['nueva', 'Nueva orden de compra'],
+    ['parametrizacion', 'Parametrización de Oben'],
     ['config', 'Configuración'],
   ];
 
@@ -274,6 +276,8 @@ export default function ComercialPage() {
           }}
         />
       )}
+
+      {tab === 'parametrizacion' && <ParametrizacionPanel />}
 
       {tab === 'config' && <ConfigPanel />}
 

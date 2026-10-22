@@ -9,7 +9,7 @@ import {
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
   Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
-  ConexionMicrosoft, DiagnosticoSharepoint,
+  ConexionMicrosoft, DiagnosticoSharepoint, MaestroComercialResultado,
   FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, CambioRuta, OrdenReciente, ProformaOrdenes, ProformaPendienteComex,
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
@@ -494,6 +494,18 @@ class ApiClient {
 
   async downloadProformaFirmada(id: string): Promise<Blob> {
     const { data } = await this.client.get(`/comercial/casos/${id}/proforma-firmada`, { responseType: 'blob' });
+    return data;
+  }
+
+  /** Maestro de Oben (clientes, productos, partidas, ciudades). ?buscar=texto */
+  async getMaestroComercial(maestro: 'clientes' | 'productos' | 'partidas' | 'ciudades', buscar = '', limite = 100): Promise<MaestroComercialResultado> {
+    const { data } = await this.client.get<MaestroComercialResultado>(`/comercial/maestros/${maestro}`, { params: { buscar: buscar || undefined, limite } });
+    return data;
+  }
+
+  /** Parametrización cliente-destino de Comercial en Oben (CodSec_Entity + Target_Customer del maestro de clientes). */
+  async getParametrizacionComercial(cliente: number, destino: string): Promise<{ datos: Record<string, unknown> | null; simulado: boolean }> {
+    const { data } = await this.client.get<{ datos: Record<string, unknown> | null; simulado: boolean }>('/comercial/maestros/consultas/parametrizacion', { params: { cliente, destino } });
     return data;
   }
 

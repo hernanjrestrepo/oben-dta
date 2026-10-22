@@ -75,17 +75,30 @@ export class ComercialMaestrosService {
     return { valido: /^ok$/i.test(texto), mensaje: /^ok$/i.test(texto) ? 'La referencia tiene Maestro de Empaque para ese destino.' : texto, simulado: r.mode === 'mock' };
   }
 
-  /** Parametrización cliente-destino. Hoy Oben la rechaza siempre (falta saber qué va en TargetCustomer). */
+  /**
+   * Parametrización cliente-destino (APICustomerParameterizationParadixe). José, 22-oct: `TargetCustomer` es el campo
+   * `Target_Customer` del maestro de clientes (antes `Cliente_Destino`), tal cual, y `CodSecEntity` el `CodSec_Entity`.
+   * Devuelve la condición comercial, moneda, Incoterm, puerto, etiquetas, notas y correos que Comercial dejó definidos.
+   */
   async parametrizacion(p: { codSecEntity: number; targetCustomer: string }) {
     if (!Number.isInteger(p.codSecEntity) || p.codSecEntity <= 0) throw new BadRequestException('Falta codSecEntity (número entero).');
     if (!p.targetCustomer?.trim()) throw new BadRequestException('Falta targetCustomer.');
     const r = await this.hub.call<unknown>('obenCostOrder', 'comercial.consultar', { maestro: 'parametrizacion', parametros: p }, OPCIONES);
     if (!r.ok) {
       throw new BadRequestException(
-        `Oben no devolvió la parametrización del cliente: ${r.error ?? 'sin detalle'}. Pendiente con José: qué valor espera la API en TargetCustomer.`,
+        `Oben no devolvió la parametrización de ese cliente y destino: ${r.error ?? 'sin detalle'}. Revisa que el destino sea exactamente el Target_Customer del cliente (incluido el punto final, p. ej. "ALADDIN PACKAGING LLC.").`,
       );
     }
-    return { datos: r.data, simulado: r.mode === 'mock' };
+    let data: unknown = r.data;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch {
+        data = null;
+      }
+    }
+    const fila = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null | undefined;
+    return { datos: fila && typeof fila === 'object' ? fila : null, simulado: r.mode === 'mock' };
   }
 
   private async filas(nombre: MaestroComercial, refrescar: boolean) {

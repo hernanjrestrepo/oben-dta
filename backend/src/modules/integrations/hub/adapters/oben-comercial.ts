@@ -22,7 +22,7 @@ export const APIS_COMERCIALES: Record<MaestroComercial, { api: string; parametro
     parametros: { codSecEntity: 'CodSecEntity', codSecEntityAddress: 'CodSecEntityAddress', codSecProduct: 'CodSecProduct', codSecCity: 'CodSecCity' },
     descripcion: 'Valida que la referencia tenga Maestro de Empaque para el cliente y su destino',
   },
-  // Responde 400 con cualquier valor probado (20-oct): falta que José diga qué va en TargetCustomer.
+  // TargetCustomer = campo Target_Customer del maestro de clientes (José, 22-oct; antes se llamaba Cliente_Destino).
   parametrizacion: {
     api: 'APICustomerParameterizationParadixe',
     parametros: { codSecEntity: 'CodSecEntity', targetCustomer: 'TargetCustomer' },
