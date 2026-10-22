@@ -15,6 +15,8 @@ export const MAX_ADJUNTOS_RUTA = 5;
 export const MAX_BYTES_ADJUNTO_RUTA = 10 * 1024 * 1024;
 
 export const LIQUIDACION_PERMISSION = 'exportations.liquidate';
+/** Consultar (perfil "Solo lectura" de Liquidación y Facturación, 22-oct): ver borradores, la proforma y el cierre sin cambiar nada. */
+export const LIQUIDACION_CONSULTA_PERMISSION = 'exportations.read';
 /** Aprobar la liquidación (COMEX): exigido para enviarla a Oben. */
 export const LIQUIDACION_APROBAR_PERMISSION = 'exportations.approve';
 
@@ -107,9 +109,9 @@ class CierreDto {
 }
 
 /**
- * Todas las rutas exigen `exportations.liquidate` (ya existe en el catálogo;
- * lo recibe `tenant.admin`, no `tenant.viewer`): submit con `confirm:true` crea
- * registros reales en el ERP de Oben, y el borrador expone valores financieros.
+ * Consultar exige `exportations.read`; todo lo que cambia algo (ruta, adjuntos,
+ * submit —que con `confirm:true` crea registros reales en el ERP de Oben—,
+ * descartar, cierre) exige `exportations.liquidate`, y aprobar `exportations.approve`.
  */
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('liquidacion')
@@ -121,21 +123,21 @@ export class LiquidacionController {
 
   /** Qué conceptos pide cada Incoterm (misma tabla que usa el cálculo) — para la pantalla. */
   @Get('incoterms')
-  @RequirePermission(LIQUIDACION_PERMISSION)
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
   incoterms() {
     return Object.entries(CONCEPTOS_POR_INCOTERM).map(([codigo, conceptos]) => ({ codigo, conceptos }));
   }
 
   /** Borrador de solo lectura: consulta spCheckSettlement y muestra qué falta. */
   @Get(':numberPF/draft')
-  @RequirePermission(LIQUIDACION_PERMISSION)
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
   draft(@Param('numberPF') numberPF: string) {
     return this.liquidacion.getDraft(numberPF);
   }
 
   /** Igual que el borrador pero con los valores que digita el usuario (dirección, puertos, partidas, Incoterm, flete...). */
   @Post(':numberPF/draft')
-  @RequirePermission(LIQUIDACION_PERMISSION)
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
   draftWithInput(@Param('numberPF') numberPF: string, @Body() dto: LiquidacionInputDto) {
     return this.liquidacion.getDraft(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines, factura: dto.factura });
   }
@@ -193,7 +195,7 @@ export class LiquidacionController {
 
   /** Descarga un soporte de un cambio de ruta. */
   @Get(':numberPF/ruta/adjuntos/:id')
-  @RequirePermission(LIQUIDACION_PERMISSION)
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
   async adjuntoRuta(@Param('numberPF') numberPF: string, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const a = await this.liquidacion.adjuntoDeRuta(numberPF, id);
     res.setHeader('Content-Type', a.tipo);
@@ -220,7 +222,7 @@ export class LiquidacionController {
 
   /** La proforma tal como la tiene Oben (encabezado, detalle y reporte COMEX), para revisarla antes de liquidar (20-oct). */
   @Get(':numberPF/proforma')
-  @RequirePermission(LIQUIDACION_PERMISSION)
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
   proforma(@Param('numberPF') numberPF: string) {
     return this.liquidacion.proformaCompleta(numberPF);
   }
@@ -247,7 +249,7 @@ export class LiquidacionController {
 
   /** Vista previa del correo de cierre (OBEN MAS §1.2): destinatarios, adjuntos, qué es simulado y si puede salir. No envía nada. */
   @Get(':numberPF/cierre')
-  @RequirePermission(LIQUIDACION_PERMISSION)
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
   cierrePreview(@Param('numberPF') numberPF: string) {
     return this.cierre.preview(numberPF);
   }

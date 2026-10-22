@@ -3,7 +3,7 @@ import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { REQUIRE_PERMISSION_KEY } from '../security/require-permission.decorator';
-import { LIQUIDACION_APROBAR_PERMISSION, LIQUIDACION_PERMISSION, LiquidacionController } from './liquidacion.controller';
+import { LIQUIDACION_APROBAR_PERMISSION, LIQUIDACION_CONSULTA_PERMISSION, LIQUIDACION_PERMISSION, LiquidacionController } from './liquidacion.controller';
 
 /**
  * Liquidación crea registros reales en el ERP de Oben (con confirm:true) y
@@ -21,8 +21,9 @@ describe('LiquidacionController — control de acceso', () => {
     expect(guards).toEqual(expect.arrayContaining([JwtAuthGuard, PermissionsGuard]));
   });
 
-  it('el permiso requerido es exportations.liquidate (existe en el catálogo)', () => {
+  it('liquidar exige exportations.liquidate y consultar exportations.read (ambos existen en el catálogo)', () => {
     expect(LIQUIDACION_PERMISSION).toBe('exportations.liquidate');
+    expect(LIQUIDACION_CONSULTA_PERMISSION).toBe('exportations.read');
   });
 
   it('tiene exactamente las 13 rutas esperadas (incoterms, draft GET/POST, aprobar, ruta de COMEX y sus adjuntos, submit, correo de cierre, proforma y descartar/restaurar pendientes)', () => {
@@ -35,7 +36,13 @@ describe('LiquidacionController — control de acceso', () => {
     expect(req).toEqual({ permissions: ['exportations.approve'], mode: 'all' });
   });
 
-  it.each(['incoterms', 'draft', 'draftWithInput', 'ruta', 'adjuntarRuta', 'adjuntoRuta', 'submit', 'cierrePreview', 'cierreEnviar', 'proforma', 'descartar', 'restaurar'])('la ruta %s exige exportations.liquidate', (name) => {
+  // Perfil "Solo lectura" (22-oct): ve el borrador (también recalculado con lo que digita, sin escribir nada), la proforma y la vista previa del cierre.
+  it.each(['incoterms', 'draft', 'draftWithInput', 'adjuntoRuta', 'proforma', 'cierrePreview'])('la consulta %s exige exportations.read', (name) => {
+    const req = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto[name] as object) as { permissions: string[]; mode: string };
+    expect(req).toEqual({ permissions: ['exportations.read'], mode: 'all' });
+  });
+
+  it.each(['ruta', 'adjuntarRuta', 'submit', 'cierreEnviar', 'descartar', 'restaurar'])('la ruta %s (cambia algo) exige exportations.liquidate', (name) => {
     const req = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto[name] as object) as {
       permissions: string[];
       mode: string;

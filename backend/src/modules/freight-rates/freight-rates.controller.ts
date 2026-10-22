@@ -60,14 +60,14 @@ export class FreightRatesController {
 
   /** Histórico de cuadros de tarifas subidos (quién, cuándo, cuántas tarifas). */
   @Get('tarifario-exportacion/cargas')
-  @RequirePermission('exportations.liquidate')
+  @RequirePermission('exportations.read')
   historialTarifario() {
     return this.tarifario.historial();
   }
 
   /** Descarga el Excel original de una carga del histórico. */
   @Get('tarifario-exportacion/cargas/:id/archivo')
-  @RequirePermission('exportations.liquidate')
+  @RequirePermission('exportations.read')
   async archivoTarifario(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const a = await this.tarifario.archivoDeCarga(id);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

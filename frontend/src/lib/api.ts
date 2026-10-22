@@ -146,6 +146,16 @@ class ApiClient {
     return !!this.getUser() && !!localStorage.getItem('access_token');
   }
 
+  /** Permisos vigentes del usuario (su perfil pudo cambiar desde que inició sesión); actualiza el usuario guardado. */
+  async refreshMyPermissions(): Promise<User | null> {
+    const user = this.getUser();
+    if (!user) return null;
+    const { data } = await this.client.get<{ permissions: string[] }>('/security/me/permissions');
+    const actualizado = { ...user, permissions: data.permissions };
+    localStorage.setItem('user', JSON.stringify(actualizado));
+    return actualizado;
+  }
+
   // Auth
   async login(email: string, password: string): Promise<AuthResponse> {
     const { data } = await this.client.post<AuthResponse>('/auth/login', { email, password });

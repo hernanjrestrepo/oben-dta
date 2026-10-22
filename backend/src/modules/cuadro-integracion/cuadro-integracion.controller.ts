@@ -4,8 +4,8 @@ import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { CuadroIntegracionService } from './cuadro-integracion.service';
 
-/** Mismo permiso que Liquidación: son datos financieros de exportación y solo se leen (nada se escribe en Oben). */
-export const CUADRO_INTEGRACION_PERMISSION = 'exportations.liquidate';
+/** Mismo permiso de consulta que Liquidación: datos de exportación que solo se leen (nada se escribe en Oben). */
+export const CUADRO_INTEGRACION_PERMISSION = 'exportations.read';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('cuadro-integracion')

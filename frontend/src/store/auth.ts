@@ -14,6 +14,7 @@ interface AuthState {
   platformLogin: (email: string, password: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
+  refreshPermissions: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -71,6 +72,15 @@ export const useAuthStore = create<AuthState>((set) => ({
         error: message,
       });
       throw err;
+    }
+  },
+
+  refreshPermissions: async () => {
+    try {
+      const user = await api.refreshMyPermissions();
+      if (user) set({ user });
+    } catch {
+      /* sin red o sesión vencida: se queda con los permisos del inicio de sesión */
     }
   },
 

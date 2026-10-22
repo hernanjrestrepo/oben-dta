@@ -3,93 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
-import {
-  LayoutDashboard,
-  ShoppingCart,
-  Users,
-  LogOut,
-  ChevronRight,
-  ChevronDown,
-  Menu,
-  X,
-  Activity,
-  FileText,
-  Mail,
-  ShieldCheck,
-  History,
-  Truck,
-  Package,
-  Users2,
-  FileSpreadsheet,
-  Briefcase,
-  ArrowRightLeft,
-  Receipt,
-  ReceiptText,
-  UserCog,
-  FilePenLine,
-  KeyRound,
-  PlugZap,
-  type LucideIcon,
-} from 'lucide-react';
-import { useMemo, useState, useSyncExternalStore } from 'react';
-
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  /** Permiso necesario para ver la opción (sin permiso = visible para todos). */
-  permiso?: string;
-}
-
-/**
- * Menú agrupado por función (WO-028, reunión 2026-10-01): antes eran 17
- * opciones sueltas. Cada grupo se puede plegar y recuerda su estado.
- */
-const GRUPOS: Array<{ titulo: string; items: NavItem[] }> = [
-  {
-    titulo: 'Inicio',
-    items: [
-      { href: '/operaciones', label: 'Centro de Operaciones', icon: Activity },
-      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    titulo: 'Comercial',
-    items: [
-      { href: '/comercial', label: 'Comercial', icon: Briefcase },
-      { href: '/quotes', label: 'Cotizaciones', icon: Mail },
-      { href: '/orders', label: 'Órdenes', icon: ShoppingCart },
-      { href: '/clients', label: 'Clientes', icon: Users },
-      { href: '/equivalencias', label: 'Equivalencias', icon: ArrowRightLeft },
-    ],
-  },
-  {
-    titulo: 'Despacho y facturación',
-    items: [
-      { href: '/lista-empaque', label: 'Lista de Empaque', icon: Package },
-      { href: '/facturacion', label: 'Liquidación y Facturación', icon: Receipt },
-      { href: '/cuadro-integracion', label: 'Cuadro de integración', icon: FileSpreadsheet, permiso: 'exportations.liquidate' },
-      { href: '/facturas-parciales', label: 'Facturas parciales', icon: ReceiptText, permiso: 'invoices.read' },
-      { href: '/invoices', label: 'Facturas', icon: FileText },
-      { href: '/fletes', label: 'Fletes', icon: Truck },
-    ],
-  },
-  {
-    titulo: 'Reportes',
-    items: [{ href: '/reportes', label: 'Reportes Oben', icon: FileSpreadsheet }],
-  },
-  {
-    titulo: 'Configuración',
-    items: [
-      { href: '/distribucion', label: 'Listas de Distribución', icon: Users2 },
-      { href: '/formatos', label: 'Formatos de correo', icon: FilePenLine, permiso: 'configuracion.read' },
-      { href: '/auditoria', label: 'Auditoría', icon: History, permiso: 'auditoria.read' },
-      { href: '/conexiones', label: 'Conexión Microsoft 365', icon: PlugZap, permiso: 'integrations.read' },
-      { href: '/admin/users', label: 'Usuarios', icon: UserCog, permiso: 'users.read' },
-      { href: '/admin/roles', label: 'Perfiles', icon: ShieldCheck, permiso: 'security.read' },
-    ],
-  },
-];
+import { LogOut, ChevronRight, ChevronDown, Menu, X, KeyRound } from 'lucide-react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { MENU, puedeVer } from '@/lib/menu';
 
 const PLEGADOS_KEY = 'oben-xmart.menu.plegados';
 const PLEGADOS_EVENTO = 'oben-xmart:menu-plegados';
@@ -113,8 +29,12 @@ function suscribir(cb: () => void): () => void {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAuthStore();
+  const { user, logout, refreshPermissions } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // El menú sigue al perfil: si un administrador lo cambió, se ve al recargar sin volver a iniciar sesión.
+  useEffect(() => {
+    void refreshPermissions();
+  }, [refreshPermissions]);
   const plegadosRaw = useSyncExternalStore(suscribir, leerPlegados, () => '[]');
   const plegados = useMemo<string[]>(() => {
     try {
@@ -136,9 +56,9 @@ export function Sidebar() {
   }
 
   const esActivo = (href: string) => pathname === href || !!pathname?.startsWith(`${href}/`);
-  const grupos = GRUPOS.map((g) => ({
+  const grupos = MENU.map((g) => ({
     ...g,
-    items: g.items.filter((i) => !i.permiso || user?.permissions?.includes(i.permiso)),
+    items: g.items.filter((i) => puedeVer(i, user?.permissions ?? [])),
   })).filter((g) => g.items.length > 0);
 
   return (
