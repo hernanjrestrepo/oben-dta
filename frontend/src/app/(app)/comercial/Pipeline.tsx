@@ -198,7 +198,11 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
                                   PF {c.numberPF}
                                 </span>
                               )}
-                              {c.numberOrderSales && <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-indigo-100 text-indigo-800 tabular-nums">OV {c.numberOrderSales}</span>}
+                              {(c.numberOrderSales || ['retenida', 'activa', 'cerrada'].includes(c.estado)) && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-indigo-100 text-indigo-800 tabular-nums" title={c.numberOrderSales ? undefined : 'Oben todavía no devuelve el número de la orden de venta por su API'}>
+                                  {c.numberOrderSales ? `OV ${c.numberOrderSales}` : 'OV creada'}
+                                </span>
+                              )}
                             </div>
                           )}
                           <div className="flex items-center justify-between gap-1 mt-1.5">

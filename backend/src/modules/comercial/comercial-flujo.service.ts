@@ -398,7 +398,7 @@ export class ComercialFlujoService {
             throw new BadRequestException(conOV.error ?? `OBEN MAS no creó la orden de venta (la Proforma quedó "${conOV.estado}").`);
           }
           ovReal = conOV.ordenVenta;
-          this.evento(caso, 'ov_creada', `Orden de venta ${ovReal ?? '(Oben no informó su número)'} creada en OBEN MAS para la Proforma ${caso.numberPF}${quien}.`, opts.confirmadoPor);
+          this.evento(caso, 'ov_creada', `Orden de venta${ovReal ? ` ${ovReal}` : ''} creada en OBEN MAS para la Proforma ${caso.numberPF}${ovReal ? '' : ' (Oben todavía no devuelve el número de la orden de venta por su API: consúltalo en OBEN MAS)'}${quien}.`, opts.confirmadoPor);
         }
         const r = await this.escribir<{ numberOrderSales?: unknown }>(caso, 'proforma.aprobar', 'aprobar', { numberPF: caso.numberPF, ...(real ? { numberOrderSales: ovReal } : {}) }, opts);
         const ov = real ? (ovReal ?? NaN) : Number(r.numberOrderSales);
@@ -406,7 +406,7 @@ export class ComercialFlujoService {
         caso.estado = 'retenida';
         caso.fechas = { ...caso.fechas, aprobadaCliente: caso.fechas.aprobadaCliente ?? ahora, retenida: ahora };
         caso.seguimiento = await this.iniciarSeguimiento('cartera');
-        this.evento(caso, 'aprobada', `Proforma aprobada: orden de venta ${caso.numberOrderSales ?? '(sin número)'} retenida, esperando cartera${quien}.`, opts.confirmadoPor);
+        this.evento(caso, 'aprobada', `Proforma aprobada: orden de venta${nOV(caso)} retenida, esperando cartera${quien}.`, opts.confirmadoPor);
         await this.reenviarACartera(caso);
         break;
       }
@@ -446,8 +446,8 @@ export class ComercialFlujoService {
         caso.estado = 'activa';
         caso.fechas = { ...caso.fechas, activa: ahora };
         caso.seguimiento = { tipo: null, enviados: caso.seguimiento.enviados, proximoEn: null, ultimoEn: caso.seguimiento.ultimoEn };
-        this.evento(caso, 'activa', `Orden de venta ${caso.numberOrderSales ?? ''} ACTIVA: comienza producción${quien}.`, opts.confirmadoPor);
-        await this.avisarComercial(caso, `Orden de venta ${caso.numberOrderSales ?? caso.numberPF} activa`, '<p>Cartera liberó la orden y quedó activa en OBEN MAS: comienza producción.</p>');
+        this.evento(caso, 'activa', `Orden de venta${nOV(caso)} ACTIVA: comienza producción${quien}.`, opts.confirmadoPor);
+        await this.avisarComercial(caso, `Orden de venta${nOV(caso)} de la Proforma ${caso.numberPF} activa`, '<p>Cartera liberó la orden y quedó activa en OBEN MAS: comienza producción.</p>');
         break;
       }
     }
@@ -816,7 +816,7 @@ export class ComercialFlujoService {
           }
           caso.seguimiento = { ...caso.seguimiento, tipo: null, proximoEn: null };
           if (caso.accionPendiente?.tipo !== 'activar') {
-            return this.solicitarAccion(caso, { tipo: 'activar', detalle: `Cartera liberó la OV ${caso.numberOrderSales ?? ''} (PF ${caso.numberPF}): pasarla a ACTIVA en OBEN MAS.` });
+            return this.solicitarAccion(caso, { tipo: 'activar', detalle: `Cartera liberó la OV${nOV(caso)} (PF ${caso.numberPF}): pasarla a ACTIVA en OBEN MAS.` });
           }
         } else if (this.vencido(caso)) {
           await this.seguimientoCartera(caso, cartera.ok ? (cartera.data?.observacion as string | undefined) : undefined);
@@ -833,7 +833,7 @@ export class ComercialFlujoService {
           if (anterior) {
             // Alejandra (48:42): "se me había dicho que el 29, ahora ya no es el 29 sino el 2".
             this.evento(caso, 'cambio_entrega', `La entrega comprometida cambió: ${anterior} → ${nueva ?? '(sin fecha)'}.`);
-            await this.avisarCS(caso, `Cambio de fecha de entrega — OV ${caso.numberOrderSales ?? caso.numberPF}`, `<p>Planeación cambió la entrega comprometida de ${esc(anterior)} a ${esc(nueva ?? '(sin fecha)')}. Revisa si hay que avisar al cliente.</p>`);
+            await this.avisarCS(caso, `Cambio de fecha de entrega — OV${nOV(caso)} (PF ${caso.numberPF})`, `<p>Planeación cambió la entrega comprometida de ${esc(anterior)} a ${esc(nueva ?? '(sin fecha)')}. Revisa si hay que avisar al cliente.</p>`);
           }
         }
         if (caso.numberOrderSales && (await this.despachada(caso.numberOrderSales))) {
@@ -891,8 +891,8 @@ export class ComercialFlujoService {
     const res = await this.enviarCorreo(caso, {
       to: para,
       cc: [...cs.to, ...cs.cc].filter((x) => x !== para),
-      subject: `${caso.simulated ? '[SIMULADO] ' : ''}OV ${caso.numberOrderSales ?? ''} (PF ${caso.numberPF}) — retenida por cartera${dias !== null ? ` hace ${dias} día(s)` : ''}: ¿en qué va?`,
-      body: `<p>La orden de venta ${caso.numberOrderSales ?? ''} de ${esc(caso.cliente ?? '')} (Proforma ${esc(caso.numberPF!)}) sigue retenida por cartera${dias !== null ? ` desde hace ${dias} día(s)` : ''}.</p>${observacion ? `<p>Cartera: ${esc(observacion)}</p>` : ''}<p>¿Cómo va la gestión con el cliente? Si el pedido no continúa, avísanos para darlo de baja.</p>`,
+      subject: `${caso.simulated ? '[SIMULADO] ' : ''}OV${nOV(caso)} (PF ${caso.numberPF}) — retenida por cartera${dias !== null ? ` hace ${dias} día(s)` : ''}: ¿en qué va?`,
+      body: `<p>La orden de venta${nOV(caso)} de ${esc(caso.cliente ?? '')} (Proforma ${esc(caso.numberPF!)}) sigue retenida por cartera${dias !== null ? ` desde hace ${dias} día(s)` : ''}.</p>${observacion ? `<p>Cartera: ${esc(observacion)}</p>` : ''}<p>¿Cómo va la gestión con el cliente? Si el pedido no continúa, avísanos para darlo de baja.</p>`,
     });
     await this.avanzarSeguimiento(caso, 'cartera', res.ok, 'Seguimiento de cartera al comercial', res.error);
   }
@@ -941,8 +941,8 @@ export class ComercialFlujoService {
     const res = await this.enviarCorreo(caso, {
       to,
       cc: [...rest, ...lista.cc],
-      subject: `${caso.simulated ? '[SIMULADO] ' : ''}Proforma ${caso.numberPF} aprobada por ${caso.cliente} — OV ${caso.numberOrderSales ?? ''} retenida, pendiente de cartera`,
-      body: `<p>${esc(caso.cliente ?? '')} aprobó la Proforma ${esc(caso.numberPF!)}${caso.ocNumero ? ` (orden de compra ${esc(caso.ocNumero)})` : ''}. La orden de venta ${caso.numberOrderSales ?? ''} quedó retenida en OBEN MAS a la espera de la validación de cartera.</p>${firmado ? '<p>Adjunta la Proforma aprobada por el cliente.</p>' : ''}`,
+      subject: `${caso.simulated ? '[SIMULADO] ' : ''}Proforma ${caso.numberPF} aprobada por ${caso.cliente} — OV${nOV(caso)} retenida, pendiente de cartera`,
+      body: `<p>${esc(caso.cliente ?? '')} aprobó la Proforma ${esc(caso.numberPF!)}${caso.ocNumero ? ` (orden de compra ${esc(caso.ocNumero)})` : ''}. La orden de venta${nOV(caso)} quedó retenida en OBEN MAS a la espera de la validación de cartera.</p>${firmado ? '<p>Adjunta la Proforma aprobada por el cliente.</p>' : ''}`,
       attachments: firmado ? [{ filename: firmado.nombre, content: firmado.buffer.toString('base64'), encoding: 'base64', contentType: 'application/pdf' }] : undefined,
       enHilo: false,
     });
@@ -1126,6 +1126,11 @@ function lineaArg(l: CasoLinea) {
     precioUnitario: l.precioUnitario,
     moneda: l.moneda,
   };
+}
+
+/** " 11400" para los textos, o nada si Oben no informó el número de la orden de venta. */
+function nOV(caso: Pick<ComercialCase, 'numberOrderSales'>): string {
+  return caso.numberOrderSales ? ` ${caso.numberOrderSales}` : '';
 }
 
 function uniq(xs: string[]): string[] {

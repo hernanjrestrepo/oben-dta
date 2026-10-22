@@ -267,7 +267,13 @@ export class ObenCostOrderRealAdapter extends RealAdapterBase {
       throw new Error('BUSINESS_ERROR: numberOrderSales requerido');
     }
 
-    const url = args.target === 'liquidacion' && this.cfg.consultaLiquidacionUrl ? this.cfg.consultaLiquidacionUrl : this.cfg.consultaUrl;
+    // 'comercial': el mismo servidor de las APIs comerciales (lo creado en pruebas se consulta en pruebas: la numeración se cruza con producción).
+    const url =
+      args.target === 'comercial'
+        ? `${String(this.cfg.comercialUrl ?? COMERCIAL_URL_PRUEBAS).replace(/\/+$/, '')}/APIConsultaParadixe`
+        : args.target === 'liquidacion' && this.cfg.consultaLiquidacionUrl
+          ? this.cfg.consultaLiquidacionUrl
+          : this.cfg.consultaUrl;
     return this.httpJson(url, { method: 'POST' }, {
       Authtoken: this.cfg.authToken!,
       NombreConsulta: procedure,

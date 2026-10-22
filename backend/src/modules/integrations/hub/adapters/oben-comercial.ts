@@ -78,7 +78,10 @@ export function valorEncabezado(v: unknown): string {
  * (Antes solo devolvía el código interno: se sigue aceptando, sin número oficial.) Las demás escrituras: "OK".
  * Si no es así, lanza BUSINESS_ERROR con el texto de Oben.
  */
-export function resultadoEscritura(paso: EscrituraComercial, data: unknown): { ok: true; codigoInterno?: number; numeroPF?: string | null } {
+export function resultadoEscritura(
+  paso: EscrituraComercial,
+  data: unknown,
+): { ok: true; codigoInterno?: number; numeroPF?: string | null; ordenVenta?: number } {
   const crudo = typeof data === 'string' || typeof data === 'number' ? String(data) : JSON.stringify(data ?? '');
   const texto = crudo.trim().replace(/^"|"$/g, '').trim();
   if (paso === 'encabezado') {
@@ -90,6 +93,10 @@ export function resultadoEscritura(paso: EscrituraComercial, data: unknown): { o
     if (/^\d+$/.test(texto) && Number(texto) > 0) return { ok: true, codigoInterno: Number(texto), numeroPF: null };
   } else if (/^ok$/i.test(texto)) {
     return { ok: true };
+  } else if (paso === 'ov') {
+    // Hoy responde "OK" a secas; si Oben agrega el número de la orden de venta (como hizo con el encabezado), se toma.
+    const ov = texto.match(/(?:Number\s*_?OV|Number\s*_?Order\s*_?Sales|N(?:ro|[uú]mero)\.?\s*(?:de\s*)?(?:la\s*)?(?:orden\s*de\s*venta|OV))\s*:\s*(\d+)/i);
+    if (ov && Number(ov[1]) > 0) return { ok: true, ordenVenta: Number(ov[1]) };
   }
   throw new Error(`BUSINESS_ERROR: ${texto || 'Oben no devolvió respuesta'}`);
 }

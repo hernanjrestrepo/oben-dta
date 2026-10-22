@@ -83,7 +83,7 @@ const OC = {
   ].join('\n'),
 };
 
-function world(opts: { rechazarEncabezado?: string; leadTime?: boolean } = {}) {
+function world(opts: { rechazarEncabezado?: string; leadTime?: boolean; sinOvEnPruebas?: boolean } = {}) {
   const store = new InMemoryObenPlusSimStore();
   const obenPlus = new ObenPlusMockAdapter(new StaticScenarioProvider(), store);
   const emails: Array<Record<string, unknown>> = [];
@@ -105,6 +105,9 @@ function world(opts: { rechazarEncabezado?: string; leadTime?: boolean } = {}) {
         return { ok: true, mode: 'real', data: paso === 'encabezado' ? { ok: true, codigoInterno: 13400, numeroPF: '11547' } : { ok: true } };
       }
       if (system === 'obenCostOrder' && op === 'query.run') {
+        // La numeración de pruebas se cruza con producción: allá la PF 11547 es OTRA proforma (con su propia OV).
+        if (args.target !== 'comercial') return { ok: true, mode: 'real', data: [{ NroProforma: '11547', Cliente: 'OTRO CLIENTE REAL', OrdenesVenta: [{ NroOrdenVenta: '99999' }] }] };
+        if (opts.sinOvEnPruebas) return { ok: false, mode: 'real', error: 'HTTP 400: No se encuentras datos con los parámetros suministrados o no son válidos' };
         return { ok: true, mode: 'real', data: [{ NroProforma: '11547', Mercado: 'EXPORTACION', Cliente: 'OBEN US, LLC', OrdenesVenta: [{ NroOrdenVenta: '11400' }] }] };
       }
       return obenPlus.execute(op, args, CTX);
@@ -202,6 +205,7 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(w.escrituras.map((e) => e.paso)).toEqual(['encabezado', 'detalle', 'detalle', 'detalle']);
     expect(w.escrituras.slice(1).map((e) => e.valores.CodSecProduct)).toEqual([1024, 5622, 261]); // 609,6 mm → referencia de 610 mm
     expect(w.escrituras[0].valores).toMatchObject({ CodSecEntity: 9995, CodSedCustomerAddress: 1828, PurchaseOrder: 'OC-PARADIXE-0002', DestinationPort: 1186, Export: 'true' });
+    expect(w.escrituras[0].valores.Notes).toMatch(/^PRUEBA OBEN XMART - NO PROCESAR\. Oben Xmart · orden de compra OC-PARADIXE-0002/); // servidor de pruebas
     expect(caso.eventos.at(-1)!.detalle).toMatch(/Proforma 11547 creada en OBEN MAS \(servidor de PRUEBAS de Oben, código interno 13400\)/);
     expect(await w.store.get('t1', '11547')).toMatchObject({ estado: 'sin_cubicar' });
 
@@ -211,7 +215,7 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(caso.estado).toBe('enviada_cliente');
     expect(w.emails.at(-1)).toMatchObject({ to: 'ceo@paradixe.xyz', subject: expect.stringMatching(/Proforma 11547 .*\[PF 11547\]/) });
 
-    // Paso 6: el cliente aprueba → confirmar → OV REAL (11400, leída del reporte de Oben), retenida.
+    // Paso 6: el cliente aprueba → confirmar → OV REAL (11400, leída del reporte del MISMO servidor de pruebas, no del de producción), retenida.
     caso = await w.flujo.registrarRespuesta(caso, { tipo: 'aprueba', motivo: 'Aprobada por teléfono', via: 'manual' });
     caso = await w.flujo.confirmar(caso.id);
     expect(caso).toMatchObject({ estado: 'retenida', numberOrderSales: 11400 });
@@ -226,6 +230,25 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(w.escrituras.at(-1)!.paso).toBe('activar');
     const real = w.proformasRepo.rows[0];
     expect(real).toMatchObject({ estado: 'activa', numeroPF: '11547', codigoInterno: 13400, ordenVenta: 11400, casoId: caso.id });
+  });
+
+  it('si Oben no informa el número de la OV, el caso sigue (sin inventar uno ni tomar el de producción) y lo dice claro', async () => {
+    const w = world({ sinOvEnPruebas: true });
+    let caso = await w.flujo.recibirOc(OC, 'correo');
+    caso = await w.flujo.confirmar(caso.id);
+    await w.sim('sim.cubicar', '11547');
+    caso = await w.tick(caso.id);
+    caso = await w.flujo.registrarRespuesta(caso, { tipo: 'aprueba', motivo: 'Aprobada', via: 'manual' });
+    caso = await w.flujo.confirmar(caso.id);
+    expect(caso).toMatchObject({ estado: 'retenida', numberOrderSales: null });
+    expect(caso.eventos.find((e) => e.tipo === 'ov_creada')!.detalle).toMatch(/^Orden de venta creada en OBEN MAS para la Proforma 11547 \(Oben todavía no devuelve el número/);
+    await w.sim('sim.liberarCartera', '11547');
+    caso = await w.tick(caso.id);
+    expect(caso.accionPendiente!.detalle).toMatch(/^Cartera liberó la OV \(PF 11547\)/);
+    caso = await w.flujo.confirmar(caso.id);
+    expect(caso.estado).toBe('activa');
+    expect(caso.eventos.at(-1)!.detalle).toMatch(/^Orden de venta ACTIVA/);
+    expect(w.emails.at(-1)).toMatchObject({ subject: expect.stringMatching(/Orden de venta de la Proforma 11547 activa/) });
   });
 
   it('si Oben rechaza el encabezado, el caso NO avanza, explica el motivo y al confirmar de nuevo continúa sin duplicar', async () => {

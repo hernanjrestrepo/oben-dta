@@ -132,7 +132,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
             {caso.simulated && <SimuladoBadge items={caso.simulatedItems} />}
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            OC {caso.ocNumero ?? '(sin número)'} · Proforma {caso.numberPF ?? '—'} · OV {caso.numberOrderSales ?? '—'} · {caso.tipo ?? '—'} {caso.pais ? `(${caso.pais})` : ''}
+            OC {caso.ocNumero ?? '(sin número)'} · Proforma {caso.numberPF ?? '—'} · OV {caso.numberOrderSales ?? (['retenida', 'activa', 'cerrada'].includes(caso.estado) ? 'creada (Oben no informa el número)' : '—')} · {caso.tipo ?? '—'} {caso.pais ? `(${caso.pais})` : ''}
           </p>
           <p className="text-xs text-gray-400">
             De {caso.contactoEmail} · comercial {caso.comercialEmail ?? '—'} · leída por {caso.extraidoPor === 'ia' ? 'IA' : 'reglas'} · recibida {fecha(caso.ocRecibidaEn)}
@@ -460,7 +460,7 @@ function TarjetaOben({ p }: { p: ProformaOben }) {
         </div>
         <div>
           <dt className="text-[11px] text-gray-500">Orden de venta</dt>
-          <dd className="font-bold text-gray-900 tabular-nums">{p.ordenVenta ?? (p.estado === 'ov_creada' || p.estado === 'activa' ? 'creada' : '—')}</dd>
+          <dd className="font-bold text-gray-900 tabular-nums">{p.ordenVenta ?? (p.estado === 'ov_creada' || p.estado === 'activa' ? 'creada · Oben no informa el número' : '—')}</dd>
         </div>
         <div>
           <dt className="text-[11px] text-gray-500">Estado en Oben</dt>

@@ -170,6 +170,11 @@ describe('respuestas de las escrituras de Oben (200 aunque rechacen)', () => {
     // Formato anterior (solo el código interno): se acepta, sin número oficial.
     expect(resultadoEscritura('encabezado', 13392)).toEqual({ ok: true, codigoInterno: 13392, numeroPF: null });
     expect(resultadoEscritura('detalle', 'OK')).toEqual({ ok: true });
+    // La OV hoy responde "OK" a secas; si Oben agrega su número (como en el encabezado), se toma.
+    expect(resultadoEscritura('ov', 'OK')).toEqual({ ok: true });
+    expect(resultadoEscritura('ov', '"OK; Number OV: 11400"')).toEqual({ ok: true, ordenVenta: 11400 });
+    expect(resultadoEscritura('ov', 'NumberOrderSales: 11401')).toEqual({ ok: true, ordenVenta: 11401 });
+    expect(() => resultadoEscritura('ov', 'No se pudo insertar')).toThrow(/BUSINESS_ERROR/);
     expect(() => resultadoEscritura('activar', 'No existe Lead Time Production para la pelicula FCH--0030TN')).toThrow(/BUSINESS_ERROR: No existe Lead Time/);
     expect(() => resultadoEscritura('encabezado', 'OK')).toThrow(/BUSINESS_ERROR/);
   });

@@ -176,6 +176,15 @@ describe('ObenCostOrderRealAdapter (API real de costos de orden de Oben)', () =>
       expect(result.data).toBe('OK');
     });
 
+    it("target 'comercial' consulta el MISMO servidor de las APIs comerciales (lo de pruebas nunca se busca en producción)", async () => {
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '[]' });
+      await makeAdapter().execute('query.run', { procedure: 'spCheckSalesOrderComex_Paradixe', numberOrderSales: '11546', target: 'comercial' }, CTX);
+      expect(global.fetch).toHaveBeenCalledWith('http://192.168.20.12:9098/api/External/APIConsultaParadixe', expect.anything());
+      const prod = new ObenCostOrderRealAdapter({ consultaUrl: 'https://x/c', comercialUrl: 'https://api.obengroup.co/api/External/', authToken: 'tok' });
+      await prod.execute('query.run', { procedure: 'spCheckSalesOrderComex_Paradixe', numberOrderSales: '11546', target: 'comercial' }, CTX);
+      expect((global.fetch as jest.Mock).mock.calls[1][0]).toBe('https://api.obengroup.co/api/External/APIConsultaParadixe');
+    });
+
     it('rechaza sin llamar a fetch si falta procedure o numberOrderSales', async () => {
       global.fetch = jest.fn();
       const adapter = makeAdapter();

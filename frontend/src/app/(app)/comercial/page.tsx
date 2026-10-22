@@ -15,7 +15,7 @@ type Tab = 'pipeline' | 'nueva' | 'simulador' | 'datos' | 'config';
 
 /**
  * Comercial / Customer Service (reunión 2026-09-23): de la orden de compra del cliente a la orden de venta activa.
- * El Pipeline es el CRM (indicadores, tablero o lista, lo que requiere atención); clic en una orden abre su detalle
+ * La pestaña CRM reúne todo (indicadores, tablero o lista, lo que requiere atención); clic en una orden abre su detalle
  * con la bitácora, el freno de mano y la Proforma real en OBEN MAS. El Simulador hace lo que Oben aún no expone por API.
  */
 export default function ComercialPage() {
@@ -52,7 +52,7 @@ export default function ComercialPage() {
   }, [aplicar, traer]);
 
   const tabs: Array<[Tab, string]> = [
-    ['pipeline', `Pipeline${casos.length ? ` (${casos.length})` : ''}`],
+    ['pipeline', `CRM${casos.length ? ` (${casos.length})` : ''}`],
     ['nueva', 'Nueva orden de compra'],
     ['simulador', 'Simulador'],
     ['datos', 'Datos de Oben'],
