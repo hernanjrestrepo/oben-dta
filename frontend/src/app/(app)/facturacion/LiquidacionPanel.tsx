@@ -245,7 +245,11 @@ export function LiquidacionPanel({
           title="1 · Incoterm de la proforma"
           subtitle="Qué incluye y hasta dónde va (Incoterms 2020). Define qué se liquida."
           right={
-            <button className={btnSecondary} onClick={() => setVerProforma(true)} title="La proforma tal como está en OBEN MAS (puertos, Incoterm, término de pago, precios)">
+            <button
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F47735] text-white text-sm font-semibold shadow-sm hover:bg-[#E5641F] focus:outline-none focus:ring-2 focus:ring-[#F47735]/40"
+              onClick={() => setVerProforma(true)}
+              title="La proforma tal como está en OBEN MAS (puertos, Incoterm, término de pago, precios)"
+            >
               <FileText className="w-4 h-4" /> Ver proforma
             </button>
           }

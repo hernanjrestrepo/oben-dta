@@ -389,10 +389,13 @@ export default function FacturacionPage() {
                   <p className="text-[11px] uppercase tracking-wide text-gray-500">Kilos</p>
                   <p className="text-lg font-bold tabular-nums text-gray-900">{draft.totalKilos.toLocaleString('es-CO', { maximumFractionDigits: 2 })}</p>
                 </div>
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-gray-500">Valor</p>
-                  <p className="text-lg font-bold tabular-nums text-[#C4521A]">{usd(draft.totalValor)}</p>
-                </div>
+                {/* Exportación: sin "Valor" (Hernán, 23-oct: confunde); manda el total de la factura. */}
+                {!exportacion && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Valor</p>
+                    <p className="text-lg font-bold tabular-nums text-[#C4521A]">{usd(draft.totalValor)}</p>
+                  </div>
+                )}
                 {exportacion && liqEstado?.totalFactura != null && (
                   <div title="FOB final + flete + seguro + otros gastos: el total de la factura">
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">Total {liqEstado.incoterm ?? 'factura'}</p>
