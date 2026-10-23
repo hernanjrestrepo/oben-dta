@@ -926,8 +926,31 @@ export interface CargaTarifario {
   tamano: number | null;
   usuario: string | null;
   fecha: string;
-  resumen: { maritimas?: ResumenTarifas; inland?: ResumenTarifas; descartadas?: number };
+  resumen: { maritimas?: ResumenTarifas; inland?: ResumenTarifas; descartadas?: number; vigenteDesde?: string | null; vigenteHasta?: string | null };
   vigente: boolean;
+}
+
+/** Tarifa agregada a mano con el botón + del tarifario (23-oct). */
+export interface TarifaManualInput {
+  tipo: 'maritima' | 'inland';
+  origen?: string;
+  /** Marítima: puerto de destino. Inland: puerto o rampa de donde sale el camión. */
+  destino: string;
+  direccion?: string;
+  agente: string;
+  naviera?: string;
+  dias?: number;
+  valor: number;
+  comisionAduanera?: number;
+  vigenteDesde: string;
+  vigenteHasta: string;
+}
+
+export interface TarifasManuales {
+  maritimas: Array<{ id: string; origen: string; destino: string; agente: string; naviera: string | null; dias: number | null; valor: number | null; validUntil: string | null; por: string }>;
+  inland: Array<{ id: string; puerto: string; direccion: string; agente: string; dias: number | null; valor: number | null; comisionAduanera: number | null; validUntil: string | null; por: string }>;
+  destinosMaritimos: string[];
+  puertosInland: string[];
 }
 
 export interface LiquidacionDraftLine {

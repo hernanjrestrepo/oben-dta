@@ -8,6 +8,7 @@ import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { leerTarifarioExportacion, type FilaInland, type FilaMaritima, type TarifarioLeido } from './tarifario-exportacion';
+import { MARCA_MANUAL } from './liquidacion-rates.service';
 
 export interface CambioTarifa {
   tipo: 'maritima' | 'inland';
@@ -71,16 +72,35 @@ export class TarifarioExportacionService {
     @Optional() private readonly audit?: WorkflowAuditService,
   ) {}
 
-  async cargar(buffer: Buffer, archivo: string, opciones: { confirmar: boolean; usuario: string | null }): Promise<ResultadoCargaTarifario> {
+  async cargar(
+    buffer: Buffer,
+    archivo: string,
+    opciones: { confirmar: boolean; usuario: string | null; vigenteDesde?: string | null; vigenteHasta?: string | null },
+  ): Promise<ResultadoCargaTarifario> {
+    // Vigencia del cuadro (Hernán, 23-oct: "cuando se cargue un archivo de fletes el sistema debe preguntar la fecha de
+    // vigencia y de expiración"): obligatoria para aplicar; reemplaza las fechas que traiga el Excel en todas las tarifas.
+    const vigencia = validarVigencia(opciones.vigenteDesde, opciones.vigenteHasta, opciones.confirmar);
     let leido: TarifarioLeido;
     try {
       leido = leerTarifarioExportacion(buffer);
     } catch (err) {
       throw new BadRequestException(`No se pudo leer el tarifario: ${(err as Error).message}`);
     }
+    if (vigencia) {
+      leido = {
+        ...leido,
+        maritimas: leido.maritimas.map((m) => ({ ...m, effectiveDate: vigencia.desde, validUntil: vigencia.hasta })),
+        inland: leido.inland.map((i) => ({ ...i, validUntil: vigencia.hasta })),
+      };
+    }
     const tenantId = this.ctx.tenantId;
     const hoy = new Date().toISOString().slice(0, 10);
-    const [actualesM, actualesI] = await Promise.all([this.ocean.find({ where: { tenantId } }), this.inland.find({ where: { tenantId } })]);
+    // Las tarifas agregadas a mano (botón +) no vienen en el archivo: no se comparan ni se borran; tienen su propia vigencia.
+    const noManual = (r: { sourceFile?: string | null }) => !(r.sourceFile ?? '').startsWith(MARCA_MANUAL);
+    const [actualesM, actualesI] = await Promise.all([
+      this.ocean.find({ where: { tenantId } }).then((rs) => rs.filter(noManual)),
+      this.inland.find({ where: { tenantId } }).then((rs) => rs.filter(noManual)),
+    ]);
 
     const nuevasM = conOcurrencia<FilaMaritima>(leido.maritimas, claveMaritima);
     const nuevasI = conOcurrencia<FilaInland>(leido.inland, claveInland);
@@ -136,6 +156,7 @@ export class TarifarioExportacionService {
     const avisos: string[] = [];
     if (rM.vencidas || rI.vencidas) avisos.push(`${rM.vencidas} tarifas marítimas y ${rI.vencidas} Inland ya están vencidas: se cargan igual y la liquidación lo avisa al usarlas.`);
     if (rM.quitadas || rI.quitadas) avisos.push(`Salen ${rM.quitadas} tarifas marítimas y ${rI.quitadas} Inland que no están en el archivo. Si una liquidación abierta las tenía escogidas, vuelve a la sugerida (COMEX la puede escoger de nuevo).`);
+    if (vigencia) avisos.push(`Todas las tarifas quedan vigentes del ${vigencia.desde} al ${vigencia.hasta} (las fechas del Excel no se usan).`);
     if (leido.descartadas.length) avisos.push(`${leido.descartadas.length} filas del archivo no se cargan (ver detalle).`);
     avisos.push('Los recargos de destino (Entry Fee 120, ISF 45, HMF) no cambian: el archivo no los trae.');
 
@@ -153,7 +174,7 @@ export class TarifarioExportacionService {
           archivo,
           contenido: buffer,
           tamano: buffer.length,
-          resumen: { maritimas: base.maritimas, inland: base.inland, descartadas: leido.descartadas.length },
+          resumen: { maritimas: base.maritimas, inland: base.inland, descartadas: leido.descartadas.length, vigenteDesde: vigencia?.desde ?? null, vigenteHasta: vigencia?.hasta ?? null },
           tarifas: { maritimas: leido.maritimas, inland: leido.inland },
           respaldo: { maritimas: actualesM, inland: actualesI },
           usuarioId: this.ctx.userId ?? null,
@@ -200,7 +221,7 @@ export class TarifarioExportacionService {
         entityType: 'tarifario',
         entityId: cargaId,
         actorId: this.ctx.userId,
-        inputData: { archivo, usuario: opciones.usuario },
+        inputData: { archivo, usuario: opciones.usuario, vigenteDesde: vigencia?.desde ?? null, vigenteHasta: vigencia?.hasta ?? null },
         outputData: { maritimas: base.maritimas, inland: base.inland, descartadas: leido.descartadas.length },
       })
       .catch(() => undefined);
@@ -219,4 +240,20 @@ export class TarifarioExportacionService {
     if (!f?.contenido) throw new BadRequestException('Esa carga del tarifario no existe o no guardó el archivo.');
     return { archivo: f.archivo, contenido: f.contenido };
   }
+}
+
+const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Vigencia del cuadro: ambas fechas AAAA-MM-DD y desde ≤ hasta; obligatoria para aplicar (en la vista previa es opcional). */
+export function validarVigencia(desde: string | null | undefined, hasta: string | null | undefined, obligatoria: boolean): { desde: string; hasta: string } | null {
+  const d = desde?.trim() || null;
+  const h = hasta?.trim() || null;
+  if (!d && !h) {
+    if (obligatoria) throw new BadRequestException('Indica la fecha de vigencia (desde) y la de expiración (hasta) del tarifario antes de cargarlo.');
+    return null;
+  }
+  if (!d || !h) throw new BadRequestException('Faltan fechas: indica la de vigencia (desde) y la de expiración (hasta).');
+  if (!FECHA.test(d) || !FECHA.test(h) || Number.isNaN(Date.parse(d)) || Number.isNaN(Date.parse(h))) throw new BadRequestException('Las fechas deben venir como AAAA-MM-DD.');
+  if (d > h) throw new BadRequestException(`La fecha de vigencia (${d}) es posterior a la de expiración (${h}).`);
+  return { desde: d, hasta: h };
 }

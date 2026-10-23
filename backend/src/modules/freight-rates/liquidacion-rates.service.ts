@@ -89,6 +89,9 @@ export interface LiquidacionOceanFreightResult {
  * Postgres devuelve las columnas `decimal` como TEXTO ("110.0000"): sin esta
  * conversión la liquidación (que exige números) los trataba como faltantes.
  */
+/** `sourceFile` de las tarifas agregadas a mano ("Manual · quién · fecha"). */
+export const MARCA_MANUAL = 'Manual';
+
 const toAmount = (v: unknown): number | null => {
   if (v === null || v === undefined || v === '') return null;
   const n = typeof v === 'number' ? v : Number(v);
@@ -389,6 +392,90 @@ export class LiquidacionRatesService {
       }
     }
     return { maritimas: maritimas.sort((a, b) => a.flete - b.flete), inland: inland.sort((a, b) => a.valor - b.valor) };
+  }
+
+  /** Tarifas agregadas a mano (las más recientes primero) y los destinos que ya existen, para escoger sin errores de digitación. */
+  async tarifasManuales(tenantId: string) {
+    const manual = ILike(`${MARCA_MANUAL}%`);
+    const [mar, inl] = await Promise.all([
+      this.oceanRates ? this.oceanRates.find({ where: { tenantId, sourceFile: manual }, order: { importedAt: 'DESC' }, take: 100 }) : [],
+      this.inlandRates.find({ where: { tenantId, sourceFile: manual }, order: { importedAt: 'DESC' }, take: 100 }),
+    ]);
+    const distintos = async <T extends object>(repo: Repository<T> | undefined, campo: string) =>
+      repo
+        ? ((await repo.createQueryBuilder('r').select(`DISTINCT r.${campo}`, 'v').where('r.tenant_id = :tenantId', { tenantId }).orderBy('v').getRawMany()) as Array<{ v: string }>).map((r) => r.v).filter(Boolean)
+        : [];
+    return {
+      maritimas: mar.map((r) => ({ id: r.id, origen: r.origin, destino: r.destinationPort, agente: r.forwarder, naviera: r.shippingLine, dias: r.transitDays, valor: tarifa(r.rateTotal), validUntil: r.validUntil, por: r.sourceFile })),
+      inland: inl.map((r) => ({ id: r.id, puerto: r.destinationPort, direccion: r.destinationAddress, agente: r.forwarder, dias: r.transitTimeDays, valor: tarifa(r.rate40hc), comisionAduanera: toAmount(r.customsCommission), validUntil: r.validUntil, por: r.sourceFile })),
+      destinosMaritimos: await distintos(this.oceanRates, 'destination_port'),
+      puertosInland: await distintos(this.inlandRates, 'destination_port'),
+    };
+  }
+
+  /** Borra una tarifa agregada a mano (nunca una del archivo de fletes). */
+  async quitarTarifaManual(tenantId: string, tipo: 'maritima' | 'inland', id: string): Promise<boolean> {
+    const where = { tenantId, id, sourceFile: ILike(`${MARCA_MANUAL}%`) };
+    const r = tipo === 'maritima' ? await this.oceanRates?.delete(where) : await this.inlandRates.delete(where);
+    return !!r?.affected;
+  }
+
+  /**
+   * Tarifa ADICIONAL que COMEX agrega a mano desde la tarjeta del tarifario porque no está en el cuadro (Hernán, 23-oct:
+   * "adicionar con un símbolo + tarifas no existentes en el cuadro", sin depender de una PF). Queda en la misma tabla
+   * (aparece como opción en toda liquidación con ese destino), marcada en `sourceFile` como manual con quién y cuándo,
+   * con su vigencia (desde/hasta). Las cargas del archivo de fletes no la tocan.
+   */
+  async agregarTarifaManual(
+    tenantId: string,
+    t:
+      | { tipo: 'maritima'; origen: string; destino: string; agente: string; naviera: string | null; dias: number | null; valor: number }
+      | { tipo: 'inland'; puerto: string; direccion: string; agente: string; valor: number; comisionAduanera: number | null; dias: number | null },
+    marca: string,
+    vigencia: { desde: string; hasta: string },
+  ): Promise<string> {
+    const validUntil = vigencia.hasta;
+    if (t.tipo === 'maritima') {
+      if (!this.oceanRates) throw new Error('El tarifario marítimo no está disponible en este ambiente.');
+      const origin = /colombia/i.test(t.origen) ? t.origen : `${t.origen}, Colombia`;
+      const fila = await this.oceanRates.save(
+        this.oceanRates.create({
+          tenantId,
+          origin,
+          destination: t.destino,
+          destinationPort: t.destino,
+          containerType: '40HC',
+          forwarder: t.agente,
+          shippingLine: t.naviera,
+          transitPoints: null,
+          transitDays: t.dias,
+          rateTotal: t.valor,
+          carrierDestinationCharges: null,
+          isPartial: false,
+          effectiveDate: vigencia.desde,
+          validUntil,
+          sourceFile: marca,
+        }),
+      );
+      return fila.id;
+    }
+    const fila = await this.inlandRates.save(
+      this.inlandRates.create({
+        tenantId,
+        country: 'USA',
+        forwarder: t.agente,
+        destinationPort: t.puerto,
+        state: '',
+        destinationAddress: t.direccion,
+        weightLbs: null,
+        rate40hc: t.valor,
+        customsCommission: t.comisionAduanera === null ? null : String(t.comisionAduanera),
+        transitTimeDays: t.dias,
+        validUntil,
+        sourceFile: marca,
+      } as Partial<FreightInlandRate>),
+    );
+    return fila.id;
   }
 
   private parsePercentFormula(formula: string): number | null {

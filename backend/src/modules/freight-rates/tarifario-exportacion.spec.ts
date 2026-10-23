@@ -145,8 +145,11 @@ describe('carga del tarifario desde la pantalla, con histórico', () => {
   it('al confirmar: reemplaza las tarifas, conserva el id de las que siguen (las rutas escogidas por COMEX valen) y guarda el histórico', async () => {
     const buffer = libro();
     const { svc, db, audit } = armar({ maritimas: [itapoa, vieja], inland: [cinci] });
-    const r = await svc.cargar(buffer, 'Fletes Exportacion_Oben Noviembre 2026.xlsx', { confirmar: true, usuario: 'María Escobar' });
+    const r = await svc.cargar(buffer, 'Fletes Exportacion_Oben Noviembre 2026.xlsx', { confirmar: true, usuario: 'María Escobar', vigenteDesde: '2026-11-01', vigenteHasta: '2026-11-30' });
     expect(r.aplicado).toBe(true);
+    // La vigencia que pidió el sistema reemplaza la del Excel en todas las tarifas.
+    expect(db.ocean.every((x) => x.validUntil === '2026-11-30' && x.effectiveDate === '2026-11-01')).toBe(true);
+    expect(db.inland.every((x) => x.validUntil === '2026-11-30')).toBe(true);
     expect(db.ocean.map((x) => x.id)).toContain('m-itapoa'); // la misma tarifa: mismo id
     expect(db.ocean.some((x) => x.id === 'm-vieja')).toBe(false); // no estaba en el archivo: sale
     expect(db.inland.find((x) => x.id === 'i-cinci')).toMatchObject({ rate40hc: 523, customsCommission: '240', sourceFile: 'Fletes Exportacion_Oben Noviembre 2026.xlsx (Leg3)' });
@@ -166,9 +169,24 @@ describe('carga del tarifario desde la pantalla, con histórico', () => {
     expect((await svc.archivoDeCarga(carga.id as string)).contenido.length).toBe(buffer.length);
   });
 
+  it('no aplica sin la fecha de vigencia y la de expiración (Hernán, 23-oct), ni con las fechas al revés', async () => {
+    const { svc, db } = armar({ maritimas: [itapoa] });
+    await expect(svc.cargar(libro(), 'a.xlsx', { confirmar: true, usuario: null })).rejects.toThrow(/fecha de vigencia/);
+    await expect(svc.cargar(libro(), 'a.xlsx', { confirmar: true, usuario: null, vigenteDesde: '2026-12-01', vigenteHasta: '2026-11-01' })).rejects.toThrow(/posterior/);
+    expect(db.cargas).toHaveLength(0);
+  });
+
+  it('las tarifas agregadas a mano (botón +) no se borran al cargar el archivo', async () => {
+    const manual = { ...vieja, id: 'm-manual', sourceFile: 'Manual · María · 2026-10-23' };
+    const { svc, db } = armar({ maritimas: [itapoa, manual], inland: [cinci] });
+    const r = await svc.cargar(libro(), 'b.xlsx', { confirmar: true, usuario: null, vigenteDesde: '2026-11-01', vigenteHasta: '2026-11-30' });
+    expect(r.maritimas.quitadas).toBe(0);
+    expect(db.ocean.some((x) => x.id === 'm-manual')).toBe(true);
+  });
+
   it('un archivo inválido no cambia nada y explica por qué', async () => {
     const { svc, db } = armar({ maritimas: [itapoa] });
-    await expect(svc.cargar(libro({ sinLeg3: true }), 'otro.xlsx', { confirmar: true, usuario: null })).rejects.toThrow(BadRequestException);
+    await expect(svc.cargar(libro({ sinLeg3: true }), 'otro.xlsx', { confirmar: true, usuario: null, vigenteDesde: '2026-11-01', vigenteHasta: '2026-11-30' })).rejects.toThrow(BadRequestException);
     expect(db.ocean).toHaveLength(1);
     expect(db.cargas).toHaveLength(0);
   });

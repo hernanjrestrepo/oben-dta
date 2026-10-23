@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
-import type { CargaTarifario, LiquidacionInputPantalla, ProformaCompleta, ResultadoCargaTarifario, VistaFactura } from '@/types';
-import { AlertCircle, Download, FileSpreadsheet, FileText, History, Loader2, Receipt, Upload, X } from 'lucide-react';
-import { Card, CardHeader, btnPrimary, btnSecondary, fecha, usd } from './ui';
+import type { CargaTarifario, LiquidacionInputPantalla, ProformaCompleta, ResultadoCargaTarifario, TarifaManualInput, TarifasManuales, VistaFactura } from '@/types';
+import { AlertCircle, Download, FileSpreadsheet, FileText, History, Loader2, Plus, Receipt, Trash2, Upload, X } from 'lucide-react';
+import { Card, CardHeader, btnPrimary, btnSecondary, fecha, inputCls, usd } from './ui';
 
 /** Nombres legibles de los campos que entrega Oben para la proforma (los demás se muestran tal cual). */
 const ETIQUETAS: Record<string, string> = {
@@ -211,6 +211,9 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
   const [trabajando, setTrabajando] = useState(false);
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
+  // Vigencia del cuadro (Hernán, 23-oct): el sistema la pide al cargar; reemplaza las fechas del Excel.
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
   const input = useRef<HTMLInputElement>(null);
 
   const cargarHistorial = () =>
@@ -242,8 +245,10 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
     try {
       setTrabajando(true);
       setError('');
-      const r = await api.cargarTarifarioExportacion(archivo, true);
-      setOk(`Tarifario cargado: ${r.maritimas.total} tarifas marítimas y ${r.inland.total} Inland. Quedó en el histórico.`);
+      const r = await api.cargarTarifarioExportacion(archivo, true, { desde, hasta });
+      setOk(`Tarifario cargado: ${r.maritimas.total} tarifas marítimas y ${r.inland.total} Inland, vigentes del ${desde} al ${hasta}. Quedó en el histórico.`);
+      setDesde('');
+      setHasta('');
       setVista(null);
       setArchivo(null);
       await cargarHistorial();
@@ -335,8 +340,24 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
                 </ul>
               </details>
             )}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <label className="text-[11px] font-medium text-gray-700">
+                Fecha de vigencia (desde) *
+                <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={`${inputCls} w-full mt-0.5`} />
+              </label>
+              <label className="text-[11px] font-medium text-gray-700">
+                Fecha de expiración (hasta) *
+                <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} className={`${inputCls} w-full mt-0.5`} />
+              </label>
+            </div>
+            {desde && hasta && desde > hasta && <p className="text-red-700">La fecha de vigencia no puede ser posterior a la de expiración.</p>}
             <div className="flex gap-2 pt-1">
-              <button className={btnPrimary} onClick={() => void aplicar()} disabled={trabajando}>
+              <button
+                className={btnPrimary}
+                onClick={() => void aplicar()}
+                disabled={trabajando || !desde || !hasta || desde > hasta}
+                title={!desde || !hasta ? 'Indica la vigencia del tarifario' : undefined}
+              >
                 {trabajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Cargar este tarifario
               </button>
               <button className={btnSecondary} onClick={() => (setVista(null), setArchivo(null))} disabled={trabajando}>
@@ -345,6 +366,7 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
             </div>
           </div>
         )}
+        <TarifasManualesSeccion puedeCargar={puedeCargar} onCambio={onCargado} />
         <div>
           <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1 flex items-center gap-1">
             <History className="w-3 h-3" /> Histórico de tarifarios subidos
@@ -365,6 +387,7 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
                       {fecha(h.fecha)}
                       {h.usuario ? ` · ${h.usuario}` : ''}
                       {h.resumen?.maritimas ? ` · ${h.resumen.maritimas.total} marítimas, ${h.resumen.inland?.total ?? 0} Inland` : ''}
+                      {h.resumen?.vigenteDesde ? ` · vigente ${h.resumen.vigenteDesde} → ${h.resumen.vigenteHasta}` : ''}
                     </span>
                   </span>
                   <button
@@ -381,5 +404,205 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
         </div>
       </div>
     </Card>
+  );
+}
+
+const VACIA = { tipo: 'maritima' as 'maritima' | 'inland', origen: 'Cartagena, Colombia', destino: '', direccion: '', agente: '', naviera: '', dias: '', valor: '', comisionAduanera: '', vigenteDesde: '', vigenteHasta: '' };
+type Campo = Exclude<keyof typeof VACIA, 'tipo'>;
+
+/**
+ * Botón + del tarifario (Hernán, 23-oct): tarifas que no están en el cuadro, sin depender de una proforma. Quedan
+ * como opción en toda liquidación con ese destino, con su vigencia, y las cargas del archivo de fletes no las tocan.
+ */
+function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar: boolean; onCambio?: () => void }) {
+  const [datos, setDatos] = useState<TarifasManuales | null>(null);
+  const [abierto, setAbierto] = useState(false);
+  const [f, setF] = useState(VACIA);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.getTarifasManuales().then(setDatos).catch(() => setDatos(null));
+  }, []);
+  const num = (v: string) => (v.trim() === '' ? undefined : Number(v.replace(',', '.')));
+  const maritima = f.tipo === 'maritima';
+  const listo =
+    !!f.destino.trim() &&
+    !!f.agente.trim() &&
+    Number(num(f.valor)) > 0 &&
+    !!f.vigenteDesde &&
+    !!f.vigenteHasta &&
+    f.vigenteDesde <= f.vigenteHasta &&
+    (maritima ? !!f.origen.trim() : /\b\d{5}\b/.test(f.direccion));
+
+  async function guardar() {
+    const dias = num(f.dias);
+    const comision = num(f.comisionAduanera);
+    const t: TarifaManualInput = {
+      tipo: f.tipo,
+      destino: f.destino.trim(),
+      agente: f.agente.trim(),
+      valor: Number(num(f.valor)),
+      vigenteDesde: f.vigenteDesde,
+      vigenteHasta: f.vigenteHasta,
+      ...(dias !== undefined ? { dias: Math.round(dias) } : {}),
+      ...(maritima
+        ? { origen: f.origen.trim(), ...(f.naviera.trim() ? { naviera: f.naviera.trim() } : {}) }
+        : { direccion: f.direccion.trim(), ...(comision !== undefined ? { comisionAduanera: comision } : {}) }),
+    };
+    try {
+      setGuardando(true);
+      setError('');
+      setDatos(await api.agregarTarifaManual(t));
+      setF({ ...VACIA, tipo: f.tipo, vigenteDesde: f.vigenteDesde, vigenteHasta: f.vigenteHasta });
+      setAbierto(false);
+      onCambio?.();
+    } catch (err) {
+      setError(extractMessage(err, 'No se pudo agregar la tarifa.'));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function quitar(tipo: 'maritima' | 'inland', id: string) {
+    if (!window.confirm('¿Quitar esta tarifa agregada a mano? Las liquidaciones que ya la escogieron conservan su valor.')) return;
+    try {
+      setError('');
+      setDatos(await api.quitarTarifaManual(tipo, id));
+      onCambio?.();
+    } catch (err) {
+      setError(extractMessage(err, 'No se pudo quitar la tarifa.'));
+    }
+  }
+
+  const total = (datos?.maritimas.length ?? 0) + (datos?.inland.length ?? 0);
+  const campo = (label: string, k: Campo, extra: Record<string, unknown> = {}) => (
+    <label className="text-[11px] font-medium text-gray-700">
+      {label}
+      <input value={f[k]} onChange={(e) => setF((x) => ({ ...x, [k]: e.target.value }))} className={`${inputCls} w-full mt-0.5 text-xs py-1.5`} {...extra} />
+    </label>
+  );
+
+  return (
+    <div className="rounded-lg border border-gray-200 p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <p className="text-[11px] uppercase tracking-wide text-gray-400 flex-1">Tarifas agregadas a mano ({total})</p>
+        {puedeCargar && !abierto && (
+          <button className={btnSecondary} onClick={() => setAbierto(true)} title="Agregar una tarifa que no está en el cuadro">
+            <Plus className="w-4 h-4" /> Agregar tarifa
+          </button>
+        )}
+      </div>
+      {abierto && (
+        <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-3 space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {(['maritima', 'inland'] as const).map((tipo) => (
+              <button
+                key={tipo}
+                onClick={() => setF((x) => ({ ...x, tipo, destino: '' }))}
+                className={`px-2.5 py-1 rounded-full text-xs border ${f.tipo === tipo ? 'bg-[#F47735] text-white border-[#F47735]' : 'bg-white text-gray-700 border-gray-200'}`}
+              >
+                {tipo === 'maritima' ? 'Flete marítimo (pata 2)' : 'Inland / aduana (pata 3)'}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {maritima ? (
+              <>
+                {campo('Puerto de origen *', 'origen', { placeholder: 'Cartagena, Colombia' })}
+                {campo('Puerto de destino *', 'destino', { list: 'destinos-maritimos', placeholder: 'Escoge o escribe' })}
+                {campo('Agente *', 'agente')}
+                {campo('Naviera', 'naviera')}
+              </>
+            ) : (
+              <>
+                {campo('Puerto o rampa de salida *', 'destino', { list: 'puertos-inland', placeholder: 'Escoge o escribe' })}
+                {campo('Dirección de entrega (con ZIP) *', 'direccion', { placeholder: 'Cincinnati, OH 45240' })}
+                {campo('Transportador / agente *', 'agente')}
+                {campo('Comisión aduanera (USD)', 'comisionAduanera', { inputMode: 'decimal' })}
+              </>
+            )}
+            {campo('Valor USD por contenedor de 40 pies *', 'valor', { inputMode: 'decimal' })}
+            {campo('Días de tránsito', 'dias', { inputMode: 'numeric' })}
+            {campo('Vigente desde *', 'vigenteDesde', { type: 'date' })}
+            {campo('Vence *', 'vigenteHasta', { type: 'date', min: f.vigenteDesde || undefined })}
+          </div>
+          <datalist id="destinos-maritimos">
+            {datos?.destinosMaritimos.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
+          <datalist id="puertos-inland">
+            {datos?.puertosInland.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
+          <p className="text-[11px] text-gray-500">
+            {maritima
+              ? 'Aparece como opción en las liquidaciones que llegan a ese puerto. Escoge el destino de la lista para que coincida con el tarifario.'
+              : 'Aparece en las liquidaciones cuya dirección de entrega tiene ese ZIP.'}
+          </p>
+          <div className="flex gap-2">
+            <button className={btnPrimary} onClick={() => void guardar()} disabled={guardando || !listo}>
+              {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Agregar
+            </button>
+            <button
+              className={btnSecondary}
+              onClick={() => {
+                setAbierto(false);
+                setError('');
+              }}
+              disabled={guardando}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+      {error && (
+        <p className="text-xs text-red-700 flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5" /> {error}
+        </p>
+      )}
+      {datos && total > 0 && (
+        <ul className="divide-y divide-gray-100 text-xs">
+          {datos.maritimas.map((t) => (
+            <li key={t.id} className="py-1.5 flex items-center gap-2">
+              <span className="min-w-0 flex-1">
+                <span className="font-medium text-gray-900">
+                  {t.origen.split(',')[0]} → {t.destino}
+                </span>
+                <span className="block text-gray-500">
+                  Marítimo · {[t.agente, t.naviera].filter(Boolean).join(' / ')} · {usd(t.valor)}
+                  {t.dias !== null ? ` · ${t.dias} días` : ''} · vence {t.validUntil ?? '—'} · {t.por}
+                </span>
+              </span>
+              {puedeCargar && (
+                <button className="p-1 rounded hover:bg-gray-100" title="Quitar" onClick={() => void quitar('maritima', t.id)}>
+                  <Trash2 className="w-4 h-4 text-gray-400" />
+                </button>
+              )}
+            </li>
+          ))}
+          {datos.inland.map((t) => (
+            <li key={t.id} className="py-1.5 flex items-center gap-2">
+              <span className="min-w-0 flex-1">
+                <span className="font-medium text-gray-900">
+                  {t.puerto} → {t.direccion}
+                </span>
+                <span className="block text-gray-500">
+                  Inland · {t.agente} · {usd(t.valor)}
+                  {t.comisionAduanera !== null ? ` · aduana ${usd(t.comisionAduanera)}` : ''} · vence {t.validUntil ?? '—'} · {t.por}
+                </span>
+              </span>
+              {puedeCargar && (
+                <button className="p-1 rounded hover:bg-gray-100" title="Quitar" onClick={() => void quitar('inland', t.id)}>
+                  <Trash2 className="w-4 h-4 text-gray-400" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -13,7 +13,7 @@ import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { IdempotencyService } from '../idempotency/idempotency.service';
-import { LiquidacionRatesService, ciudadDe, type OpcionInland } from '../freight-rates/liquidacion-rates.service';
+import { LiquidacionRatesService, ciudadDe, type OpcionInland, type OpcionMaritima } from '../freight-rates/liquidacion-rates.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { LIQUIDACION_VALUE_CALCULATOR, noQuedarPorDebajo, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
@@ -161,6 +161,20 @@ function mejorInlandDesde(opciones: OpcionInland[], puerto: string): OpcionInlan
 }
 
 /** "Cartagena → Cincinnati, OH (Ramp) · Trading / HAPAG LLOYD USD 3150.00 + Inland Trading USD 860.00". */
+/** Copia de las tarifas que escogió COMEX, guardada con el cambio de ruta (selección histórica, 23-oct). */
+type TarifasDeRuta = { maritima: OpcionMaritima | null; inland: OpcionInland | null; aduana: OpcionInland | null };
+
+function tarifasDeRuta(guardada: LiquidacionRuta | null): TarifasDeRuta {
+  const t = (guardada?.detalle as { tarifas?: Partial<TarifasDeRuta> } | undefined)?.tarifas;
+  const ok = <T extends { id?: unknown }>(v: T | null | undefined, id: string | null | undefined): T | null => (v && id && v.id === id ? v : null);
+  return { maritima: ok(t?.maritima, guardada?.maritimaId), inland: ok(t?.inland, guardada?.inlandId), aduana: ok(t?.aduana, guardada?.aduanaId) };
+}
+
+/** Pone la copia histórica en lugar de la tarifa viva con el mismo id (o la agrega si el tarifario ya no la trae). */
+function conFoto<T extends { id: string }>(lista: T[], foto: T): T[] {
+  return lista.some((o) => o.id === foto.id) ? lista.map((o) => (o.id === foto.id ? foto : o)) : [...lista, foto];
+}
+
 function describirRuta(ruta: RutaLiquidacion, ids: { maritimaId: string | null; inlandId: string | null; aduanaId?: string | null }): string {
   const m = ruta.opciones.maritimas.find((o) => o.id === ids.maritimaId);
   const i = ruta.opciones.inland.find((o) => o.id === ids.inlandId);
@@ -349,10 +363,19 @@ export class LiquidacionService {
     // DEL TARIFARIO (reunión del 15-oct: puerto de origen/destino, agente, naviera, transportador
     // terrestre); nada se digita. Lo escogido se guarda en liquidacion_rutas (POST /liquidacion/:pf/ruta).
     const guardada = await this.rutaGuardada(pf);
-    const opcionesRuta =
+    const vivas =
       (esUSA || conceptos?.includes('flete')) && this.rates.opcionesDeRuta
         ? await this.rates.opcionesDeRuta(this.ctx.tenantId, { direccion: header.direccion, puertoArribo: header.puertoArribo })
         : null;
+    // La selección de COMEX es HISTÓRICA (Hernán, 23-oct: "no se cambia cuando se cambie el cuadro de fletes"): manda la
+    // copia de la tarifa guardada al escogerla, aunque el tarifario nuevo le cambie el valor o ya no la traiga.
+    const foto = tarifasDeRuta(guardada);
+    const opcionesRuta = vivas
+      ? {
+          maritimas: foto.maritima ? conFoto(vivas.maritimas, foto.maritima) : vivas.maritimas,
+          inland: [foto.inland, foto.aduana].reduce((lista, t) => (t ? conFoto(lista, t) : lista), vivas.inland),
+        }
+      : null;
     const maritimaComex = guardada?.maritimaId ? (opcionesRuta?.maritimas.find((o) => o.id === guardada.maritimaId) ?? null) : null;
     const inlandComex = guardada?.inlandId ? (opcionesRuta?.inland.find((o) => o.id === guardada.inlandId) ?? null) : null;
     if ((guardada?.maritimaId && !maritimaComex) || (guardada?.inlandId && !inlandComex) || (guardada?.aduanaId && !opcionesRuta?.inland.some((o) => o.id === guardada.aduanaId))) {
@@ -827,6 +850,12 @@ export class LiquidacionService {
       throw new BadRequestException('Ese Inland no es una opción del tarifario para esta PF.');
     }
     const motivo = cambio.motivo?.trim() || null;
+    // Copia de las tarifas escogidas tal como estaban hoy: la liquidación las usa aunque el tarifario cambie.
+    const tarifas: TarifasDeRuta = {
+      maritima: maritimaId ? (antes.ruta.opciones.maritimas.find((o) => o.id === maritimaId) ?? null) : null,
+      inland: inlandId ? (antes.ruta.opciones.inland.find((o) => o.id === inlandId) ?? null) : null,
+      aduana: aduanaId ? (antes.ruta.opciones.inland.find((o) => o.id === aduanaId) ?? null) : null,
+    };
     const fila = await this.rutas.save(
       this.rutas.create({
         tenantId: this.ctx.tenantId,
@@ -837,7 +866,7 @@ export class LiquidacionService {
         motivo,
         usuarioId: this.ctx.userId ?? null,
         usuarioNombre: usuario.nombre,
-        detalle: { antes: describirRuta(antes.ruta, antes.ruta.actual) },
+        detalle: { antes: describirRuta(antes.ruta, antes.ruta.actual), tarifas },
       }),
     );
     const despues = await this.getDraft(pf, input);
@@ -852,6 +881,7 @@ export class LiquidacionService {
       costoAduanaDespues: despues.ruta?.actual.costoAduana ?? null,
       sobrecostoAduana: despues.ruta?.sobrecostoAduana ?? null,
       contenedores: antes.ruta.contenedores,
+      tarifas,
     };
     fila.detalle = detalle;
     await this.rutas.save(fila);

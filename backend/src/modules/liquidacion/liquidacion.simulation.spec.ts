@@ -957,6 +957,21 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
         expect(d.headerOrigen.inlandFreight).toBe('maestro');
       });
 
+      it('la selección es histórica: un tarifario nuevo que cambia o quita la tarifa escogida no la toca (Hernán, 23-oct)', async () => {
+        const { service, rates } = preparar();
+        await service.cambiarRuta('11237', { maritimaId: 'm-trading', inlandId: 'i-trading', motivo: 'Booking' }, input, { nombre: 'María' });
+        // Se carga un cuadro nuevo: Trading sube a 4000 (mismo id) y el Inland de Trading sale.
+        (rates as unknown as { opcionesDeRuta: jest.Mock }).opcionesDeRuta.mockResolvedValue({
+          maritimas: OPCIONES.maritimas.map((o) => (o.id === 'm-trading' ? { ...o, flete: 4000 } : o)),
+          inland: OPCIONES.inland.filter((o) => o.id !== 'i-trading'),
+        });
+        const d = await service.getDraft('11237', input);
+        expect(d.totales.flete).toBe(3150);
+        expect(d.header.inlandFreight).toBe(860);
+        expect(d.ruta).toMatchObject({ actual: { maritimaId: 'm-trading', inlandId: 'i-trading', escogidaPorComex: true } });
+        expect(d.ajustes.join(' ')).not.toMatch(/ya no está en el tarifario/);
+      });
+
       it('nunca acepta una tarifa que no esté en las opciones del tarifario; null vuelve a la sugerida', async () => {
         const { service } = preparar();
         await expect(service.cambiarRuta('11237', { maritimaId: 'otro-id' }, input, { nombre: null })).rejects.toThrow(BadRequestException);

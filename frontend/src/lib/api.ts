@@ -14,7 +14,7 @@ import {
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
-  LiquidacionFacturaInput, LiquidacionInputPantalla, VistaFactura, ProformaCompleta, ResultadoCargaTarifario, CargaTarifario,
+  LiquidacionFacturaInput, LiquidacionInputPantalla, VistaFactura, ProformaCompleta, ResultadoCargaTarifario, CargaTarifario, TarifasManuales, TarifaManualInput,
 } from '@/types';
 
 // Misma dirección desde la que se abrió la app (Next la reenvía al backend, ver
@@ -389,10 +389,14 @@ class ApiClient {
   }
 
   /** Sube el tarifario de exportación de COMEX: sin `confirmar` solo muestra lo que cambiaría. */
-  async cargarTarifarioExportacion(archivo: File, confirmar: boolean): Promise<ResultadoCargaTarifario> {
+  async cargarTarifarioExportacion(archivo: File, confirmar: boolean, vigencia?: { desde: string; hasta: string }): Promise<ResultadoCargaTarifario> {
     const form = new FormData();
     form.append('archivo', archivo, archivo.name);
     form.append('confirmar', confirmar ? 'true' : 'false');
+    if (vigencia) {
+      form.append('vigenteDesde', vigencia.desde);
+      form.append('vigenteHasta', vigencia.hasta);
+    }
     const { data } = await this.client.post<ResultadoCargaTarifario>('/freight-rates/tarifario-exportacion', form, {
       timeout: 180_000,
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -403,6 +407,23 @@ class ApiClient {
   /** Histórico de cuadros de tarifas subidos. */
   async getHistorialTarifario(): Promise<CargaTarifario[]> {
     const { data } = await this.client.get<CargaTarifario[]>('/freight-rates/tarifario-exportacion/cargas');
+    return data;
+  }
+
+  /** Tarifas agregadas a mano (botón +) y los destinos que ya existen en el tarifario. */
+  async getTarifasManuales(): Promise<TarifasManuales> {
+    const { data } = await this.client.get<TarifasManuales>('/freight-rates/tarifas-manuales');
+    return data;
+  }
+
+  /** Agrega una tarifa que no está en el cuadro (queda como opción en las liquidaciones con ese destino). */
+  async agregarTarifaManual(t: TarifaManualInput): Promise<TarifasManuales> {
+    const { data } = await this.client.post<TarifasManuales>('/freight-rates/tarifas-manuales', t);
+    return data;
+  }
+
+  async quitarTarifaManual(tipo: 'maritima' | 'inland', id: string): Promise<TarifasManuales> {
+    const { data } = await this.client.delete<TarifasManuales>(`/freight-rates/tarifas-manuales/${tipo}/${id}`);
     return data;
   }
 
