@@ -714,8 +714,14 @@ export class FacturacionService {
   async proformasPendientes() {
     if (!this.liquidacion) return [];
     // OV "listas": su lista de empaque ya se aprobó en corte y salió (mismo evento que las órdenes recientes).
-    const eventos = await this.audit.listByAction('ov_approved_lista_empaque_enviada', 5000);
-    const listas = new Set(eventos.filter((e) => e.outputData?.ok !== false).map((e) => Number(e.entityId)).filter((n) => Number.isInteger(n) && n > 0));
+    // Desde el 23-oct la de exportación ya no sale antes de la aprobación: también cuentan las que la esperan.
+    const [eventos, enEspera] = await Promise.all([
+      this.audit.listByAction('ov_approved_lista_empaque_enviada', 5000),
+      this.audit.listByAction('ov_approved_espera_liquidacion_comex', 5000),
+    ]);
+    const listas = new Set(
+      [...eventos.filter((e) => e.outputData?.ok !== false), ...enEspera].map((e) => Number(e.entityId)).filter((n) => Number.isInteger(n) && n > 0),
+    );
     return this.liquidacion.proformasPendientesComex(listas);
   }
 

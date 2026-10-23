@@ -1,28 +1,23 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { LiquidacionService } from '../liquidacion/liquidacion.service';
+import { Injectable, Logger } from '@nestjs/common';
 import { LiquidacionCierreService } from '../liquidacion/liquidacion-cierre.service';
 import type { LiquidacionDraft } from '../liquidacion/liquidacion.types';
+import type { TrasAprobacionComex } from '../liquidacion/aprobacion-comex.token';
 import { FacturasParcialesService } from './facturas-parciales.service';
 
 /**
  * Lo que pasa cuando COMEX aprueba una liquidación de exportación (Hernán, 23-oct):
  *  1. Correo "Se realizó revisión de liquidación de COMEX" con la Proforma, la Lista de Empaque y la Liquidación.
  *  2. Por separado, se pide la factura a Oben y Facturación recibe el aviso con el resultado, como hoy.
- * Vive en Facturación (que ya depende de Liquidación) y se registra como oyente de la aprobación.
+ * Lo llama el controlador de Liquidación al aprobar (token APROBACION_COMEX, en la misma petición).
  */
 @Injectable()
-export class AprobacionComexService implements OnModuleInit {
+export class AprobacionComexService implements TrasAprobacionComex {
   private readonly logger = new Logger(AprobacionComexService.name);
 
   constructor(
-    private readonly liquidacion: LiquidacionService,
     private readonly cierre: LiquidacionCierreService,
     private readonly facturas: FacturasParcialesService,
   ) {}
-
-  onModuleInit(): void {
-    this.liquidacion.alAprobar((draft, aprobacion) => this.procesar(draft, aprobacion));
-  }
 
   async procesar(draft: LiquidacionDraft, aprobacion: { por: string | null; huella: string }) {
     const pf = draft.numberPF;

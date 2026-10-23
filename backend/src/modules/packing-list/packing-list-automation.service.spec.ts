@@ -509,3 +509,48 @@ describe('PackingListAutomationService', () => {
     });
   });
 });
+
+describe('exportación: la Lista de Empaque sale solo con la liquidación aprobada por COMEX (Hernán, 23-oct)', () => {
+  const armar = (aprobada: boolean, exportacion = true) => {
+    const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-x' } });
+    const hub = { call: hubCall } as any;
+    const ctx = { userId: 'u1', tenantId: 't1' } as any;
+    const eventos: Array<{ action: string; outputData?: Record<string, unknown> }> = [];
+    const audit = {
+      log: jest.fn(async (e: { action: string; entityId: string }) => eventos.push({ action: e.action })),
+      listForEntity: jest.fn(async () => eventos),
+    } as any;
+    const listas = { resolveRecipients: jest.fn().mockResolvedValue({ to: ['ops@oben.com'], cc: [], bcc: [] }) } as any;
+    const reports = { buildDocumentPackage: jest.fn().mockResolvedValue(COMPLETE_PACKAGE), confirmApproveComex: jest.fn().mockResolvedValue({ ok: true }) } as any;
+    const retries = { findOne: jest.fn(), create: jest.fn((x: unknown) => x), save: jest.fn(), update: jest.fn() } as any;
+    const cartera = { evaluar: jest.fn().mockResolvedValue({ action: 'continuar', verificada: true, simulated: false, motivo: 'ok' }) } as any;
+    const estado = { aprobada };
+    const aviso = {
+      esperaAprobacionComex: jest.fn(async () => ({ exportacion, numberPF: '11599', aprobada: estado.aprobada })),
+      avisarExportacion: jest.fn().mockResolvedValue({ estado: 'avisada' }),
+    } as any;
+    const service = new PackingListAutomationService(hub, ctx, audit, listas, reports, retries, cartera, undefined, undefined, aviso);
+    const correos = () => hubCall.mock.calls.filter((c) => c[0] === 'email');
+    return { service, aviso, correos, estado, reports };
+  };
+
+  it('sin aprobación: no sale el correo, se avisa a COMEX y al aprobar sale', async () => {
+    const { service, aviso, correos, estado, reports } = armar(false);
+    const r = await service.handleOvApproved(11433);
+    expect(r).toMatchObject({ sent: false, held: true, esperaComex: expect.stringContaining('PF 11599') });
+    expect(reports.buildDocumentPackage).not.toHaveBeenCalled();
+    expect(aviso.avisarExportacion).toHaveBeenCalledWith(11433);
+    expect(correos()).toHaveLength(0);
+
+    estado.aprobada = true;
+    expect(await service.liberarTrasAprobacionComex([11433])).toEqual([{ ov: 11433, resultado: 'enviada' }]);
+    expect(correos()).toHaveLength(1);
+    expect(await service.liberarTrasAprobacionComex([11433])).toEqual([{ ov: 11433, resultado: 'ya había salido' }]);
+  });
+
+  it('nacional: sale como siempre, sin esperar liquidación', async () => {
+    const { service, correos } = armar(false, false);
+    expect((await service.handleOvApproved(11348)).sent).toBe(true);
+    expect(correos()).toHaveLength(1);
+  });
+});

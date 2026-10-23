@@ -661,7 +661,9 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
           PackingListAutomationService,
           (svc) => svc.handleOvApproved(numberOrderSales),
         );
-        resultRef = result.held
+        resultRef = result.esperaComex
+          ? `${numberOrderSales}:espera_liquidacion_comex`
+          : result.held
           ? `${numberOrderSales}:retenida_por_cartera`
           : result.queued
             ? `${numberOrderSales}:en_cola_reintento`

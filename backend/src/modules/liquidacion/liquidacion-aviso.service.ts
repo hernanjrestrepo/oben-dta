@@ -127,6 +127,17 @@ export class LiquidacionAvisoService {
     return partes.join('');
   }
 
+  /**
+   * Hernán, 23-oct: "los correos de exportación solo se mandan cuando tengamos la liquidación aprobada por COMEX;
+   * nacionales no requieren liquidación". null = Oben no dijo el país (no se frena: el paquete ya se armó con Oben).
+   */
+  async esperaAprobacionComex(numberOrderSales: number): Promise<{ exportacion: boolean; numberPF: string; aprobada: boolean } | null> {
+    const h = await this.encabezadoDeOv(numberOrderSales);
+    if (!h?.proforma || !h.pais) return null;
+    if (/^col(ombia)?\b/i.test(h.pais)) return { exportacion: false, numberPF: h.proforma, aprobada: true };
+    return { exportacion: true, numberPF: h.proforma, aprobada: await this.liquidacion.aprobadaPorComex(h.proforma) };
+  }
+
   private async encabezadoDeOv(numberOrderSales: number): Promise<{ pais: string; proforma: string } | null> {
     const r = await this.hub.call<unknown>(
       'obenCostOrder',

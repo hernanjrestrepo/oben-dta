@@ -1,3 +1,4 @@
+import { LIBERAR_EXPORTACION } from '../liquidacion/aprobacion-comex.token';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PackingListController } from './packing-list.controller';
@@ -26,7 +27,12 @@ import { PackingListCarteraService } from './packing-list-cartera.service';
     LiquidacionModule,
   ],
   controllers: [PackingListController],
-  providers: [PackingListAutomationService, PackingListRetryProcessorService, PackingListCarteraService],
+  providers: [
+    PackingListAutomationService,
+    PackingListRetryProcessorService,
+    PackingListCarteraService,
+    { provide: LIBERAR_EXPORTACION, useExisting: PackingListAutomationService },
+  ],
   exports: [PackingListAutomationService],
 })
 export class PackingListModule {}

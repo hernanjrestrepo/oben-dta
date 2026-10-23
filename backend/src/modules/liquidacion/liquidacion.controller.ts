@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Logger, Optional, Param, ParseIntPipe, ParseUUIDPipe, Post, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { ContextIdFactory, ModuleRef } from '@nestjs/core';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
@@ -8,6 +9,8 @@ import { RequirePermission } from '../security/require-permission.decorator';
 import { LiquidacionService } from './liquidacion.service';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import { CONCEPTOS_POR_INCOTERM } from './incoterm-rules';
+import { APROBACION_COMEX, LIBERAR_EXPORTACION, type LiberarExportacion, type TrasAprobacionComex } from './aprobacion-comex.token';
+import type { LiquidacionDraft } from './liquidacion.types';
 import type { LiquidacionFacturaInput, LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotalesInput } from './liquidacion.types';
 
 /** Soportes de un cambio de ruta: hasta 5 archivos de 10 MB (cotizaciones, correos, PDF). */
@@ -116,9 +119,12 @@ class CierreDto {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('liquidacion')
 export class LiquidacionController {
+  private readonly logger = new Logger(LiquidacionController.name);
+
   constructor(
     private readonly liquidacion: LiquidacionService,
     private readonly cierre: LiquidacionCierreService,
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
 
   /** Qué conceptos pide cada Incoterm (misma tabla que usa el cálculo) — para la pantalla. */
@@ -148,14 +154,17 @@ export class LiquidacionController {
    */
   @Post(':numberPF/approve')
   @RequirePermission(LIQUIDACION_APROBAR_PERMISSION)
-  approve(
+  async approve(
     @Param('numberPF') numberPF: string,
     @Body() dto: LiquidacionInputDto,
     @Req() req: { user?: { email?: string; firstName?: string; lastName?: string } },
   ) {
     const u = req.user ?? {};
     const nombre = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || null;
-    return this.liquidacion.aprobar(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines, factura: dto.factura }, { nombre });
+    const draft = await this.liquidacion.aprobar(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines, factura: dto.factura }, { nombre });
+    // En segundo plano (Oben puede tardar hasta 90 s): COMEX no espera los correos ni la factura. Nunca tumba la aprobación.
+    void trasAprobar(this.moduleRef, this.liquidacion, req, draft, nombre).catch((err: Error) => this.logger.error(`PF ${draft.numberPF}: lo que sigue a la aprobación falló: ${err.message}`));
+    return draft;
   }
 
   /**
@@ -260,4 +269,26 @@ export class LiquidacionController {
   cierreEnviar(@Param('numberPF') numberPF: string, @Body() dto: CierreDto) {
     return this.cierre.enviar(numberPF, { force: dto.force ?? false });
   }
+}
+
+/**
+ * Al aprobar COMEX (Hernán, 23-oct): 1) salen los correos de Lista de Empaque de exportación que esperaban la
+ * aprobación; 2) correo "Se realizó revisión de liquidación de COMEX"; 3) por separado, la factura con su aviso.
+ * Fuera de la clase: el controlador solo expone rutas.
+ */
+async function trasAprobar(moduleRef: ModuleRef | undefined, liquidacion: LiquidacionService, req: object, draft: LiquidacionDraft, por: string | null): Promise<void> {
+  if (!moduleRef) return;
+  const logger = new Logger('LiquidacionController');
+  const contextId = ContextIdFactory.getByRequest(req);
+  const ovs = String(draft.ordenVenta ?? '')
+    .split(/[\s,;/]+/)
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0);
+  const liberar = await moduleRef.resolve<LiberarExportacion>(LIBERAR_EXPORTACION, contextId, { strict: false }).catch(() => null);
+  if (liberar && ovs.length) {
+    const r = await liberar.liberarTrasAprobacionComex(ovs);
+    logger.log(`PF ${draft.numberPF}: Listas de Empaque tras la aprobación de COMEX → ${r.map((x) => `OV ${x.ov}: ${x.resultado}`).join('; ')}`);
+  }
+  const tras = await moduleRef.resolve<TrasAprobacionComex>(APROBACION_COMEX, contextId, { strict: false }).catch(() => null);
+  await tras?.procesar(draft, { por, huella: liquidacion.huellaDe(draft) });
 }

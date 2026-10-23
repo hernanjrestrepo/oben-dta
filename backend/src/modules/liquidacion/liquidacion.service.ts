@@ -224,15 +224,6 @@ export class LiquidacionService {
    */
   private readonly reporteCache = new Map<string, { filas: Array<Record<string, unknown>>; hasta: number }>();
   private readonly reporteEnCurso = new Map<string, Promise<Array<Record<string, unknown>>>>();
-  /**
-   * Lo que pasa SOLO al aprobar COMEX (Hernán, 23-oct: correo de revisión con Proforma, Lista de Empaque y Liquidación,
-   * y aparte la factura). Lo registra quien lo hace (FacturacionModule) para no crear una dependencia circular.
-   */
-  private readonly alAprobarOyentes: Array<(draft: LiquidacionDraft, aprobacion: { por: string | null; huella: string }) => Promise<unknown>> = [];
-
-  alAprobar(oyente: (draft: LiquidacionDraft, aprobacion: { por: string | null; huella: string }) => Promise<unknown>): void {
-    this.alAprobarOyentes.push(oyente);
-  }
 
   constructor(
     private readonly hub: IntegrationHubService,
@@ -1211,6 +1202,17 @@ export class LiquidacionService {
   }
 
   /** Huella de lo que se enviaría a Oben (encabezado + líneas): la aprobación de COMEX vale solo para esta. */
+  /** Huella de los valores aprobados (identifica una aprobación: el correo de revisión sale una vez por huella). */
+  huellaDe(draft: LiquidacionDraft): string {
+    return this.huella(draft);
+  }
+
+  /** COMEX ya aprobó la liquidación de la PF (alguna vez): los correos de exportación pueden salir. */
+  async aprobadaPorComex(numberPF: string): Promise<boolean> {
+    if (!this.aprobaciones) return false;
+    return (await this.aprobaciones.count({ where: { tenantId: this.ctx.tenantId, numberPF: String(numberPF).trim() } })) > 0;
+  }
+
   private huella(draft: LiquidacionDraft): string {
     const orden = (v: unknown): unknown =>
       v && typeof v === 'object' && !Array.isArray(v)
@@ -1290,11 +1292,6 @@ export class LiquidacionService {
       outputData: { huella: fila.huella, lines: draft.lines.length, header: draft.header },
     });
     draft.aprobacion = await this.estadoAprobacion(draft);
-    // En segundo plano: COMEX no espera el correo ni la factura (Oben puede tardar hasta 90 s). Nunca tumba la aprobación.
-    const huella = fila.huella;
-    for (const oyente of this.alAprobarOyentes) {
-      void oyente(draft, { por: aprobador.nombre, huella }).catch((err: Error) => this.logger.error(`PF ${draft.numberPF}: lo que sigue a la aprobación falló: ${err.message}`));
-    }
     return draft;
   }
 

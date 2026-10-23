@@ -45,6 +45,8 @@ export interface HandleOvApprovedResult {
   /** Regla PND: la orden quedó retenida porque cartera no ha liberado (no se generó nada). */
   held?: boolean;
   carteraMotivo?: string;
+  /** Exportación retenida hasta que COMEX apruebe la liquidación (23-oct). */
+  esperaComex?: string;
 }
 
 /**
@@ -116,6 +118,31 @@ export class PackingListAutomationService {
       return { sent: false, queued: true, held: true, carteraMotivo: gate.decision.motivo, client: '', included: [], failed: [] };
     }
 
+    // Exportación (Hernán, 23-oct): el correo sale solo con la liquidación aprobada por COMEX. Mientras tanto se le
+    // avisa a COMEX para que la apruebe; al aprobar, `liberarTrasAprobacionComex` manda este mismo correo.
+    const espera = await this.avisoLiquidacion?.esperaAprobacionComex(numberOrderSales).catch(() => null);
+    if (espera?.exportacion && !espera.aprobada) {
+      const motivo = `Pedido de exportación: la Lista de Empaque sale cuando COMEX apruebe la liquidación de la PF ${espera.numberPF}.`;
+      await this.audit.log({
+        workflowName: 'packing-list-automation',
+        eventType: WorkflowEventType.ACTION_EXECUTED,
+        action: 'ov_approved_espera_liquidacion_comex',
+        entityType: 'packing_list',
+        entityId: String(numberOrderSales),
+        actorId: this.ctx.userId,
+        outputData: { numberPF: espera.numberPF },
+        reason: motivo,
+      });
+      try {
+        const l = await this.avisoLiquidacion?.avisarExportacion(numberOrderSales);
+        if (l) this.logger.log(`Orden ${numberOrderSales}: liquidación para COMEX → ${l.estado}${l.motivo ? ` (${l.motivo})` : ''}.`);
+      } catch (err) {
+        this.logger.error(`Orden ${numberOrderSales}: el aviso de liquidación a COMEX falló: ${(err as Error).message}`);
+      }
+      this.logger.log(`Orden ${numberOrderSales}: ${motivo}`);
+      return { sent: false, queued: false, held: true, esperaComex: motivo, client: '', included: [], failed: [] };
+    }
+
     const documentPackage = await this.reports.buildDocumentPackage(numberOrderSales);
     const includedKeys = documentPackage.included.map((r) => r.key);
     const failedKeys = documentPackage.failed.map((r) => r.key);
@@ -178,6 +205,30 @@ export class PackingListAutomationService {
       );
     }
     return result;
+  }
+
+  /**
+   * COMEX aprobó la liquidación: sale el correo de Lista de Empaque de las OV de exportación que lo esperaban (y que
+   * aún no lo tienen). Devuelve qué pasó con cada una.
+   */
+  async liberarTrasAprobacionComex(ovs: number[]): Promise<Array<{ ov: number; resultado: string }>> {
+    const salida: Array<{ ov: number; resultado: string }> = [];
+    for (const ov of ovs) {
+      const eventos = await this.audit.listForEntity('packing_list', String(ov));
+      const esperaba = eventos.some((e) => e.action === 'ov_approved_espera_liquidacion_comex');
+      const yaSalio = eventos.some((e) => e.action === 'ov_approved_lista_empaque_enviada' && e.outputData?.ok !== false);
+      if (!esperaba || yaSalio) {
+        salida.push({ ov, resultado: yaSalio ? 'ya había salido' : 'no estaba esperando (aún no llega "Aprobada En Corte")' });
+        continue;
+      }
+      try {
+        const r = await this.handleOvApproved(ov);
+        salida.push({ ov, resultado: r.sent ? 'enviada' : r.held ? (r.esperaComex ?? r.carteraMotivo ?? 'retenida') : r.queued ? 'en cola de reintento' : 'no salió' });
+      } catch (err) {
+        salida.push({ ov, resultado: `error: ${(err as Error).message}` });
+      }
+    }
+    return salida;
   }
 
   /**
