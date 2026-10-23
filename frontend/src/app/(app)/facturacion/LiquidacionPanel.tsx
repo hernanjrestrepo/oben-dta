@@ -14,8 +14,8 @@ import type {
 } from '@/types';
 import { IncotermGuia } from './IncotermGuia';
 import { OtrosGastosCard, RutaMaritimaCard } from './RutaPanel';
-import { ProformaModal, TarifarioCard, VistaFacturaCard } from './ComexExtras';
-import { AlertCircle, ArrowRight, BadgeCheck, FileText, Loader2, Ship, Sparkles } from 'lucide-react';
+import { ProformaModal, TarifarioCard, TarifasManualesSeccion, VistaFacturaCard } from './ComexExtras';
+import { AlertCircle, BadgeCheck, FileText, Loader2, Ship, Sparkles } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -26,7 +26,6 @@ import {
   Listo,
   PendienteConfirmar,
   agruparFaltantes,
-  btnPrimary,
   btnSecondary,
   inputCls,
   isNum,
@@ -91,11 +90,9 @@ const TEXTOS: Array<[TextoKey, string, string]> = [
 export function LiquidacionPanel({
   factura,
   onEstado,
-  onContinuar,
 }: {
   factura: FacturacionDraft;
   onEstado: (e: LiquidacionEstado) => void;
-  onContinuar: () => void;
 }) {
   const pf = factura.proforma;
   const [reglas, setReglas] = useState<IncotermRegla[] | null>(null);
@@ -269,9 +266,14 @@ export function LiquidacionPanel({
       {/* ── Datos ── */}
       <div className="xl:col-span-5 space-y-5">
 
+        {/* Orden (Hernán, 23-oct): tarifario arriba, flete marítimo, y debajo las tarifas que no están en el cuadro. */}
+        <TarifarioCard puedeCargar={puedeAprobar} onCargado={() => setTextos((t) => ({ ...t }))} />
+
         {liq?.ruta && (
           <RutaMaritimaCard pf={pf} ruta={liq.ruta} input={payload} onDraft={alGuardarRuta} />
         )}
+
+        <TarifasManualesSeccion puedeCargar={puedeAprobar} onCambio={() => setTextos((t) => ({ ...t }))} />
 
         {liq && (
           <OtrosGastosCard
@@ -349,8 +351,6 @@ export function LiquidacionPanel({
             </Field>
           </div>
         </Card>
-
-        <TarifarioCard puedeCargar={puedeAprobar} onCargado={() => setTextos((t) => ({ ...t }))} />
       </div>
 
       {/* ── Resultado ── */}
@@ -509,9 +509,6 @@ export function LiquidacionPanel({
               {liq.aprobacion?.vigente && (
                 <span className="text-[11px] text-gray-500">Al aprobar sale el correo de revisión (proforma, lista de empaque y liquidación) y se pide la factura; Facturación recibe el aviso.</span>
               )}
-              <button className={`${btnPrimary} ml-auto`} onClick={onContinuar}>
-                Continuar al envío <ArrowRight className="w-4 h-4" />
-              </button>
             </div>
           )}
         </Card>

@@ -366,7 +366,6 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
             </div>
           </div>
         )}
-        <TarifasManualesSeccion puedeCargar={puedeCargar} onCambio={onCargado} />
         <div>
           <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1 flex items-center gap-1">
             <History className="w-3 h-3" /> Histórico de tarifarios subidos
@@ -414,7 +413,7 @@ type Campo = Exclude<keyof typeof VACIA, 'tipo'>;
  * Botón + del tarifario (Hernán, 23-oct): tarifas que no están en el cuadro, sin depender de una proforma. Quedan
  * como opción en toda liquidación con ese destino, con su vigencia, y las cargas del archivo de fletes no las tocan.
  */
-function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar: boolean; onCambio?: () => void }) {
+export function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar: boolean; onCambio?: () => void }) {
   const [datos, setDatos] = useState<TarifasManuales | null>(null);
   const [abierto, setAbierto] = useState(false);
   const [f, setF] = useState(VACIA);
@@ -483,9 +482,12 @@ function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar: boolea
   );
 
   return (
-    <div className="rounded-lg border border-gray-200 p-3 space-y-2">
+    <Card>
+      <div className="p-4 space-y-2">
       <div className="flex items-center gap-2">
-        <p className="text-[11px] uppercase tracking-wide text-gray-400 flex-1">Tarifas agregadas a mano ({total})</p>
+        <p className="text-sm font-semibold text-gray-900 flex-1">
+          Tarifas fuera del tarifario <span className="text-xs font-normal text-gray-500">· agregadas a mano ({total})</span>
+        </p>
         {puedeCargar && !abierto && (
           <button className={btnSecondary} onClick={() => setAbierto(true)} title="Agregar una tarifa que no está en el cuadro">
             <Plus className="w-4 h-4" /> Agregar tarifa
@@ -603,6 +605,7 @@ function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar: boolea
           ))}
         </ul>
       )}
-    </div>
+      </div>
+    </Card>
   );
 }

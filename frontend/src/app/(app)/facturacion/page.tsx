@@ -406,8 +406,8 @@ export default function FacturacionPage() {
             </div>
           </Card>
 
-          {/* Pasos */}
-          <nav ref={pasosRef} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Pasos. Exportación: no hay más pasos en pantalla; al aprobar COMEX todo sigue solo (Hernán, 23-oct). */}
+          <nav ref={pasosRef} className={`${exportacion ? 'hidden' : 'grid'} grid-cols-1 md:grid-cols-2 gap-3`}>
             {pasos.map((p) => {
               const activo = paso === p.key;
               const Icon = p.icon;
@@ -442,7 +442,7 @@ export default function FacturacionPage() {
           {/* Paneles: se mantienen montados para no perder lo digitado al cambiar de paso */}
           <div className={paso === 'liquidacion' ? '' : 'hidden'}>
             {exportacion ? (
-              <LiquidacionPanel factura={draft} onEstado={setLiqEstado} onContinuar={() => irA('envio')} />
+              <LiquidacionPanel factura={draft} onEstado={setLiqEstado} />
             ) : (
               <Card className="p-8 text-center">
                 <MapPin className="w-8 h-8 text-teal-600 mx-auto" />

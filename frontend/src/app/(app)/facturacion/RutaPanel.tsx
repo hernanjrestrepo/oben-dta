@@ -4,11 +4,10 @@ import { useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
 import type { LiquidacionDraft, LiquidacionHeaderValues, LiquidacionTotalesInput, OpcionInland, OpcionMaritima, RutaLiquidacion } from '@/types';
-import { AlertCircle, Anchor, CheckCircle2, History, Landmark, Loader2, Paperclip, X, Receipt, RotateCcw, Truck } from 'lucide-react';
+import { AlertCircle, Anchor, CheckCircle2, ChevronDown, History, Landmark, Loader2, Paperclip, X, Receipt, RotateCcw, Truck } from 'lucide-react';
 import { Card, CardHeader, btnPrimary, btnSecondary, fecha, inputCls, isNum, usd } from './ui';
 
 const ciudad = (puerto: string) => puerto.split(/,| - |\(/)[0].trim().toLowerCase();
-const TODOS = '';
 
 type Entrada = { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput };
 
@@ -53,20 +52,15 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
   const [sel, setSel] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const [archivos, setArchivos] = useState<File[]>([]);
-  const [filtro, setFiltro] = useState({ origen: TODOS, destino: TODOS, agente: TODOS, naviera: TODOS });
+  const [verOtras, setVerOtras] = useState(false);
   const { guardar, guardando, error } = useGuardarRuta(pf, input, onDraft);
 
   const marSel = sel ?? actual.maritimaId;
   const elegida = opciones.maritimas.find((o) => o.id === marSel) ?? null;
   const pendiente = sel !== null && sel !== actual.maritimaId;
-  const valores = (k: 'origen' | 'destino' | 'forwarder' | 'naviera') => [...new Set(opciones.maritimas.map((o) => o[k] ?? '—'))].sort();
-  const filas = opciones.maritimas.filter(
-    (o) =>
-      (!filtro.origen || o.origen === filtro.origen) &&
-      (!filtro.destino || o.destino === filtro.destino) &&
-      (!filtro.agente || (o.forwarder ?? '—') === filtro.agente) &&
-      (!filtro.naviera || (o.naviera ?? '—') === filtro.naviera),
-  );
+  // Sin filtros (Hernán, 23-oct): arriba la escogida; las demás en un desplegable, de la más barata a la más cara.
+  const otras = opciones.maritimas.filter((o) => o.id !== marSel).sort((a, b) => a.flete - b.flete);
+  const filas = [...(elegida ? [elegida] : []), ...(verOtras || !elegida ? otras : [])];
   const sugeridaOp = opciones.maritimas.find((o) => o.id === sugerida.maritimaId) ?? null;
   const sobrecosto = elegida && sugeridaOp ? (elegida.flete - sugeridaOp.flete) * contenedores : null;
 
@@ -92,7 +86,7 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
       <CardHeader
         icon={<Anchor className="w-4 h-4 text-[#F47735]" />}
         title="2 · Flete marítimo"
-        subtitle="Del tarifario: puerto de origen → puerto de destino, agente y naviera. La sugerida es la más barata vigente al puerto de la proforma."
+        subtitle="Del tarifario: puerto de origen → puerto de destino, agente y naviera. La sugerida es la más barata vigente; las demás opciones, en el desplegable."
         right={<EstadoBadge comex={actual.maritimaPorComex} />}
       />
       <div className="p-4 space-y-3">
@@ -100,13 +94,7 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
           <SinTarifas />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-2">
-              <Filtro label="Puerto de origen" valor={filtro.origen} opciones={valores('origen')} onChange={(v) => setFiltro((f) => ({ ...f, origen: v }))} />
-              <Filtro label="Puerto de destino" valor={filtro.destino} opciones={valores('destino')} onChange={(v) => setFiltro((f) => ({ ...f, destino: v }))} />
-              <Filtro label="Agente" valor={filtro.agente} opciones={valores('forwarder')} onChange={(v) => setFiltro((f) => ({ ...f, agente: v }))} />
-              <Filtro label="Naviera" valor={filtro.naviera} opciones={valores('naviera')} onChange={(v) => setFiltro((f) => ({ ...f, naviera: v }))} />
-            </div>
-            <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-200">
+            <div className="max-h-96 overflow-y-auto rounded-lg border border-gray-200">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 text-gray-500 sticky top-0">
                   <tr>
@@ -136,15 +124,17 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
                       <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-900">{usd(o.flete)}</td>
                     </tr>
                   ))}
-                  {filas.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-3 py-3 text-center text-gray-400">
-                        Ninguna tarifa con esos filtros.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
+              {elegida && otras.length > 0 && (
+                <button
+                  onClick={() => setVerOtras((v) => !v)}
+                  className="w-full flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-[#C4521A] bg-gray-50 hover:bg-orange-50 border-t border-gray-200"
+                >
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${verOtras ? 'rotate-180' : ''}`} />
+                  {verOtras ? 'Ocultar las otras opciones' : `Ver otras opciones del tarifario (${otras.length})`}
+                </button>
+              )}
             </div>
             {contenedores > 1 && <p className="text-[11px] text-gray-500">Valores por contenedor de 40 pies; esta proforma lleva {contenedores}.</p>}
             <Aplicar
@@ -482,22 +472,6 @@ function EstadoBadge({ comex }: { comex: boolean }): ReactNode {
 
 function SinTarifas() {
   return <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">El tarifario no tiene tarifas para esta ruta. Hay que cargar el archivo de fletes vigente.</p>;
-}
-
-function Filtro({ label, valor, opciones, onChange }: { label: string; valor: string; opciones: string[]; onChange: (v: string) => void }) {
-  return (
-    <label className="text-[11px] text-gray-500">
-      {label}
-      <select value={valor} onChange={(e) => onChange(e.target.value)} className={`${inputCls} w-full mt-0.5 text-xs py-1.5`}>
-        <option value={TODOS}>Todos</option>
-        {opciones.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
 }
 
 function Marcas({ id, sugeridaId, actualId, vencida, validUntil }: { id: string; sugeridaId: string | null; actualId: string | null; vencida: boolean; validUntil: string | null }) {
