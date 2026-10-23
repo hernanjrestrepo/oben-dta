@@ -172,7 +172,12 @@ export class ResilientAdapterExecutor {
 
   private isNonRetryable(result: AdapterCallResult<unknown>): boolean {
     if (result.state === 'pending_credentials') return true;
-    return (result.error ?? '').startsWith('BUSINESS_ERROR:');
+    const error = result.error ?? '';
+    // Oben responde "no hay datos" / "parámetros no válidos" como HTTP 4xx con su sobre {"isSuccessful":"False",...}:
+    // el servidor está vivo y contestó. Contarlo como caída abría el circuito y tumbaba TODAS las consultas a Oben
+    // (23-oct: el reporte de proformas frío tarda ~30 s y vuelve 400 "No se encuentran datos" → "Cargar proforma" fallaba).
+    if (/^HTTP 4\d\d: \s*\{\s*"isSuccessful"/i.test(error)) return true;
+    return error.startsWith('BUSINESS_ERROR:');
   }
 
   private circuitFor(key: string): CircuitState {

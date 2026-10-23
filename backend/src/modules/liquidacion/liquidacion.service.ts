@@ -85,6 +85,8 @@ const PAIS_ORIGEN = 'Colombia';
 const NET_PAYLOAD_40_KG = 26_000;
 /** El reporte de proformas trae TODAS (~100, ~55 KB): se cachea por PF para no pedirlo en cada tecla. */
 const INCOTERM_CACHE_MS = 10 * 60_000;
+/** Reporte de proformas de producción: 3 min (las aprobadas/nuevas se ven pronto sin pedirlo en cada clic). */
+const REPORTE_PROFORMAS_CACHE_MS = 3 * 60_000;
 const INCOTERM_QUERY_OPTIONS = { maxAttempts: 1, timeoutMs: 8_000 };
 
 /**
@@ -201,6 +203,13 @@ export class LiquidacionService {
   /** País por OV (no cambia): cada recálculo de la pantalla volvía a pedir el reporte de empaque a Oben. */
   private readonly paisCache = new Map<string, { pais: string; hasta: number }>();
   private readonly proformaCache = new Map<string, { valor: { incoterm: string | null; pais: string | null }; hasta: number }>();
+  /**
+   * Reporte de proformas de PRODUCCIÓN (trae TODAS las proformas sin importar el parámetro). Frío tarda ~30 s y Oben
+   * a veces corta con 400 "No se encuentran datos" (23-oct); caliente, 0,2 s. Se guarda unos minutos y las consultas
+   * simultáneas comparten una sola llamada a Oben.
+   */
+  private readonly reporteCache = new Map<string, { filas: Array<Record<string, unknown>>; hasta: number }>();
+  private readonly reporteEnCurso = new Map<string, Promise<Array<Record<string, unknown>>>>();
 
   constructor(
     private readonly hub: IntegrationHubService,
@@ -659,14 +668,32 @@ export class LiquidacionService {
    * aprobación en Oben Xmart y, si se pasa `ovsListas`, con alguna OV lista
    * (lista de empaque aprobada en corte). Las más nuevas primero.
    */
+  /** Filas del reporte de proformas de producción (ver `reporteCache`). Lanza si Oben no lo entrega. */
+  async reporteProformas(): Promise<Array<Record<string, unknown>>> {
+    const key = this.ctx.tenantId;
+    const cached = this.reporteCache.get(key);
+    if (cached && cached.hasta > Date.now()) return cached.filas;
+    let enCurso = this.reporteEnCurso.get(key);
+    if (!enCurso) {
+      enCurso = (async () => {
+        const res = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: SP_PROFORMAS_COMEX, numberOrderSales: '0' }, OBEN_QUERY_OPTIONS);
+        if (!res.ok) throw new BadRequestException(res.error ?? 'Oben no respondió el reporte de proformas.');
+        const filas = parsearProformasComex(res.data);
+        if (filas.length) this.reporteCache.set(key, { filas, hasta: Date.now() + REPORTE_PROFORMAS_CACHE_MS });
+        return filas;
+      })().finally(() => this.reporteEnCurso.delete(key));
+      this.reporteEnCurso.set(key, enCurso);
+    }
+    return enCurso;
+  }
+
   async proformasPendientesComex(ovsListas?: ReadonlySet<number>): Promise<ProformaPendienteComex[]> {
-    const res = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: SP_PROFORMAS_COMEX, numberOrderSales: '0' }, OBEN_QUERY_OPTIONS);
-    if (!res.ok) throw new BadRequestException(res.error ?? 'Oben no respondió el reporte de proformas.');
+    const filas = await this.reporteProformas();
     const aprobadas = new Set((this.aprobaciones ? await this.aprobaciones.find({ where: { tenantId: this.ctx.tenantId } }) : []).map((a) => a.numberPF));
     // Las que COMEX ya liquidó por fuera (20-oct, p. ej. la 11166) no son pendientes.
     const descartadas = new Set((this.descartes ? await this.descartes.find({ where: { tenantId: this.ctx.tenantId } }) : []).map((d) => d.numberPF));
     const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
-    return parsearProformasComex(res.data)
+    return filas
       .filter((f) => /EXPORT/i.test(String(f.Mercado ?? '')))
       .map((f) => ({
         numberPF: String(f.NroProforma ?? f.Proforma ?? '').trim(),
@@ -857,14 +884,15 @@ export class LiquidacionService {
     // 15-oct: ya no traía la 11366 ni la 10867), producción — el reporte de proformas real trae el Incoterm.
     for (const target of ['liquidacion', undefined] as const) {
       try {
-        const res = await this.hub.call<unknown>(
-          'obenCostOrder',
-          'query.run',
-          { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf, ...(target ? { target } : {}) },
-          INCOTERM_QUERY_OPTIONS,
-        );
-        if (!res.ok) continue;
-        const encontrado = { incoterm: incotermDeProforma(res.data, pf), pais: paisDeProforma(res.data, pf) };
+        let data: unknown;
+        if (target) {
+          const res = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf, target }, INCOTERM_QUERY_OPTIONS);
+          if (!res.ok) continue;
+          data = res.data;
+        } else {
+          data = await this.reporteProformas(); // producción: el reporte compartido
+        }
+        const encontrado = { incoterm: incotermDeProforma(data, pf), pais: paisDeProforma(data, pf) };
         valor = { incoterm: valor.incoterm ?? encontrado.incoterm, pais: valor.pais ?? encontrado.pais };
         if (valor.incoterm && valor.pais) break;
       } catch {

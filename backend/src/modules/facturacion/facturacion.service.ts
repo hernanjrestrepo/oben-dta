@@ -729,14 +729,16 @@ export class FacturacionService {
     const pf = numberPF.trim();
     if (!/^\d+$/.test(pf)) throw new BadRequestException('El número de proforma debe ser numérico (ej: 11208).');
     const resultado: ProformaOrdenes = { numberPF: pf, ordenesVenta: [], cliente: null, pais: null };
-    const reporte = await this.hub.call<unknown>(
-      'obenCostOrder',
-      'query.run',
-      { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf },
-      OBEN_QUERY_OPTIONS,
-    );
-    if (reporte.ok) {
-      const fila = parsearProformasComex(reporte.data).find((r) => String(r.NroProforma ?? r.Proforma ?? '').trim() === pf);
+    // El reporte compartido (en memoria unos minutos): frío, Oben tarda ~30 s y a veces lo corta (23-oct, PF 11598).
+    let filas: Array<Record<string, unknown>> | null = null;
+    if (this.liquidacion) {
+      filas = await this.liquidacion.reporteProformas().catch(() => null);
+    } else {
+      const reporte = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: SP_PROFORMAS_COMEX, numberOrderSales: pf }, OBEN_QUERY_OPTIONS);
+      if (reporte.ok) filas = parsearProformasComex(reporte.data);
+    }
+    if (filas) {
+      const fila = filas.find((r) => String(r.NroProforma ?? r.Proforma ?? '').trim() === pf);
       if (fila) {
         const ovs = Array.isArray(fila.OrdenesVenta) ? (fila.OrdenesVenta as Array<Record<string, unknown>>) : [];
         resultado.ordenesVenta = numerosDeOv(ovs.map((o) => o?.NroOrdenVenta));
