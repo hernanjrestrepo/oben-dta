@@ -126,15 +126,7 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
                   ))}
                 </tbody>
               </table>
-              {elegida && otras.length > 0 && (
-                <button
-                  onClick={() => setVerOtras((v) => !v)}
-                  className="w-full flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-[#C4521A] bg-gray-50 hover:bg-orange-50 border-t border-gray-200"
-                >
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${verOtras ? 'rotate-180' : ''}`} />
-                  {verOtras ? 'Ocultar las otras opciones' : `Ver otras opciones del tarifario (${otras.length})`}
-                </button>
-              )}
+              <VerOtras total={opciones.maritimas.length} elegida={!!elegida} abierto={verOtras} onToggle={() => setVerOtras((v) => !v)} />
             </div>
             {contenedores > 1 && <p className="text-[11px] text-gray-500">Valores por contenedor de 40 pies; esta proforma lleva {contenedores}.</p>}
             <Aplicar
@@ -186,6 +178,8 @@ export function OtrosGastosCard({
   const ruta = liq.ruta;
   const [sel, setSel] = useState<string | null>(null);
   const [selAduana, setSelAduana] = useState<string | null>(null);
+  const [verOtrosInland, setVerOtrosInland] = useState(false);
+  const [verOtrasAduanas, setVerOtrasAduanas] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [archivos, setArchivos] = useState<File[]>([]);
   const { guardar, guardando, error } = useGuardarRuta(pf, input, onDraft);
@@ -274,7 +268,7 @@ export function OtrosGastosCard({
                   <div className="rounded-lg border border-gray-200 overflow-hidden">
                     <table className="w-full text-xs">
                       <tbody className="divide-y divide-gray-100">
-                        {inlandOpts.map((o) => {
+                        {conElegidaPrimero(inlandOpts, inlSel, verOtrosInland, (o) => o.valor).map((o) => {
                           const ok = empalma(o);
                           return (
                             <tr
@@ -296,6 +290,7 @@ export function OtrosGastosCard({
                         })}
                       </tbody>
                     </table>
+                    <VerOtras total={inlandOpts.length} elegida={inlandOpts.some((o) => o.id === inlSel)} abierto={verOtrosInland} onToggle={() => setVerOtrosInland((v) => !v)} />
                   </div>
                   {!actual?.maritimaPorComex && <p className="mt-1 text-[11px] text-gray-500">Si escoges un transportador de otro puerto, el flete marítimo se ajusta para llegar a ese puerto.</p>}
                 </div>
@@ -310,7 +305,7 @@ export function OtrosGastosCard({
                     <div className="rounded-lg border border-gray-200 overflow-hidden">
                       <table className="w-full text-xs">
                         <tbody className="divide-y divide-gray-100">
-                          {aduanaOpts.map((o) => (
+                          {conElegidaPrimero(aduanaOpts, aduSel, verOtrasAduanas, (o) => o.comisionAduanera ?? 0).map((o) => (
                             <tr key={o.id} onClick={() => setSelAduana(o.id)} className={`cursor-pointer hover:bg-gray-50 ${o.id === aduSel ? 'bg-orange-50' : ''}`}>
                               <td className="pl-2 w-8">
                                 <input type="radio" readOnly checked={o.id === aduSel} className="accent-[#F47735]" aria-label={`Escoger aduana ${o.forwarder}`} />
@@ -324,6 +319,7 @@ export function OtrosGastosCard({
                           ))}
                         </tbody>
                       </table>
+                      <VerOtras total={aduanaOpts.length} elegida={aduanaOpts.some((o) => o.id === aduSel)} abierto={verOtrasAduanas} onToggle={() => setVerOtrasAduanas((v) => !v)} />
                     </div>
                   )}
                 </div>
@@ -359,6 +355,29 @@ export function OtrosGastosCard({
         )}
       </div>
     </Card>
+  );
+}
+
+/** La escogida primero; las demás (de la más barata a la más cara) solo con el desplegable abierto (Hernán, 23-oct). */
+function conElegidaPrimero<T extends { id: string }>(lista: T[], idSel: string | null, abierto: boolean, valor: (o: T) => number): T[] {
+  const elegida = lista.find((o) => o.id === idSel);
+  if (!elegida) return lista;
+  const otras = lista.filter((o) => o.id !== idSel).sort((a, b) => valor(a) - valor(b));
+  return abierto ? [elegida, ...otras] : [elegida];
+}
+
+/** Barra "Ver otras opciones del tarifario (N)" bajo la tabla. */
+function VerOtras({ total, elegida, abierto, onToggle }: { total: number; elegida: boolean; abierto: boolean; onToggle: () => void }) {
+  const otras = elegida ? total - 1 : 0;
+  if (otras <= 0) return null;
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-[#C4521A] bg-gray-50 hover:bg-orange-50 border-t border-gray-200"
+    >
+      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${abierto ? 'rotate-180' : ''}`} />
+      {abierto ? 'Ocultar las otras opciones' : `Ver otras opciones del tarifario (${otras})`}
+    </button>
   );
 }
 
