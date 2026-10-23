@@ -7,8 +7,10 @@ import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
  * - facturada: Oben respondió éxito (Code 200).
  * - rechazada: Oben respondió isSuccessful=false — es seguro reintentar.
  * - revisar: no se supo si Oben facturó (timeout/red) — verificar en OBEN MAS antes de reintentar.
+ * - en_espera: Oben la tiene en "Aprobación pendiente"; se reintenta como máximo una vez al día.
+ * - ya_facturada: Oben dice que ya estaba facturada (la hizo Oben u otra solicitud): NO la creó Oben Xmart y nunca se vuelve a pedir.
  */
-export type EstadoFacturaParcial = 'pendiente' | 'facturando' | 'facturada' | 'rechazada' | 'revisar' | 'en_espera';
+export type EstadoFacturaParcial = 'pendiente' | 'facturando' | 'facturada' | 'rechazada' | 'revisar' | 'en_espera' | 'ya_facturada';
 
 /** Solicitud de factura parcial de una proforma por número de distribución (WO-023). */
 @Entity('facturas_parciales')

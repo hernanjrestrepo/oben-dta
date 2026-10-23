@@ -19,6 +19,7 @@ const ESTADO: Record<EstadoFacturaParcial, { label: string; cls: string }> = {
   rechazada: { label: 'Rechazada por Oben', cls: 'bg-red-50 text-red-700 border-red-200' },
   en_espera: { label: 'Esperando aprobación en Oben', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   revisar: { label: 'Revisar en OBEN MAS', cls: 'bg-orange-50 text-[#C4521A] border-orange-200' },
+  ya_facturada: { label: 'Ya estaba facturada (no la creó Oben Xmart)', cls: 'bg-gray-50 text-gray-700 border-gray-200' },
 };
 
 function fecha(s: string | null): string {

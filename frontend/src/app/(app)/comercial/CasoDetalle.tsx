@@ -141,7 +141,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
 
         <Progreso estado={caso.estado} />
 
-        {oben && <TarjetaOben p={oben} />}
+        {oben && <TarjetaOben p={oben} onGuardarOV={(n) => accion('ov', () => api.setComercialCasoOV(id, n))} ocupado={!!busy} />}
 
         {error && (
           <p className="text-sm text-red-700 flex items-start gap-1.5">
@@ -168,7 +168,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
             <p className="text-xs text-amber-900">{caso.accionPendiente.detalle}</p>
             <div className="flex flex-wrap gap-2">
               <button className={btnPrimary} disabled={!!busy} onClick={() => accion('confirmar', () => api.confirmComercialCaso(id))}>
-                {busy === 'confirmar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} {BOTON_CONFIRMAR[caso.accionPendiente.tipo] ?? 'Confirmar'}
+                {busy === 'confirmar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} {caso.simulated ? `${BOTON_CONFIRMAR[caso.accionPendiente.tipo] ?? 'Confirmar'} (SIMULADO: no llega a Oben)` : (BOTON_CONFIRMAR[caso.accionPendiente.tipo] ?? 'Confirmar')}
               </button>
               <button
                 className={btnSecondary}
@@ -429,7 +429,9 @@ function Progreso({ estado }: { estado: CasoEstado }) {
 }
 
 /** La Proforma REAL en OBEN MAS: números, estado y lo que respondió Oben en cada paso. */
-function TarjetaOben({ p }: { p: ProformaOben }) {
+function TarjetaOben({ p, onGuardarOV, ocupado }: { p: ProformaOben; onGuardarOV: (n: number) => void; ocupado: boolean }) {
+  const [ov, setOv] = useState('');
+  const ovCreada = p.estado === 'ov_creada' || p.estado === 'activa';
   const estado: Record<ProformaOben['estado'], string> = {
     pendiente: 'Sin crear',
     encabezado: 'Faltan líneas',
@@ -460,13 +462,22 @@ function TarjetaOben({ p }: { p: ProformaOben }) {
         </div>
         <div>
           <dt className="text-[11px] text-gray-500">Orden de venta</dt>
-          <dd className="font-bold text-gray-900 tabular-nums">{p.ordenVenta ?? (p.estado === 'ov_creada' || p.estado === 'activa' ? 'creada · Oben no informa el número' : '—')}</dd>
+          <dd className="font-bold text-gray-900 tabular-nums">{p.ordenVenta ?? (ovCreada ? 'creada · Oben no informa el número' : '—')}</dd>
         </div>
         <div>
           <dt className="text-[11px] text-gray-500">Estado en Oben</dt>
           <dd className="text-gray-900">{estado[p.estado]}</dd>
         </div>
       </dl>
+      {ovCreada && !p.ordenVenta && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-gray-600">Oben no devuelve el número de la orden de venta. Míralo en OBEN MAS y regístralo aquí:</span>
+          <input value={ov} onChange={(e) => setOv(e.target.value.replace(/\D/g, ''))} placeholder="Nº de la OV" className={`${inputCls} w-28 py-1`} inputMode="numeric" />
+          <button className={btnPrimary} disabled={ocupado || !ov} onClick={() => onGuardarOV(Number(ov))}>
+            Guardar número
+          </button>
+        </div>
+      )}
       {p.error && <p className="text-xs text-red-700">{p.error}</p>}
       <ul className="text-[11px] text-gray-600 space-y-0.5">
         {p.pasos.map((x, i) => (

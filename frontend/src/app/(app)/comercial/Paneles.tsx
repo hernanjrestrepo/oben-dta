@@ -320,10 +320,10 @@ export function SimuladorPanel({ casos, onChange }: { casos: ComercialCaso[]; on
         <div className="mt-3 space-y-3">
           <div className="flex flex-wrap gap-2">
             <button className={btnSecondary} disabled={!!busy} onClick={() => run('demo', () => api.comercialSimDatosDemo(), (r) => `Cliente piloto simulado listo (${(r as { equivalenciasCreadas: number }).equivalenciasCreadas} equivalencias nuevas).`)}>
-              Cargar cliente piloto simulado
+              Cargar cliente piloto simulado (no existe en Oben)
             </button>
             <button className={btnSecondary} disabled={!!busy} onClick={() => run('oc', () => api.comercialSimOcDemo(), () => 'Orden de compra simulada recibida.')}>
-              Recibir una OC simulada
+              Recibir una OC simulada (NO crea nada en OBEN MAS)
             </button>
             <button className={btnSecondary} disabled={!!busy} onClick={() => run('procesar', () => api.comercialSimProcesar(), (r) => `Procesados ${(r as { procesados: number }).procesados} caso(s).`)}>
               Procesar ahora

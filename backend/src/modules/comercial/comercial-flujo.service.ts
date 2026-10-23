@@ -385,7 +385,14 @@ export class ComercialFlujoService {
         caso.numberPF = pf;
         caso.estado = 'sin_cubicar';
         caso.fechas = { ...caso.fechas, proformaCreada: ahora };
-        this.evento(caso, 'proforma_creada', `Proforma ${pf} creada en OBEN MAS (sin cubicar)${quien}.`, opts.confirmadoPor);
+        this.evento(
+          caso,
+          'proforma_creada',
+          /^SIM-/i.test(pf) || caso.simulated
+            ? `Proforma ${pf} creada en el SIMULADOR (no existe en OBEN MAS: el cliente o sus referencias son de prueba)${quien}.`
+            : `Proforma ${pf} creada en OBEN MAS (sin cubicar)${quien}.`,
+          opts.confirmadoPor,
+        );
         break;
       }
       case 'aprobar': {
@@ -508,6 +515,34 @@ export class ComercialFlujoService {
     }
     await this.idempotency.markCompleted(tenantId, key, { data: res.data });
     return (res.data ?? {}) as T;
+  }
+
+  /**
+   * Número de la orden de venta escrito por una persona (lo ve en OBEN MAS): Oben no lo devuelve por API. Queda en
+   * el caso, en la Proforma real y en la bitácora; desde ahí lo usan el CRM, los correos y MIA.
+   */
+  async registrarNumeroOV(id: string, ordenVenta: number): Promise<ComercialCase> {
+    if (!Number.isInteger(ordenVenta) || ordenVenta <= 0) throw new BadRequestException('El número de la orden de venta debe ser un entero positivo.');
+    const caso = await this.obtener(id);
+    const real = await this.proformaReal(caso);
+    if (!real || (real.estado !== 'ov_creada' && real.estado !== 'activa')) {
+      throw new BadRequestException('Este caso no tiene una orden de venta creada en OBEN MAS todavía.');
+    }
+    const quien = this.ctx.userId ? await this.nombreUsuario(this.ctx.userId) : "Oben Xmart";
+    await this.proformas!.registrarOrdenVenta(real.id, ordenVenta, quien);
+    const anterior = caso.numberOrderSales;
+    caso.numberOrderSales = ordenVenta;
+    this.evento(
+      caso,
+      'ov_numero',
+      anterior && anterior !== ordenVenta
+        ? `Número de la orden de venta corregido: ${anterior} → ${ordenVenta} (registrado por ${quien}).`
+        : `Número de la orden de venta ${ordenVenta} registrado por ${quien} (Oben no lo devuelve por su API).`,
+      this.ctx.userId,
+    );
+    await this.casos.save(caso);
+    await this.audit.log({ workflowName: WORKFLOW, action: 'comercial_ov_numero', entityType: 'comercial_case', entityId: caso.id, actorId: this.ctx.userId, outputData: { numberPF: caso.numberPF, numberOrderSales: ordenVenta, anterior } });
+    return caso;
   }
 
   /** La Proforma real en OBEN MAS de este caso (APIs comerciales), si la hay. */

@@ -103,7 +103,6 @@ function armar(
   };
   const listas = { resolveRecipients: jest.fn(async () => ({ to: ['facturacion@oben.com'], cc: [], bcc: [] })) };
   const svc = new FacturasParcialesService(repo as never, tenants as never, ctx as never, hub as never, audit as never, listas as never, programadas as never);
-  svc.esperaVerificacionMs = 0;
   svc.reloj = () => opts.ahora ?? MANANA_1030;
   const facturasPedidas = () => hub.call.mock.calls.filter((c) => c[1] === 'factura.crear').map((c) => c[2] as { numberPF: string; numberDistribucion: string });
   return { svc, hub, filas, prog, audit, facturasPedidas };

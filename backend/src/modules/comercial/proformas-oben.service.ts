@@ -338,6 +338,14 @@ export class ProformasObenService {
     return this.guardar(p, `Orden de venta de la proforma ${this.nombrePF(p)} creada en OBEN MAS`, usuario);
   }
 
+  /** Número de la OV registrado a mano: la API de Oben solo responde "OK" y no lo devuelve (23-oct). */
+  async registrarOrdenVenta(id: string, ordenVenta: number, usuario: string | null): Promise<ProformaOben> {
+    const p = await this.obtener(id);
+    if (p.estado !== 'ov_creada' && p.estado !== 'activa') throw new BadRequestException('La proforma todavía no tiene orden de venta creada en OBEN MAS.');
+    p.ordenVenta = ordenVenta;
+    return this.guardar(p, `Número de la orden de venta ${ordenVenta} registrado a mano para la proforma ${this.nombrePF(p)}`, usuario);
+  }
+
   /** Activa la orden de venta (en el flujo: cuando cartera la libera). */
   async activar(id: string, usuario: string | null): Promise<ProformaOben> {
     const p = await this.obtener(id);

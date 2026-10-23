@@ -6,6 +6,7 @@ import { DistributionListsModule } from '../distribution-lists/distribution-list
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { Client } from '../../entities/client.entity';
 import { Tenant } from '../../entities/tenant.entity';
+import { FacturaLlamada } from '../../entities/factura-llamada.entity';
 import { FacturaParcial } from '../../entities/factura-parcial.entity';
 import { FacturaProgramada } from '../../entities/factura-programada.entity';
 import { FacturasParcialesService } from './facturas-parciales.service';
@@ -22,7 +23,7 @@ import { CuadroDiarioService } from './cuadro-diario.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Client, Tenant, FacturaParcial, FacturaProgramada]),
+    TypeOrmModule.forFeature([Client, Tenant, FacturaParcial, FacturaProgramada, FacturaLlamada]),
     IntegrationHubModule,
     AuthModule,
     DistributionListsModule,

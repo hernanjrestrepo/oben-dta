@@ -55,6 +55,13 @@ export class FacturasParcialesController {
     return this.parciales.facturar(id, dto.confirmoQueNoExiste === true);
   }
 
+  /** Registro crudo de las llamadas a la API de factura de Oben de un día (hora de Bogotá), para cruzar con Oben. */
+  @Get('llamadas')
+  @RequirePermission('invoices.read')
+  llamadas(@Query('fecha') fecha?: string) {
+    return this.parciales.llamadasDelDia(fecha);
+  }
+
   /** Reenvía el correo de resultado (con la factura en PDF o la explicación de la falla). No pide nada a Oben. */
   @Post(':id/reenviar-aviso')
   @RequirePermission('invoices.send')

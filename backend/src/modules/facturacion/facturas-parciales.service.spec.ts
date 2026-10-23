@@ -66,7 +66,6 @@ function build(opts: { hub?: { ok: boolean; error?: string; data?: unknown }; au
   const audit = { log: jest.fn() };
   const listas = { resolveRecipients: jest.fn(async () => ({ to: ['jorge@oben.com', 'camilo@oben.com'], cc: ['hernan@x.com'], bcc: [] })) };
   const svc = new FacturasParcialesService(repo as never, tenants as never, ctx as never, hub as never, audit as never, listas as never);
-  svc.esperaVerificacionMs = 0;
   return { svc, hub, filas, audit, listas };
 }
 
@@ -116,7 +115,7 @@ describe('FacturasParcialesService (WO-023)', () => {
     const f2 = await r2.svc.registrarManual('10770', '11023');
     expect((await r2.svc.facturar(f2.id)).estado).toBe('revisar');
     await expect(r2.svc.facturar(f2.id)).rejects.toBeInstanceOf(ConflictException);
-    expect(crearCalls(r2.hub)).toBe(2); // 1 intento + 1 de verificación (sigue sin aclararse)
+    expect(crearCalls(r2.hub)).toBe(1); // UNA sola llamada (23-oct): nunca se repite para "verificar"
   });
 
   it('"Aprobación pendiente" de Oben NO es rechazo: queda "en_espera", no avisa por correo y se puede reintentar', async () => {
@@ -134,7 +133,7 @@ describe('FacturasParcialesService (WO-023)', () => {
       expect(r.estado).toBe('revisar');
       expect(r.error).toMatch(/sin confirmación de éxito/);
       await expect(svc.facturar(f.id)).rejects.toBeInstanceOf(ConflictException);
-      expect(crearCalls(hub)).toBe(2); // 1 intento + 1 de verificación; sigue sin confirmación → 'revisar'
+      expect(crearCalls(hub)).toBe(1); // UNA sola llamada; lo dudoso queda en 'revisar'
     }
   });
 });
@@ -205,50 +204,38 @@ describe('Factura AUTOMÁTICA de pedidos nacionales (Hernán, 7-oct)', () => {
     expect((await svc.facturarOvNacional(11339)).estado).toBe('revisar');
   });
 
-  it('Oben factura pero responde error genérico / se cuelga: el sistema VERIFICA solo; si Oben dice que ya estaba facturada → "facturada"', async () => {
-    const { svc, hub } = build();
-    let n = 0;
-    hub.call.mockImplementation(async (_s: string, op: string, args: { procedure?: string }) => {
-      if (op === 'query.run' && args?.procedure === 'spEmpaqueUnificada_Paradixe') return { ok: true, mode: 'real', data: { Pais: 'COLOMBIA', Proforma: '11547' } };
-      if (op === 'query.run') return { ok: true, mode: 'real', data: [{ NroProforma: '11250', Mercado: 'NACIONAL' }] };
-      n += 1;
-      return n === 1 ? { ok: true, mode: 'real', data: { message: 'An error has occurred.' } } : { ok: false, mode: 'real', error: 'Oben rechazó la operación (Code 500): EL ARTÍCULO 5512 NO SE ENCUENTRA EN LA ORDEN DE VENTA _ ' };
-    });
-    const f = await svc.registrarManual('11250', '11084');
-    const r = await svc.facturar(f.id);
-    expect(r.estado).toBe('facturada');
-    expect(crearCalls(hub)).toBe(2);
+  it('23-oct: respuesta genérica o timeout → UNA sola llamada y "revisar" (antes se repetía para verificar y podía dejar facturas vacías)', async () => {
+    for (const resp of [{ ok: true, data: { message: 'An error has occurred.' } }, { ok: false, error: 'This operation was aborted' }]) {
+      const { svc, hub } = build({ hub: resp });
+      const f = await svc.registrarManual('11250', '11084');
+      expect((await svc.facturar(f.id)).estado).toBe('revisar');
+      expect(crearCalls(hub)).toBe(1);
+      await expect(svc.facturar(f.id)).rejects.toThrow(/verifícalo en OBEN MAS/);
+      expect(crearCalls(hub)).toBe(1);
+    }
   });
 
-  it('19-oct (OV 11299): timeout y luego "ya ha sido procesado en otra instancia" → "revisar", nunca "rechazada" (no se reintenta a ciegas)', async () => {
-    const { svc, hub } = build();
-    let n = 0;
-    hub.call.mockImplementation(async (_s: string, op: string, args: { procedure?: string }) => {
-      if (op === 'query.run' && args?.procedure === 'spEmpaqueUnificada_Paradixe') return { ok: true, mode: 'real', data: { Pais: 'COLOMBIA', Proforma: '11503' } };
-      if (op === 'query.run') return { ok: true, mode: 'real', data: [{ NroProforma: '11503', Mercado: 'NACIONAL' }] };
-      if (op !== 'factura.crear') return { ok: true, mode: 'real', data: {} };
-      n += 1;
-      return n === 1
-        ? { ok: false, mode: 'real', error: 'This operation was aborted' }
-        : {
-            ok: false,
-            mode: 'real',
-            error: 'Oben rechazó la operación (Code 500): Orden de venta #CLOP_9891_OV ya ha sido procesado en otra instancia del navegador o por otro usuario. Vuelva a abrir la transacción para ver el estado actual. _ ',
-          };
+  it('"el artículo N no se encuentra en la orden de venta" → "ya_facturada" (no la creó Oben Xmart) y nunca se vuelve a pedir', async () => {
+    const { svc, hub } = build({ hub: { ok: false, error: 'Oben rechazó la operación (Code 500): EL ARTÍCULO 5512 NO SE ENCUENTRA EN LA ORDEN DE VENTA _ ' } });
+    const f = await svc.registrarManual('11250', '11084');
+    const r = await svc.facturar(f.id);
+    expect(r.estado).toBe('ya_facturada');
+    expect(r.facturadaAt ?? null).toBeNull();
+    expect(r.error).toMatch(/NO la creó Oben Xmart/);
+    expect((await svc.facturar(f.id)).estado).toBe('ya_facturada');
+    expect(crearCalls(hub)).toBe(1);
+  });
+
+  it('"ya ha sido procesado en otra instancia" → "revisar", nunca "rechazada" (no se reintenta a ciegas)', async () => {
+    const { svc, hub } = build({
+      hub: { ok: false, error: 'Oben rechazó la operación (Code 500): Orden de venta #CLOP_9891_OV ya ha sido procesado en otra instancia del navegador o por otro usuario. _ ' },
     });
-    const f = await svc.registrarManual('11503', '1');
+    const f = await svc.registrarManual('11250', '1');
     const r = await svc.facturar(f.id);
     expect(r.estado).toBe('revisar');
-    expect(r.error).toMatch(/lo más probable es que la factura SÍ se creó/);
+    expect(r.error).toMatch(/la está procesando otro usuario/);
     await expect(svc.facturar(f.id)).rejects.toThrow(/verifícalo en OBEN MAS/);
-    expect(crearCalls(hub)).toBe(2);
-  });
-
-  it('si la verificación tampoco aclara (otro timeout), queda en "revisar"', async () => {
-    const { svc, hub } = build({ hub: { ok: false, error: 'This operation was aborted' } });
-    const f = await svc.registrarManual('11250', '11084');
-    expect((await svc.facturar(f.id)).estado).toBe('revisar');
-    expect(crearCalls(hub)).toBe(2);
+    expect(crearCalls(hub)).toBe(1);
   });
 
   it('SUSPENDIDA: no se pide ninguna factura a Oben (ni el botón, ni el automático de pedidos nacionales)', async () => {

@@ -1,23 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { Type } from 'class-transformer';
-import {
-  ArrayMaxSize,
-  IsArray,
-  IsBoolean,
-  IsEmail,
-  IsIn,
-  IsInt,
-  IsNotEmpty,
-  IsNumber,
-  IsObject,
-  IsOptional,
-  IsPositive,
-  IsString,
-  MaxLength,
-  Min,
-  ValidateNested,
-} from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsNotEmpty, IsNumber, IsObject, IsOptional, IsPositive, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
@@ -195,6 +179,12 @@ export class RespuestaManualDto {
   lineas?: LineaRespuestaDto[];
 }
 
+class NumeroOvDto {
+  @IsInt()
+  @Min(1)
+  numero!: number;
+}
+
 class MotivoDto {
   @IsString()
   @IsNotEmpty()
@@ -332,6 +322,13 @@ export class ComercialCasosController {
     const caso = await this.flujo.obtener(id);
     const lineas = dto.lineas?.length ? await this.flujo.lineasManuales(caso, dto.lineas) : undefined;
     return this.flujo.registrarRespuesta(caso, { tipo: dto.tipo, motivo: dto.nota, via: 'registro manual', ...(lineas ? { lineas } : {}) });
+  }
+
+  /** Número de la orden de venta que una persona ve en OBEN MAS (la API de Oben no lo devuelve). */
+  @Post('casos/:id/orden-venta')
+  @RequirePermission('orders.update')
+  registrarNumeroOV(@Param('id', ParseUUIDPipe) id: string, @Body() dto: NumeroOvDto) {
+    return this.flujo.registrarNumeroOV(id, dto.numero);
   }
 
   /** Dar de baja (el cliente no sigue): anula la Proforma en OBEN MAS. */

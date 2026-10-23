@@ -498,6 +498,12 @@ class ApiClient {
     return data;
   }
 
+  /** Número de la orden de venta visto en OBEN MAS (Oben no lo devuelve por API). */
+  async setComercialCasoOV(id: string, numero: number): Promise<ComercialCaso> {
+    const { data } = await this.client.post<ComercialCaso>(`/comercial/casos/${id}/orden-venta`, { numero });
+    return data;
+  }
+
   async cancelComercialCaso(id: string, motivo: string): Promise<ComercialCaso> {
     const { data } = await this.client.post<ComercialCaso>(`/comercial/casos/${id}/anular`, { motivo });
     return data;

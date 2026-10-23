@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThanOrEqual, Repository } from 'typeorm';
 import { FacturaParcial, EstadoFacturaParcial } from '../../entities/factura-parcial.entity';
+import { FacturaLlamada, ResultadoLlamadaFactura } from '../../entities/factura-llamada.entity';
 import { FacturaProgramada, TipoFacturaProgramada } from '../../entities/factura-programada.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
@@ -74,6 +75,18 @@ export interface ResultadoProgramada {
 }
 
 const HORA_CORTE_POR_DEFECTO = '16:00';
+
+/**
+ * Guardas contra facturas vacías y consecutivos dañados (diagnóstico del 23-oct): cada llamada a la API de factura
+ * que Oben rechaza a mitad de camino puede dejarle una factura vacía con el consecutivo gastado. Por eso una
+ * solicitud se pide como máximo una vez al día (dos si una persona confirma que verificó en OBEN MAS), hay un tope
+ * diario de llamadas, los clientes bloqueados no se llaman y tras 3 fallos seguidos la facturación se suspende sola.
+ */
+const MAX_LLAMADAS_DIA_POR_DEFECTO = 25;
+const FALLOS_SEGUIDOS_PARA_FRENO = 3;
+/** Clientes con los que la API de Oben falla siempre (HTTP 400 "No se pudo crear la factura"): no se llaman hasta que José lo confirme. */
+const CLIENTES_BLOQUEADOS_POR_DEFECTO = ['OBEN DISTRIBUIDORA'];
+const RESULTADOS_FALLIDOS: ResultadoLlamadaFactura[] = ['rechazada', 'revisar', 'ya_facturada'];
 /** Un correo "Facturar Parcial" y el cierre de su orden pueden llegar en cualquier orden, con minutos de diferencia. */
 const TOLERANCIA_CIERRE_MS = 30 * 60_000;
 
@@ -128,8 +141,6 @@ export function parsearCorreoFacturaParcial(asunto: string, cuerpo: string): Sol
 @Injectable()
 export class FacturasParcialesService {
   private readonly logger = new Logger(FacturasParcialesService.name);
-  /** Espera antes de la llamada de verificación (las pruebas la ponen en 0). */
-  esperaVerificacionMs = 3_000;
   /** Reloj (las pruebas lo fijan para probar el corte de las 4 p. m.). */
   reloj: () => Date = () => new Date();
 
@@ -142,6 +153,7 @@ export class FacturasParcialesService {
     @Optional() private readonly distributionLists?: DistributionListsService,
     @Optional() @InjectRepository(FacturaProgramada) private readonly programadas?: Repository<FacturaProgramada>,
     @Optional() private readonly facturacion?: FacturacionService,
+    @Optional() @InjectRepository(FacturaLlamada) private readonly llamadas?: Repository<FacturaLlamada>,
   ) {}
 
   listar(limite = 50): Promise<FacturaParcial[]> {
@@ -167,7 +179,7 @@ export class FacturasParcialesService {
         this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: queda pendiente — ${espera}`);
         return (await this.repo.findOne({ where: { id: fila.id, tenantId: this.ctx.tenantId } })) ?? fila;
       }
-      return this.facturar(fila.id);
+      return this.facturar(fila.id, false, false, 'correo Facturar Parcial');
     }
     return fila;
   }
@@ -184,11 +196,12 @@ export class FacturasParcialesService {
    * que no: seguro reintentar). 'revisar' (no se sabe si Oben facturó) exige
    * `confirmoQueNoExiste` — reintentar a ciegas podría duplicar la factura.
    */
-  async facturar(id: string, confirmoQueNoExiste = false, mercadoConfirmado = false): Promise<FacturaParcial> {
+  async facturar(id: string, confirmoQueNoExiste = false, mercadoConfirmado = false, disparo = 'clic en pantalla'): Promise<FacturaParcial> {
     const tenantId = this.ctx.tenantId;
     const fila = await this.repo.findOne({ where: { id, tenantId } });
     if (!fila) throw new NotFoundException('Solicitud de factura parcial no encontrada.');
-    if (fila.estado === 'facturada') return fila;
+    // Terminal: la facturó Oben Xmart o ya estaba facturada en Oben — nunca se vuelve a pedir.
+    if (fila.estado === 'facturada' || fila.estado === 'ya_facturada') return fila;
     // Interruptor general (Hernán, 7-oct: "suspendida la facturación hasta nueva orden"): no se pide NINGUNA factura a Oben.
     if (await this.suspendida()) {
       throw new ConflictException('La facturación está suspendida hasta nueva orden: no se envía ninguna factura a Oben.');
@@ -212,45 +225,54 @@ export class FacturasParcialesService {
           : `La solicitud está "${fila.estado}".`,
       );
     }
+    // Guardas antes de llamar a Oben (23-oct): cada llamada de más puede dejarle a Oben una factura vacía.
+    const bloqueo = await this.bloqueoAntesDeLlamar(fila, confirmoQueNoExiste);
+    if (bloqueo?.yaFacturada) {
+      await this.repo.update({ id, tenantId, estado: In(desde) }, { estado: 'ya_facturada', error: bloqueo.motivo });
+      this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: ya_facturada sin llamar a Oben — ${bloqueo.motivo}`);
+      return (await this.repo.findOne({ where: { id, tenantId } }))!;
+    }
+    if (bloqueo) {
+      await this.repo.update({ id, tenantId }, { error: bloqueo.motivo });
+      this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: no se llama a Oben — ${bloqueo.motivo}`);
+      throw new ConflictException(bloqueo.motivo);
+    }
+
     // Reclamo atómico: dos clics (o el correo y un clic) no facturan dos veces.
     const claim = await this.repo.update({ id, tenantId, estado: In(desde) }, { estado: 'facturando', error: null });
     if (!claim.affected) throw new ConflictException('Otra persona está facturando esta solicitud en este momento.');
 
-    const pedir = () =>
-      this.hub.call<unknown>('obenCostOrder', 'factura.crear', { numberPF: fila.numberPF, numberDistribucion: fila.numeroDistribucion }, { maxAttempts: 1, timeoutMs: 90_000 });
-    let r = await pedir();
+    // UNA sola llamada por solicitud (23-oct): nunca se repite para "verificar". Lo dudoso queda en "revisar".
+    const registro = await this.registrarLlamada(fila, disparo);
+    const inicio = Date.now();
+    const r = await this.hub.call<unknown>('obenCostOrder', 'factura.crear', { numberPF: fila.numberPF, numberDistribucion: fila.numeroDistribucion }, { maxAttempts: 1, timeoutMs: 90_000 });
     // Oben contesta un rechazo de negocio con HTTP 200+isSuccessful=false o con HTTP 4xx (visto el 2026-10-06: 400 "No se pudo crear la factura de venta"): en ambos casos NO se creó nada y es seguro reintentar.
     const esRechazo = (x: typeof r) => !x.ok && /^(Oben rechazó la operación|HTTP 4\d\d:)/.test(x.error ?? '');
     const esErrorCliente = (x: typeof r) => !x.ok && /BUSINESS_ERROR|pending_credentials|ssrf_blocked/.test(x.error ?? '');
     // Éxito = confirmación EXPLÍCITA de Oben (isSuccessful true o Code 200).
     const esExito = (x: typeof r) => x.ok && confirmaExito(x.data);
-    let yaFacturada = !r.ok && YA_FACTURADA.test(r.error ?? '');
-    // Visto el 2026-10-07: Oben a veces FACTURA y aun así responde {"message":"An error has occurred."} o se demora
-    // más del tiempo de espera. Como Oben cierra los artículos al facturar, repetir la llamada es seguro: si ya
-    // estaba facturada la rechaza ("el artículo X no se encuentra en la orden de venta"); si no, la crea.
-    let verificada = false;
-    if (!esExito(r) && !yaFacturada && !esErrorCliente(r) && (r.ok || !esRechazo(r))) {
-      await new Promise((res) => setTimeout(res, this.esperaVerificacionMs));
-      r = await pedir();
-      verificada = true;
-      yaFacturada = !r.ok && YA_FACTURADA.test(r.error ?? '');
-    }
+    // "El artículo N no se encuentra en la orden de venta" / "estado: Facturada": ya estaba facturada (no la creamos).
+    const yaFacturada = !r.ok && YA_FACTURADA.test(r.error ?? '');
     const rechazo = esRechazo(r);
     const errorCliente = esErrorCliente(r);
-    const confirmada = esExito(r) || yaFacturada;
-    const enEspera = !confirmada && !r.ok && EN_ESPERA_OBEN.test(r.error ?? '');
+    const confirmada = esExito(r);
+    const enEspera = !confirmada && !yaFacturada && !r.ok && EN_ESPERA_OBEN.test(r.error ?? '');
     const procesadaEnOtra = !confirmada && !r.ok && PROCESADA_EN_OTRA.test(r.error ?? '');
     const estado: EstadoFacturaParcial = confirmada
       ? 'facturada'
-      : enEspera
+      : yaFacturada
+        ? 'ya_facturada'
+        : enEspera
         ? 'en_espera'
         : procesadaEnOtra || r.ok || (!rechazo && !errorCliente)
           ? 'revisar'
           : 'rechazada';
     const errorTexto = confirmada
       ? null
+      : yaFacturada
+        ? `Oben dice que ya estaba facturada: la factura NO la creó Oben Xmart (la hizo Oben u otra solicitud) y no se vuelve a pedir. Respuesta de Oben: ${r.error}`
       : procesadaEnOtra
-        ? `Oben dice que la orden ${verificada ? 'ya fue procesada (la primera solicitud no respondió a tiempo)' : 'la está procesando otro usuario'}: lo más probable es que la factura SÍ se creó. Verificar en OBEN MAS antes de reintentar. Respuesta de Oben: ${r.error}`
+        ? `Oben dice que la orden la está procesando otro usuario: puede que la factura SÍ se haya creado. Verificar en OBEN MAS antes de reintentar. Respuesta de Oben: ${r.error}`
       : r.ok
         ? `Respuesta de Oben sin confirmación de éxito (${JSON.stringify(r.data ?? null).slice(0, 160)}). Verificar en OBEN MAS si la factura existe antes de reintentar.`
         : (r.error ?? 'Error desconocido');
@@ -258,7 +280,7 @@ export class FacturasParcialesService {
       { id, tenantId },
       {
         estado,
-        respuesta: (r.ok ? r.data : yaFacturada ? { yaFacturada: true, verificada, detalle: r.error } : null) as never,
+        respuesta: (r.ok ? r.data : yaFacturada ? { yaFacturada: true, detalle: r.error } : null) as never,
         error: errorTexto,
         modo: r.mode ?? null,
         facturadoPor: this.ctx.userId ?? null,
@@ -268,17 +290,19 @@ export class FacturasParcialesService {
     await this.audit.log({
       workflowName: 'facturacion',
       eventType: WorkflowEventType.ACTION_EXECUTED,
-      action: confirmada ? 'factura_parcial_creada' : 'factura_parcial_fallida',
+      action: confirmada ? 'factura_parcial_creada' : yaFacturada ? 'factura_ya_existia' : 'factura_parcial_fallida',
       entityType: 'proforma',
       entityId: fila.numberPF,
       actorId: this.ctx.userId,
-      inputData: { numberPF: fila.numberPF, numeroDistribucion: fila.numeroDistribucion, origen: fila.origen },
+      inputData: { numberPF: fila.numberPF, numeroDistribucion: fila.numeroDistribucion, origen: fila.origen, disparo },
       outputData: { ok: confirmada, estado, modo: r.mode ?? null, respuesta: r.ok ? r.data : null },
       reason: errorTexto,
     });
     this.logger.log(`PF ${fila.numberPF} distribución ${fila.numeroDistribucion}: ${estado}${errorTexto ? ` — ${errorTexto}` : ''}`);
+    await this.cerrarLlamada(registro, estado as ResultadoLlamadaFactura, r.ok ? JSON.stringify(r.data ?? null) : (r.error ?? null), Date.now() - inicio);
+    await this.frenoPorFallos(estado);
     // En espera no es un fallo: se reintenta sola (reintentarEnEspera) y solo se avisa cuando se resuelve.
-    if (estado !== 'en_espera') await this.avisarResultado(fila, estado, errorTexto, r.mode, yaFacturada, !yaFacturada && confirmada ? numeroDeRespuesta(r.data) : null);
+    if (estado !== 'en_espera') await this.avisarResultado(fila, estado, errorTexto, r.mode, yaFacturada, confirmada ? numeroDeRespuesta(r.data) : null);
     return (await this.repo.findOne({ where: { id, tenantId } }))!;
   }
 
@@ -320,7 +344,7 @@ export class FacturasParcialesService {
       const ok = estado === 'facturada';
       const ctx = await this.contextoDeFalla(fila, errorTexto);
       const expl = ok ? null : explicarFalla(estado, errorTexto, ctx);
-      const titulo = { facturada: 'Factura creada en OBEN MAS', rechazada: 'Factura RECHAZADA por Oben', revisar: 'Factura por REVISAR en OBEN MAS', en_espera: 'Factura en espera de aprobación en Oben', pendiente: 'Factura pendiente', facturando: 'Factura en proceso' }[estado];
+      const titulo = { facturada: 'Factura creada en OBEN MAS', ya_facturada: 'Ya estaba facturada en Oben (no la creó Oben Xmart)', rechazada: 'Factura RECHAZADA por Oben', revisar: 'Factura por REVISAR en OBEN MAS', en_espera: 'Factura en espera de aprobación en Oben', pendiente: 'Factura pendiente', facturando: 'Factura en proceso' }[estado];
       const pdf = ok ? await this.pdfDeLaFactura(fila) : null;
       const resumen =
         `<table cellpadding="4" style="border-collapse:collapse">` +
@@ -480,12 +504,12 @@ export class FacturasParcialesService {
     return /^col(ombia)?\b/i.test(pais) ? 'nacional' : 'exportacion';
   }
 
-  private async encabezadoDeOv(ov: number): Promise<{ pais: string; proforma: string } | null> {
+  private async encabezadoDeOv(ov: number): Promise<{ pais: string; proforma: string; cliente: string } | null> {
     const r = await this.hub.call<unknown>('obenCostOrder', 'query.run', { procedure: 'spEmpaqueUnificada_Paradixe', numberOrderSales: ov }, { maxAttempts: 2, timeoutMs: 60_000 });
     const h = r.ok ? (Array.isArray(r.data) ? (r.data as unknown[])[0] : r.data) : null;
     if (!h || typeof h !== 'object') return null;
     const o = h as Record<string, unknown>;
-    return { pais: String(o.Pais ?? '').trim(), proforma: String(o.Proforma ?? '').trim() };
+    return { pais: String(o.Pais ?? '').trim(), proforma: String(o.Proforma ?? '').trim(), cliente: String(o.Cliente ?? '').trim() };
   }
 
   /**
@@ -536,7 +560,7 @@ export class FacturasParcialesService {
       const estados = new Set<string>();
       for (const p of espera) {
         try {
-          estados.add((await this.facturar(p.id, false, true)).estado);
+          estados.add((await this.facturar(p.id, false, true, `cierre de la OV ${numberOrderSales}`)).estado);
         } catch (err) {
           estados.add('error');
           this.logger.warn(`PF ${h.proforma}: reintento en espera falló: ${(err as Error).message}`);
@@ -562,7 +586,7 @@ export class FacturasParcialesService {
       const partes: string[] = [];
       for (const p of listos) {
         try {
-          const r = await this.facturar(p.id, false, true);
+          const r = await this.facturar(p.id, false, true, `cierre de la OV ${numberOrderSales}`);
           estados.add(r.estado);
           partes.push(`distribución ${p.numeroDistribucion}: ${r.estado}`);
         } catch (err) {
@@ -591,7 +615,7 @@ export class FacturasParcialesService {
     } catch {
       return omitir(`La PF ${h.proforma} ya tiene una solicitud de factura.`, h.proforma); // carrera: otra ejecución la registró primero
     }
-    const r = await this.facturar(fila.id, false, true);
+    const r = await this.facturar(fila.id, false, true, `cierre de la OV ${numberOrderSales}`);
     return { estado: r.estado, numberPF: h.proforma };
   }
 
@@ -703,7 +727,7 @@ export class FacturasParcialesService {
           for (const x of pendientes) {
             parcialesProcesados += 1;
             try {
-              const r = await this.facturar(x.id);
+              const r = await this.facturar(x.id, false, false, 'cuadro del dia');
               resultados.push({ ...base, resultado: r.estado, detalle: `distribución ${x.numeroDistribucion}${r.error ? `: ${r.error}` : ''}` });
             } catch (err) {
               resultados.push({ ...base, resultado: 'omitida', detalle: `distribución ${x.numeroDistribucion}: ${(err as Error).message}` });
@@ -735,22 +759,171 @@ export class FacturasParcialesService {
   }
 
   /**
-   * Reintenta las solicitudes que Oben dejó en "Aprobación pendiente" (últimas 48 h). Las llama el procesador de
-   * fondo cada 15 min; si Oben ya las aprobó se facturan y ahí sí sale el aviso por correo.
+   * Reintenta las solicitudes que Oben dejó en "Aprobación pendiente" (últimas 48 h). Antes del 23-oct se reintentaban
+   * cada 15 min (la PF 11611 se pidió 12 veces en 2 h): ahora como MÁXIMO una vez al día y solo si la proforma está en
+   * el cuadro de hoy (con la programación diaria activa). Si Oben ya la aprobó, se factura y sale el aviso.
    */
   async reintentarEnEspera(): Promise<number> {
     const desde = new Date(this.reloj().getTime() - 48 * 3_600_000);
     const filas = await this.repo.find({ where: { tenantId: this.ctx.tenantId, estado: 'en_espera', updatedAt: MoreThanOrEqual(desde) } });
     let n = 0;
     for (const f of filas) {
+      if ((await this.llamadasDeHoy({ solicitudId: f.id })).length > 0) continue; // ya se le pidió hoy
+      const prog = await this.programadaHoy({ pf: f.numberPF });
+      if (prog.activa && !prog.entrada) continue; // no está en el cuadro de hoy
       try {
-        await this.facturar(f.id, false, f.origen === 'automatico');
+        await this.facturar(f.id, false, f.origen === 'automatico', 'reintento diario (en espera)');
         n++;
       } catch (err) {
         this.logger.warn(`PF ${f.numberPF}: reintento en espera falló: ${(err as Error).message}`);
       }
     }
     return n;
+  }
+
+  /**
+   * Por qué NO se debe llamar a Oben para esta solicitud (null = se puede). `yaFacturada` = el cuadro de Oben ya la
+   * muestra facturada: queda así sin llamar.
+   */
+  private async bloqueoAntesDeLlamar(fila: FacturaParcial, confirmoQueNoExiste: boolean): Promise<{ motivo: string; yaFacturada?: boolean } | null> {
+    const f = await this.ajustes();
+    // 1. El cuadro de Oben ya la muestra FACTURADA (pedido completo): pedirla otra vez solo puede dejar una factura vacía.
+    if (this.programadas && !fila.numeroDistribucion) {
+      const prog = await this.programadas.find({ where: { tenantId: this.ctx.tenantId, numberPF: fila.numberPF } });
+      const ultima = prog.sort((x, y) => String(y.fecha).localeCompare(String(x.fecha)))[0];
+      if (ultima?.estadoOben && /FACTURAD/i.test(ultima.estadoOben)) {
+        return { yaFacturada: true, motivo: `El cuadro de Oben del ${ultima.fecha} la muestra "${ultima.estadoOben}": ya está facturada, no se pide.` };
+      }
+    }
+    // 2. Clientes con los que la API de Oben falla siempre.
+    const lista = Array.isArray(f?.clientesBloqueados) ? (f!.clientesBloqueados as unknown[]).map(String) : CLIENTES_BLOQUEADOS_POR_DEFECTO;
+    const cliente = (await this.clienteDe(fila)).toUpperCase();
+    const bloqueado = cliente ? lista.map((c) => c.toUpperCase()).find((b) => b && cliente.includes(b)) : undefined;
+    if (bloqueado) {
+      return {
+        motivo: `El cliente ${cliente} está bloqueado para pedir facturas por la API: Oben siempre lo rechaza ("No se pudo crear la factura de venta"). No se llama hasta que José lo confirme; mientras tanto se factura en OBEN MAS.`,
+      };
+    }
+    if (!this.llamadas) return null;
+    // 3. Una llamada que salió y nunca volvió (el proceso se cayó en medio): no se sabe qué quedó en Oben.
+    const previas = await this.llamadas.find({ where: { tenantId: this.ctx.tenantId, solicitudId: fila.id }, order: { createdAt: 'DESC' }, take: 5 });
+    if (previas.some((l) => l.resultado === 'enviada') && !confirmoQueNoExiste) {
+      return { motivo: 'Una llamada anterior a Oben no terminó: verifica en OBEN MAS qué quedó y confirma antes de reintentar.' };
+    }
+    // 4. Una vez al día por solicitud (dos si una persona confirma que verificó en OBEN MAS).
+    const hoy = await this.llamadasDeHoy({ solicitudId: fila.id });
+    if (hoy.length >= (confirmoQueNoExiste ? 2 : 1)) {
+      const u = hoy[0];
+      return {
+        motivo: `Ya se le pidió a Oben hoy (${hhmm(fechaHoraBogota(new Date(u.createdAt)).minutos)}, resultado: ${u.resultado}). Para no dejar facturas vacías se pide como máximo una vez al día${confirmoQueNoExiste ? '' : '; si verificaste en OBEN MAS que no existe, confirma para un último intento'}.`,
+      };
+    }
+    // 5. Tope diario de llamadas.
+    const max = Number(f?.maxLlamadasDia) > 0 ? Number(f!.maxLlamadasDia) : MAX_LLAMADAS_DIA_POR_DEFECTO;
+    if ((await this.llamadasDeHoy({})).length >= max) {
+      return { motivo: `Se alcanzó el tope de ${max} llamadas de factura a Oben de hoy: lo demás se pide mañana (o se sube el tope si Oben lo autoriza).` };
+    }
+    return null;
+  }
+
+  /** Cliente de la solicitud: el del cuadro de Oben, o el de su orden de venta. '' si no se sabe. */
+  private async clienteDe(fila: FacturaParcial): Promise<string> {
+    if (this.programadas) {
+      const prog = await this.programadas.find({ where: { tenantId: this.ctx.tenantId, numberPF: fila.numberPF } });
+      const conCliente = prog.filter((x) => x.cliente).sort((x, y) => String(y.fecha).localeCompare(String(x.fecha)))[0];
+      if (conCliente?.cliente) return conCliente.cliente;
+    }
+    const ov = /^OV\s+(\d+)/i.exec(fila.remitente ?? '');
+    if (ov) return (await this.encabezadoDeOv(Number(ov[1])).catch(() => null))?.cliente ?? '';
+    return '';
+  }
+
+  /** Llamadas de factura de HOY (hora de Bogotá), de una solicitud o de todo el tenant; la más reciente primero. */
+  private async llamadasDeHoy(c: { solicitudId?: string }): Promise<FacturaLlamada[]> {
+    if (!this.llamadas) return [];
+    const inicioDia = new Date(Date.parse(`${fechaHoraBogota(this.reloj()).fecha}T05:00:00Z`)); // 00:00 en Bogotá
+    return this.llamadas.find({
+      where: { tenantId: this.ctx.tenantId, createdAt: MoreThanOrEqual(inicioDia), ...(c.solicitudId ? { solicitudId: c.solicitudId } : {}) },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  private async registrarLlamada(fila: FacturaParcial, disparo: string): Promise<FacturaLlamada | null> {
+    if (!this.llamadas) return null;
+    return this.llamadas.save(
+      this.llamadas.create({
+        tenantId: this.ctx.tenantId,
+        solicitudId: fila.id,
+        numberPF: fila.numberPF,
+        numeroDistribucion: fila.numeroDistribucion ?? '',
+        disparo: disparo.slice(0, 40),
+        resultado: 'enviada',
+        usuarioId: this.ctx.userId ?? null,
+        createdAt: this.reloj(),
+      }),
+    );
+  }
+
+  private async cerrarLlamada(l: FacturaLlamada | null, resultado: ResultadoLlamadaFactura, respuesta: string | null, duracionMs: number): Promise<void> {
+    if (!l || !this.llamadas) return;
+    await this.llamadas.update({ id: l.id, tenantId: this.ctx.tenantId }, { resultado, respuesta: respuesta?.slice(0, 4000) ?? null, duracionMs, terminadaAt: this.reloj() });
+  }
+
+  /** Freno: tras 3 llamadas seguidas que no crean factura (rechazo, duda o "ya estaba facturada"), la facturación se suspende sola y avisa. */
+  private async frenoPorFallos(ultimo: EstadoFacturaParcial): Promise<void> {
+    if (!this.llamadas || !RESULTADOS_FALLIDOS.includes(ultimo as ResultadoLlamadaFactura)) return;
+    const ultimas = await this.llamadas.find({ where: { tenantId: this.ctx.tenantId }, order: { createdAt: 'DESC' }, take: FALLOS_SEGUIDOS_PARA_FRENO });
+    if (ultimas.length < FALLOS_SEGUIDOS_PARA_FRENO || !ultimas.every((l) => RESULTADOS_FALLIDOS.includes(l.resultado))) return;
+    const t = await this.tenants.findOne({ where: { id: this.ctx.tenantId } });
+    if (!t) return;
+    const fact = (t.settings?.facturacion ?? {}) as Record<string, unknown>;
+    if (fact.suspendida === true) return;
+    const motivo = `Freno automático: ${FALLOS_SEGUIDOS_PARA_FRENO} llamadas seguidas a Oben sin crear factura (${ultimas.map((l) => `PF ${l.numberPF}: ${l.resultado}`).join('; ')}).`;
+    const settings = { ...(t.settings ?? {}), facturacion: { ...fact, suspendida: true, suspendidaPor: 'freno automático', suspendidaMotivo: motivo, suspendidaEn: this.reloj().toISOString() } };
+    await this.tenants.update({ id: t.id }, { settings: settings as never });
+    this.logger.warn(`Facturación SUSPENDIDA por el freno automático — ${motivo}`);
+    await this.audit.log({ workflowName: 'facturacion', eventType: WorkflowEventType.ACTION_EXECUTED, action: 'facturacion_freno_automatico', entityType: 'tenant', entityId: t.id, actorId: this.ctx.userId, reason: motivo });
+    await this.avisarFreno(motivo);
+  }
+
+  private async avisarFreno(motivo: string): Promise<void> {
+    if (!this.distributionLists) return;
+    try {
+      const dest = await this.distributionLists.resolveRecipients('document', 'facturacion');
+      if (dest.to.length === 0) return;
+      const [para, ...resto] = dest.to;
+      const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      await this.hub.call(
+        'email',
+        'send',
+        {
+          to: para,
+          ...(resto.length || dest.cc.length ? { cc: [...resto, ...dest.cc].join(',') } : {}),
+          subject: 'Facturación SUSPENDIDA automáticamente — Oben Xmart',
+          body:
+            `<p><b>Qué pasó:</b> ${esc(motivo)}</p>` +
+            '<p><b>Qué significa:</b> cuando Oben rechaza varias facturas seguidas algo está mal (de su lado o en los datos), y cada llamada fallida puede dejar una factura vacía con el consecutivo gastado. Para no dañar más consecutivos, Oben Xmart dejó de pedir facturas.</p>' +
+            '<p><b>Qué se hace:</b> revisar en OBEN MAS las proformas de arriba (si quedó alguna factura vacía, anularla) y, cuando esté claro, reactivar la facturación.</p>',
+        },
+        { maxAttempts: 1, timeoutMs: 30_000 },
+      );
+    } catch (err) {
+      this.logger.warn(`No se pudo avisar el freno de facturación: ${(err as Error).message}`);
+    }
+  }
+
+  /** Registro de llamadas a la API de factura de un día, hora de Bogotá (para cruzar con Oben). */
+  async llamadasDelDia(fecha?: string): Promise<FacturaLlamada[]> {
+    if (!this.llamadas) return [];
+    const dia = fecha ?? fechaHoraBogota(this.reloj()).fecha;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) throw new BadRequestException('La fecha debe venir como AAAA-MM-DD.');
+    const inicio = new Date(Date.parse(`${dia}T05:00:00Z`));
+    const fin = new Date(inicio.getTime() + 24 * 3_600_000);
+    return this.llamadas
+      .createQueryBuilder('l')
+      .where('l.tenant_id = :t AND l.created_at >= :i AND l.created_at < :f', { t: this.ctx.tenantId, i: inicio, f: fin })
+      .orderBy('l.created_at', 'ASC')
+      .getMany();
   }
 
   /** Ajustes de facturación del tenant (`settings.facturacion`); null si no se pueden leer. */
