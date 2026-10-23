@@ -8,7 +8,8 @@ import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { DistributionListsService } from '../distribution-lists/distribution-lists.service';
 import { ObenReportsService, OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
-import type { CierreAdjunto, CierreEnvioResult, CierrePreview } from './liquidacion.types';
+import type { CierreAdjunto, CierreEnvioResult, CierrePreview, LiquidacionDraft } from './liquidacion.types';
+import { pdfLiquidacion, pdfProforma } from './liquidacion-pdf';
 
 const WORKFLOW_NAME = 'liquidacion';
 /** Lista de distribución del correo de cierre: COMEX y Facturación (OBEN MAS §1.2). */
@@ -183,6 +184,93 @@ export class LiquidacionCierreService {
         error,
       };
     }
+  }
+
+  /**
+   * Correo al aprobar COMEX (Hernán, 23-oct): "apenas COMEX apruebe ... se envía correo con proforma, lista de empaque y
+   * liquidación: se realizó revisión de liquidación de COMEX". A COMEX y Facturación (misma lista del cierre). Una vez
+   * por aprobación (huella); nunca incompleto: si falta un documento o la lista, no sale y queda auditado.
+   */
+  async enviarRevisionComex(draft: LiquidacionDraft, aprobacion: { por: string | null; huella: string }): Promise<{ enviado: boolean; detalle: string }> {
+    const pf = draft.numberPF;
+    const eventos = await this.audit.listForEntity('liquidacion', pf);
+    if (eventos.some((e) => e.action === 'liquidacion_revision_comex_enviada' && e.outputData?.ok !== false && e.outputData?.huella === aprobacion.huella)) {
+      return { enviado: false, detalle: 'Ya se envió el correo de esta misma aprobación.' };
+    }
+    const faltan: string[] = [];
+    const destinatarios = await this.distributionLists.resolveRecipients('document', CIERRE_DISTRIBUTION_KEY);
+    if (destinatarios.to.length === 0) faltan.push(`No hay destinatarios en la lista "${CIERRE_DISTRIBUTION_KEY}" (COMEX y Facturación).`);
+
+    const adjuntos: Array<{ filename: string; contentType: string; buffer: Buffer; label: string }> = [];
+    const firmada = await this.proformaFirmada(pf);
+    if (firmada && !firmada.simulated) adjuntos.push({ filename: firmada.filename, contentType: firmada.contentType, buffer: firmada.buffer, label: firmada.label });
+    else adjuntos.push({ filename: `Proforma-PF${pf}.pdf`, contentType: 'application/pdf', buffer: await pdfProforma(draft), label: 'Proforma' });
+
+    const ovs = String(draft.ordenVenta ?? '')
+      .split(/[\s,;/]+/)
+      .map(Number)
+      .filter((n) => Number.isInteger(n) && n > 0);
+    if (ovs.length === 0) faltan.push(`La PF ${pf} no trae orden de venta: no se puede adjuntar la Lista de Empaque.`);
+    for (const ov of ovs) {
+      const unificada = await this.reports.buildReport('empaque_unificada', ov);
+      if (!unificada.ok) faltan.push(`Lista de Empaque (OV ${ov}): ${unificada.failure.error}`);
+      else if (unificada.simulated) faltan.push(`Lista de Empaque (OV ${ov}): salió del SIMULADOR, no de Oben.`);
+      else adjuntos.push({ filename: unificada.attachment.filename, contentType: unificada.attachment.contentType, buffer: unificada.attachment.buffer, label: `Lista de Empaque OV ${ov}` });
+    }
+    const aprobadaEn = new Date();
+    adjuntos.push({ filename: `Liquidacion-PF${pf}.pdf`, contentType: 'application/pdf', buffer: await pdfLiquidacion(draft, { por: aprobacion.por, en: aprobadaEn }), label: 'Liquidación aprobada por COMEX' });
+
+    if (draft.simulated) faltan.push('La liquidación tiene datos simulados.');
+    if (faltan.length) {
+      await this.audit.log({
+        workflowName: WORKFLOW_NAME,
+        action: 'liquidacion_revision_comex_incompleta',
+        entityType: 'liquidacion',
+        entityId: pf,
+        actorId: this.ctx.userId,
+        outputData: { faltan, huella: aprobacion.huella },
+        reason: 'El correo de revisión de COMEX no se envía incompleto.',
+      });
+      this.logger.warn(`PF ${pf}: el correo de revisión de COMEX no salió — ${faltan.join(' | ')}`);
+      return { enviado: false, detalle: faltan.join(' ') };
+    }
+
+    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const ov = draft.ordenVenta ? ` / OV ${draft.ordenVenta}` : '';
+    const body = [
+      `<p><b>Se realizó revisión de liquidación de COMEX</b> — Proforma ${esc(pf)}${esc(ov)}, ${esc(draft.cliente)}${draft.pais ? ` (${esc(draft.pais)})` : ''}.</p>`,
+      `<p>Aprobada por ${esc(aprobacion.por ?? 'COMEX')}. Incoterm ${esc(draft.incoterm ?? '—')}.</p>`,
+      `<p>Adjuntos:</p><ul>${adjuntos.map((a) => `<li>${esc(a.label)} — ${esc(a.filename)}</li>`).join('')}</ul>`,
+      '<p>La factura se pide aparte; Facturación recibe el aviso con el resultado, como hoy.</p>',
+    ].join('');
+    const [primero, ...resto] = destinatarios.to;
+    const cc = [...resto, ...destinatarios.cc];
+    const res = await this.hub.call<{ id: string }>(
+      'email',
+      'send',
+      {
+        to: primero,
+        ...(cc.length ? { cc: cc.join(',') } : {}),
+        ...(destinatarios.bcc?.length ? { bcc: destinatarios.bcc.join(',') } : {}),
+        subject: `Se realizó revisión de liquidación de COMEX — PF ${pf}${ov}`,
+        body,
+        attachments: adjuntos.map((a) => ({ filename: a.filename, content: a.buffer.toString('base64'), encoding: 'base64', contentType: a.contentType })),
+      },
+      { maxAttempts: 1, timeoutMs: 60_000 },
+    );
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.NOTIFICATION_SENT,
+      action: 'liquidacion_revision_comex_enviada',
+      entityType: 'liquidacion',
+      entityId: pf,
+      actorId: this.ctx.userId,
+      outputData: { ok: res.ok, to: primero, cc, adjuntos: adjuntos.map((a) => a.filename), huella: aprobacion.huella, messageId: res.data?.id ?? null },
+      reason: res.ok ? null : (res.error ?? 'error desconocido'),
+    });
+    if (!res.ok) return { enviado: false, detalle: `No se pudo enviar el correo: ${res.error ?? 'error desconocido'}` };
+    this.logger.log(`PF ${pf}: correo "Se realizó revisión de liquidación de COMEX" enviado a ${primero} (${adjuntos.length} adjuntos).`);
+    return { enviado: true, detalle: `${adjuntos.length} adjuntos a ${[primero, ...cc].join(', ')}` };
   }
 
   private async preparar(pf: string): Promise<Preparado> {

@@ -58,6 +58,6 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
       },
     },
   ],
-  exports: [LiquidacionService, LiquidacionAvisoService],
+  exports: [LiquidacionService, LiquidacionAvisoService, LiquidacionCierreService],
 })
 export class LiquidacionModule {}

@@ -620,6 +620,57 @@ export class FacturasParcialesService {
   }
 
   /**
+   * Exportación: la factura se pide SOLA cuando COMEX aprueba la liquidación (Hernán, 23-oct: "apenas COMEX apruebe se
+   * genera la factura sin necesidad de nada más ... y se le notifica al área de facturación como se hace hoy"). No
+   * depende del cuadro del día. Siguen todas las guardas de `facturar` (suspendida, tope diario, clientes bloqueados,
+   * una llamada) y el aviso a Facturación. Una sola solicitud por PF: si ya hay una (aunque haya salido rechazada), no
+   * se vuelve a pedir. Se apaga con `settings.facturacion.exportacionAlAprobar = false`.
+   */
+  async facturarExportacionAprobada(numberPF: string): Promise<{ estado: string; motivo?: string }> {
+    const tenantId = this.ctx.tenantId;
+    const omitir = async (motivo: string) => {
+      await this.audit.log({
+        workflowName: 'facturacion',
+        eventType: WorkflowEventType.ACTION_EXECUTED,
+        action: 'factura_automatica_omitida',
+        entityType: 'proforma',
+        entityId: numberPF,
+        actorId: this.ctx.userId,
+        outputData: { numberPF, disparo: 'aprobación de COMEX' },
+        reason: motivo,
+      });
+      this.logger.log(`PF ${numberPF}: factura de exportación omitida — ${motivo}`);
+      return { estado: 'omitida', motivo };
+    };
+    if ((await this.ajustes())?.exportacionAlAprobar === false) return omitir('La factura automática de exportación al aprobar COMEX está apagada.');
+    const previa = await this.repo.find({ where: { tenantId, numberPF } });
+    if (previa.length > 0) return omitir(`La PF ${numberPF} ya tiene una solicitud de factura (${previa.map((p) => p.estado).join(', ')}): no se vuelve a pedir.`);
+    let fila: FacturaParcial;
+    try {
+      fila = await this.repo.save(
+        this.repo.create({
+          tenantId,
+          numberPF,
+          numeroDistribucion: '',
+          origen: 'automatico',
+          remitente: 'Aprobación de la liquidación por COMEX (exportación)',
+          estado: 'pendiente',
+          solicitadoPor: this.ctx.userId ?? null,
+        }),
+      );
+    } catch {
+      return omitir(`La PF ${numberPF} ya tiene una solicitud de factura.`);
+    }
+    try {
+      // mercadoConfirmado: la PF viene de una liquidación de exportación aprobada por COMEX.
+      const r = await this.facturar(fila.id, false, true, 'aprobación de COMEX');
+      return { estado: r.estado, ...(r.error ? { motivo: r.error } : {}) };
+    } catch (err) {
+      return { estado: 'omitida', motivo: (err as Error).message };
+    }
+  }
+
+  /**
    * Programación diaria (WO-032). Con `settings.facturacion.soloProgramadas === true` (`activa`) la facturación
    * automática solo factura lo que Oben programó para HOY ("se factura lo que Comercial y Despacho programan cada
    * día", reunión del 8-oct). `entrada` = la orden en la programación de hoy (null si no está); `corte` = minutos

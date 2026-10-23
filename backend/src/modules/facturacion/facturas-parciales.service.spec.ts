@@ -281,3 +281,22 @@ describe('Factura AUTOMÁTICA de pedidos nacionales (Hernán, 7-oct)', () => {
     expect(hub.call.mock.calls.filter((c) => c[1] === 'send')).toHaveLength(0);
   });
 });
+
+describe('factura de exportación al aprobar COMEX (Hernán, 23-oct)', () => {
+  it('pide la factura sola (sin cuadro), avisa a Facturación y no la vuelve a pedir aunque salga rechazada', async () => {
+    const { svc, hub, filas } = build({ mercado: 'EXPORTACION', hub: { ok: false, error: 'HTTP 400: {"isSuccessful":"False","code":"400","message":"No se pudo crear la factura de venta"}' } });
+    const r = await svc.facturarExportacionAprobada('11599');
+    expect(r.estado).toBe('rechazada');
+    expect(hub.call).toHaveBeenCalledWith('obenCostOrder', 'factura.crear', { numberPF: '11599', numberDistribucion: '' }, expect.anything());
+    expect(hub.call).toHaveBeenCalledWith('email', 'send', expect.objectContaining({ subject: expect.stringContaining('PF 11599') }), expect.anything());
+    expect(filas[0]).toMatchObject({ origen: 'automatico', remitente: expect.stringContaining('COMEX') });
+    expect((await svc.facturarExportacionAprobada('11599')).estado).toBe('omitida');
+    expect(crearCalls(hub)).toBe(1);
+  });
+
+  it('respeta la suspensión de la facturación', async () => {
+    const { svc, hub } = build({ suspendida: true });
+    expect((await svc.facturarExportacionAprobada('11599')).estado).toBe('omitida');
+    expect(crearCalls(hub)).toBe(0);
+  });
+});

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AprobacionComexService } from './aprobacion-comex.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { IntegrationHubModule } from '../integrations/hub/integration-hub.module';
 import { AuthModule } from '../auth/auth.module';
@@ -32,7 +33,7 @@ import { CuadroDiarioService } from './cuadro-diario.service';
     ConexionesModule,
   ],
   controllers: [FacturacionController, FacturasParcialesController, FacturacionProgramadaController],
-  providers: [FacturacionService, FacturacionPdfService, TrmService, FacturasParcialesService, FacturasEsperaProcessor, CuadroDiarioService],
+  providers: [FacturacionService, FacturacionPdfService, TrmService, FacturasParcialesService, FacturasEsperaProcessor, CuadroDiarioService, AprobacionComexService],
   exports: [FacturacionService, FacturasParcialesService],
 })
 export class FacturacionModule {}

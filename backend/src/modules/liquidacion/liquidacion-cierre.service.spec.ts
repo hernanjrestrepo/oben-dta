@@ -274,3 +274,47 @@ describe('LiquidacionCierreService — correo de cierre a COMEX/Facturación (OB
     });
   });
 });
+
+describe('correo "Se realizó revisión de liquidación de COMEX" al aprobar (Hernán, 23-oct)', () => {
+  const DRAFT = {
+    numberPF: '11599',
+    ordenVenta: '11433',
+    ordenCompra: 'OC-26-0185',
+    cliente: 'OBEN ECUADOR S.A.',
+    pais: 'ECUADOR',
+    esUSA: false,
+    incoterm: 'CIF',
+    terminoPago: 'CREDITO 60 DIAS',
+    header: { direccion: 'AV JAIME ROLDOS, QUITO', puertoEmbarque: 'CARTAGENA - COLOMBIA', puertoArribo: 'PUERTO GUAYAQUIL', paNcm: '3920.62.00.20' },
+    totales: { incoterm: 'CIF', flete: 895, otrosGastos: 0 },
+    lines: [
+      { codSecLineFilm: 155, tipoPelicula: 'TES--0040NN', precio: 2.15, descripcion: 'PELÍCULA TERMOENCOGIBLE / SHRINK FILM', kilosTotal: 19462.9, valueTotal: 41845.24, valueFreight: 780.72, valueSure: 21.75, expensesOther: 0, valueFOB: 41043.36 },
+    ],
+    ajustes: [],
+    simulated: false,
+  } as never;
+
+  it('envía Proforma, Lista de Empaque y Liquidación a COMEX y Facturación, una vez por aprobación', async () => {
+    const { service, sentEmail, emails, audit, reports } = make();
+    const r = await service.enviarRevisionComex(DRAFT, { por: 'Lía Amaya', huella: 'h1' });
+    expect(r.enviado).toBe(true);
+    expect(reports.buildReport).toHaveBeenCalledWith('empaque_unificada', 11433);
+    const e = sentEmail();
+    expect(e.subject).toBe('Se realizó revisión de liquidación de COMEX — PF 11599 / OV 11433');
+    expect(e.attachments.map((a) => a.filename)).toEqual(['Proforma-PF11599.pdf', 'Lista_de_Empaque_Unificada-OV11086.xlsx', 'Liquidacion-PF11599.pdf']);
+    for (const pdf of [e.attachments[0], e.attachments[2]]) expect(Buffer.from(pdf.content, 'base64').subarray(0, 4).toString()).toBe('%PDF');
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'liquidacion_revision_comex_enviada', outputData: expect.objectContaining({ ok: true, huella: 'h1' }) }));
+
+    audit.listForEntity.mockResolvedValue([{ action: 'liquidacion_revision_comex_enviada', outputData: { ok: true, huella: 'h1' } }]);
+    expect((await service.enviarRevisionComex(DRAFT, { por: 'Lía', huella: 'h1' })).enviado).toBe(false);
+    expect(emails()).toHaveLength(1);
+  });
+
+  it('nunca sale incompleto: sin Lista de Empaque de Oben no se envía y queda auditado', async () => {
+    const { service, emails, audit } = make({ unificada: { ok: false, failure: { error: 'Oben no tiene datos de este reporte' } } });
+    const r = await service.enviarRevisionComex(DRAFT, { por: null, huella: 'h2' });
+    expect(r.enviado).toBe(false);
+    expect(emails()).toHaveLength(0);
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'liquidacion_revision_comex_incompleta' }));
+  });
+});

@@ -502,6 +502,9 @@ export function LiquidacionPanel({
                 </button>
               ) : null}
               {liq.readyToSubmit && !liq.aprobacion?.vigente && <span className="text-[11px] text-amber-700">Falta la aprobación de COMEX</span>}
+              {liq.aprobacion?.vigente && (
+                <span className="text-[11px] text-gray-500">Al aprobar sale el correo de revisión (proforma, lista de empaque y liquidación) y se pide la factura; Facturación recibe el aviso.</span>
+              )}
               <button className={`${btnPrimary} ml-auto`} onClick={onContinuar}>
                 Continuar al envío <ArrowRight className="w-4 h-4" />
               </button>
