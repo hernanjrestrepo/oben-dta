@@ -26,7 +26,6 @@ import {
   Listo,
   PendienteConfirmar,
   agruparFaltantes,
-  btnSecondary,
   inputCls,
   isNum,
   kg,
