@@ -198,8 +198,10 @@ export class LiquidacionCierreService {
       return { enviado: false, detalle: 'Ya se envió el correo de esta misma aprobación.' };
     }
     const faltan: string[] = [];
-    const destinatarios = await this.distributionLists.resolveRecipients('document', CIERRE_DISTRIBUTION_KEY);
-    if (destinatarios.to.length === 0) faltan.push(`No hay destinatarios en la lista "${CIERRE_DISTRIBUTION_KEY}" (COMEX y Facturación).`);
+    // Lista de COMEX y Facturación; si aún no está configurada (23-oct en producción), la de Facturación.
+    let destinatarios = await this.distributionLists.resolveRecipients('document', CIERRE_DISTRIBUTION_KEY);
+    if (destinatarios.to.length === 0) destinatarios = await this.distributionLists.resolveRecipients('document', 'facturacion');
+    if (destinatarios.to.length === 0) faltan.push(`No hay destinatarios en la lista "${CIERRE_DISTRIBUTION_KEY}" (COMEX y Facturación) ni en "facturacion".`);
 
     const adjuntos: Array<{ filename: string; contentType: string; buffer: Buffer; label: string }> = [];
     const firmada = await this.proformaFirmada(pf);
