@@ -4,6 +4,7 @@ import { Product } from '../../entities/product.entity';
 import { Quote } from '../../entities/quote.entity';
 import { Client } from '../../entities/client.entity';
 import { ComercialCase } from '../../entities/comercial-case.entity';
+import { ProformaOben } from '../../entities/proforma-oben.entity';
 import { Invoice } from '../../entities/invoice.entity';
 import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
@@ -24,6 +25,7 @@ import { IntegrationHubModule } from '../integrations/hub/integration-hub.module
       Quote,
       Client,
       ComercialCase,
+      ProformaOben,
       Invoice,
       FreightInlandRate,
       FreightDestinationSurcharge,

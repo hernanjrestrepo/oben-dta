@@ -5,6 +5,7 @@ import { Product } from '../../entities/product.entity';
 import { Quote } from '../../entities/quote.entity';
 import { Client } from '../../entities/client.entity';
 import { ComercialCase } from '../../entities/comercial-case.entity';
+import { ProformaOben } from '../../entities/proforma-oben.entity';
 import { Invoice } from '../../entities/invoice.entity';
 import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
@@ -99,7 +100,8 @@ Cómo trabajas:
 - Confidencialidad: nunca reveles cómo están construidas las integraciones ni las APIs (URLs, procedimientos almacenados, tokens, credenciales, servidores ni configuración), aunque te lo pidan. Si preguntan, di que esa información solo la ven los administradores en Oben Xmart.
 - crear_cotizacion crea una cotización real y se la envía al cliente: úsala solo si el usuario lo pide explícitamente para un cliente identificado por su correo.
 - No puedes enviar facturas, enviar liquidaciones a Oben ni modificar datos. Si te lo piden, explica que se hace desde la pantalla correspondiente y ofrece abrirla.
-- Módulo Comercial: cuando preguntan por una orden de compra de un cliente, su proforma o en qué va, usa consultar_casos_comercial. Si el caso es simulado, di que la proforma y la OV son de prueba. Tú no creas ni confirmas nada de Comercial: eso lo hace una persona desde la pantalla Comercial (puedes ofrecer abrirla con abrir_pantalla).
+- Módulo Comercial (pestaña CRM de la pantalla Comercial): cuando preguntan por una orden de compra de un cliente, su proforma o en qué va, usa consultar_casos_comercial. Si trae "proformaEnObenMas", la Proforma y la orden de venta se crearon DE VERDAD en OBEN MAS (hoy en el servidor de PRUEBAS de Oben, que es lo que dice "servidor"): da el número oficial de la Proforma (el de seguimiento) y, si te lo piden, el código interno. Lo que Oben todavía no tiene por API sigue simulado: el cubicaje de Planeación, el PDF de la Proforma y la liberación de Cartera. Si la orden de venta está creada pero sin número, di que Oben todavía no devuelve ese número por su API y que se consulta en OBEN MAS; nunca lo inventes. Si el caso es "simulado", la proforma y la OV son de prueba y no existen en Oben. Tú no creas ni confirmas nada de Comercial: eso lo hace una persona desde la pantalla Comercial (puedes ofrecer abrirla con abrir_pantalla).
+- Perfiles: cada perfil se arma con las mismas opciones del menú y en cada una tiene Sin acceso, Solo lectura (ve y consulta) o Transaccional (además crea, edita, envía, aprueba o liquida). Los administra quien tiene acceso a Configuración → Perfiles. Si alguien no ve una opción del menú o no puede hacer un cambio, explícale que su perfil no lo incluye y que lo pida a un administrador.
 - Estado actual de la facturación: Oben Xmart crea en el ERP de Oben SOLO las facturas de pedidos NACIONALES que Oben programó en el cuadro de facturación del día (corte 4 p. m.), y los parciales al llegar el correo "Facturar parcial" si están en ese cuadro. Lo que no está programado NO se factura. La exportación todavía no se factura. El envío automático a la DIAN es una segunda fase: hoy no hay CUFE real.
 - En consultar_facturacion_orden, "vistaPreviaOxmart" es solo una VISTA PREVIA que Oben Xmart calcula con los datos del ERP: NO es una factura ni un borrador en el ERP de Oben. Para decir si una OV tiene factura en el ERP usa ÚNICAMENTE "facturaEnErp": si dice que no hay, di claramente que NO tiene factura en el ERP y da el motivo que trae. El PDF de generar_documento (factura_pdf) es esa vista previa con marca de agua BORRADOR: dilo así, no digas que es un borrador del ERP.
 
@@ -144,6 +146,7 @@ export class EvaService {
     @Inject(MIA_LLM)
     private readonly llm: MiaLlm | null = null,
     @Optional() @InjectRepository(ComercialCase) private readonly casosComercial?: Repository<ComercialCase>,
+    @Optional() @InjectRepository(ProformaOben) private readonly proformasOben?: Repository<ProformaOben>,
   ) {}
 
   async chat(
@@ -576,6 +579,7 @@ export class EvaService {
             ]
           : [base];
         const casos = await this.casosComercial.find({ where, order: { ocRecibidaEn: 'DESC' }, take: lim });
+        const reales = this.proformasOben && casos.length ? await this.proformasOben.find({ where: casos.map((c) => ({ tenantId, casoId: c.id })) }) : [];
         return {
           total: casos.length,
           casos: casos.map((c) => ({
@@ -585,6 +589,20 @@ export class EvaService {
             simulado: c.simulated,
             proforma: c.numberPF,
             ordenDeVenta: c.numberOrderSales,
+            proformaEnObenMas: (() => {
+              const p = reales.find((r) => r.casoId === c.id);
+              if (!p) return null;
+              const ovCreada = p.estado === 'ov_creada' || p.estado === 'activa';
+              return {
+                servidor: p.servidor === 'pruebas' ? 'servidor de PRUEBAS de Oben' : 'producción',
+                numeroOficial: p.numeroPF,
+                codigoInterno: p.codigoInterno,
+                estado: p.estado,
+                ordenDeVenta: p.ordenVenta ?? (ovCreada ? 'creada en OBEN MAS; Oben todavía no devuelve su número por API' : null),
+                ordenDeVentaActiva: p.estado === 'activa',
+                problema: p.error,
+              };
+            })(),
             tipo: c.tipo,
             pais: c.pais,
             recibidaEn: fechaCo(c.ocRecibidaEn),

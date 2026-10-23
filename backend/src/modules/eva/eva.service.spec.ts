@@ -84,7 +84,28 @@ function build(
         lineas: [{ n: 1, codigoCliente: 'BOPP 15', codigoOben: 'SIM-SC15TN', kilos: 1000, anchoMm: 425 }],
         eventos: [{ fecha: '2026-10-22T20:00:00.000Z', tipo: 'oc_recibida', detalle: 'Orden de compra recibida por correo' }],
       },
+      {
+        id: 'caso-real',
+        cliente: 'PARADIXE — CLIENTE DEMO',
+        ocNumero: 'OC-PARADIXE-0002',
+        estado: 'activa',
+        simulated: false,
+        numberPF: '11546',
+        numberOrderSales: null,
+        tipo: 'exportacion',
+        pais: 'USA',
+        ocRecibidaEn: new Date('2026-10-22T22:30:00Z'),
+        fechaRequerida: '2026-11-30',
+        accionPendiente: null,
+        missing: [],
+        atencion: [],
+        lineas: [],
+        eventos: [],
+      },
     ]),
+  };
+  const proformasOben = {
+    find: jest.fn(async () => [{ casoId: 'caso-real', servidor: 'pruebas', numeroPF: '11546', codigoInterno: 13395, estado: 'activa', ordenVenta: null, error: null }]),
   };
   const ctx = {
     tenantId: T,
@@ -109,6 +130,7 @@ function build(
     audit as never,
     opts.sinCliente ? null : client,
     casosComercial as never,
+    proformasOben as never,
   );
   return { svc, pedidos, client, audit, authz, quotesService };
 }
@@ -167,6 +189,18 @@ describe('EvaService (MIA sobre Kimi, con Ollama de respaldo)', () => {
     const resultado = pedidos[1].at(-1) as { content: string };
     expect(resultado.content).not.toMatch(/^ERROR/);
     for (const dato of ['PARADIXE-0001', 'oc_recibida', '"simulado":true', 'SIM-SC15TN', 'Crear la Proforma']) expect(resultado.content).toContain(dato);
+  });
+
+  it('consultar_casos_comercial: la Proforma REAL en OBEN MAS (número oficial, servidor de pruebas) y la OV sin número explicada', async () => {
+    const { svc, pedidos } = build({
+      respuestas: [
+        respuesta([usar('consultar_casos_comercial', { buscar: '11546' })], 'tool_use'),
+        respuesta([texto('La PF 11546 está activa en OBEN MAS (pruebas).')], 'end_turn'),
+      ],
+    });
+    await svc.chat('¿en qué va la proforma 11546?');
+    const resultado = String((pedidos[1].at(-1) as { content: string }).content);
+    for (const dato of ['"numeroOficial":"11546"', '"codigoInterno":13395', 'servidor de PRUEBAS de Oben', 'Oben todavía no devuelve su número', '"ordenDeVentaActiva":true']) expect(resultado).toContain(dato);
   });
 
   it('sin el permiso de la herramienta no consulta nada y se lo dice al modelo', async () => {
