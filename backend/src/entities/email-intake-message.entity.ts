@@ -16,6 +16,7 @@ export type EmailIntakeRoute =
   | 'packing_list_trigger'
   | 'comercial_respuesta'
   | 'factura_parcial'
+  | 'comercial_cubicacion'
   | 'unknown';
 
 export type EmailIntakeStatus = 'processing' | 'processed' | 'failed' | 'skipped';

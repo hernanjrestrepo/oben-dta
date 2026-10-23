@@ -264,8 +264,9 @@ export function SimuladorPanel({ casos, onChange }: { casos: ComercialCaso[]; on
           <h3 className="font-semibold">Simulador: lo que hacen personas en OBEN MAS y Oben aún no expone por API</h3>
         </div>
         <p className="text-sm text-purple-900">
-          La Proforma y la orden de venta se crean de verdad en OBEN MAS. Lo que todavía no tiene API se simula aquí: que Planeación cubique la Proforma y
-          que Cartera libere el crédito. Cada botón hace ese paso y procesa el caso de una vez.
+          La Proforma y la orden de venta se crean de verdad en OBEN MAS. El cubicaje llega solo con el correo de OBEN MAS &quot;Cubicación de Proforma
+          #N&quot; (el botón &quot;Planeación cubica&quot; queda como respaldo). Lo que todavía no tiene API se simula aquí: que Cartera libere el crédito. Cada
+          botón hace ese paso y procesa el caso de una vez.
         </p>
       </div>
 

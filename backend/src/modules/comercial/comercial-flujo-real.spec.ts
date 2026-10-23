@@ -4,7 +4,7 @@ import { StaticScenarioProvider } from '../integrations/hub/static-scenario-prov
 import { ObenPlusMockAdapter } from '../integrations/hub/adapters/oben-plus.mock';
 import { InMemoryObenPlusSimStore } from '../integrations/hub/oben-plus-sim.store';
 import type { ComercialCase } from '../../entities/comercial-case.entity';
-import { ComercialFlujoService } from './comercial-flujo.service';
+import { ComercialFlujoService, parsearCorreoCubicacion } from './comercial-flujo.service';
 import { ComercialIntakeService } from './comercial-intake.service';
 import { ProformasObenService } from './proformas-oben.service';
 
@@ -230,6 +230,36 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(w.escrituras.at(-1)!.paso).toBe('activar');
     const real = w.proformasRepo.rows[0];
     expect(real).toMatchObject({ estado: 'activa', numeroPF: '11547', codigoInterno: 13400, ordenVenta: 11400, casoId: caso.id });
+  });
+
+  it('el correo REAL de OBEN MAS "Cubicación de Proforma #N" confirma el cubicaje: el caso pasa solo a cubicada y la Proforma sale al cliente', async () => {
+    const w = world();
+    let caso = await w.flujo.recibirOc(OC, 'correo');
+    caso = await w.flujo.confirmar(caso.id);
+    const correo = {
+      from: 'Sistemas <notif.app.co@obengroup.com>',
+      subject: 'Cubicación de Proforma #11547 - OBEN US, LLC (Multi-Plastics )',
+      body: 'Se realizó la cubicación de la Proforma #11547 por parte del area de Planeación, favor validar.',
+      messageId: '<cub-1@obengroup.com>',
+    };
+    const r = await w.flujo.registrarCubicacionDesdeCorreo(correo);
+    expect(r.caso).toMatchObject({ estado: 'enviada_cliente', numberPF: '11547' });
+    expect(r.caso!.eventos.find((e) => e.tipo === 'cubicada')!.detalle).toMatch(/lo confirmó OBEN MAS por correo/);
+    expect(w.emails.at(-1)).toMatchObject({ to: 'ceo@paradixe.xyz', subject: expect.stringMatching(/Proforma 11547/) });
+    // El ciclo de 1 minuto no lo devuelve a "sin cubicar" (el espejo del simulador también quedó cubicado).
+    caso = await w.tick(caso.id);
+    expect(caso.estado).toBe('enviada_cliente');
+    // El mismo correo dos veces no hace nada; de otro dominio se rechaza; sin caso se informa.
+    expect((await w.flujo.registrarCubicacionDesdeCorreo(correo)).detalle).toBe('Correo ya procesado.');
+    await expect(w.flujo.registrarCubicacionDesdeCorreo({ ...correo, from: 'x@gmail.com', messageId: '<2>' })).rejects.toThrow(/obengroup\.com/);
+    expect((await w.flujo.registrarCubicacionDesdeCorreo({ ...correo, subject: 'Cubicación de Proforma #11691 - OBEN US', body: '', messageId: '<3>' })).caso).toBeNull();
+  });
+
+  it('parsearCorreoCubicacion: el correo real, reenvíos y nada más', () => {
+    expect(parsearCorreoCubicacion('Cubicación de Proforma #11691 - OBEN US, LLC (Multi-Plastics )', 'Se realizó la cubicación de la Proforma #11691 por parte del area de Planeación, favor validar.')).toBe('11691');
+    expect(parsearCorreoCubicacion('RV: Cubicacion de Proforma #11691', '')).toBe('11691');
+    expect(parsearCorreoCubicacion('Proforma 10770 - Facturar Parcial', '')).toBeNull();
+    expect(() => parsearCorreoCubicacion('Cubicación de Proforma #11691', 'Se realizó la cubicación de la Proforma #11692')).toThrow(/no se toma/);
   });
 
   it('si Oben no informa el número de la OV, el caso sigue (sin inventar uno ni tomar el de producción) y lo dice claro', async () => {

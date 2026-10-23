@@ -674,6 +674,44 @@ export class ComercialFlujoService {
     return caso;
   }
 
+  // ─── Cubicaje confirmado por OBEN MAS ────────────────────────────────────
+
+  /**
+   * Correo "Cubicación de Proforma #N" de OBEN MAS (23-oct): es la confirmación REAL de que Planeación cubicó. El caso
+   * con esa Proforma pasa a "cubicada" y sigue solo (la Proforma sale al cliente). Reemplaza el botón "Planeación
+   * cubica" del Simulador, que queda como respaldo. null si ningún caso abierto tiene esa Proforma.
+   */
+  async registrarCubicacionDesdeCorreo(correo: { from: string; subject: string; body: string; messageId?: string | null }): Promise<{ caso: ComercialCase | null; numberPF: string; detalle: string }> {
+    const numberPF = parsearCorreoCubicacion(correo.subject, correo.body);
+    if (!numberPF) throw new BadRequestException('No es un correo de cubicación de OBEN MAS.');
+    const dominio = (correo.from.split('@')[1] ?? '').replace(/>.*$/, '').toLowerCase().trim();
+    if (dominio !== DOMINIO_OBEN) throw new BadRequestException(`Solo un correo de @${DOMINIO_OBEN} confirma un cubicaje (llegó de "${correo.from}").`);
+    const caso = await this.casos.findOne({ where: { tenantId: this.ctx.tenantId, numberPF, estado: In([...CASO_ESTADOS_ABIERTOS]) } });
+    const ref = correo.messageId ? ` [${correo.messageId}]` : '';
+    if (!caso) {
+      await this.audit.log({ workflowName: WORKFLOW, action: 'comercial_cubicacion_sin_caso', entityType: 'proforma', entityId: numberPF, actorId: null, reason: correo.subject });
+      return { caso: null, numberPF, detalle: `Ningún caso abierto de Oben Xmart tiene la Proforma ${numberPF} (se creó por fuera).` };
+    }
+    if (correo.messageId && caso.eventos.some((e) => e.detalle.includes(correo.messageId!))) {
+      return { caso, numberPF, detalle: 'Correo ya procesado.' };
+    }
+    if (caso.estado !== 'sin_cubicar') {
+      this.evento(caso, 'cubicada', `OBEN MAS confirmó otra vez el cubicaje de la Proforma ${numberPF} ("${correo.subject.trim()}"); el caso ya estaba "${caso.estado}".${ref}`);
+      await this.casos.save(caso);
+      return { caso, numberPF, detalle: `Ya estaba "${caso.estado}".` };
+    }
+    // El espejo del simulador (estado, PDF y cartera que Oben aún no expone) también queda cubicado, para que el
+    // ciclo de 1 minuto no devuelva el caso a "sin cubicar".
+    const espejo = await this.hub.call('obenPlus', 'sim.cubicar', { numberPF }, { maxAttempts: 1, timeoutMs: 30_000 });
+    if (!espejo.ok) this.logger.warn(`Caso ${caso.id}: el simulador no registró el cubicaje de ${numberPF}: ${espejo.error}`);
+    caso.estado = 'cubicada';
+    caso.fechas = { ...caso.fechas, cubicada: new Date().toISOString() };
+    this.evento(caso, 'cubicada', `Planeación cubicó la Proforma ${numberPF}: lo confirmó OBEN MAS por correo ("${correo.subject.trim()}").${ref}`);
+    await this.casos.save(caso);
+    await this.audit.log({ workflowName: WORKFLOW, action: 'comercial_cubicada_por_correo', entityType: 'comercial_case', entityId: caso.id, actorId: null, outputData: { numberPF } });
+    return { caso: await this.enviarAlCliente(caso), numberPF, detalle: 'Cubicada; la Proforma sale al cliente.' };
+  }
+
   // ─── Respuesta del cliente ───────────────────────────────────────────────
 
   /** Caso abierto al que responde un correo: por el hilo (In-Reply-To/References) o por "[PF n]" en el asunto. */
@@ -1176,6 +1214,24 @@ function parseFecha(v: string, campo: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new BadRequestException(`${campo}: formato YYYY-MM-DD`);
   return new Date(`${v}T00:00:00.000Z`);
 }
+
+/**
+ * Correo REAL de OBEN MAS cuando Planeación cubica (23-oct, ejemplo de Hernán):
+ *   De: Sistemas <notif.app.co@obengroup.com>
+ *   Asunto: "Cubicación de Proforma #11691 - OBEN US, LLC (Multi-Plastics )"
+ *   Cuerpo: "Se realizó la cubicación de la Proforma #11691 por parte del area de Planeación, favor validar."
+ * Devuelve el número de la Proforma; null si no es ese correo. Si asunto y cuerpo traen números distintos, lanza (nunca adivina).
+ */
+export function parsearCorreoCubicacion(asunto: string, cuerpo: string): string | null {
+  const a = asunto.match(/^\s*(?:(?:RE|RV|FW|FWD)\s*:\s*)*Cubicaci[oó]n\s+de\s+(?:la\s+)?Proforma\s*(?:#|N[°º.o]*\s*)?\s*(\d+)/i);
+  if (!a) return null;
+  const c = cuerpo.match(/cubicaci[oó]n\s+de\s+la\s+Proforma\s*(?:#|N[°º.o]*\s*)?\s*(\d+)/i);
+  if (c && c[1] !== a[1]) throw new BadRequestException(`El asunto dice Proforma ${a[1]} pero el cuerpo dice ${c[1]}: no se toma como cubicada.`);
+  return a[1];
+}
+
+/** Solo el sistema de Oben confirma un cubicaje. */
+const DOMINIO_OBEN = 'obengroup.com';
 
 export function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);

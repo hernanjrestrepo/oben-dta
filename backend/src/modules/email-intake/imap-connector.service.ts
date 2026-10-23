@@ -24,7 +24,7 @@ import { QuotesService } from '../quotes/quotes.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
 import { FreightRateImportService } from '../freight-rates/freight-rate-import.service';
 import { PackingListAutomationService } from '../packing-list/packing-list-automation.service';
-import { ComercialFlujoService } from '../comercial/comercial-flujo.service';
+import { ComercialFlujoService, parsearCorreoCubicacion } from '../comercial/comercial-flujo.service';
 import { FacturasParcialesService, parsearCorreoFacturaParcial } from '../facturacion/facturas-parciales.service';
 
 /**
@@ -718,6 +718,39 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
       // (settings.comercial.habilitado): una respuesta del cliente a una
       // Proforma se reconoce por el hilo, ANTES del clasificador general.
       const comercial = await this.comercialHabilitado(tenantId);
+
+      // "Cubicación de Proforma #N" de OBEN MAS (23-oct): confirmación real del cubicaje de Planeación.
+      let pfCubicada: string | null = null;
+      let errorCubicacion: string | null = null;
+      try {
+        pfCubicada = parsearCorreoCubicacion(subject, body);
+      } catch (e) {
+        errorCubicacion = (e as Error).message;
+      }
+      if (comercial && (pfCubicada || errorCubicacion)) {
+        category = 'comercial_cubicacion';
+        confidence = 1;
+        provider = 'rules';
+        try {
+          if (errorCubicacion) throw new Error(errorCubicacion);
+          const r = await this.callRequestScoped(tenantId, ComercialFlujoService, (svc) => svc.registrarCubicacionDesdeCorreo({ from, subject, body, messageId }));
+          resultRef = `${r.numberPF}:${r.caso ? r.caso.estado : 'sin_caso'}`;
+        } catch (e) {
+          status = 'failed';
+          errorMessage = (e as Error).message;
+        }
+        await this.finalizeMessage(tenantId, messageId, {
+          classificationCategory: category,
+          classificationConfidence: confidence,
+          classificationProvider: provider,
+          status,
+          resultRef,
+          errorMessage,
+          movedToFolder: cfg.processedFolder ?? 'Procesados',
+        });
+        await this.markSeenAndMove(client, msg.uid, cfg, cfg.processedFolder ?? 'Procesados');
+        return;
+      }
       const fullAttachments = (parsed.attachments ?? []).map((a) => ({
         filename: a.filename ?? 'archivo',
         contentType: a.contentType ?? null,
