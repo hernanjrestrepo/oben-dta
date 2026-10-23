@@ -500,7 +500,10 @@ export function LiquidacionPanel({
                   <BadgeCheck className="w-4 h-4" /> Aprobada por COMEX{liq.aprobacion.por ? ` · ${liq.aprobacion.por}` : ''}
                 </span>
               ) : puedeAprobar ? (
-                <button className={btnSecondary} onClick={() => void aprobar()} disabled={aprobando || !liq.readyToSubmit || liq.simulated || liq.sinConfirmar.length > 0} title={liq.aprobacion?.existe ? 'Cambió algo desde la última aprobación: hay que aprobarla de nuevo' : 'COMEX aprueba estos valores antes de enviarlos a Oben'}>
+                <button
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:bg-gray-200 disabled:text-gray-500 disabled:shadow-none disabled:cursor-not-allowed"
+                  onClick={() => void aprobar()}
+                  disabled={aprobando || !liq.readyToSubmit || liq.simulated || liq.sinConfirmar.length > 0} title={liq.aprobacion?.existe ? 'Cambió algo desde la última aprobación: hay que aprobarla de nuevo' : 'COMEX aprueba estos valores antes de enviarlos a Oben'}>
                   {aprobando ? <Loader2 className="w-4 h-4 animate-spin" /> : <BadgeCheck className="w-4 h-4" />}
                   {liq.aprobacion?.existe ? 'Aprobar de nuevo (COMEX)' : 'Aprobar liquidación (COMEX)'}
                 </button>
