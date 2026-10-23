@@ -379,8 +379,8 @@ export function LiquidacionPanel({
             )}
             {liq && (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
-                  <Kpi label="Valor mercancía" value={usd(tot.valor)} />
+                {/* Sin "Valor mercancía" (Hernán, 23-oct: "solo confunde"): el resultado es el FOB final y el total. */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <Kpi label="Flete" value={usd(tot.flete)} tone={isNum(tot.flete) ? 'default' : 'muted'} />
                   <Kpi label="Seguro" value={usd(tot.seguro)} tone={isNum(tot.seguro) ? 'default' : 'muted'} />
                   <Kpi label="Otros gastos" value={usd(tot.otros)} tone={isNum(tot.otros) ? 'default' : 'muted'} />
