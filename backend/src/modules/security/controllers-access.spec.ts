@@ -27,6 +27,12 @@ const ROUTES_WITHOUT_PERMISSION: Record<string, string> = {
   'AuthController.changePassword': 'solo JWT: cambia la contraseña propia (exige la actual)',
   'SecurityController.myPermissions': 'solo JWT: lista los permisos del propio usuario',
   'LicenseController.status': 'solo JWT: estado de licencia del propio tenant (pantalla de bloqueo)',
+  'AcademyController.plan': 'solo JWT: el propio plan de Xmart Academy, filtrado por los permisos del usuario',
+  'AcademyController.glosario': 'solo JWT: glosario de Xmart Academy (contenido de entrenamiento, sin datos de negocio)',
+  'AcademyController.modulo': 'solo JWT: una lección del propio plan (el servicio niega las que no están en el perfil)',
+  'AcademyController.visto': 'solo JWT: registra el avance propio en una lección',
+  'AcademyController.quiz': 'solo JWT: responde el quiz propio (se califica en el servidor)',
+  'AcademyController.evento': 'solo JWT: registra un evento de uso propio (tipos cerrados)',
 };
 
 function controllerFiles(dir: string): string[] {

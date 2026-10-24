@@ -36,6 +36,7 @@ import { EquivalencesModule } from './modules/equivalences/equivalences.module';
 import { FacturacionModule } from './modules/facturacion/facturacion.module';
 import { ComercialModule } from './modules/comercial/comercial.module';
 import { ConexionesModule } from './modules/conexiones/conexiones.module';
+import { AcademyModule } from './modules/academy/academy.module';
 
 // Import all entities
 import { Client } from './entities/client.entity';
@@ -44,6 +45,7 @@ import { ComercialCase } from './entities/comercial-case.entity';
 import { FormatoEnvio } from './entities/formato-envio.entity';
 import { FacturaParcial } from './entities/factura-parcial.entity';
 import { FacturaLlamada } from './entities/factura-llamada.entity';
+import { AcademyEvento, AcademyIntento, AcademyProgreso } from './entities/academy.entities';
 import { FacturaProgramada } from './entities/factura-programada.entity';
 import { LiquidacionAprobacion } from './entities/liquidacion-aprobacion.entity';
 import { LiquidacionRuta } from './entities/liquidacion-ruta.entity';
@@ -181,6 +183,9 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
           FormatoEnvio,
           FacturaParcial,
           FacturaLlamada,
+          AcademyProgreso,
+          AcademyIntento,
+          AcademyEvento,
           FacturaProgramada,
           LiquidacionAprobacion,
           LiquidacionRuta,
@@ -224,6 +229,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
     FacturacionModule,
     ComercialModule,
     ConexionesModule,
+    AcademyModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_INTERCEPTOR, useClass: SlowRequestInterceptor }],

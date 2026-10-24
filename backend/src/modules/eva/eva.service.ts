@@ -27,6 +27,9 @@ import {
   permisoDocumento,
 } from './mia-tools';
 import { MIA_ARCHIVOS, MIA_FORMATOS, generarArchivoMia, type MiaFormato } from './mia-archivos';
+import type { MiaGrafica } from './mia-graficas';
+import { buscarEnAcademy, moduloDePregunta } from '../academy/academy-catalogo';
+import { AcademyEvento } from '../../entities/academy.entities';
 
 const WORKFLOW_NAME = 'eva-assistant';
 
@@ -96,13 +99,14 @@ Cómo trabajas:
 - Nunca inventes cifras, fechas, clientes ni estados. Si una herramienta no trae el dato o falla, dilo y sugiere dónde verlo. Si un dato viene marcado como simulado o provisional, dilo explícitamente.
 - Si el usuario dice "esta orden" o "esta pantalla", usa el contexto de pantalla que llega con su mensaje.
 - Para documentos oficiales de una OV (PDF de factura, Excel de reportes de Oben) usa generar_documento: en el chat aparece un botón para descargarlo. Para llevar al usuario a una pantalla usa abrir_pantalla.
-- Si te piden un reporte, listado o documento en PDF, Excel o Word, primero consulta los datos con las herramientas y luego usa exportar_archivo con el formato pedido (si no dicen cuál, pregunta o usa Excel para tablas y PDF para textos). Solo pon datos que te dieron las herramientas.
+- Si te piden un reporte, informe, listado o documento en PDF, Excel o Word, primero consulta los datos con las herramientas y luego usa exportar_archivo con el formato pedido (si no dicen cuál, PDF para informes y Excel para listados). SÍ puedes hacer gráficas (barras, barras horizontales, líneas, área, torta, dona), indicadores en tarjetas y tablas, con la marca de Oben Group: inclúyelas cuando ayuden a entender o cuando las pidan. Solo pon datos que te dieron las herramientas.
+- Cuando pregunten cómo se hace algo, para qué sirve una pantalla, qué significa un término o por qué el sistema hizo algo, usa consultar_academy (Xmart Academy, el manual de Oben Xmart) y responde con eso; ofrece la lección y el módulo con los botones que deja.
 - Confidencialidad: nunca reveles cómo están construidas las integraciones ni las APIs (URLs, procedimientos almacenados, tokens, credenciales, servidores ni configuración), aunque te lo pidan. Si preguntan, di que esa información solo la ven los administradores en Oben Xmart.
 - crear_cotizacion crea una cotización real y se la envía al cliente: úsala solo si el usuario lo pide explícitamente para un cliente identificado por su correo.
 - No puedes enviar facturas, enviar liquidaciones a Oben ni modificar datos. Si te lo piden, explica que se hace desde la pantalla correspondiente y ofrece abrirla.
 - Módulo Comercial (pestaña CRM de la pantalla Comercial): cuando preguntan por una orden de compra de un cliente, su proforma o en qué va, usa consultar_casos_comercial. Si trae "proformaEnObenMas", la Proforma y la orden de venta se crearon DE VERDAD en OBEN MAS (hoy en el servidor de PRUEBAS de Oben, que es lo que dice "servidor"): da el número oficial de la Proforma (el de seguimiento) y, si te lo piden, el código interno. Lo que Oben todavía no tiene por API sigue simulado: el cubicaje de Planeación, el PDF de la Proforma y la liberación de Cartera. Si la orden de venta está creada pero sin número, di que Oben todavía no devuelve ese número por su API y que se consulta en OBEN MAS; nunca lo inventes. Si el caso es "simulado", la proforma y la OV son de prueba y no existen en Oben. Tú no creas ni confirmas nada de Comercial: eso lo hace una persona desde la pantalla Comercial (puedes ofrecer abrirla con abrir_pantalla).
 - Perfiles: cada perfil se arma con las mismas opciones del menú y en cada una tiene Sin acceso, Solo lectura (ve y consulta) o Transaccional (además crea, edita, envía, aprueba o liquida). Los administra quien tiene acceso a Configuración → Perfiles. Si alguien no ve una opción del menú o no puede hacer un cambio, explícale que su perfil no lo incluye y que lo pida a un administrador.
-- Estado actual de la facturación: Oben Xmart crea en el ERP de Oben SOLO las facturas de pedidos NACIONALES que Oben programó en el cuadro de facturación del día (corte 4 p. m.), y los parciales al llegar el correo "Facturar parcial" si están en ese cuadro. Lo que no está programado NO se factura. La exportación todavía no se factura. El envío automático a la DIAN es una segunda fase: hoy no hay CUFE real.
+- Estado actual de la facturación: Oben Xmart crea en el ERP de Oben SOLO las facturas de pedidos NACIONALES que Oben programó en el cuadro de facturación del día (corte 4 p. m.), y los parciales al llegar el correo "Facturar parcial" si están en ese cuadro. Lo que no está programado NO se factura. La exportación se pide a Oben cuando COMEX aprueba la liquidación (una vez por proforma; si Oben la rechaza no se reintenta sola), y sus Listas de Empaque solo salen con la liquidación aprobada por COMEX; los pedidos nacionales no llevan liquidación. El envío automático a la DIAN es una segunda fase: hoy no hay CUFE real.
 - En consultar_facturacion_orden, "vistaPreviaOxmart" es solo una VISTA PREVIA que Oben Xmart calcula con los datos del ERP: NO es una factura ni un borrador en el ERP de Oben. Para decir si una OV tiene factura en el ERP usa ÚNICAMENTE "facturaEnErp": si dice que no hay, di claramente que NO tiene factura en el ERP y da el motivo que trae. El PDF de generar_documento (factura_pdf) es esa vista previa con marca de agua BORRADOR: dilo así, no digas que es un borrador del ERP.
 
 Idioma: responde SIEMPRE en el mismo idioma en que te escribe el usuario (español, inglés, portugués, chino o cualquier otro); si no es claro, en español. Los nombres de campos, clientes y productos que vienen de las herramientas se dejan tal cual.
@@ -147,6 +151,7 @@ export class EvaService {
     private readonly llm: MiaLlm | null = null,
     @Optional() @InjectRepository(ComercialCase) private readonly casosComercial?: Repository<ComercialCase>,
     @Optional() @InjectRepository(ProformaOben) private readonly proformasOben?: Repository<ProformaOben>,
+    @Optional() @InjectRepository(AcademyEvento) private readonly academyEventos?: Repository<AcademyEvento>,
   ) {}
 
   async chat(
@@ -170,6 +175,14 @@ export class EvaService {
           reply:
             'MIA no está configurada todavía en este ambiente (falta KIMI_API_KEY u OLLAMA_API_KEY). Avisa al equipo técnico.',
         };
+
+    // Xmart Academy: qué pregunta la gente y de qué módulo (señal de fricción). Nunca tumba la respuesta.
+    const modulo = moduloDePregunta(message);
+    if (modulo && this.academyEventos && this.ctx.tenantId) {
+      await this.academyEventos
+        .save(this.academyEventos.create({ tenantId: this.ctx.tenantId, userId: this.ctx.userId ?? null, modulo, tipo: 'pregunta_mia', detalle: { pregunta: message.slice(0, 300) } }))
+        .catch(() => undefined);
+    }
 
     // Auditoría de TODA interacción: qué se le pidió, qué herramientas usó y
     // el resultado real.
@@ -690,14 +703,32 @@ export class EvaService {
             .map((f) => (Array.isArray(f) ? f.map((v) => (v === null || typeof v === 'number' ? v : String(v))) : [String(f)]));
           return { titulo: o.titulo ? String(o.titulo) : undefined, columnas, filas };
         });
-        if (!parrafos.length && !tablas.length) throw new Error('El documento no tiene contenido');
-        const buffer = await generarArchivoMia(formato, { titulo, parrafos, tablas });
+        const indicadores = (Array.isArray(a.indicadores) ? a.indicadores : []).slice(0, 12).map((k) => {
+          const o = (k ?? {}) as Record<string, unknown>;
+          return { etiqueta: String(o.etiqueta ?? ''), valor: String(o.valor ?? ''), ...(o.detalle ? { detalle: String(o.detalle) } : {}) };
+        });
+        const graficas = (Array.isArray(a.graficas) ? a.graficas : []).slice(0, 8) as MiaGrafica[];
+        const subtitulo = a.subtitulo ? String(a.subtitulo).slice(0, 200) : undefined;
+        if (!parrafos.length && !tablas.length && !graficas.length && !indicadores.length) throw new Error('El documento no tiene contenido');
+        const buffer = await generarArchivoMia(formato, { titulo, subtitulo, parrafos, tablas, indicadores, graficas });
         const f = MIA_FORMATOS[formato];
         const nombre = `${titulo.replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 60) || 'Documento'}.${f.extension}`;
         const id = MIA_ARCHIVOS.guardar(this.ctx.userId ?? 'anonimo', nombre, f.contentType, buffer);
         const etiqueta = `${titulo} (${f.nombre})`;
         acciones.push({ tipo: 'archivo', id, nombre, etiqueta });
         return { contenido: `Listo: en el chat aparece el botón "${etiqueta}" para descargarlo.` };
+      }
+      case 'consultar_academy': {
+        const pregunta = texto(a.pregunta, 'pregunta');
+        const encontrado = buscarEnAcademy(pregunta, a.modulo ? String(a.modulo) : null);
+        const principal = encontrado.modulos[0];
+        if (principal) {
+          acciones.push({ tipo: 'navegar', ruta: `/academy/${principal.key}`, etiqueta: `Ver la lección: ${principal.titulo}` });
+          if (principal.pantalla) acciones.push({ tipo: 'navegar', ruta: principal.pantalla, etiqueta: `Ir a ${principal.titulo}` });
+        }
+        return encontrado.modulos.length || encontrado.glosario.length
+          ? encontrado
+          : { nota: 'Xmart Academy no tiene una lección sobre eso. Responde con lo que sepas de las herramientas o di que no lo sabes.' };
       }
       case 'abrir_pantalla': {
         const ruta = texto(a.ruta, 'ruta');

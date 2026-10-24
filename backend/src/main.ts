@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { DataSource } from 'typeorm';
 import { runSqlMigrations } from './common/bootstrap/run-sql-migrations';
 
 async function bootstrap() {
@@ -51,7 +52,8 @@ async function bootstrap() {
   });
 
   // Filtro global de excepciones y validation pipe con estricto whitelist.
-  app.useGlobalFilters(new AllExceptionsFilter());
+  // Con la base de datos: los errores de cada módulo alimentan el panel de fricciones de Xmart Academy.
+  app.useGlobalFilters(new AllExceptionsFilter(app.get(DataSource)));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

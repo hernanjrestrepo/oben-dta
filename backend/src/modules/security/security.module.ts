@@ -16,7 +16,8 @@ import { User } from '../../entities/user.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import { License } from '../../entities/license.entity';
 import { WorkflowEvent } from '../../entities/workflow-event.entity';
-import { AuthorizationService } from './authorization.service';
+import { AUTHORIZATION_POLICIES, AuthorizationService } from './authorization.service';
+import { AcademyCertificacionPolicy } from '../academy/academy-certificacion.policy';
 import { WorkflowAuditService } from './workflow-audit.service';
 import { AuditController } from './audit.controller';
 import { LicenseService } from './license.service';
@@ -75,6 +76,9 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
   ],
   providers: [
     AuthorizationService,
+    // Xmart Academy: lo transaccional exige el quiz aprobado (si el tenant lo activa).
+    AcademyCertificacionPolicy,
+    { provide: AUTHORIZATION_POLICIES, useFactory: (academy: AcademyCertificacionPolicy) => [academy], inject: [AcademyCertificacionPolicy] },
     LicenseService,
     LicenseSigningService,
     LicensingService,

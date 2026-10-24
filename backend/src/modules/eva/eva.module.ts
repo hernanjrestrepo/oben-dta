@@ -1,3 +1,4 @@
+import { AcademyEvento } from '../../entities/academy.entities';
 import { Logger, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Product } from '../../entities/product.entity';
@@ -30,6 +31,7 @@ import { IntegrationHubModule } from '../integrations/hub/integration-hub.module
       FreightInlandRate,
       FreightDestinationSurcharge,
       FreightOceanRate,
+      AcademyEvento,
     ]),
     QuotesModule,
     AuthModule,

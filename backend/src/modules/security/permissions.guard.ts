@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthorizationService } from './authorization.service';
+import { MOTIVO_ACADEMY } from '../academy/academy-certificacion.policy';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import {
   PermissionRequirement,
@@ -85,6 +86,7 @@ export class PermissionsGuard implements CanActivate {
 
     if (requirement.mode === 'any') {
       const failures: string[] = [];
+      let academy: string | undefined;
       for (const permission of requirement.permissions) {
         const decision = await this.authz.can({
           subject,
@@ -92,8 +94,10 @@ export class PermissionsGuard implements CanActivate {
           context: ctxMeta,
         });
         if (decision.effect === 'allow') return true;
+        if (decision.reason === MOTIVO_ACADEMY) academy ??= String(decision.metadata?.mensaje ?? '');
         failures.push(`${permission}:${decision.reason}`);
       }
+      if (academy) throw new ForbiddenException(academy);
       throw new ForbiddenException(
         `Permiso denegado (any): ${failures.join(', ')}`,
       );
@@ -107,6 +111,8 @@ export class PermissionsGuard implements CanActivate {
         context: ctxMeta,
       });
       if (decision.effect !== 'allow') {
+        // Xmart Academy: el mensaje dice qué módulo aprobar, no un código técnico.
+        if (decision.reason === MOTIVO_ACADEMY) throw new ForbiddenException(String(decision.metadata?.mensaje ?? 'Falta aprobar el módulo en Xmart Academy.'));
         throw new ForbiddenException(
           `Permiso denegado: ${permission} (${decision.reason})`,
         );

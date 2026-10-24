@@ -18,6 +18,8 @@ export const MIA_PANTALLAS: Record<string, string> = {
   '/equivalencias': 'Equivalencias',
   '/distribucion': 'Listas de Distribución',
   '/admin/roles': 'Perfiles (acceso por opción del menú)',
+  '/academy': 'Xmart Academy (entrenamiento por perfil)',
+  '/facturas-parciales': 'Facturas parciales (cuadro del día y solicitudes a Oben)',
 };
 
 /** Documentos que MIA puede ofrecer para descargar: el PDF de factura y los reportes Excel de Oben. */
@@ -263,12 +265,40 @@ export const MIA_TOOLS: Array<{
     tool: {
       name: 'exportar_archivo',
       description:
-        'Genera un archivo PDF, Excel o Word con un reporte o documento que tú armas (título, párrafos y tablas) con datos que YA consultaste con las otras herramientas. En el chat aparece un botón para descargarlo. Úsala cuando el usuario pida un reporte, listado o documento en PDF, Excel o Word.',
+        'Genera un archivo PDF, Excel o Word con la marca de Oben Group (logo, paleta naranja y grafito, páginas numeradas) que tú armas con datos que YA consultaste con las otras herramientas: título, subtítulo, indicadores (tarjetas con cifras clave), párrafos, GRÁFICAS (barras, barras horizontales, líneas, área, torta, dona) y tablas. En el chat aparece un botón para descargarlo. Úsala cuando el usuario pida un reporte, informe, listado o documento en PDF, Excel o Word; si pide gráficas, inclúyelas. Nunca inventes cifras.',
       input_schema: {
         type: 'object',
         properties: {
           formato: { type: 'string', enum: ['pdf', 'xlsx', 'docx'], description: 'pdf, xlsx (Excel) o docx (Word).' },
           titulo: { type: 'string', description: 'Título del documento.' },
+          subtitulo: { type: 'string', description: 'Subtítulo opcional (p. ej. periodo o área). Por defecto, la fecha.' },
+          indicadores: {
+            type: 'array',
+            description: 'Cifras clave en tarjetas (máximo 12): etiqueta, valor ya formateado y detalle opcional.',
+            items: {
+              type: 'object',
+              properties: { etiqueta: { type: 'string' }, valor: { type: 'string' }, detalle: { type: 'string' } },
+              required: ['etiqueta', 'valor'],
+            },
+          },
+          graficas: {
+            type: 'array',
+            description: 'Gráficas (máximo 8). En torta/dona usa una sola serie.',
+            items: {
+              type: 'object',
+              properties: {
+                titulo: { type: 'string' },
+                tipo: { type: 'string', enum: ['barras', 'barras_horizontales', 'lineas', 'area', 'torta', 'dona'] },
+                categorias: { type: 'array', items: { type: 'string' }, description: 'Etiquetas del eje X o de cada porción.' },
+                series: {
+                  type: 'array',
+                  items: { type: 'object', properties: { nombre: { type: 'string' }, valores: { type: 'array', items: { type: 'number' } } }, required: ['nombre', 'valores'] },
+                },
+                unidad: { type: 'string', description: 'Unidad de los valores (USD, kg, facturas…).' },
+              },
+              required: ['titulo', 'tipo', 'categorias', 'series'],
+            },
+          },
           parrafos: { type: 'array', items: { type: 'string' }, description: 'Texto del documento, un párrafo por elemento.' },
           tablas: {
             type: 'array',
@@ -285,6 +315,24 @@ export const MIA_TOOLS: Array<{
           },
         },
         required: ['formato', 'titulo'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    // Contenido de entrenamiento: sin datos de negocio.
+    permiso: null,
+    tool: {
+      name: 'consultar_academy',
+      description:
+        'Consulta Xmart Academy, el manual de Oben Xmart: cómo funciona cada módulo, el paso a paso, las reglas y el glosario. Úsala SIEMPRE que pregunten cómo se hace algo, para qué sirve una pantalla, qué significa un término o por qué el sistema hizo algo. Responde con lo que diga y ofrece ir a la lección o al módulo.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          pregunta: { type: 'string', description: 'Lo que pregunta el usuario, con sus palabras.' },
+          modulo: { type: 'string', description: 'Clave del módulo si ya la sabes (p. ej. facturacion, lista-empaque, facturas-parciales, comercial).' },
+        },
+        required: ['pregunta'],
         additionalProperties: false,
       },
     },
