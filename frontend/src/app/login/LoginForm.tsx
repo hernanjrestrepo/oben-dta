@@ -18,7 +18,7 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [validationError, setValidationError] = useState('');
 
-  const redirectTo = searchParams.get('redirect') || '/operaciones';
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
 
   useEffect(() => {
     clearError();

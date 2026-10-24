@@ -4,7 +4,6 @@ import { LIQUIDACION_PERMISSION } from '../liquidacion/liquidacion.controller';
 
 /** Pantallas a las que MIA puede llevar al usuario (mismas rutas del menú lateral). */
 export const MIA_PANTALLAS: Record<string, string> = {
-  '/operaciones': 'Centro de Operaciones',
   '/dashboard': 'Dashboard',
   '/comercial': 'Comercial',
   '/quotes': 'Cotizaciones',

@@ -37,7 +37,7 @@ export default function CambiarContrasenaPage() {
     try {
       const res = await api.changePassword(actual, nueva);
       useAuthStore.setState({ user: res.user, isAuthenticated: true });
-      router.replace('/operaciones');
+      router.replace('/dashboard');
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
       setError((Array.isArray(msg) ? msg.join(' ') : msg) || t('No se pudo cambiar la contraseña.'));

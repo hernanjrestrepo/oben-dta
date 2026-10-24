@@ -1,5 +1,4 @@
 import {
-  Activity,
   ArrowRightLeft,
   Briefcase,
   FilePenLine,
@@ -52,7 +51,7 @@ export const MENU: GrupoMenu[] = [
   {
     titulo: 'Inicio',
     items: [
-      { href: '/operaciones', label: 'Centro de Operaciones', icon: Activity, ver: ['dashboard.view'], operar: [] },
+      // Centro de Operaciones oculto (Hernán, 24-oct: "confuso"); la página sigue existiendo para Paradixe.
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, ver: ['dashboard.view'], operar: [] },
     ],
   },

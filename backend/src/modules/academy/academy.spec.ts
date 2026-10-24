@@ -32,7 +32,7 @@ describe('Xmart Academy — catálogo', () => {
       grupos[nombre] = { ver: [...ver.matchAll(/'([^']+)'/g)].map((x) => x[1]), operar: [...operar.matchAll(/'([^']+)'/g)].map((x) => x[1]) };
     }
     const opciones = [...texto.matchAll(/\{\s*href: '([^']+)',[\s\S]*?(?=\n\s*\{\s*href:|\n\s*\],)/g)].map((m) => m[0]);
-    expect(opciones.length).toBeGreaterThanOrEqual(20);
+    expect(opciones.length).toBeGreaterThanOrEqual(19);
     for (const bloque of opciones) {
       const href = /href: '([^']+)'/.exec(bloque)![1];
       if (href === '/academy') continue;
