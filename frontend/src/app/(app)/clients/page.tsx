@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -239,7 +239,7 @@ function ClientCard({
           </span>
           <span className="font-semibold text-gray-900">
             {hasLimit
-              ? `$${creditLimit.toLocaleString('es-CO')} COP`
+              ? `$${creditLimit.toLocaleString(localeActivo())} COP`
               : 'Sin límite asignado'}
           </span>
         </div>
@@ -253,10 +253,10 @@ function ClientCard({
         </div>
         <div className="flex justify-between text-xs mt-1">
           <span className="text-gray-400">
-            {t('Usado: $')}{Number(client.usedCredit).toLocaleString('es-CO')}{' '}{t('COP')}
+            {t('Usado: $')}{Number(client.usedCredit).toLocaleString(localeActivo())}{' '}{t('COP')}
           </span>
           <span className="text-gray-400">
-            {t('Disponible: $')}{Number(availableCredit).toLocaleString('es-CO')}{' '}{t('COP')}
+            {t('Disponible: $')}{Number(availableCredit).toLocaleString(localeActivo())}{' '}{t('COP')}
           </span>
         </div>
       </div>

@@ -43,7 +43,7 @@ export function EstadoPill({ estado, bloquea }: { estado: EstadoModuloAcademy; b
   const Icono = e.icono;
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${e.clase}`}>
-      <Icono className="w-3 h-3" /> {e.texto}
+      <Icono className="w-3 h-3" /> {t(e.texto)}
     </span>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { WorkflowEvent } from '@/types';
@@ -101,7 +101,7 @@ export default function AuditoriaPage() {
                     <Fragment key={ev.id}>
                       <tr className="hover:bg-gray-50 transition">
                         <td className="px-6 py-3 text-gray-500 whitespace-nowrap">
-                          {new Date(ev.createdAt).toLocaleString('es-CO')}
+                          {new Date(ev.createdAt).toLocaleString(localeActivo())}
                         </td>
                         <td className="px-6 py-3 text-gray-700">{ev.workflowName}</td>
                         <td className="px-6 py-3 font-medium text-gray-900">

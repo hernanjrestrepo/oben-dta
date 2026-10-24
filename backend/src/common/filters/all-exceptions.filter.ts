@@ -9,13 +9,17 @@ import {
 import { Request, Response } from 'express';
 import type { DataSource } from 'typeorm';
 import { moduloDeRuta } from '../../modules/academy/academy-catalogo';
+import { idiomaDe, type TraductorService } from '../../modules/traduccion/traductor.service';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
   /** Con `ds`, cada error de un usuario en un módulo queda como fricción de Xmart Academy (sin bloquear la respuesta). */
-  constructor(private readonly ds?: DataSource) {}
+  constructor(
+    private readonly ds?: DataSource,
+    private readonly traductor?: TraductorService,
+  ) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -54,13 +58,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     this.registrarFriccion(request, status, sanitizedMessage);
 
-    // Return sanitized response to client
-    response.status(status).json({
-      statusCode: status,
-      message: sanitizedMessage,
-      timestamp: new Date().toISOString(),
-      path: request.url,
-    });
+    const responder = (message: string) =>
+      response.status(status).json({
+        statusCode: status,
+        message,
+        timestamp: new Date().toISOString(),
+        path: request.url,
+      });
+    // En el idioma de la persona (Accept-Language); si la traducción tarda o falla, en español.
+    const idioma = idiomaDe(request.headers['accept-language']);
+    if (this.traductor && idioma !== 'es' && sanitizedMessage && sanitizedMessage !== 'Internal server error') {
+      void this.traductor
+        .uno(sanitizedMessage, idioma, 5000)
+        .then(responder)
+        .catch(() => responder(sanitizedMessage));
+      return;
+    }
+    responder(sanitizedMessage);
   }
 
   private registrarFriccion(request: Request, status: number, mensaje: string): void {

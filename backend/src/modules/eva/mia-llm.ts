@@ -120,10 +120,15 @@ export class LlmCompatibleOpenAi implements MiaLlm {
           // (los otros repos ya lo apagan con K2.6). kimi-k3 razona siempre y rechaza "disabled".
           ...(this.proveedor.nombre === 'kimi' && !modelo.startsWith('kimi-k3') ? { thinking: { type: 'disabled' } } : {}),
           messages: mensajes,
-          tools: herramientas.map((h) => ({
-            type: 'function',
-            function: { name: h.name, description: h.description ?? '', parameters: h.input_schema },
-          })),
+          // Sin herramientas (p. ej. traducir) no se manda la lista: algunos proveedores rechazan una vacía.
+          ...(herramientas.length
+            ? {
+                tools: herramientas.map((h) => ({
+                  type: 'function',
+                  function: { name: h.name, description: h.description ?? '', parameters: h.input_schema },
+                })),
+              }
+            : {}),
         }),
       });
       const texto = await res.text();

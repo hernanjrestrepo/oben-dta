@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import type { CuadroDelDia as Cuadro } from '@/types';
@@ -114,7 +114,7 @@ export function CuadroDelDia({ puedeCargar }: { puedeCargar: boolean }) {
                     <td className="pr-3 tabular-nums">{f.ov}</td>
                     <td className="pr-3">{f.cliente}</td>
                     <td className="pr-3 tabular-nums">{f.pf}</td>
-                    <td className="pr-3 text-right tabular-nums">{f.kg?.toLocaleString('es-CO') ?? '—'}</td>
+                    <td className="pr-3 text-right tabular-nums">{f.kg?.toLocaleString(localeActivo()) ?? '—'}</td>
                     <td className="pr-3">{f.tipo}</td>
                     <td>{f.incluida ? <span className="text-green-700 font-medium">{t('Sí')}</span> : <span title={f.motivo ?? ''}>{t('No —')}{' '}{f.motivo}</span>}</td>
                   </tr>

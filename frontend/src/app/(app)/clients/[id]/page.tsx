@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -286,7 +286,7 @@ export default function ClientDetailPage() {
               <div>
                 <p className="text-xs text-gray-500">{t('Registrado')}</p>
                 <p className="text-gray-900">
-                  {new Date(client.createdAt).toLocaleDateString('es-CO')}
+                  {new Date(client.createdAt).toLocaleDateString(localeActivo())}
                 </p>
               </div>
             </div>
@@ -302,13 +302,13 @@ export default function ClientDetailPage() {
             <div>
               <p className="text-xs text-gray-500">{t('Límite de Crédito')}</p>
               <p className="text-xl font-bold text-[#F47735]">
-                ${Number(client.creditLimit).toLocaleString('es-CO')}{' '}{t('COP')}
+                ${Number(client.creditLimit).toLocaleString(localeActivo())}{' '}{t('COP')}
               </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">{t('Crédito Usado')}</p>
               <p className="text-lg font-semibold text-gray-900">
-                ${Number(client.usedCredit).toLocaleString('es-CO')}{' '}{t('COP')}
+                ${Number(client.usedCredit).toLocaleString(localeActivo())}{' '}{t('COP')}
               </p>
             </div>
             <div>
@@ -318,7 +318,7 @@ export default function ClientDetailPage() {
                   availableCredit > 0 ? 'text-green-600' : 'text-red-600'
                 }`}
               >
-                ${Number(availableCredit).toLocaleString('es-CO')}{' '}{t('COP')}
+                ${Number(availableCredit).toLocaleString(localeActivo())}{' '}{t('COP')}
               </p>
             </div>
             <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -370,7 +370,7 @@ export default function ClientDetailPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4">
-                      ${Number(order.totalAmount).toLocaleString('es-CO')}{' '}{t('COP')}
+                      ${Number(order.totalAmount).toLocaleString(localeActivo())}{' '}{t('COP')}
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
@@ -378,7 +378,7 @@ export default function ClientDetailPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-gray-500">
-                      {new Date(order.createdAt).toLocaleDateString('es-CO')}
+                      {new Date(order.createdAt).toLocaleDateString(localeActivo())}
                     </td>
                   </tr>
                 ))}

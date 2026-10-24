@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -221,7 +221,7 @@ export default function NewOrderPage() {
                       <option value="">{t('Seleccionar producto...')}</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name} — ${p.price.toLocaleString('es-CO')}{' '}{t('COP')}
+                          {p.name} — ${p.price.toLocaleString(localeActivo())}{' '}{t('COP')}
                         </option>
                       ))}
                     </select>
@@ -239,7 +239,7 @@ export default function NewOrderPage() {
                 </div>
                 <div className="w-32 text-right py-2.5 text-sm font-medium text-gray-700">
                   {product
-                    ? `$${(product.price * item.quantity).toLocaleString('es-CO')} COP`
+                    ? `$${(product.price * item.quantity).toLocaleString(localeActivo())} COP`
                     : '—'}
                 </div>
                 <button
@@ -256,7 +256,7 @@ export default function NewOrderPage() {
 
           <div className="flex justify-end pt-2 border-t border-gray-100">
             <p className="text-lg font-bold text-[#F47735]">
-              {t('Total: $')}{getTotal().toLocaleString('es-CO')}{' '}{t('COP')}
+              {t('Total: $')}{getTotal().toLocaleString(localeActivo())}{' '}{t('COP')}
             </p>
           </div>
         </div>

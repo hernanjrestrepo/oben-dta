@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -331,24 +331,24 @@ export default function QuoteDetailPage() {
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-gray-500">{t('Creada')}</span>
-              <span className="text-gray-700">{new Date(quote.createdAt).toLocaleString('es-CO')}</span>
+              <span className="text-gray-700">{new Date(quote.createdAt).toLocaleString(localeActivo())}</span>
             </div>
             {quote.approvedAt && (
               <div className="flex justify-between">
                 <span className="text-gray-500">{t('Aprobada')}</span>
-                <span className="text-gray-700">{new Date(quote.approvedAt).toLocaleString('es-CO')}</span>
+                <span className="text-gray-700">{new Date(quote.approvedAt).toLocaleString(localeActivo())}</span>
               </div>
             )}
             {quote.paidAt && (
               <div className="flex justify-between">
                 <span className="text-gray-500">{t('Pagada')}</span>
-                <span className="text-gray-700">{new Date(quote.paidAt).toLocaleString('es-CO')}</span>
+                <span className="text-gray-700">{new Date(quote.paidAt).toLocaleString(localeActivo())}</span>
               </div>
             )}
             {quote.deliveredAt && (
               <div className="flex justify-between">
                 <span className="text-gray-500">{t('Entregada')}</span>
-                <span className="text-gray-700">{new Date(quote.deliveredAt).toLocaleString('es-CO')}</span>
+                <span className="text-gray-700">{new Date(quote.deliveredAt).toLocaleString(localeActivo())}</span>
               </div>
             )}
             {quote.invoiceNumber && (
@@ -394,10 +394,10 @@ export default function QuoteDetailPage() {
                     <td className="px-6 py-4 text-gray-600 font-mono text-xs">{item.product?.sku || '—'}</td>
                     <td className="px-6 py-4 text-right">{item.quantity}</td>
                     <td className="px-6 py-4 text-right">
-                      ${Number(item.unitPrice).toLocaleString('es-CO')}{' '}{t('COP')}
+                      ${Number(item.unitPrice).toLocaleString(localeActivo())}{' '}{t('COP')}
                     </td>
                     <td className="px-6 py-4 text-right font-medium">
-                      ${Number(item.totalPrice).toLocaleString('es-CO')}{' '}{t('COP')}
+                      ${Number(item.totalPrice).toLocaleString(localeActivo())}{' '}{t('COP')}
                     </td>
                   </tr>
                 ))
@@ -413,13 +413,13 @@ export default function QuoteDetailPage() {
               <tr>
                 <td colSpan={4} className="px-6 py-3 text-right text-gray-600">{t('Subtotal')}</td>
                 <td className="px-6 py-3 text-right font-medium">
-                  ${Number(quote.subtotal).toLocaleString('es-CO')}{' '}{t('COP')}
+                  ${Number(quote.subtotal).toLocaleString(localeActivo())}{' '}{t('COP')}
                 </td>
               </tr>
               <tr>
                 <td colSpan={4} className="px-6 py-3 text-right text-gray-600">{t('IVA')}</td>
                 <td className="px-6 py-3 text-right font-medium">
-                  ${Number(quote.taxAmount).toLocaleString('es-CO')}{' '}{t('COP')}
+                  ${Number(quote.taxAmount).toLocaleString(localeActivo())}{' '}{t('COP')}
                 </td>
               </tr>
               <tr>
@@ -427,7 +427,7 @@ export default function QuoteDetailPage() {
                   {t('Total:')}
                 </td>
                 <td className="px-6 py-4 text-right font-bold text-[#F47735] text-lg">
-                  ${Number(quote.total).toLocaleString('es-CO')}{' '}{t('COP')}
+                  ${Number(quote.total).toLocaleString(localeActivo())}{' '}{t('COP')}
                 </td>
               </tr>
             </tfoot>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -238,18 +238,18 @@ export default function InvoiceDetailPage() {
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-gray-500">{t('Emitida')}</span>
-              <span className="text-gray-700">{new Date(invoice.createdAt).toLocaleString('es-CO')}</span>
+              <span className="text-gray-700">{new Date(invoice.createdAt).toLocaleString(localeActivo())}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">{t('Vencimiento')}</span>
               <span className="text-gray-700">
-                {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('es-CO') : '—'}
+                {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString(localeActivo()) : '—'}
               </span>
             </div>
             {invoice.paidAt && (
               <div className="flex justify-between">
                 <span className="text-gray-500">{t('Pagada el')}</span>
-                <span className="text-gray-700">{new Date(invoice.paidAt).toLocaleString('es-CO')}</span>
+                <span className="text-gray-700">{new Date(invoice.paidAt).toLocaleString(localeActivo())}</span>
               </div>
             )}
             <div className="flex justify-between">
@@ -275,19 +275,19 @@ export default function InvoiceDetailPage() {
           <div className="flex justify-between px-6 py-4">
             <span className="text-gray-500">{t('Subtotal')}</span>
             <span className="text-gray-900 font-medium">
-              ${Number(invoice.amount).toLocaleString('es-CO')}{' '}{t('COP')}
+              ${Number(invoice.amount).toLocaleString(localeActivo())}{' '}{t('COP')}
             </span>
           </div>
           <div className="flex justify-between px-6 py-4">
             <span className="text-gray-500">{t('IVA')}</span>
             <span className="text-gray-900 font-medium">
-              ${Number(invoice.taxAmount).toLocaleString('es-CO')}{' '}{t('COP')}
+              ${Number(invoice.taxAmount).toLocaleString(localeActivo())}{' '}{t('COP')}
             </span>
           </div>
           <div className="flex justify-between px-6 py-4 bg-gray-50">
             <span className="font-semibold text-gray-700">{t('Total')}</span>
             <span className="font-bold text-[#F47735] text-lg">
-              ${Number(invoice.totalAmount).toLocaleString('es-CO')}{' '}{t('COP')}
+              ${Number(invoice.totalAmount).toLocaleString(localeActivo())}{' '}{t('COP')}
             </span>
           </div>
         </div>

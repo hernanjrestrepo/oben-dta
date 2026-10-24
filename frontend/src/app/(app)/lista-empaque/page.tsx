@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -314,7 +314,7 @@ function RetenidasPorCartera() {
           <li key={h.id} className="py-2 flex flex-col md:flex-row md:items-center gap-2 text-sm">
             <span className="font-semibold text-gray-900">OV {h.numberOrderSales}</span>
             <span className="text-xs text-gray-600 flex-1">
-              {h.holdReason ?? ''}{' '}{t('· retenida desde')}{' '}{new Date(h.createdAt).toLocaleString('es-CO')}{' '}{t('· próxima verificación')}{' '}{new Date(h.nextRetryAt).toLocaleString('es-CO')}
+              {h.holdReason ?? ''}{' '}{t('· retenida desde')}{' '}{new Date(h.createdAt).toLocaleString(localeActivo())}{' '}{t('· próxima verificación')}{' '}{new Date(h.nextRetryAt).toLocaleString(localeActivo())}
             </span>
             <div className="flex gap-2">
               <button onClick={() => accion(h.numberOrderSales, 'liberar')} disabled={busy === h.numberOrderSales} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-50">

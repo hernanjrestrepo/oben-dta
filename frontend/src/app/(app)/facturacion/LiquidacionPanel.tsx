@@ -1,5 +1,6 @@
 'use client';
 
+import { useTextosServidor } from '@/i18n/textosServidor';
 import { useT } from '@/i18n/idioma';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
@@ -202,6 +203,9 @@ export function LiquidacionPanel({
     }
   }
 
+  // Avisos del servidor: la lógica los lee en español; se traducen solo para mostrarlos.
+  const avisos = (liq?.ajustes ?? []).filter(esAvisoDeFaltante);
+  const ts = useTextosServidor(avisos);
 
   if (!pf) {
     return (
@@ -475,11 +479,11 @@ export function LiquidacionPanel({
                   </table>
                 </div>
 
-                {liq.ajustes.filter(esAvisoDeFaltante).map((a) => (
+                {avisos.map((a) => (
                   <div key={a} className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 flex gap-2">
                     <Sparkles className="w-4 h-4 shrink-0 mt-px" />
                     <span>
-                      <strong>{t('Ajuste automático.')}</strong> {a}
+                      <strong>{t('Ajuste automático.')}</strong> {ts(a)}
                     </span>
                   </div>
                 ))}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -150,7 +150,7 @@ export default function QuotesPage() {
                         {quote.client?.name || '—'}
                       </td>
                       <td className="px-6 py-4 font-semibold text-gray-900">
-                        ${Number(quote.total).toLocaleString('es-CO')}{' '}{t('COP')}
+                        ${Number(quote.total).toLocaleString(localeActivo())}{' '}{t('COP')}
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -162,7 +162,7 @@ export default function QuotesPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-500">
-                        {new Date(quote.createdAt).toLocaleDateString('es-CO')}
+                        {new Date(quote.createdAt).toLocaleDateString(localeActivo())}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <Link

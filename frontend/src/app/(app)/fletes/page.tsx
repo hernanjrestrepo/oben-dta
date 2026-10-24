@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge } from '@/types';
@@ -128,9 +128,9 @@ export default function FletesPage() {
                           <span>{r.state} — {r.destinationAddress}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-600">{r.weightLbs?.toLocaleString('es-CO') ?? '—'}</td>
+                      <td className="px-4 py-3 text-right text-gray-600">{r.weightLbs?.toLocaleString(localeActivo()) ?? '—'}</td>
                       <td className="px-4 py-3 text-right font-semibold text-[#F47735]">
-                        ${Number(r.rate40hc).toLocaleString('es-CO')}
+                        ${Number(r.rate40hc).toLocaleString(localeActivo())}
                       </td>
                       <td className="px-4 py-3 text-right text-gray-600">
                         {r.transitTimeDays != null ? (
@@ -175,12 +175,12 @@ export default function FletesPage() {
                     <tr key={r.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-700">{r.destinationPort ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-600">{r.deliveryAddress}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{r.unitWeightLbs?.toLocaleString('es-CO') ?? '—'}</td>
+                      <td className="px-4 py-3 text-right text-gray-600">{r.unitWeightLbs?.toLocaleString(localeActivo()) ?? '—'}</td>
                       <td className="px-4 py-3 text-right font-semibold text-[#F47735]">
-                        ${Number(r.transloadingRate).toLocaleString('es-CO')}
+                        ${Number(r.transloadingRate).toLocaleString(localeActivo())}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-[#F47735]">
-                        ${Number(r.transportationRate).toLocaleString('es-CO')}
+                        ${Number(r.transportationRate).toLocaleString(localeActivo())}
                       </td>
                     </tr>
                   ))
@@ -221,7 +221,7 @@ export default function FletesPage() {
                       </td>
                       <td className="px-4 py-3 text-gray-700">{r.surchargeName}</td>
                       <td className="px-4 py-3 text-right font-semibold text-[#F47735]">
-                        {r.rateAmount != null ? `$${Number(r.rateAmount).toLocaleString('es-CO')}` : '—'}
+                        {r.rateAmount != null ? `$${Number(r.rateAmount).toLocaleString(localeActivo())}` : '—'}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs font-mono">{r.rateFormula ?? '—'}</td>
                     </tr>

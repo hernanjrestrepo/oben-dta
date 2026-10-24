@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -24,7 +24,7 @@ const ESTADO: Record<EstadoFacturaParcial, { label: string; cls: string }> = {
 };
 
 function fecha(s: string | null): string {
-  return s ? new Date(s).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  return s ? new Date(s).toLocaleString(localeActivo(), { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' }) : '—';
 }
 
 /**

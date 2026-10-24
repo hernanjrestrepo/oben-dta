@@ -62,7 +62,7 @@ export default function LeccionPage() {
           <nav className="flex items-center gap-1 text-xs text-white/60">
             <Link href="/academy" className="hover:text-white">{t('Xmart Academy')}</Link>
             <ChevronRight className="w-3 h-3" />
-            <span>{l.grupo}</span>
+            <span>{t(l.grupo)}</span>
           </nav>
           <div className="mt-5 flex flex-col md:flex-row md:items-center gap-6">
             <span className="w-16 h-16 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0 academy-flotar">

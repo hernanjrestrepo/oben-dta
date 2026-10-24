@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -77,7 +77,7 @@ export function LicenseGate({ children }: { children: React.ReactNode }) {
           <span>{t('Tus datos y configuraciones están intactos. Este bloqueo es únicamente operativo — contacta a tu proveedor para renovar la licencia y recuperar el acceso.')}</span>
         </div>
         {status.expiresAt && (
-          <p className="text-xs text-gray-400">{t('Fecha de vencimiento:')}{' '}{new Date(status.expiresAt).toLocaleDateString('es-CO')}</p>
+          <p className="text-xs text-gray-400">{t('Fecha de vencimiento:')}{' '}{new Date(status.expiresAt).toLocaleDateString(localeActivo())}</p>
         )}
       </div>
     </div>

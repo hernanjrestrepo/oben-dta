@@ -33,6 +33,7 @@ const ROUTES_WITHOUT_PERMISSION: Record<string, string> = {
   'AcademyController.visto': 'solo JWT: registra el avance propio en una lección',
   'AcademyController.quiz': 'solo JWT: responde el quiz propio (se califica en el servidor)',
   'AcademyController.evento': 'solo JWT: registra un evento de uso propio (tipos cerrados)',
+  'TraduccionController.traducir': 'solo JWT: traduce para mostrar textos que la pantalla ya tiene (máx. 60 de 600 caracteres)',
 };
 
 function controllerFiles(dir: string): string[] {

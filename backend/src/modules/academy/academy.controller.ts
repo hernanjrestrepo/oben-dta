@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Put, Query, UseGuards, DefaultValuePipe } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Put, Query, UseGuards, DefaultValuePipe } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
 import { AcademyService } from './academy.service';
+import { TraductorService, idiomaDe } from '../traduccion/traductor.service';
+import { traducirContenido } from './academy-traduccion';
 
 class VistoDto {
   @IsOptional()
@@ -58,21 +60,25 @@ class AjustesDto {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('academy')
 export class AcademyController {
-  constructor(private readonly academy: AcademyService) {}
+  constructor(
+    private readonly academy: AcademyService,
+    private readonly traductor: TraductorService,
+  ) {}
 
+  // El contenido sale en el idioma de la persona (Accept-Language); el español es la fuente.
   @Get('plan')
-  plan() {
-    return this.academy.plan();
+  async plan(@Headers('accept-language') lang?: string) {
+    return traducirContenido(await this.academy.plan(), idiomaDe(lang), this.traductor);
   }
 
   @Get('glosario')
-  glosario() {
-    return this.academy.glosario();
+  glosario(@Headers('accept-language') lang?: string) {
+    return traducirContenido(this.academy.glosario(), idiomaDe(lang), this.traductor);
   }
 
   @Get('modulos/:key')
-  modulo(@Param('key') key: string) {
-    return this.academy.modulo(key);
+  async modulo(@Param('key') key: string, @Headers('accept-language') lang?: string) {
+    return traducirContenido(await this.academy.modulo(key), idiomaDe(lang), this.traductor);
   }
 
   @Post('modulos/:key/visto')
@@ -81,8 +87,8 @@ export class AcademyController {
   }
 
   @Post('modulos/:key/quiz')
-  quiz(@Param('key') key: string, @Body() dto: QuizDto) {
-    return this.academy.responderQuiz(key, dto.respuestas);
+  async quiz(@Param('key') key: string, @Body() dto: QuizDto, @Headers('accept-language') lang?: string) {
+    return traducirContenido(await this.academy.responderQuiz(key, dto.respuestas), idiomaDe(lang), this.traductor);
   }
 
   @Post('eventos')

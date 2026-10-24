@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import type { CasoEstado } from '@/types';
 
 export const ESTADOS: CasoEstado[] = ['oc_recibida', 'sin_cubicar', 'cubicada', 'enviada_cliente', 'retenida', 'activa', 'cerrada', 'rechazada', 'anulada'];
@@ -60,5 +60,5 @@ export const btnSecondary =
 export function fecha(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(localeActivo(), { dateStyle: 'short', timeStyle: 'short' });
 }

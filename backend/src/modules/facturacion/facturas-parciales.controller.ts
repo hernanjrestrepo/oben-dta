@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { TraducirCampos } from '../traduccion/traductor.service';
 import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsOptional, Matches } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
@@ -39,6 +40,8 @@ export class FacturasParcialesController {
 
   @Get()
   @RequirePermission('invoices.read')
+  // El motivo de cada solicitud (solo se muestra) sale en el idioma de la persona.
+  @TraducirCampos('error')
   listar(@Query('limite') limite?: string) {
     return this.parciales.listar(Number(limite) || 50);
   }

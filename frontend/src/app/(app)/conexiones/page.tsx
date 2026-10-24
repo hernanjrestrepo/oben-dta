@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { ConexionMicrosoft, DiagnosticoSharepoint } from '@/types';
@@ -127,14 +127,14 @@ export default function ConexionesPage() {
               <div><dt className="font-semibold inline">{t('Qué significa:')}{' '}</dt><dd className="inline">{diag.explicacion.queSignifica}</dd></div>
               <div><dt className="font-semibold inline">{t('Qué hacer:')}{' '}</dt><dd className="inline">{diag.explicacion.queHacer}</dd></div>
             </dl>
-            <p className="mt-3 text-xs opacity-75">{t('Probado el')}{' '}{new Date(diag.probadoEn).toLocaleString('es-CO')}</p>
+            <p className="mt-3 text-xs opacity-75">{t('Probado el')}{' '}{new Date(diag.probadoEn).toLocaleString(localeActivo())}</p>
           </section>
 
           {diag.token && (
             <section className="bg-white rounded-xl border border-gray-200 p-5">
               <h2 className="font-semibold text-gray-900 mb-1">{t('Permisos que Microsoft le da HOY a la app')}</h2>
               <p className="text-xs text-gray-500 mb-3">
-                {t('Leídos del token que Microsoft acaba de emitir')}{diag.token.emitido ? ` (${new Date(diag.token.emitido).toLocaleString('es-CO')})` : ''}{t('. Para leer el Excel debe aparecer uno de SharePoint (Sites.Selected o Sites.Read.All).')}
+                {t('Leídos del token que Microsoft acaba de emitir')}{diag.token.emitido ? ` (${new Date(diag.token.emitido).toLocaleString(localeActivo())})` : ''}{t('. Para leer el Excel debe aparecer uno de SharePoint (Sites.Selected o Sites.Read.All).')}
               </p>
               <div className="flex flex-wrap gap-2">
                 {diag.token.permisos.length === 0 && <span className="text-sm text-gray-500">{t('(ninguno)')}</span>}

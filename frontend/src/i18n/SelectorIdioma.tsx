@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { Languages } from 'lucide-react';
-import { IDIOMAS, cambiarIdioma, useIdioma, useT } from './idioma';
+import { IDIOMAS, cambiarIdioma, marcarHidratado, useIdioma, useT } from './idioma';
 
 /** Selector ES / EN / PT / FR. `tono="claro"` para fondos naranjas u oscuros (menú lateral). */
 export function SelectorIdioma({ tono = 'oscuro' }: { tono?: 'claro' | 'oscuro' }) {
@@ -34,6 +34,8 @@ export function SelectorIdioma({ tono = 'oscuro' }: { tono?: 'claro' | 'oscuro' 
 /** Mantiene `<html lang>` con el idioma escogido (lectores de pantalla, traductor del navegador). */
 export function IdiomaDelDocumento() {
   const idioma = useIdioma();
+  // Ya cargó la página: desde aquí se ve el idioma escogido (antes, español como lo armó el servidor).
+  useEffect(() => marcarHidratado(), []);
   useEffect(() => {
     document.documentElement.lang = idioma;
   }, [idioma]);

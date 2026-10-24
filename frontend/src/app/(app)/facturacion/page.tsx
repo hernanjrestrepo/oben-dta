@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -389,7 +389,7 @@ export default function FacturacionPage() {
               <div className="flex gap-6 lg:pl-6 lg:border-l border-gray-100">
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-gray-500">{t('Kilos')}</p>
-                  <p className="text-lg font-bold tabular-nums text-gray-900">{draft.totalKilos.toLocaleString('es-CO', { maximumFractionDigits: 2 })}</p>
+                  <p className="text-lg font-bold tabular-nums text-gray-900">{draft.totalKilos.toLocaleString(localeActivo(), { maximumFractionDigits: 2 })}</p>
                 </div>
                 {/* Exportación: sin "Valor" (Hernán, 23-oct: confunde); manda el total de la factura. */}
                 {!exportacion && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -201,7 +201,7 @@ export default function NewQuotePage() {
                       <option value="">{t('Seleccionar producto...')}</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name} ({p.sku}) — ${p.price.toLocaleString('es-CO')}{' '}{t('COP')}
+                          {p.name} ({p.sku}) — ${p.price.toLocaleString(localeActivo())}{' '}{t('COP')}
                         </option>
                       ))}
                     </select>
@@ -219,7 +219,7 @@ export default function NewQuotePage() {
                 </div>
                 <div className="w-32 text-right py-2.5 text-sm font-medium text-gray-700">
                   {product
-                    ? `$${(product.price * item.quantity).toLocaleString('es-CO')} COP`
+                    ? `$${(product.price * item.quantity).toLocaleString(localeActivo())} COP`
                     : '—'}
                 </div>
                 <button

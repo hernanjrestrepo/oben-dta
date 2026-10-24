@@ -204,6 +204,12 @@ class ApiClient {
 
   // MIA (Claude Haiku): reenvía la conversación y la pantalla actual; sus
   // herramientas consultan Oben en vivo, por eso el timeout es largo.
+  /** Traduce para mostrar textos que llegaron del servidor en español (al idioma escogido). */
+  async traducirTextos(textos: string[]): Promise<string[]> {
+    const { data } = await this.client.post<{ textos: string[] }>('/traduccion', { textos }, { timeout: 30000 });
+    return data.textos;
+  }
+
   // ── Xmart Academy ──
   async getAcademyPlan(): Promise<PlanAcademy> {
     const { data } = await this.client.get<PlanAcademy>('/academy/plan');

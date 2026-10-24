@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -166,7 +166,7 @@ export default function OrdersPage() {
                         {order.client?.name || '—'}
                       </td>
                       <td className="px-6 py-4 font-semibold text-gray-900">
-                        ${Number(order.totalAmount).toLocaleString('es-CO')}{' '}{t('COP')}
+                        ${Number(order.totalAmount).toLocaleString(localeActivo())}{' '}{t('COP')}
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -178,7 +178,7 @@ export default function OrdersPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-500">
-                        {new Date(order.createdAt).toLocaleDateString('es-CO')}
+                        {new Date(order.createdAt).toLocaleDateString(localeActivo())}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">

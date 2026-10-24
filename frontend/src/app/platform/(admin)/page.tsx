@@ -1,5 +1,6 @@
 'use client';
 
+import { localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { SystemStatus } from '@/types';
@@ -69,7 +70,7 @@ export default function PlatformStatusPage() {
 
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 flex items-center gap-3 text-sm text-gray-500">
         <Clock className="w-4 h-4" />
-        Uptime del proceso: {formatUptime(status.uptimeSeconds)} · Consultado {new Date(status.timestamp).toLocaleString('es-CO')}
+        Uptime del proceso: {formatUptime(status.uptimeSeconds)} · Consultado {new Date(status.timestamp).toLocaleString(localeActivo())}
       </div>
     </div>
   );

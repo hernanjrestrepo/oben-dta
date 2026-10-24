@@ -1,5 +1,6 @@
 'use client';
 
+import { localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -103,7 +104,7 @@ export default function AuditPage() {
                 ) : (
                   items.map((row) => (
                     <tr key={row.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{new Date(row.createdAt).toLocaleString('es-CO')}</td>
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{new Date(row.createdAt).toLocaleString(localeActivo())}</td>
                       <td className="px-4 py-3 font-mono text-xs text-gray-700">{row.permissionKey}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{row.method} {row.route}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs font-mono">{row.userId?.slice(0, 8) ?? '—'}</td>

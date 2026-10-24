@@ -1,5 +1,6 @@
 'use client';
 
+import { localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -123,7 +124,7 @@ export default function TenantsPage() {
                       <td className="px-6 py-4">
                         <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${statusColors[t.status] || 'bg-gray-100 text-gray-700'}`}>{t.status}</span>
                       </td>
-                      <td className="px-6 py-4 text-gray-500">{new Date(t.createdAt).toLocaleDateString('es-CO')}</td>
+                      <td className="px-6 py-4 text-gray-500">{new Date(t.createdAt).toLocaleDateString(localeActivo())}</td>
                       <td className="px-6 py-4 text-right">
                         <Link href={`/platform/tenants/${t.id}`} className="text-gray-700 hover:underline flex items-center gap-1 justify-end">
                           Administrar <ArrowRight className="w-4 h-4" />

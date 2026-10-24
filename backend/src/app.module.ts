@@ -37,6 +37,7 @@ import { FacturacionModule } from './modules/facturacion/facturacion.module';
 import { ComercialModule } from './modules/comercial/comercial.module';
 import { ConexionesModule } from './modules/conexiones/conexiones.module';
 import { AcademyModule } from './modules/academy/academy.module';
+import { TraduccionModule } from './modules/traduccion/traduccion.module';
 
 // Import all entities
 import { Client } from './entities/client.entity';
@@ -230,6 +231,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
     ComercialModule,
     ConexionesModule,
     AcademyModule,
+    TraduccionModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_INTERCEPTOR, useClass: SlowRequestInterceptor }],

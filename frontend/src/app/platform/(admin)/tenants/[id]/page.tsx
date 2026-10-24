@@ -1,5 +1,6 @@
 'use client';
 
+import { localeActivo } from '@/i18n/idioma';
 import { useEffect, useState, use as usePromise } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -160,8 +161,8 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
         {subscription && (
           <div className="text-sm text-gray-600 grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div><span className="text-gray-400">Estado:</span> <span className="font-semibold">{subscription.status}</span></div>
-            <div><span className="text-gray-400">Desde:</span> {new Date(subscription.startsAt).toLocaleDateString('es-CO')}</div>
-            <div><span className="text-gray-400">Vence:</span> {subscription.endsAt ? new Date(subscription.endsAt).toLocaleDateString('es-CO') : 'Sin vencimiento'}</div>
+            <div><span className="text-gray-400">Desde:</span> {new Date(subscription.startsAt).toLocaleDateString(localeActivo())}</div>
+            <div><span className="text-gray-400">Vence:</span> {subscription.endsAt ? new Date(subscription.endsAt).toLocaleDateString(localeActivo()) : 'Sin vencimiento'}</div>
           </div>
         )}
 
@@ -198,8 +199,8 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
         {license?.commercialLicense && (
           <div className="text-sm text-gray-600 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div><span className="text-gray-400">Installation ID:</span> <span className="font-mono text-xs">{license.commercialLicense.installationId.slice(0, 8)}</span></div>
-            <div><span className="text-gray-400">Emitida:</span> {new Date(license.commercialLicense.issuedAt).toLocaleDateString('es-CO')}</div>
-            <div><span className="text-gray-400">Vence:</span> {new Date(license.commercialLicense.expiresAt).toLocaleDateString('es-CO')}</div>
+            <div><span className="text-gray-400">Emitida:</span> {new Date(license.commercialLicense.issuedAt).toLocaleDateString(localeActivo())}</div>
+            <div><span className="text-gray-400">Vence:</span> {new Date(license.commercialLicense.expiresAt).toLocaleDateString(localeActivo())}</div>
             <div><span className="text-gray-400">Máx. usuarios:</span> {license.commercialLicense.maxUsers}</div>
             {license.daysRemaining !== null && (
               <div><span className="text-gray-400">Días restantes:</span> {license.daysRemaining}</div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -273,11 +273,11 @@ export default function OrderDetailPage() {
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-gray-500">{t('Creada')}</span>
-              <span className="text-gray-700">{new Date(order.createdAt).toLocaleString('es-CO')}</span>
+              <span className="text-gray-700">{new Date(order.createdAt).toLocaleString(localeActivo())}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">{t('Actualizada')}</span>
-              <span className="text-gray-700">{new Date(order.updatedAt).toLocaleString('es-CO')}</span>
+              <span className="text-gray-700">{new Date(order.updatedAt).toLocaleString(localeActivo())}</span>
             </div>
             {order.validatedBy && (
               <div className="flex justify-between">
@@ -327,10 +327,10 @@ export default function OrderDetailPage() {
                   <td className="px-6 py-4 text-gray-600 font-mono text-xs">{item.product?.sku || '—'}</td>
                   <td className="px-6 py-4 text-right">{item.quantity}</td>
                   <td className="px-6 py-4 text-right">
-                    ${Number(item.unitPrice).toLocaleString('es-CO')}{' '}{t('COP')}
+                    ${Number(item.unitPrice).toLocaleString(localeActivo())}{' '}{t('COP')}
                   </td>
                   <td className="px-6 py-4 text-right font-medium">
-                    ${Number(item.totalPrice).toLocaleString('es-CO')}{' '}{t('COP')}
+                    ${Number(item.totalPrice).toLocaleString(localeActivo())}{' '}{t('COP')}
                   </td>
                 </tr>
               )) || (
@@ -347,7 +347,7 @@ export default function OrderDetailPage() {
                   {t('Total:')}
                 </td>
                 <td className="px-6 py-4 text-right font-bold text-[#F47735] text-lg">
-                  ${Number(order.totalAmount).toLocaleString('es-CO')}{' '}{t('COP')}
+                  ${Number(order.totalAmount).toLocaleString(localeActivo())}{' '}{t('COP')}
                 </td>
               </tr>
             </tfoot>

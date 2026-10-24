@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { DataSource } from 'typeorm';
+import { TraductorService } from './modules/traduccion/traductor.service';
 import { runSqlMigrations } from './common/bootstrap/run-sql-migrations';
 
 async function bootstrap() {
@@ -53,7 +54,8 @@ async function bootstrap() {
 
   // Filtro global de excepciones y validation pipe con estricto whitelist.
   // Con la base de datos: los errores de cada módulo alimentan el panel de fricciones de Xmart Academy.
-  app.useGlobalFilters(new AllExceptionsFilter(app.get(DataSource)));
+  // …y con el traductor, el mensaje de error sale en el idioma de la persona (24-oct).
+  app.useGlobalFilters(new AllExceptionsFilter(app.get(DataSource), app.get(TraductorService)));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

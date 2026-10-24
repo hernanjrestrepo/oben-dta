@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useState } from 'react';
 import type { CasoEstado, ComercialCaso, ComercialTablero } from '@/types';
 import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ChevronDown, Clock, Hourglass, Inbox, LayoutGrid, List, Timer, X } from 'lucide-react';
@@ -31,7 +31,7 @@ const DIA = 86_400_000;
 const dias = (desde?: string | null) => (desde ? Math.max(0, (Date.now() - new Date(desde).getTime()) / DIA) : null);
 const fmtDias = (d: number | null) => (d === null ? '—' : d < 1 ? `${Math.max(1, Math.round(d * 24))} h` : `${Math.floor(d)} d`);
 const kilos = (c: ComercialCaso) => c.lineas.reduce((a, l) => a + (l.kilos ?? 0), 0);
-const fmtKg = (n: number) => `${Math.round(n).toLocaleString('es-CO')} kg`;
+const fmtKg = (n: number) => `${Math.round(n).toLocaleString(localeActivo())} kg`;
 const promedio = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const esReal = (c: ComercialCaso) => !!c.numberPF && !/^SIM-/i.test(c.numberPF);
 

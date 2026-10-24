@@ -126,6 +126,14 @@ const MANUAL: Record<string, T> = {
   Factura: { en: 'Invoice', pt: 'Fatura', fr: 'Facture' },
   reporte: { en: 'report', pt: 'relatório', fr: 'rapport' },
   Reporte: { en: 'Report', pt: 'Relatório', fr: 'Rapport' },
+  // ── Xmart Academy: estados y grupos
+  Fundamentos: { en: 'Fundamentals', pt: 'Fundamentos', fr: 'Fondamentaux' },
+  Aprobado: { en: 'Passed', pt: 'Aprovado', fr: 'Réussi' },
+  'En curso': { en: 'In progress', pt: 'Em andamento', fr: 'En cours' },
+  'Con novedades': { en: 'Updated', pt: 'Com novidades', fr: 'Mis à jour' },
+  'Por empezar': { en: 'Not started', pt: 'Não iniciado', fr: 'À commencer' },
+  'Falta para continuar': { en: 'Missing to continue', pt: 'Falta para continuar', fr: 'Manquant pour continuer' },
+  'El documento aún no está listo': { en: 'The document is not ready yet', pt: 'O documento ainda não está pronto', fr: "Le document n'est pas encore prêt" },
 };
 
 export const TEXTOS: Record<string, T> = { ...TEXTOS_PANTALLAS, ...MANUAL };

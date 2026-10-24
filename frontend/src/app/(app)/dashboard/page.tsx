@@ -1,6 +1,6 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -120,7 +120,7 @@ export default function DashboardPage() {
           />
           <KPICard
             title={t('Ingresos Totales')}
-            value={`$${(kpis?.totalRevenue ?? 0).toLocaleString('es-CO')} COP`}
+            value={`$${(kpis?.totalRevenue ?? 0).toLocaleString(localeActivo())} COP`}
             icon={DollarSign}
             color="bg-[#E5641F]"
           />
@@ -233,7 +233,7 @@ function OrderRow({ order }: { order: Order }) {
       </td>
       <td className="px-6 py-4 text-gray-700">{order.client?.name || '—'}</td>
       <td className="px-6 py-4 font-semibold text-gray-900">
-        ${Number(order.totalAmount).toLocaleString('es-CO')}{' '}{t('COP')}
+        ${Number(order.totalAmount).toLocaleString(localeActivo())}{' '}{t('COP')}
       </td>
       <td className="px-6 py-4">
         <span
@@ -245,7 +245,7 @@ function OrderRow({ order }: { order: Order }) {
         </span>
       </td>
       <td className="px-6 py-4 text-gray-500">
-        {new Date(order.createdAt).toLocaleDateString('es-CO')}
+        {new Date(order.createdAt).toLocaleDateString(localeActivo())}
       </td>
     </tr>
   );

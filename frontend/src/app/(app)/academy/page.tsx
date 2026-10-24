@@ -271,6 +271,7 @@ function Recorrido({ plan }: { plan: PlanAcademy }) {
 }
 
 function MiPlan({ plan }: { plan: PlanAcademy }) {
+  const t = useT();
   const grupos = ORDEN_GRUPOS.map((g) => ({ g, modulos: plan.modulos.filter((m) => m.grupo === g) })).filter((x) => x.modulos.length);
   return (
     <section className="space-y-6">
@@ -281,7 +282,7 @@ function MiPlan({ plan }: { plan: PlanAcademy }) {
       />
       {grupos.map(({ g, modulos }) => (
         <div key={g}>
-          <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">{g}</p>
+          <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">{t(g)}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {modulos.map((m, i) => (
               <TarjetaModulo key={m.key} m={m} i={i} />

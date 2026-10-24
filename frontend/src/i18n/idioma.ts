@@ -48,8 +48,21 @@ function suscribir(cb: () => void) {
   };
 }
 
+/**
+ * El servidor arma las páginas en español; el navegador arranca igual y cambia al idioma escogido apenas termina de
+ * cargar (`marcarHidratado`). Así React no encuentra diferencias entre lo que mandó el servidor y lo que pinta.
+ */
+let hidratado = false;
+const idiomaVisible = (): Idioma => (hidratado ? leerIdioma() : 'es');
+
+export function marcarHidratado() {
+  if (hidratado) return;
+  hidratado = true;
+  window.dispatchEvent(new Event(EVENTO));
+}
+
 export function useIdioma(): Idioma {
-  return useSyncExternalStore(suscribir, leerIdioma, () => 'es');
+  return useSyncExternalStore(suscribir, idiomaVisible, () => 'es');
 }
 
 export type Vars = Record<string, string | number>;
@@ -69,4 +82,9 @@ export function useT() {
 /** Configuración regional para fechas y números (Colombia en español). */
 export function localeDe(i: Idioma): string {
   return { es: 'es-CO', en: 'en-US', pt: 'pt-BR', fr: 'fr-FR' }[i];
+}
+
+/** Configuración regional del idioma que se ve ahora (fechas y números: 1.000,50 · 1,000.50 · 1 000,50). */
+export function localeActivo(): string {
+  return localeDe(typeof window === 'undefined' ? 'es' : idiomaVisible());
 }

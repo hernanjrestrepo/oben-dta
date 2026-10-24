@@ -1,6 +1,7 @@
 'use client';
 
-import { useT } from '@/i18n/idioma';
+import { useTextosServidor } from '@/i18n/textosServidor';
+import { useT, localeActivo } from '@/i18n/idioma';
 import { useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Hourglass, X } from 'lucide-react';
 
@@ -10,13 +11,13 @@ export const isNum = (v: unknown): v is number => typeof v === 'number' && Numbe
 
 export function usd(n: number | null | undefined): string {
   return isNum(n)
-    ? `US$ ${n.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    ? `US$ ${n.toLocaleString(localeActivo(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : '—';
 }
 
 /** Monto sin prefijo, para tablas cuya cabecera ya dice USD. */
 export function num2(n: number | null | undefined): string {
-  return isNum(n) ? n.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+  return isNum(n) ? n.toLocaleString(localeActivo(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 }
 
 /**
@@ -33,12 +34,12 @@ export function agruparFaltantes(missing: string[]): { generales: string[]; line
 }
 
 export function kg(n: number | null | undefined): string {
-  return isNum(n) ? `${n.toLocaleString('es-CO', { maximumFractionDigits: 2 })} kg` : '—';
+  return isNum(n) ? `${n.toLocaleString(localeActivo(), { maximumFractionDigits: 2 })} kg` : '—';
 }
 
 /** Valores por kg: 4 decimales, como los define José. */
 export function unit(n: number | null | undefined): string {
-  return isNum(n) ? n.toLocaleString('es-CO', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—';
+  return isNum(n) ? n.toLocaleString(localeActivo(), { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—';
 }
 
 /** "12,5" o "12.5" → 12.5; vacío o inválido → null (nunca 0). */
@@ -82,18 +83,20 @@ export function Field({ label, hint, children, className = '' }: { label: ReactN
 /** Lo que falta — nunca se inventa. Se colapsa si es largo. */
 export function Faltantes({ items, titulo = 'Falta para continuar' }: { items: string[]; titulo?: string }) {
   const [abierto, setAbierto] = useState(false);
+  const t = useT();
+  const ts = useTextosServidor(items);
   if (items.length === 0) return null;
   const visibles = abierto ? items : items.slice(0, 5);
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
       <p className="text-sm font-semibold text-amber-900 flex items-center gap-2">
-        <AlertTriangle className="w-4 h-4" /> {titulo} ({items.length})
+        <AlertTriangle className="w-4 h-4" /> {t(titulo)} ({items.length})
       </p>
       <ul className="mt-2 space-y-1 text-xs text-amber-900">
         {visibles.map((m) => (
           <li key={m} className="flex gap-2">
             <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-500 shrink-0" />
-            <span>{m}</span>
+            <span>{ts(m)}</span>
           </li>
         ))}
       </ul>
@@ -118,6 +121,7 @@ export function Listo({ children }: { children: ReactNode }) {
 /** Lo que es lectura nuestra y José aún no confirma por escrito. */
 export function PendienteConfirmar({ items }: { items: string[] }) {
   const t = useT();
+  const ts = useTextosServidor(items);
   if (items.length === 0) return null;
   return (
     <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
@@ -131,7 +135,7 @@ export function PendienteConfirmar({ items }: { items: string[] }) {
         {items.map((m) => (
           <li key={m} className="flex gap-2">
             <span className="mt-1.5 w-1 h-1 rounded-full bg-indigo-500 shrink-0" />
-            <span>{m}</span>
+            <span>{ts(m)}</span>
           </li>
         ))}
       </ul>
@@ -217,7 +221,7 @@ export function Composicion({ partes }: { partes: Array<{ label: string; valor: 
           <span key={p.label} className="inline-flex items-center gap-1.5 text-xs text-gray-600">
             <span className={`w-2.5 h-2.5 rounded-sm ${p.color}`} />
             {p.label} <span className="font-medium text-gray-900">{usd(p.valor)}</span>
-            <span className="text-gray-400">({((Math.max(p.valor, 0) / total) * 100).toLocaleString('es-CO', { maximumFractionDigits: 1 })}%)</span>
+            <span className="text-gray-400">({((Math.max(p.valor, 0) / total) * 100).toLocaleString(localeActivo(), { maximumFractionDigits: 1 })}%)</span>
           </span>
         ))}
       </div>
