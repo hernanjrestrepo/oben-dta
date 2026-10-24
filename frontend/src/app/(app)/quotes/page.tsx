@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -37,6 +38,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function QuotesPage() {
+  const t = useT();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -76,15 +78,15 @@ export default function QuotesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cotizaciones</h1>
-          <p className="text-gray-500 mt-1">Pipeline correo → cotización → pago → producción → entrega</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('Cotizaciones')}</h1>
+          <p className="text-gray-500 mt-1">{t('Pipeline correo → cotización → pago → producción → entrega')}</p>
         </div>
         <Link
           href="/quotes/new"
           className="inline-flex items-center gap-2 bg-[#F47735] hover:bg-[#E5641F] text-white px-4 py-2.5 rounded-lg font-medium transition"
         >
           <Plus className="w-5 h-5" />
-          Nueva Solicitud de Cotización
+          {t('Nueva Solicitud de Cotización')}
         </Link>
       </div>
 
@@ -93,7 +95,7 @@ export default function QuotesPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           type="text"
-          placeholder="Buscar por número, cliente o estado..."
+          placeholder={t('Buscar por número, cliente o estado...')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
@@ -115,7 +117,7 @@ export default function QuotesPage() {
                 onClick={loadQuotes}
                 className="mt-3 text-[#F47735] hover:underline"
               >
-                Reintentar
+                {t('Reintentar')}
               </button>
             </div>
           </div>
@@ -124,12 +126,12 @@ export default function QuotesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Cotización</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Cliente</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Total</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Estado</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Fecha</th>
-                  <th className="px-6 py-3 text-right font-semibold text-gray-600">Acciones</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Cotización')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Cliente')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Total')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Estado')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Fecha')}</th>
+                  <th className="px-6 py-3 text-right font-semibold text-gray-600">{t('Acciones')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -148,7 +150,7 @@ export default function QuotesPage() {
                         {quote.client?.name || '—'}
                       </td>
                       <td className="px-6 py-4 font-semibold text-gray-900">
-                        ${Number(quote.total).toLocaleString('es-CO')} COP
+                        ${Number(quote.total).toLocaleString('es-CO')}{' '}{t('COP')}
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -166,7 +168,7 @@ export default function QuotesPage() {
                         <Link
                           href={`/quotes/${quote.id}`}
                           className="inline-flex p-2 text-[#F47735] hover:bg-blue-50 rounded-lg transition"
-                          title="Ver detalle"
+                          title={t('Ver detalle')}
                         >
                           <ArrowRight className="w-4 h-4" />
                         </Link>

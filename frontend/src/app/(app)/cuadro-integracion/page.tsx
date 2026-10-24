@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -15,6 +16,7 @@ const td = 'px-3 py-1.5 text-xs text-gray-800 border-b border-gray-100';
 const tdr = `${td} text-right tabular-nums`;
 
 function TablaInsumos({ titulo, lineas, total }: { titulo: string; lineas: CuadroLineaInsumo[]; total: number }) {
+  const t = useT();
   return (
     <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
       <h3 className="px-4 py-2.5 text-sm font-semibold text-gray-900 bg-orange-50 border-b border-orange-100">{titulo}</h3>
@@ -22,22 +24,22 @@ function TablaInsumos({ titulo, lineas, total }: { titulo: string; lineas: Cuadr
         <table className="w-full">
           <thead>
             <tr>
-              <th className={th}>Referencia</th>
-              <th className={th}>Declaración</th>
-              <th className={th}>Subpartida</th>
-              <th className={th}>Descripción</th>
-              <th className={th}>Un.</th>
-              <th className={`${th} text-right`}>Cantidad</th>
-              <th className={`${th} text-right`}>Peso neto kg</th>
-              <th className={`${th} text-right`}>Valor US$</th>
-              <th className={`${th} text-right`}>% Desp.</th>
+              <th className={th}>{t('Referencia')}</th>
+              <th className={th}>{t('Declaración')}</th>
+              <th className={th}>{t('Subpartida')}</th>
+              <th className={th}>{t('Descripción')}</th>
+              <th className={th}>{t('Un.')}</th>
+              <th className={`${th} text-right`}>{t('Cantidad')}</th>
+              <th className={`${th} text-right`}>{t('Peso neto kg')}</th>
+              <th className={`${th} text-right`}>{t('Valor US$')}</th>
+              <th className={`${th} text-right`}>{t('% Desp.')}</th>
             </tr>
           </thead>
           <tbody>
             {lineas.length === 0 && (
               <tr>
                 <td className={`${td} text-center text-gray-500`} colSpan={9}>
-                  Sin insumos de este origen en la orden.
+                  {t('Sin insumos de este origen en la orden.')}
                 </td>
               </tr>
             )}
@@ -56,7 +58,7 @@ function TablaInsumos({ titulo, lineas, total }: { titulo: string; lineas: Cuadr
             ))}
             <tr className="bg-gray-50">
               <td className={`${td} font-semibold`} colSpan={7}>
-                Total
+                {t('Total')}
               </td>
               <td className={`${tdr} font-semibold`}>{num(total)}</td>
               <td className={td} />
@@ -69,6 +71,7 @@ function TablaInsumos({ titulo, lineas, total }: { titulo: string; lineas: Cuadr
 }
 
 export default function CuadroIntegracionPage() {
+  const t = useT();
   const [orden, setOrden] = useState('');
   const [cuadro, setCuadro] = useState<CuadroIntegracion | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -112,10 +115,10 @@ export default function CuadroIntegracionPage() {
     <div className="max-w-6xl mx-auto space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <FileSpreadsheet className="w-6 h-6 text-[#F47735]" /> Cuadro de integración
+          <FileSpreadsheet className="w-6 h-6 text-[#F47735]" />{' '}{t('Cuadro de integración')}
         </h1>
         <p className="text-sm text-gray-600 mt-1">
-          Certificado de Integración de Materias Primas e Insumos Nacionales y Extranjeros — Zona Franca Permanente Internacional del Atlántico.
+          {t('Certificado de Integración de Materias Primas e Insumos Nacionales y Extranjeros — Zona Franca Permanente Internacional del Atlántico.')}
         </p>
       </div>
 
@@ -126,7 +129,7 @@ export default function CuadroIntegracionPage() {
             value={orden}
             onChange={(e) => setOrden(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void cargar()}
-            placeholder="Número de orden (p. ej. 11028)"
+            placeholder={t('Número de orden (p. ej. 11028)')}
             className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none"
           />
         </div>
@@ -135,7 +138,7 @@ export default function CuadroIntegracionPage() {
           disabled={!orden.trim() || cargando}
           className="px-5 py-2.5 rounded-lg bg-[#F47735] hover:bg-[#E5641F] text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-50"
         >
-          {cargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Armar cuadro
+          {cargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}{' '}{t('Armar cuadro')}
         </button>
       </div>
 
@@ -151,7 +154,7 @@ export default function CuadroIntegracionPage() {
             <div className="rounded-xl border border-purple-200 bg-purple-50 p-3 text-sm text-purple-900 flex gap-2">
               <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
-                <strong>DATOS SIMULADOS.</strong> El consumo por orden y los maestros todavía no vienen del ERP de Oben: este cuadro usa el ejemplo del certificado 51590 y no tiene validez para la Zona Franca.
+                <strong>{t('DATOS SIMULADOS.')}</strong>{' '}{t('El consumo por orden y los maestros todavía no vienen del ERP de Oben: este cuadro usa el ejemplo del certificado 51590 y no tiene validez para la Zona Franca.')}
               </span>
             </div>
           )}
@@ -159,10 +162,10 @@ export default function CuadroIntegracionPage() {
           <div className="rounded-xl border border-gray-200 bg-white p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm text-gray-700">
               <p>
-                <span className="text-gray-500">Orden:</span> <strong>{cuadro.orden}</strong>
+                <span className="text-gray-500">{t('Orden:')}</span> <strong>{cuadro.orden}</strong>
               </p>
               <p>
-                <span className="text-gray-500">Destino:</span> <strong>{cuadro.destino}</strong>
+                <span className="text-gray-500">{t('Destino:')}</span> <strong>{cuadro.destino}</strong>
               </p>
             </div>
             <div
@@ -171,20 +174,20 @@ export default function CuadroIntegracionPage() {
               }`}
             >
               {cuadro.balanceMasa.cuadra ? <CheckCircle2 className="w-3.5 h-3.5" /> : <TriangleAlert className="w-3.5 h-3.5" />}
-              Masas: consumo MP {num(cuadro.balanceMasa.consumoMpKg)} kg · producto {num(cuadro.balanceMasa.productoKg)} kg · diferencia {num(cuadro.balanceMasa.diferenciaKg)} kg
+              {t('Masas: consumo MP')}{' '}{num(cuadro.balanceMasa.consumoMpKg)}{' '}{t('kg · producto')}{' '}{num(cuadro.balanceMasa.productoKg)}{' '}{t('kg · diferencia')}{' '}{num(cuadro.balanceMasa.diferenciaKg)} kg
             </div>
             <button
               onClick={() => void descargar()}
               disabled={bajando}
               className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-medium text-gray-800 flex items-center gap-2 disabled:opacity-60"
             >
-              {bajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Descargar Excel
+              {bajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}{' '}{t('Descargar Excel')}
             </button>
           </div>
 
           {cuadro.avisos.length > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-              <p className="font-semibold mb-1">Avisos del cuadro</p>
+              <p className="font-semibold mb-1">{t('Avisos del cuadro')}</p>
               <ul className="list-disc pl-5 space-y-0.5">
                 {cuadro.avisos.map((a) => (
                   <li key={a}>{a}</li>
@@ -194,16 +197,16 @@ export default function CuadroIntegracionPage() {
           )}
 
           <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-            <h3 className="px-4 py-2.5 text-sm font-semibold text-gray-900 bg-orange-50 border-b border-orange-100">Producto(s) elaborado(s)</h3>
+            <h3 className="px-4 py-2.5 text-sm font-semibold text-gray-900 bg-orange-50 border-b border-orange-100">{t('Producto(s) elaborado(s)')}</h3>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className={th}>Referencia</th>
-                    <th className={th}>Descripción</th>
-                    <th className={th}>Subpartida</th>
-                    <th className={`${th} text-right`}>Cantidad kg</th>
-                    <th className={`${th} text-right`}>Valor US$</th>
+                    <th className={th}>{t('Referencia')}</th>
+                    <th className={th}>{t('Descripción')}</th>
+                    <th className={th}>{t('Subpartida')}</th>
+                    <th className={`${th} text-right`}>{t('Cantidad kg')}</th>
+                    <th className={`${th} text-right`}>{t('Valor US$')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -225,17 +228,17 @@ export default function CuadroIntegracionPage() {
           <TablaInsumos titulo="Insumos nacionales" lineas={cuadro.insumosNacionales} total={cuadro.totales.nacionalesUsd} />
 
           <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-            <h3 className="px-4 py-2.5 text-sm font-semibold text-gray-900 bg-orange-50 border-b border-orange-100">Desperdicios</h3>
+            <h3 className="px-4 py-2.5 text-sm font-semibold text-gray-900 bg-orange-50 border-b border-orange-100">{t('Desperdicios')}</h3>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className={th}>Referencia</th>
-                    <th className={th}>Descripción</th>
-                    <th className={th}>Un.</th>
-                    <th className={`${th} text-right`}>Cantidad</th>
-                    <th className={`${th} text-right`}>Peso neto kg</th>
-                    <th className={`${th} text-right`}>Valor US$</th>
+                    <th className={th}>{t('Referencia')}</th>
+                    <th className={th}>{t('Descripción')}</th>
+                    <th className={th}>{t('Un.')}</th>
+                    <th className={`${th} text-right`}>{t('Cantidad')}</th>
+                    <th className={`${th} text-right`}>{t('Peso neto kg')}</th>
+                    <th className={`${th} text-right`}>{t('Valor US$')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -251,7 +254,7 @@ export default function CuadroIntegracionPage() {
                   ))}
                   <tr className="bg-gray-50">
                     <td className={`${td} font-semibold`} colSpan={4}>
-                      Total desperdicios
+                      {t('Total desperdicios')}
                     </td>
                     <td className={`${tdr} font-semibold`}>{num(cuadro.totales.desperdiciosKg)}</td>
                     <td className={td} />
@@ -262,23 +265,23 @@ export default function CuadroIntegracionPage() {
           </section>
 
           <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-            <h3 className="px-4 py-2.5 text-sm font-semibold text-gray-900 bg-orange-50 border-b border-orange-100">Participación en el valor del producto</h3>
+            <h3 className="px-4 py-2.5 text-sm font-semibold text-gray-900 bg-orange-50 border-b border-orange-100">{t('Participación en el valor del producto')}</h3>
             <table className="w-full">
               <thead>
                 <tr>
-                  <th className={th}>Concepto</th>
-                  <th className={`${th} text-right`}>Valor US$</th>
-                  <th className={`${th} text-right`}>Participación</th>
+                  <th className={th}>{t('Concepto')}</th>
+                  <th className={`${th} text-right`}>{t('Valor US$')}</th>
+                  <th className={`${th} text-right`}>{t('Participación')}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className={td}>Insumos extranjeros</td>
+                  <td className={td}>{t('Insumos extranjeros')}</td>
                   <td className={tdr}>{num(cuadro.totales.extranjerosUsd)}</td>
                   <td className={tdr}>{pct(cuadro.totales.participacionExtranjeraPct)}</td>
                 </tr>
                 <tr>
-                  <td className={td}>Insumos nacionales</td>
+                  <td className={td}>{t('Insumos nacionales')}</td>
                   <td className={tdr}>{num(cuadro.totales.nacionalesUsd)}</td>
                   <td className={tdr}>{pct(cuadro.totales.participacionNacionalPct)}</td>
                 </tr>
@@ -290,12 +293,12 @@ export default function CuadroIntegracionPage() {
                   </tr>
                 ))}
                 <tr>
-                  <td className={td}>Otros costos</td>
+                  <td className={td}>{t('Otros costos')}</td>
                   <td className={tdr}>{num(cuadro.totales.otrosUsd)}</td>
                   <td className={tdr}>{pct(cuadro.totales.participacionOtrosPct)}</td>
                 </tr>
                 <tr className="bg-gray-50">
-                  <td className={`${td} font-semibold`}>Valor del producto</td>
+                  <td className={`${td} font-semibold`}>{t('Valor del producto')}</td>
                   <td className={`${tdr} font-semibold`}>{num(cuadro.totales.productoUsd)}</td>
                   <td className={`${tdr} font-semibold`}>100.00 %</td>
                 </tr>

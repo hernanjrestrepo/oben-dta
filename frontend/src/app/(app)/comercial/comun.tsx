@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import type { CasoEstado } from '@/types';
 
 export const ESTADOS: CasoEstado[] = ['oc_recibida', 'sin_cubicar', 'cubicada', 'enviada_cliente', 'retenida', 'activa', 'cerrada', 'rechazada', 'anulada'];
@@ -41,9 +42,10 @@ export function EstadoBadge({ estado }: { estado: CasoEstado }) {
 }
 
 export function SimuladoBadge({ items }: { items?: string[] }) {
+  const t = useT();
   return (
     <span title={items?.join('\n')} className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
-      SIMULADO
+      {t('SIMULADO')}
     </span>
   );
 }

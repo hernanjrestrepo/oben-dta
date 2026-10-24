@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -15,6 +16,7 @@ import { AlertCircle, ArrowRightLeft, Check, Loader2, Pencil, Plus, Search, Tras
  * Oben adivinada.
  */
 export default function EquivalenciasPage() {
+  const t = useT();
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState('');
   const [rows, setRows] = useState<Equivalence[]>([]);
@@ -98,16 +100,15 @@ export default function EquivalenciasPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <ArrowRightLeft className="w-6 h-6 text-[#F47735]" />
-          Equivalencias cliente ↔ producto
+          {t('Equivalencias cliente ↔ producto')}
         </h1>
         <p className="text-gray-500 mt-1">
-          Cómo pide cada cliente un material (&quot;BOPP 1&quot;, &quot;BOPP 345&quot;…) y a qué referencia de Oben corresponde. La lectura automática de órdenes de
-          compra solo usa esta tabla: lo que no esté aquí queda como faltante, nunca se adivina.
+          {t('Cómo pide cada cliente un material ("BOPP 1", "BOPP 345"…) y a qué referencia de Oben corresponde. La lectura automática de órdenes de compra solo usa esta tabla: lo que no esté aquí queda como faltante, nunca se adivina.')}
         </p>
       </div>
 
       <ImportPanel
-        title="Cargar la tabla de equivalencias (Excel/CSV)"
+        title={t('Cargar la tabla de equivalencias (Excel/CSV)')}
         columns={['Cliente (código, código OBEN MAS o nombre)', 'Código del cliente', 'Código Oben', 'Descripción (opcional)']}
         onImport={(dto) => api.importEquivalences(dto)}
         onDone={load}
@@ -116,9 +117,9 @@ export default function EquivalenciasPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
         <div className="flex flex-col md:flex-row gap-3 md:items-end">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Cliente')}</label>
             <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={`${input} w-full`}>
-              <option value="">Todos los clientes</option>
+              <option value="">{t('Todos los clientes')}</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} ({c.obenCode || c.clientId})
@@ -128,25 +129,25 @@ export default function EquivalenciasPage() {
           </div>
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar código o descripción" className={`${input} w-full pl-9`} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Buscar código o descripción')} className={`${input} w-full pl-9`} />
           </div>
         </div>
 
         {clientId && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2 p-3 bg-gray-50 rounded-lg">
-            <input value={form.clientCode} onChange={(e) => setForm({ ...form, clientCode: e.target.value })} placeholder="Como lo pide el cliente (ej. BOPP 345)" className={input} />
-            <input value={form.obenCode} onChange={(e) => setForm({ ...form, obenCode: e.target.value })} placeholder="Referencia Oben (ej. SC15TN)" className={input} />
-            <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descripción (opcional)" className={input} />
+            <input value={form.clientCode} onChange={(e) => setForm({ ...form, clientCode: e.target.value })} placeholder={t('Como lo pide el cliente (ej. BOPP 345)')} className={input} />
+            <input value={form.obenCode} onChange={(e) => setForm({ ...form, obenCode: e.target.value })} placeholder={t('Referencia Oben (ej. SC15TN)')} className={input} />
+            <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t('Descripción (opcional)')} className={input} />
             <button
               onClick={add}
               disabled={saving || !form.clientCode.trim() || !form.obenCode.trim()}
               className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg text-sm font-medium disabled:opacity-50"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Agregar
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}{' '}{t('Agregar')}
             </button>
           </div>
         )}
-        {!clientId && <p className="text-xs text-gray-400">Escoge un cliente para agregar equivalencias una por una.</p>}
+        {!clientId && <p className="text-xs text-gray-400">{t('Escoge un cliente para agregar equivalencias una por una.')}</p>}
 
         {error && (
           <p className="text-sm text-red-700 flex items-center gap-1.5">
@@ -159,16 +160,16 @@ export default function EquivalenciasPage() {
             <Loader2 className="w-6 h-6 animate-spin text-[#F47735]" />
           </div>
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-gray-500 py-6 text-center">No hay equivalencias{clientId ? ' para este cliente' : ''}.</p>
+          <p className="text-sm text-gray-500 py-6 text-center">{t('No hay equivalencias')}{clientId ? ' para este cliente' : ''}.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-left text-gray-600">
-                  <th className="px-3 py-2 font-semibold">Cliente</th>
-                  <th className="px-3 py-2 font-semibold">Como lo pide el cliente</th>
-                  <th className="px-3 py-2 font-semibold">Referencia Oben</th>
-                  <th className="px-3 py-2 font-semibold">Descripción</th>
+                  <th className="px-3 py-2 font-semibold">{t('Cliente')}</th>
+                  <th className="px-3 py-2 font-semibold">{t('Como lo pide el cliente')}</th>
+                  <th className="px-3 py-2 font-semibold">{t('Referencia Oben')}</th>
+                  <th className="px-3 py-2 font-semibold">{t('Descripción')}</th>
                   <th className="px-3 py-2" />
                 </tr>
               </thead>
@@ -187,10 +188,10 @@ export default function EquivalenciasPage() {
                         <input value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} className={`${input} w-full`} />
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <button onClick={saveEdit} className="p-1.5 text-green-700 hover:bg-green-50 rounded" title="Guardar">
+                        <button onClick={saveEdit} className="p-1.5 text-green-700 hover:bg-green-50 rounded" title={t('Guardar')}>
                           <Check className="w-4 h-4" />
                         </button>
-                        <button onClick={() => setEditing(null)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Cancelar">
+                        <button onClick={() => setEditing(null)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title={t('Cancelar')}>
                           <X className="w-4 h-4" />
                         </button>
                       </td>
@@ -205,11 +206,11 @@ export default function EquivalenciasPage() {
                         <button
                           onClick={() => setEditing({ id: r.id, clientCode: r.clientCode, obenCode: r.obenCode, description: r.description ?? '' })}
                           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
-                          title="Editar"
+                          title={t('Editar')}
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
-                        <button onClick={() => remove(r.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Eliminar">
+                        <button onClick={() => remove(r.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title={t('Eliminar')}>
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
@@ -218,7 +219,7 @@ export default function EquivalenciasPage() {
                 )}
               </tbody>
             </table>
-            <p className="text-xs text-gray-400 mt-2">{filtered.length} equivalencia(s)</p>
+            <p className="text-xs text-gray-400 mt-2">{filtered.length}{' '}{t('equivalencia(s)')}</p>
           </div>
         )}
       </div>

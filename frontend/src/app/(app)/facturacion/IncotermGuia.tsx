@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import type { ConceptoLiquidacion, IncotermRegla } from '@/types';
 import {
   Anchor,
@@ -94,6 +95,7 @@ export function IncotermGuia({
   delErp: boolean;
   onSeleccionar: (codigo: string) => void;
 }) {
+  const t = useT();
   const codigos = Object.keys(INCOTERMS_2020);
   const info = seleccionado ? INCOTERMS_2020[seleccionado] : undefined;
   const regla = reglas?.find((r) => r.codigo === seleccionado);
@@ -105,7 +107,7 @@ export function IncotermGuia({
         {GRUPOS.map(({ g, label }) => (
           <div key={g}>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">
-              Grupo {g} · {label}
+              {t('Grupo')}{' '}{g} · {label}
             </p>
             <div className="flex gap-1.5">
               {codigos
@@ -133,7 +135,7 @@ export function IncotermGuia({
       </div>
 
       {!info ? (
-        <p className="text-sm text-gray-500">Escoge el Incoterm de la proforma para ver qué incluye y hasta dónde va.</p>
+        <p className="text-sm text-gray-500">{t('Escoge el Incoterm de la proforma para ver qué incluye y hasta dónde va.')}</p>
       ) : (
         <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -143,7 +145,7 @@ export function IncotermGuia({
               <span className="text-gray-500">· {info.es}</span>
               {delErp && (
                 <span className="ml-2 align-middle text-[10px] px-1.5 py-px rounded border border-emerald-200 bg-emerald-50 text-emerald-700 font-medium">
-                  del ERP de Oben
+                  {t('del ERP de Oben')}
                 </span>
               )}
             </p>
@@ -155,7 +157,7 @@ export function IncotermGuia({
           <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
             <p className="text-sm font-semibold text-gray-900">{info.formula}</p>
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-gray-500">En la liquidación:</span>
+              <span className="text-gray-500">{t('En la liquidación:')}</span>
               {CONCEPTOS.map((c) => {
                 const si = !!regla?.conceptos.includes(c);
                 return (
@@ -182,6 +184,7 @@ export function IncotermGuia({
 
 /** Las 12 etapas de origen a destino: verde = Oben, gris = comprador; la bandera marca la entrega. */
 function BarraEtapas({ info }: { info: IncotermInfo }) {
+  const t = useT();
   return (
     <div className="mt-3 overflow-x-auto">
       <div className="min-w-[760px]">
@@ -214,7 +217,7 @@ function BarraEtapas({ info }: { info: IncotermInfo }) {
             <div key={i} className="relative h-4">
               {i === info.entrega && (
                 <span className="absolute right-[-4px] translate-x-1/2 whitespace-nowrap text-[10px] font-semibold text-[#C4521A]">
-                  ▲ Entrega: aquí pasa el riesgo
+                  {t('▲ Entrega: aquí pasa el riesgo')}
                 </span>
               )}
             </div>
@@ -222,13 +225,13 @@ function BarraEtapas({ info }: { info: IncotermInfo }) {
         </div>
         <div className="mt-1 flex items-center gap-4 text-[11px] text-gray-600">
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-emerald-500" /> Paga Oben (vendedor)
+            <span className="w-3 h-3 rounded bg-emerald-500" />{' '}{t('Paga Oben (vendedor)')}
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded border border-gray-300 bg-white" /> Paga el comprador
+            <span className="w-3 h-3 rounded border border-gray-300 bg-white" />{' '}{t('Paga el comprador')}
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-[3px] h-3 rounded bg-[#F47735]" /> Punto de entrega
+            <span className="w-[3px] h-3 rounded bg-[#F47735]" />{' '}{t('Punto de entrega')}
           </span>
         </div>
       </div>

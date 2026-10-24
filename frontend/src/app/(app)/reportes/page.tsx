@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { FileSpreadsheet, Loader2, AlertCircle, Search, ShieldCheck, Mail, Send, CheckCircle2, Package, Download } from 'lucide-react';
@@ -11,6 +12,7 @@ interface ReportType {
 }
 
 export default function ReportesPage() {
+  const t = useT();
   const [types, setTypes] = useState<ReportType[]>([]);
   const [reportKey, setReportKey] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
@@ -119,20 +121,20 @@ export default function ReportesPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <FileSpreadsheet className="w-6 h-6 text-[#F47735]" />
-          Reportes Oben
+          {t('Reportes Oben')}
         </h1>
         <p className="text-gray-500 mt-1">
-          Consulta en vivo al ERP de Oben (consumo de materiales, empaque, chequeos) y envío por correo en Excel — no se inventan datos (en el entorno de pruebas responde su simulador, siempre rotulado SIMULADO).
+          {t('Consulta en vivo al ERP de Oben (consumo de materiales, empaque, chequeos) y envío por correo en Excel — no se inventan datos (en el entorno de pruebas responde su simulador, siempre rotulado SIMULADO).')}
         </p>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border-2 border-[#F47735]/30 p-5">
         <div className="flex items-center gap-2 mb-1">
           <Package className="w-5 h-5 text-[#F47735]" />
-          <h2 className="font-semibold text-gray-900">Enviar paquete completo</h2>
+          <h2 className="font-semibold text-gray-900">{t('Enviar paquete completo')}</h2>
         </div>
         <p className="text-sm text-gray-500 mb-4">
-          Junta en un solo correo todos los reportes que se puedan consultar para esta orden — el conjunto de documentos que se arma al insertar el último pallet.
+          {t('Junta en un solo correo todos los reportes que se puedan consultar para esta orden — el conjunto de documentos que se arma al insertar el último pallet.')}
         </p>
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
@@ -141,7 +143,7 @@ export default function ReportesPage() {
               type="email"
               value={packageEmailTo}
               onChange={(e) => { setPackageEmailTo(e.target.value); setPackageResult(null); setPackageError(''); }}
-              placeholder="correo@destino.com (vacío = lista de distribución de 'document_package')"
+              placeholder={t('correo@destino.com (vacío = lista de distribución de \'document_package\')')}
               className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none text-gray-900 text-sm"
             />
           </div>
@@ -151,21 +153,21 @@ export default function ReportesPage() {
             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-50 text-sm whitespace-nowrap"
           >
             {sendingPackage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
-            Enviar paquete completo
+            {t('Enviar paquete completo')}
           </button>
         </div>
         {!orderNumber.trim() && (
-          <p className="mt-2 text-xs text-gray-400">Escribe primero el número de orden abajo.</p>
+          <p className="mt-2 text-xs text-gray-400">{t('Escribe primero el número de orden abajo.')}</p>
         )}
         {packageResult && (
           <div className="mt-3 text-sm">
             <p className="text-green-700 flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4" /> Enviado a {packageResult.to} — {packageResult.included.length} reporte{packageResult.included.length !== 1 ? 's' : ''} incluido{packageResult.included.length !== 1 ? 's' : ''}
+              <CheckCircle2 className="w-4 h-4" />{' '}{t('Enviado a')}{' '}{packageResult.to} — {packageResult.included.length}{' '}{t('reporte')}{packageResult.included.length !== 1 ? 's' : ''}{' '}{t('incluido')}{packageResult.included.length !== 1 ? 's' : ''}
             </p>
             {packageResult.failed.length > 0 && (
               <p className="text-amber-700 mt-1 flex items-start gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                No se pudieron incluir: {packageResult.failed.map((f) => f.key).join(', ')}
+                {t('No se pudieron incluir:')}{' '}{packageResult.failed.map((f) => f.key).join(', ')}
               </p>
             )}
           </div>
@@ -180,7 +182,7 @@ export default function ReportesPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
         <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_auto] gap-3 items-end">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Reporte</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Reporte')}</label>
             <select
               value={reportKey}
               onChange={(e) => setReportKey(e.target.value)}
@@ -192,12 +194,12 @@ export default function ReportesPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Número de orden de venta (Oben)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Número de orden de venta (Oben)')}</label>
             <input
               value={orderNumber}
               onChange={(e) => setOrderNumber(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Ej: 10794"
+              placeholder={t('Ej: 10794')}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none text-gray-900"
             />
           </div>
@@ -207,7 +209,7 @@ export default function ReportesPage() {
             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            Consultar
+            {t('Consultar')}
           </button>
         </div>
       </div>
@@ -235,7 +237,7 @@ export default function ReportesPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition disabled:opacity-50 text-sm"
               >
                 {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                Descargar Excel
+                {t('Descargar Excel')}
               </button>
             </div>
             {downloadError && (
@@ -245,7 +247,7 @@ export default function ReportesPage() {
             )}
 
             <div className="mt-1 pt-0">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Enviar por correo (Excel)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Enviar por correo (Excel)')}</label>
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
                   <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -254,7 +256,7 @@ export default function ReportesPage() {
                     value={emailTo}
                     onChange={(e) => { setEmailTo(e.target.value); setSentOk(false); setSendError(''); }}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendEmail()}
-                    placeholder="correo@destino.com (vacío = usa la lista de distribución asociada)"
+                    placeholder={t('correo@destino.com (vacío = usa la lista de distribución asociada)')}
                     className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none text-gray-900 text-sm"
                   />
                 </div>
@@ -264,15 +266,15 @@ export default function ReportesPage() {
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-50 text-sm"
                 >
                   {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Enviar por correo
+                  {t('Enviar por correo')}
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-gray-400">
-                Déjalo en blanco para usar la lista de distribución asociada a &quot;{reportKey}&quot; (configúrala en Listas de Distribución).
+                {t('Déjalo en blanco para usar la lista de distribución asociada a "')}{reportKey}{t('" (configúrala en Listas de Distribución).')}
               </p>
               {sentOk && (
                 <p className="mt-2 text-sm text-green-700 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" /> Enviado a {emailTo}
+                  <CheckCircle2 className="w-4 h-4" />{' '}{t('Enviado a')}{' '}{emailTo}
                 </p>
               )}
               {sendError && (
@@ -284,10 +286,10 @@ export default function ReportesPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <p className="text-xs font-medium text-gray-500 uppercase mb-3">Vista previa</p>
+            <p className="text-xs font-medium text-gray-500 uppercase mb-3">{t('Vista previa')}</p>
             <VistaDatosOben data={data} />
             <details className="mt-4">
-              <summary className="text-xs text-gray-500 cursor-pointer">Ver la respuesta original de Oben (JSON)</summary>
+              <summary className="text-xs text-gray-500 cursor-pointer">{t('Ver la respuesta original de Oben (JSON)')}</summary>
               <pre className="mt-2 text-xs text-gray-700 bg-gray-50 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
                 {JSON.stringify(data, null, 2)}
               </pre>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -11,6 +12,7 @@ interface PackingLine {
 }
 
 export default function ListaEmpaquePage() {
+  const t = useT();
   const [orderNumber, setOrderNumber] = useState('');
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -99,10 +101,10 @@ export default function ListaEmpaquePage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Package className="w-6 h-6 text-[#F47735]" />
-          Lista de Empaque
+          {t('Lista de Empaque')}
         </h1>
         <p className="text-gray-500 mt-1">
-          Consulta en vivo al ERP de Oben — no se inventan datos: se muestra lo que responde el sistema de producción (en el entorno de pruebas, su simulador, siempre rotulado SIMULADO).
+          {t('Consulta en vivo al ERP de Oben — no se inventan datos: se muestra lo que responde el sistema de producción (en el entorno de pruebas, su simulador, siempre rotulado SIMULADO).')}
         </p>
       </div>
 
@@ -110,14 +112,14 @@ export default function ListaEmpaquePage() {
         <div className="flex items-start gap-3">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Número de orden de venta (Oben)
+              {t('Número de orden de venta (Oben)')}
             </label>
             <div className="flex gap-2">
               <input
                 value={orderNumber}
                 onChange={(e) => setOrderNumber(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Ej: 10794"
+                placeholder={t('Ej: 10794')}
                 className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none text-gray-900"
               />
               <button
@@ -126,11 +128,11 @@ export default function ListaEmpaquePage() {
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-50"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                Consultar
+                {t('Consultar')}
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Este número corresponde a una orden que ya existe en el sistema de Oben (no una orden interna de Oben Xmart) — el vínculo entre ambos sistemas está pendiente de definir con Oben.
+              {t('Este número corresponde a una orden que ya existe en el sistema de Oben (no una orden interna de Oben Xmart) — el vínculo entre ambos sistemas está pendiente de definir con Oben.')}
             </p>
           </div>
         </div>
@@ -152,12 +154,12 @@ export default function ListaEmpaquePage() {
               {data.simulated === true ? (
                 <div className="flex items-center gap-2 text-purple-800">
                   <ShieldCheck className="w-5 h-5" />
-                  <p className="text-sm font-semibold">SIMULADO — datos del simulador de Oben (entorno de pruebas) — {lines.length} línea{lines.length !== 1 ? 's' : ''}</p>
+                  <p className="text-sm font-semibold">{t('SIMULADO — datos del simulador de Oben (entorno de pruebas) —')}{' '}{lines.length}{' '}{t('línea')}{lines.length !== 1 ? 's' : ''}</p>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 text-green-700">
                   <ShieldCheck className="w-5 h-5" />
-                  <p className="text-sm font-semibold">Datos reales de Oben — {lines.length} línea{lines.length !== 1 ? 's' : ''}</p>
+                  <p className="text-sm font-semibold">{t('Datos reales de Oben —')}{' '}{lines.length}{' '}{t('línea')}{lines.length !== 1 ? 's' : ''}</p>
                 </div>
               )}
               <button
@@ -166,7 +168,7 @@ export default function ListaEmpaquePage() {
                 className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition disabled:opacity-50 text-sm"
               >
                 {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                Descargar Excel
+                {t('Descargar Excel')}
               </button>
             </div>
             {downloadError && (
@@ -184,7 +186,7 @@ export default function ListaEmpaquePage() {
             </div>
 
             <div className="mt-5 pt-5 border-t border-gray-100">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Enviar por correo</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Enviar por correo')}</label>
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
                   <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -193,7 +195,7 @@ export default function ListaEmpaquePage() {
                     value={emailTo}
                     onChange={(e) => { setEmailTo(e.target.value); setSentOk(false); setSendError(''); }}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendEmail()}
-                    placeholder="correo@destino.com (vacío = usa la lista de distribución asociada)"
+                    placeholder={t('correo@destino.com (vacío = usa la lista de distribución asociada)')}
                     className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none text-gray-900 text-sm"
                   />
                 </div>
@@ -203,15 +205,15 @@ export default function ListaEmpaquePage() {
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-50 text-sm"
                 >
                   {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Enviar por correo
+                  {t('Enviar por correo')}
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-gray-400">
-                Déjalo en blanco para usar la lista de distribución asociada a &quot;packing_list&quot; (configúrala en Listas de Distribución).
+                {t('Déjalo en blanco para usar la lista de distribución asociada a "packing_list" (configúrala en Listas de Distribución).')}
               </p>
               {sentOk && (
                 <p className="mt-2 text-sm text-green-700 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" /> Enviado a {emailTo}
+                  <CheckCircle2 className="w-4 h-4" />{' '}{t('Enviado a')}{' '}{emailTo}
                 </p>
               )}
               {sendError && (
@@ -261,6 +263,7 @@ export default function ListaEmpaquePage() {
  * cartera confirmó por fuera) o cancelar (pedido dado de baja).
  */
 function RetenidasPorCartera() {
+  const t = useT();
   const [holds, setHolds] = useState<CarteraHold[] | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -300,10 +303,10 @@ function RetenidasPorCartera() {
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
       <h2 className="font-semibold text-amber-900 flex items-center gap-2">
-        <Hourglass className="w-5 h-5" /> Retenidas por cartera — Producir No Despachar ({holds.length})
+        <Hourglass className="w-5 h-5" />{' '}{t('Retenidas por cartera — Producir No Despachar (')}{holds.length})
       </h2>
       <p className="text-xs text-amber-900">
-        Aprobadas en corte pero cartera no ha liberado: la Lista de Empaque no se generó. Se vuelve a verificar cada 6 horas y sale sola al liberar.
+        {t('Aprobadas en corte pero cartera no ha liberado: la Lista de Empaque no se generó. Se vuelve a verificar cada 6 horas y sale sola al liberar.')}
       </p>
       {error && <p className="text-sm text-red-700">{error}</p>}
       <ul className="divide-y divide-amber-200">
@@ -311,14 +314,14 @@ function RetenidasPorCartera() {
           <li key={h.id} className="py-2 flex flex-col md:flex-row md:items-center gap-2 text-sm">
             <span className="font-semibold text-gray-900">OV {h.numberOrderSales}</span>
             <span className="text-xs text-gray-600 flex-1">
-              {h.holdReason ?? ''} · retenida desde {new Date(h.createdAt).toLocaleString('es-CO')} · próxima verificación {new Date(h.nextRetryAt).toLocaleString('es-CO')}
+              {h.holdReason ?? ''}{' '}{t('· retenida desde')}{' '}{new Date(h.createdAt).toLocaleString('es-CO')}{' '}{t('· próxima verificación')}{' '}{new Date(h.nextRetryAt).toLocaleString('es-CO')}
             </span>
             <div className="flex gap-2">
               <button onClick={() => accion(h.numberOrderSales, 'liberar')} disabled={busy === h.numberOrderSales} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-50">
-                Cartera ya liberó
+                {t('Cartera ya liberó')}
               </button>
               <button onClick={() => accion(h.numberOrderSales, 'cancelar')} disabled={busy === h.numberOrderSales} className="px-3 py-1.5 bg-white border border-red-200 text-red-700 rounded-lg text-xs font-medium hover:bg-red-50 disabled:opacity-50">
-                Cancelar
+                {t('Cancelar')}
               </button>
             </div>
           </li>

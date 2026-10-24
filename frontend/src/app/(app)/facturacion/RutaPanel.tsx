@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -48,6 +49,7 @@ function useGuardarRuta(pf: string, input: Entrada, onDraft: (d: LiquidacionDraf
  * digita. La sugerida es la más barata vigente al puerto de la proforma.
  */
 export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; ruta: RutaLiquidacion; input: Entrada; onDraft: (d: LiquidacionDraft) => void }) {
+  const t = useT();
   const { opciones, actual, sugerida, contenedores } = ruta;
   const [sel, setSel] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
@@ -85,8 +87,8 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
     <Card>
       <CardHeader
         icon={<Anchor className="w-4 h-4 text-[#F47735]" />}
-        title="2 · Flete marítimo"
-        subtitle="Del tarifario: puerto de origen → puerto de destino, agente y naviera. La sugerida es la más barata vigente; las demás opciones, en el desplegable."
+        title={t('2 · Flete marítimo')}
+        subtitle={t('Del tarifario: puerto de origen → puerto de destino, agente y naviera. La sugerida es la más barata vigente; las demás opciones, en el desplegable.')}
         right={<EstadoBadge comex={actual.maritimaPorComex} />}
       />
       <div className="p-4 space-y-3">
@@ -99,9 +101,9 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
                 <thead className="bg-gray-50 text-gray-500 sticky top-0">
                   <tr>
                     <th className="w-8" />
-                    <th className="px-2 py-1.5 text-left font-semibold">Ruta</th>
-                    <th className="px-2 py-1.5 text-left font-semibold">Agente / naviera</th>
-                    <th className="px-2 py-1.5 text-right font-semibold">Días</th>
+                    <th className="px-2 py-1.5 text-left font-semibold">{t('Ruta')}</th>
+                    <th className="px-2 py-1.5 text-left font-semibold">{t('Agente / naviera')}</th>
+                    <th className="px-2 py-1.5 text-right font-semibold">{t('Días')}</th>
                     <th className="px-2 py-1.5 text-right font-semibold">USD</th>
                   </tr>
                 </thead>
@@ -113,7 +115,7 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
                       </td>
                       <td className="px-2 py-1.5">
                         <span className="font-medium text-gray-900">{o.origen.split(',')[0]}</span> → <span className="font-medium text-gray-900">{o.destino}</span>
-                        {o.transito && <span className="block text-[10px] text-gray-400">vía {o.transito.split(',')[0]}</span>}
+                        {o.transito && <span className="block text-[10px] text-gray-400">{t('vía')}{' '}{o.transito.split(',')[0]}</span>}
                         <Marcas id={o.id} sugeridaId={sugerida.maritimaId} actualId={actual.maritimaId} vencida={o.vencida} validUntil={o.validUntil} />
                       </td>
                       <td className="px-2 py-1.5 text-gray-700">
@@ -128,7 +130,7 @@ export function RutaMaritimaCard({ pf, ruta, input, onDraft }: { pf: string; rut
               </table>
               <VerOtras total={opciones.maritimas.length} elegida={!!elegida} abierto={verOtras} onToggle={() => setVerOtras((v) => !v)} />
             </div>
-            {contenedores > 1 && <p className="text-[11px] text-gray-500">Valores por contenedor de 40 pies; esta proforma lleva {contenedores}.</p>}
+            {contenedores > 1 && <p className="text-[11px] text-gray-500">{t('Valores por contenedor de 40 pies; esta proforma lleva')}{' '}{contenedores}.</p>}
             <Aplicar
               pendiente={pendiente}
               porComex={actual.maritimaPorComex}
@@ -175,6 +177,7 @@ export function OtrosGastosCard({
   otrosDigitados: string;
   setOtrosDigitados: (v: string) => void;
 }) {
+  const t = useT();
   const ruta = liq.ruta;
   const [sel, setSel] = useState<string | null>(null);
   const [selAduana, setSelAduana] = useState<string | null>(null);
@@ -227,7 +230,7 @@ export function OtrosGastosCard({
     <Card>
       <CardHeader
         icon={<Receipt className="w-4 h-4 text-[#F47735]" />}
-        title="3 · Pata 3: otros gastos en destino"
+        title={t('3 · Pata 3: otros gastos en destino')}
         subtitle={
           liq.esUSA
             ? 'Inland + Entry + ISF + HMF. COMEX puede cambiar el transportador terrestre y el agente aduanero (comisión aduanera).'
@@ -242,16 +245,16 @@ export function OtrosGastosCard({
             <div className="rounded-lg border border-gray-200 overflow-hidden">
               <table className="w-full text-xs">
                 <tbody className="divide-y divide-gray-100">
-                  <Concepto label="Inland (transporte terrestre)" detalle={elegido ? `${elegido.forwarder ?? ''} desde ${elegido.puerto}` : undefined} valor={h.inlandFreight} />
-                  <Concepto label="Entry Fee" detalle="Fijo negociado en aduana" valor={h.entryFee} />
-                  <Concepto label="Importer Security Filing (ISF)" detalle="Fijo negociado en aduana" valor={h.importerSecurityFiling} />
-                  <Concepto label="Harbor Maintenance Fee (HMF)" detalle="0,125 % del FOB final" valor={h.harborMaintenanceFee} />
+                  <Concepto label={t('Inland (transporte terrestre)')} detalle={elegido ? `${elegido.forwarder ?? ''} desde ${elegido.puerto}` : undefined} valor={h.inlandFreight} />
+                  <Concepto label={t('Entry Fee')} detalle="Fijo negociado en aduana" valor={h.entryFee} />
+                  <Concepto label={t('Importer Security Filing (ISF)')} detalle="Fijo negociado en aduana" valor={h.importerSecurityFiling} />
+                  <Concepto label={t('Harbor Maintenance Fee (HMF)')} detalle="0,125 % del FOB final" valor={h.harborMaintenanceFee} />
                   <tr className="bg-gray-50 font-semibold">
-                    <td className="px-3 py-2 text-gray-900">Total otros gastos (Destination Charges)</td>
+                    <td className="px-3 py-2 text-gray-900">{t('Total otros gastos (Destination Charges)')}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-gray-900">{usd(h.destinationCharges)}</td>
                   </tr>
                   <Concepto
-                    label="Comisión aduanera (agente aduanero)"
+                    label={t('Comisión aduanera (agente aduanero)')}
                     detalle={aduanaElegida ? `${aduanaElegida.forwarder ?? ''} · informativa: no suma a Destination Charges` : 'Sin tarifa en el tarifario'}
                     valor={isNum(aduanaElegida?.comisionAduanera) ? aduanaElegida.comisionAduanera * contenedores : null}
                   />
@@ -263,7 +266,7 @@ export function OtrosGastosCard({
               <>
                 <div>
                   <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
-                    <Truck className="w-3.5 h-3.5 text-[#F47735]" /> Transportador terrestre (del tarifario)
+                    <Truck className="w-3.5 h-3.5 text-[#F47735]" />{' '}{t('Transportador terrestre (del tarifario)')}
                   </p>
                   <div className="rounded-lg border border-gray-200 overflow-hidden">
                     <table className="w-full text-xs">
@@ -281,7 +284,7 @@ export function OtrosGastosCard({
                                 <input type="radio" readOnly disabled={!ok} checked={o.id === inlSel} className="accent-[#F47735]" aria-label={`Escoger ${o.forwarder}`} />
                               </td>
                               <td className="px-2 py-1.5">
-                                <span className="font-medium text-gray-900">{o.forwarder ?? '—'}</span> desde {o.puerto}
+                                <span className="font-medium text-gray-900">{o.forwarder ?? '—'}</span>{' '}{t('desde')}{' '}{o.puerto}
                                 <Marcas id={o.id} sugeridaId={ruta?.sugerida.inlandId ?? null} actualId={actual?.inlandId ?? null} vencida={o.vencida} validUntil={o.validUntil} />
                               </td>
                               <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-900">{usd(o.valor)}</td>
@@ -292,15 +295,15 @@ export function OtrosGastosCard({
                     </table>
                     <VerOtras total={inlandOpts.length} elegida={inlandOpts.some((o) => o.id === inlSel)} abierto={verOtrosInland} onToggle={() => setVerOtrosInland((v) => !v)} />
                   </div>
-                  {!actual?.maritimaPorComex && <p className="mt-1 text-[11px] text-gray-500">Si escoges un transportador de otro puerto, el flete marítimo se ajusta para llegar a ese puerto.</p>}
+                  {!actual?.maritimaPorComex && <p className="mt-1 text-[11px] text-gray-500">{t('Si escoges un transportador de otro puerto, el flete marítimo se ajusta para llegar a ese puerto.')}</p>}
                 </div>
 
                 <div>
                   <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
-                    <Landmark className="w-3.5 h-3.5 text-[#F47735]" /> Agente aduanero · comisión aduanera (del tarifario)
+                    <Landmark className="w-3.5 h-3.5 text-[#F47735]" />{' '}{t('Agente aduanero · comisión aduanera (del tarifario)')}
                   </p>
                   {aduanaOpts.length === 0 ? (
-                    <p className="text-[11px] text-gray-500">El tarifario no trae comisión aduanera para este destino.</p>
+                    <p className="text-[11px] text-gray-500">{t('El tarifario no trae comisión aduanera para este destino.')}</p>
                   ) : (
                     <div className="rounded-lg border border-gray-200 overflow-hidden">
                       <table className="w-full text-xs">
@@ -347,11 +350,11 @@ export function OtrosGastosCard({
           </>
         ) : aplica ? (
           <label className="block text-xs text-gray-600">
-            Otros gastos (USD) — fuera de EE. UU. no hay tarifario de gastos en destino
+            {t('Otros gastos (USD) — fuera de EE. UU. no hay tarifario de gastos en destino')}
             <input value={otrosDigitados} onChange={(e) => setOtrosDigitados(e.target.value)} inputMode="decimal" placeholder={usd(liq.totales.otrosGastos)} className={`${inputCls} w-full mt-1`} />
           </label>
         ) : (
-          <p className="text-xs text-gray-500">Sin tarifas de transporte terrestre ni aduana para {liq.pais ?? 'este destino'}: el tarifario solo trae la pata 3 de EE. UU. y Canadá.</p>
+          <p className="text-xs text-gray-500">{t('Sin tarifas de transporte terrestre ni aduana para')}{' '}{liq.pais ?? 'este destino'}{t(': el tarifario solo trae la pata 3 de EE. UU. y Canadá.')}</p>
         )}
       </div>
     </Card>
@@ -407,6 +410,7 @@ function Aplicar(p: {
   onDescartar: () => void;
   onVolver: () => void;
 }) {
+  const t = useT();
   if (!p.pendiente && !p.porComex && !p.error) return null;
   return (
     <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-3 space-y-2">
@@ -416,24 +420,24 @@ function Aplicar(p: {
         </p>
       )}
       <label className="block text-xs font-medium text-gray-700">
-        Justificación del cambio <span className="text-gray-400 font-normal">(opcional)</span>
-        <input value={p.motivo} onChange={(e) => p.setMotivo(e.target.value)} maxLength={500} placeholder="Ej: espacio en el booking, tiempo de tránsito, pedido del cliente" className={`${inputCls} w-full mt-1`} />
+        {t('Justificación del cambio')}{' '}<span className="text-gray-400 font-normal">{t('(opcional)')}</span>
+        <input value={p.motivo} onChange={(e) => p.setMotivo(e.target.value)} maxLength={500} placeholder={t('Ej: espacio en el booking, tiempo de tránsito, pedido del cliente')} className={`${inputCls} w-full mt-1`} />
       </label>
       {p.pendiente && <Clip archivos={p.archivos} setArchivos={p.setArchivos} />}
       <div className="flex flex-wrap gap-2">
         {p.pendiente && (
           <>
             <button className={btnPrimary} onClick={p.onAplicar} disabled={p.guardando}>
-              {p.guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Aplicar
+              {p.guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}{' '}{t('Aplicar')}
             </button>
             <button className={btnSecondary} onClick={p.onDescartar} disabled={p.guardando}>
-              Descartar
+              {t('Descartar')}
             </button>
           </>
         )}
         {p.porComex && !p.pendiente && (
           <button className={btnSecondary} onClick={p.onVolver} disabled={p.guardando}>
-            <RotateCcw className="w-4 h-4" /> Volver a la sugerida
+            <RotateCcw className="w-4 h-4" />{' '}{t('Volver a la sugerida')}
           </button>
         )}
       </div>
@@ -442,35 +446,36 @@ function Aplicar(p: {
           <AlertCircle className="w-3.5 h-3.5" /> {p.error}
         </p>
       )}
-      <p className="text-[11px] text-gray-500">Cada cambio queda como orden de compra interna (quién, cuándo, antes → después, sobrecosto y motivo) y pide aprobar de nuevo.</p>
+      <p className="text-[11px] text-gray-500">{t('Cada cambio queda como orden de compra interna (quién, cuándo, antes → después, sobrecosto y motivo) y pide aprobar de nuevo.')}</p>
     </div>
   );
 }
 
 function Historial({ pf, ruta }: { pf: string; ruta: RutaLiquidacion }) {
+  const t = useT();
   const [ver, setVer] = useState(false);
   if (ruta.historial.length === 0) return null;
   return (
     <div>
       <button className="text-xs text-[#E5641F] hover:underline inline-flex items-center gap-1" onClick={() => setVer((v) => !v)}>
-        <History className="w-3.5 h-3.5" /> {ver ? 'Ocultar' : 'Ver'} cambios de ruta ({ruta.historial.length})
+        <History className="w-3.5 h-3.5" /> {ver ? 'Ocultar' : 'Ver'}{' '}{t('cambios de ruta (')}{ruta.historial.length})
       </button>
       {ver && (
         <ul className="mt-2 space-y-2">
           {ruta.historial.map((c) => (
             <li key={c.numero} className="rounded-lg border border-gray-200 p-2.5 text-[11px] text-gray-700">
               <p className="font-semibold text-gray-900">
-                OC interna #{c.numero} · {fecha(c.fecha)} · {c.por ?? 'sin usuario'}
-                {c.sobrecosto !== null && c.sobrecosto !== 0 && <span className={c.sobrecosto > 0 ? 'text-red-700' : 'text-emerald-700'}> · sobrecosto {usd(c.sobrecosto)}</span>}
+                {t('OC interna #')}{c.numero} · {fecha(c.fecha)} · {c.por ?? 'sin usuario'}
+                {c.sobrecosto !== null && c.sobrecosto !== 0 && <span className={c.sobrecosto > 0 ? 'text-red-700' : 'text-emerald-700'}>{' '}{t('· sobrecosto')}{' '}{usd(c.sobrecosto)}</span>}
               </p>
               <p>
-                <span className="text-gray-400">Antes:</span> {c.antes}
+                <span className="text-gray-400">{t('Antes:')}</span> {c.antes}
               </p>
               <p>
-                <span className="text-gray-400">Después:</span> {c.despues}
+                <span className="text-gray-400">{t('Después:')}</span> {c.despues}
               </p>
               <p className={c.motivo ? '' : 'text-red-600'}>
-                <span className="text-gray-400">Motivo:</span> {c.motivo ?? 'sin justificación'}
+                <span className="text-gray-400">{t('Motivo:')}</span> {c.motivo ?? 'sin justificación'}
               </p>
               <Soportes pf={pf} adjuntos={c.adjuntos ?? []} />
             </li>
@@ -482,23 +487,26 @@ function Historial({ pf, ruta }: { pf: string; ruta: RutaLiquidacion }) {
 }
 
 function EstadoBadge({ comex }: { comex: boolean }): ReactNode {
+  const t = useT();
   return comex ? (
-    <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-semibold">Escogido por COMEX</span>
+    <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-semibold">{t('Escogido por COMEX')}</span>
   ) : (
-    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">Sugerido</span>
+    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">{t('Sugerido')}</span>
   );
 }
 
 function SinTarifas() {
-  return <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">El tarifario no tiene tarifas para esta ruta. Hay que cargar el archivo de fletes vigente.</p>;
+  const t = useT();
+  return <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">{t('El tarifario no tiene tarifas para esta ruta. Hay que cargar el archivo de fletes vigente.')}</p>;
 }
 
 function Marcas({ id, sugeridaId, actualId, vencida, validUntil }: { id: string; sugeridaId: string | null; actualId: string | null; vencida: boolean; validUntil: string | null }) {
+  const t = useT();
   return (
     <span className="ml-1 inline-flex flex-wrap gap-1 align-middle">
-      {id === sugeridaId && <span className="px-1 rounded bg-emerald-100 text-emerald-800 text-[9px] font-semibold">SUGERIDA</span>}
-      {id === actualId && id !== sugeridaId && <span className="px-1 rounded bg-amber-100 text-amber-800 text-[9px] font-semibold">EN USO</span>}
-      {vencida && <span className="px-1 rounded bg-red-50 text-red-700 text-[9px] font-semibold">venció {validUntil}</span>}
+      {id === sugeridaId && <span className="px-1 rounded bg-emerald-100 text-emerald-800 text-[9px] font-semibold">{t('SUGERIDA')}</span>}
+      {id === actualId && id !== sugeridaId && <span className="px-1 rounded bg-amber-100 text-amber-800 text-[9px] font-semibold">{t('EN USO')}</span>}
+      {vencida && <span className="px-1 rounded bg-red-50 text-red-700 text-[9px] font-semibold">{t('venció')}{' '}{validUntil}</span>}
     </span>
   );
 }
@@ -509,6 +517,7 @@ const kb = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} M
 
 /** Clip: soportes de la justificación (cotización del forwarder, correo del booking…). Hasta 5 archivos de 10 MB. */
 function Clip({ archivos, setArchivos }: { archivos: File[]; setArchivos: (v: File[]) => void }) {
+  const t = useT();
   const [aviso, setAviso] = useState('');
   function agregar(lista: FileList | null) {
     const nuevos = Array.from(lista ?? []);
@@ -520,7 +529,7 @@ function Clip({ archivos, setArchivos }: { archivos: File[]; setArchivos: (v: Fi
   return (
     <div>
       <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[#C4521A] hover:underline cursor-pointer">
-        <Paperclip className="w-3.5 h-3.5" /> Adjuntar soporte <span className="text-gray-400 font-normal">(cotización, correo del booking…)</span>
+        <Paperclip className="w-3.5 h-3.5" />{' '}{t('Adjuntar soporte')}{' '}<span className="text-gray-400 font-normal">{t('(cotización, correo del booking…)')}</span>
         <input type="file" multiple className="hidden" onChange={(e) => { agregar(e.target.files); e.target.value = ''; }} />
       </label>
       {archivos.length > 0 && (
@@ -542,6 +551,7 @@ function Clip({ archivos, setArchivos }: { archivos: File[]; setArchivos: (v: Fi
 
 /** Soportes de un cambio de ruta: clic abre el archivo en otra pestaña. */
 function Soportes({ pf, adjuntos }: { pf: string; adjuntos: Array<{ id: string; nombre: string; tamano: number }> }) {
+  const t = useT();
   const [abriendo, setAbriendo] = useState<string | null>(null);
   if (!adjuntos.length) return null;
   async function abrir(id: string) {
@@ -559,7 +569,7 @@ function Soportes({ pf, adjuntos }: { pf: string; adjuntos: Array<{ id: string; 
   }
   return (
     <p className="mt-1 flex flex-wrap items-center gap-1.5">
-      <span className="text-gray-400">Soportes:</span>
+      <span className="text-gray-400">{t('Soportes:')}</span>
       {adjuntos.map((a) => (
         <button key={a.id} onClick={() => void abrir(a.id)} className="inline-flex items-center gap-1 text-[#C4521A] hover:underline" disabled={abriendo === a.id}>
           {abriendo === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />} {a.nombre} <span className="text-gray-400">({kb(a.tamano)})</span>

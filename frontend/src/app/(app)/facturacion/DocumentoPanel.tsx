@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -38,6 +39,7 @@ export function DocumentoPanel({
   actualizando: boolean;
   onContinuar: () => void;
 }) {
+  const t = useT();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfFirma, setPdfFirma] = useState('');
   const [cargando, setCargando] = useState<'preview' | 'download' | null>(null);
@@ -86,12 +88,12 @@ export function DocumentoPanel({
     <div className="space-y-5">
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
         <Card className="xl:col-span-2">
-          <CardHeader title="Datos del documento" subtitle="Lo que no viene del ERP lo confirma quien factura. Nada se inventa." />
+          <CardHeader title={t('Datos del documento')} subtitle={t('Lo que no viene del ERP lo confirma quien factura. Nada se inventa.')} />
           <div className="p-4 space-y-3">
             <Field
               label={
                 <>
-                  Dirección de entrega{draft.kind === 'exportacion' && <span className="text-red-500"> *</span>}
+                  {t('Dirección de entrega')}{draft.kind === 'exportacion' && <span className="text-red-500"> *</span>}
                   {fuente && (
                     <span className={`ml-1.5 inline-block px-1.5 py-px rounded border text-[10px] font-medium ${FUENTE[fuente].cls}`}>{FUENTE[fuente].label}</span>
                   )}
@@ -109,8 +111,8 @@ export function DocumentoPanel({
             {esNacional && (
               <div className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Despacho parcial</p>
-                  <p className="text-[11px] text-gray-500">Nacional parcial vs. completo (lo indica quien factura).</p>
+                  <p className="text-sm font-medium text-gray-900">{t('Despacho parcial')}</p>
+                  <p className="text-[11px] text-gray-500">{t('Nacional parcial vs. completo (lo indica quien factura).')}</p>
                 </div>
                 <button
                   role="switch"
@@ -122,7 +124,7 @@ export function DocumentoPanel({
                 </button>
               </div>
             )}
-            <Field label="TRM de la orden de compra">
+            <Field label={t('TRM de la orden de compra')}>
               <input
                 type="number"
                 inputMode="decimal"
@@ -143,10 +145,10 @@ export function DocumentoPanel({
                   : 'Solo si el cliente pactó su propia TRM en la orden de compra; si no, se usa la oficial del día.'}
               </p>
             </Field>
-            <Field label="Observaciones">
+            <Field label={t('Observaciones')}>
               <textarea value={input.observaciones ?? ''} onChange={(e) => onInput({ observaciones: e.target.value })} rows={3} className={`${inputCls} w-full resize-none`} />
             </Field>
-            <Field label="Información comercial">
+            <Field label={t('Información comercial')}>
               <textarea value={input.infoComercial ?? ''} onChange={(e) => onInput({ infoComercial: e.target.value })} rows={3} className={`${inputCls} w-full resize-none`} />
             </Field>
           </div>
@@ -155,7 +157,7 @@ export function DocumentoPanel({
         <Card className="xl:col-span-3">
           <CardHeader
             icon={<FileText className="w-4 h-4 text-[#F47735]" />}
-            title="Detalle a facturar"
+            title={t('Detalle a facturar')}
             subtitle={`Precios y kilos de la Proforma ${draft.proforma ?? '—'} en el ERP de Oben`}
             right={
               <div className="flex items-center gap-2">
@@ -168,10 +170,10 @@ export function DocumentoPanel({
             <table className="w-full text-sm text-gray-800">
               <thead>
                 <tr className="bg-gray-50 text-xs text-gray-500">
-                  <th className="px-4 py-2 text-left font-semibold">Película</th>
-                  <th className="px-3 py-2 text-right font-semibold">Kilos</th>
-                  <th className="px-3 py-2 text-right font-semibold">Precio USD/kg</th>
-                  <th className="px-4 py-2 text-right font-semibold">Valor (USD)</th>
+                  <th className="px-4 py-2 text-left font-semibold">{t('Película')}</th>
+                  <th className="px-3 py-2 text-right font-semibold">{t('Kilos')}</th>
+                  <th className="px-3 py-2 text-right font-semibold">{t('Precio USD/kg')}</th>
+                  <th className="px-4 py-2 text-right font-semibold">{t('Valor (USD)')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -179,7 +181,7 @@ export function DocumentoPanel({
                   <tr key={l.codSecLineFilm}>
                     <td className="px-4 py-2.5">
                       <p className="font-medium text-gray-900">{l.tipoPelicula}</p>
-                      <p className="text-[10px] text-gray-400">Línea {l.codSecLineFilm}</p>
+                      <p className="text-[10px] text-gray-400">{t('Línea')}{' '}{l.codSecLineFilm}</p>
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{kg(l.kilosTotal)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{unit(l.precio)}</td>
@@ -189,14 +191,14 @@ export function DocumentoPanel({
                 {draft.lines.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-400">
-                      Sin líneas: Oben no devolvió precios para esta proforma.
+                      {t('Sin líneas: Oben no devolvió precios para esta proforma.')}
                     </td>
                   </tr>
                 )}
               </tbody>
               <tfoot>
                 <tr className="bg-orange-50/60">
-                  <td className="px-4 py-3 font-semibold text-gray-900">Total</td>
+                  <td className="px-4 py-3 font-semibold text-gray-900">{t('Total')}</td>
                   <td className="px-3 py-3 text-right tabular-nums font-semibold">{kg(draft.totalKilos)}</td>
                   <td />
                   <td className="px-4 py-3 text-right tabular-nums text-lg font-bold text-[#C4521A]">{usd(draft.totalValor)}</td>
@@ -209,7 +211,7 @@ export function DocumentoPanel({
 
       <Card>
         <div className="p-4 space-y-3">
-          {draft.missing.length > 0 ? <Faltantes items={draft.missing} /> : <Listo>Documento listo: se puede revisar, descargar y enviar.</Listo>}
+          {draft.missing.length > 0 ? <Faltantes items={draft.missing} /> : <Listo>{t('Documento listo: se puede revisar, descargar y enviar.')}</Listo>}
           {error && (
             <p className="text-sm text-red-700 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" /> {error}
@@ -222,10 +224,10 @@ export function DocumentoPanel({
             </button>
             <button className={btnSecondary} onClick={() => void pdf('download')} disabled={!draft.readyToGenerate || !!cargando}>
               {cargando === 'download' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Descargar PDF
+              {t('Descargar PDF')}
             </button>
             <button className={`${btnPrimary} ml-auto`} onClick={onContinuar} disabled={!draft.readyToGenerate}>
-              Continuar al envío <ArrowRight className="w-4 h-4" />
+              {t('Continuar al envío')}{' '}<ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -233,7 +235,7 @@ export function DocumentoPanel({
           <div className="border-t border-gray-100 p-4">
             {pdfFirma !== firma && (
               <button onClick={() => void pdf('preview')} className="mb-3 w-full text-left rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-center gap-2 hover:bg-amber-100">
-                <RefreshCw className="w-3.5 h-3.5" /> Cambiaste datos del documento: la vista previa está desactualizada. Clic para actualizarla.
+                <RefreshCw className="w-3.5 h-3.5" />{' '}{t('Cambiaste datos del documento: la vista previa está desactualizada. Clic para actualizarla.')}
               </button>
             )}
             <iframe title={`Documento de facturación OV ${draft.numberOrderSales}`} src={pdfUrl} className="w-full h-[78vh] rounded-lg border border-gray-200 bg-gray-50" />

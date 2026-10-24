@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -45,6 +46,7 @@ const TONO: Record<Tono, string> = {
  * Oben; lo simulado se rotula siempre.
  */
 export default function FacturacionPage() {
+  const t = useT();
   const [pfInput, setPfInput] = useState('');
   const [proforma, setProforma] = useState<ProformaOrdenes | null>(null);
   const [draft, setDraft] = useState<FacturacionDraft | null>(null);
@@ -226,9 +228,9 @@ export default function FacturacionPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Receipt className="w-6 h-6 text-[#F47735]" />
-            Liquidación y Facturación
+            {t('Liquidación y Facturación')}
           </h1>
-          <p className="text-gray-500 mt-1">De la proforma al documento de facturación, con los datos reales del ERP de Oben. Lo simulado se marca siempre.</p>
+          <p className="text-gray-500 mt-1">{t('De la proforma al documento de facturación, con los datos reales del ERP de Oben. Lo simulado se marca siempre.')}</p>
         </div>
         {draft && (
           <button
@@ -236,7 +238,7 @@ export default function FacturacionPage() {
             onClick={() => void (proforma ? cargarProforma(proforma.numberPF, draft.numberOrderSales) : cargar(draft.numberOrderSales))}
             disabled={loading}
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar desde Oben
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />{' '}{t('Actualizar desde Oben')}
           </button>
         )}
       </div>
@@ -251,8 +253,8 @@ export default function FacturacionPage() {
               onChange={(e) => setPfInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && buscar()}
               inputMode="numeric"
-              placeholder="Número de proforma de Oben (ej: 11208)"
-              aria-label="Número de proforma"
+              placeholder={t('Número de proforma de Oben (ej: 11208)')}
+              aria-label={t('Número de proforma')}
               className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none text-gray-900"
             />
           </div>
@@ -262,13 +264,13 @@ export default function FacturacionPage() {
             className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            Cargar proforma
+            {t('Cargar proforma')}
           </button>
         </div>
         {proforma && proforma.ordenesVenta.length > 1 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
             <span className="text-gray-500">
-              La proforma {proforma.numberPF} tiene {proforma.ordenesVenta.length} órdenes de venta:
+              {t('La proforma')}{' '}{proforma.numberPF}{' '}{t('tiene')}{' '}{proforma.ordenesVenta.length}{' '}{t('órdenes de venta:')}
             </span>
             {proforma.ordenesVenta.map((n) => (
               <button
@@ -287,7 +289,7 @@ export default function FacturacionPage() {
         {pendientes && pendientes.length > 0 && (
           <div className="mt-3">
             <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1.5 flex items-center gap-1">
-              <ClipboardList className="w-3 h-3" /> Proformas pendientes de aprobación de COMEX ({pendientes.length})
+              <ClipboardList className="w-3 h-3" />{' '}{t('Proformas pendientes de aprobación de COMEX (')}{pendientes.length})
             </p>
             <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
               {pendientes.map((p) => {
@@ -312,7 +314,7 @@ export default function FacturacionPage() {
                     <button
                       onClick={() => void descartar(p)}
                       className="pr-2 pl-0.5 py-1 text-gray-300 hover:text-red-600"
-                      title="Ya la liquidó COMEX por fuera: quitarla de las pendientes"
+                      title={t('Ya la liquidó COMEX por fuera: quitarla de las pendientes')}
                       aria-label={`Quitar la PF ${p.numberPF} de las pendientes`}
                     >
                       <X className="w-3 h-3" />
@@ -323,7 +325,7 @@ export default function FacturacionPage() {
             </div>
           </div>
         )}
-        {pendientes && pendientes.length === 0 && <p className="mt-3 text-[11px] text-gray-400">No hay proformas de exportación pendientes de aprobación de COMEX.</p>}
+        {pendientes && pendientes.length === 0 && <p className="mt-3 text-[11px] text-gray-400">{t('No hay proformas de exportación pendientes de aprobación de COMEX.')}</p>}
       </Card>
 
       {error && (
@@ -339,7 +341,7 @@ export default function FacturacionPage() {
           <div className="h-20 rounded-xl bg-white border border-gray-200 animate-pulse" />
           <div className="h-80 rounded-xl bg-white border border-gray-200 animate-pulse" />
           <p className="text-center text-xs text-gray-400 flex items-center justify-center gap-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Consultando la proforma en el ERP de Oben…
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />{' '}{t('Consultando la proforma en el ERP de Oben…')}
           </p>
         </div>
       )}
@@ -370,35 +372,35 @@ export default function FacturacionPage() {
                     <SimuladoBadge items={draft.simulatedFields} />
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
-                      <ShieldCheck className="w-3 h-3" /> Datos reales del ERP de Oben
+                      <ShieldCheck className="w-3 h-3" />{' '}{t('Datos reales del ERP de Oben')}
                     </span>
                   )}
                 </div>
                 <h2 className="mt-1 text-xl font-bold text-gray-900 truncate" title={draft.cliente}>{draft.cliente || 'Cliente sin nombre en Oben'}</h2>
                 <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-600">
-                  <Dato label="País" valor={draft.pais} />
-                  <Dato label="Proforma" valor={draft.proforma} />
-                  <Dato label="Orden de compra" valor={draft.ordenCompra} />
-                  <Dato label="Contenedor" valor={draft.contenedor} />
-                  <Dato label="Material" valor={draft.codigoMaterial} />
-                  {exportacion && <Dato label="Término de pago" valor={liqEstado ? (liqEstado.terminoPago ?? 'Oben no lo trae') : null} />}
+                  <Dato label={t('País')} valor={draft.pais} />
+                  <Dato label={t('Proforma')} valor={draft.proforma} />
+                  <Dato label={t('Orden de compra')} valor={draft.ordenCompra} />
+                  <Dato label={t('Contenedor')} valor={draft.contenedor} />
+                  <Dato label={t('Material')} valor={draft.codigoMaterial} />
+                  {exportacion && <Dato label={t('Término de pago')} valor={liqEstado ? (liqEstado.terminoPago ?? 'Oben no lo trae') : null} />}
                 </div>
               </div>
               <div className="flex gap-6 lg:pl-6 lg:border-l border-gray-100">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-gray-500">Kilos</p>
+                  <p className="text-[11px] uppercase tracking-wide text-gray-500">{t('Kilos')}</p>
                   <p className="text-lg font-bold tabular-nums text-gray-900">{draft.totalKilos.toLocaleString('es-CO', { maximumFractionDigits: 2 })}</p>
                 </div>
                 {/* Exportación: sin "Valor" (Hernán, 23-oct: confunde); manda el total de la factura. */}
                 {!exportacion && (
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Valor</p>
+                    <p className="text-[11px] uppercase tracking-wide text-gray-500">{t('Valor')}</p>
                     <p className="text-lg font-bold tabular-nums text-[#C4521A]">{usd(draft.totalValor)}</p>
                   </div>
                 )}
                 {exportacion && liqEstado?.totalFactura != null && (
-                  <div title="FOB final + flete + seguro + otros gastos: el total de la factura">
-                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Total {liqEstado.incoterm ?? 'factura'}</p>
+                  <div title={t('FOB final + flete + seguro + otros gastos: el total de la factura')}>
+                    <p className="text-[11px] uppercase tracking-wide text-gray-500">{t('Total')}{' '}{liqEstado.incoterm ?? 'factura'}</p>
                     <p className="text-lg font-bold tabular-nums text-emerald-700">{usd(liqEstado.totalFactura)}</p>
                   </div>
                 )}
@@ -427,7 +429,7 @@ export default function FacturacionPage() {
                     {p.tono === 'ok' ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Paso {p.n}</span>
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">{t('Paso')}{' '}{p.n}</span>
                     <span className="block font-semibold text-gray-900">{p.titulo}</span>
                     <span className={`block text-xs truncate ${TONO[p.tono]}`}>
                       {p.tono === 'warn' && <TriangleAlert className="inline w-3 h-3 mr-1 -mt-0.5" />}
@@ -446,10 +448,10 @@ export default function FacturacionPage() {
             ) : (
               <Card className="p-8 text-center">
                 <MapPin className="w-8 h-8 text-teal-600 mx-auto" />
-                <p className="mt-3 font-semibold text-gray-900">La liquidación de comercio exterior aplica a pedidos de exportación</p>
-                <p className="text-sm text-gray-500 mt-1">Este pedido es {draft.kind ? TIPO_LABEL[draft.kind].toLowerCase() : 'sin clasificar'}: pasa directo al envío a Facturación.</p>
+                <p className="mt-3 font-semibold text-gray-900">{t('La liquidación de comercio exterior aplica a pedidos de exportación')}</p>
+                <p className="text-sm text-gray-500 mt-1">{t('Este pedido es')}{' '}{draft.kind ? TIPO_LABEL[draft.kind].toLowerCase() : 'sin clasificar'}{t(': pasa directo al envío a Facturación.')}</p>
                 <button className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg text-sm font-medium" onClick={() => irA('envio')}>
-                  Ir al envío
+                  {t('Ir al envío')}
                 </button>
               </Card>
             )}
@@ -472,6 +474,7 @@ function Dato({ label, valor }: { label: string; valor: string | null }) {
 }
 
 function Bienvenida() {
+  const t = useT();
   const pasos = [
     { icon: Ship, titulo: 'Liquidación', texto: 'Incoterm, flete, seguro y otros gastos con la fórmula de Oben; FOB final por línea.' },
     { icon: Send, titulo: 'Envío', texto: 'A Facturación/COMEX con la factura electrónica, una sola vez por orden.' },
@@ -479,8 +482,8 @@ function Bienvenida() {
   return (
     <Card className="p-8">
       <div className="text-center max-w-2xl mx-auto">
-        <p className="text-lg font-semibold text-gray-900">Carga una proforma para empezar</p>
-        <p className="text-sm text-gray-500 mt-1">El sistema consulta la proforma y sus órdenes de venta en el ERP de Oben, la clasifica (exportación o nacional) y te guía en dos pasos.</p>
+        <p className="text-lg font-semibold text-gray-900">{t('Carga una proforma para empezar')}</p>
+        <p className="text-sm text-gray-500 mt-1">{t('El sistema consulta la proforma y sus órdenes de venta en el ERP de Oben, la clasifica (exportación o nacional) y te guía en dos pasos.')}</p>
       </div>
       <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
         {pasos.map((p, i) => (

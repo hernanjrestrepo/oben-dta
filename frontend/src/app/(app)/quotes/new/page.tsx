@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function NewQuotePage() {
+  const t = useT();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,9 +125,9 @@ export default function NewQuotePage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Solicitud de Cotización por Correo</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('Solicitud de Cotización por Correo')}</h1>
           <p className="text-gray-500 text-sm">
-            Registra una solicitud entrante de un cliente — la plataforma identifica al cliente, los productos y genera la cotización automáticamente
+            {t('Registra una solicitud entrante de un cliente — la plataforma identifica al cliente, los productos y genera la cotización automáticamente')}
           </p>
         </div>
       </div>
@@ -141,23 +143,23 @@ export default function NewQuotePage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <Mail className="w-5 h-5 text-[#F47735]" />
-            Correo Entrante
+            {t('Correo Entrante')}
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Correo del Cliente *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Correo del Cliente *')}</label>
               <input
                 type="email"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                placeholder="cliente@empresa.com"
+                placeholder={t('cliente@empresa.com')}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Asunto</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Asunto')}</label>
               <input
                 type="text"
                 value={subject}
@@ -173,7 +175,7 @@ export default function NewQuotePage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Package className="w-5 h-5 text-[#F47735]" />
-              Productos Solicitados
+              {t('Productos Solicitados')}
             </h2>
             <button
               type="button"
@@ -181,7 +183,7 @@ export default function NewQuotePage() {
               className="inline-flex items-center gap-1 text-sm text-[#F47735] hover:underline"
             >
               <Plus className="w-4 h-4" />
-              Agregar
+              {t('Agregar')}
             </button>
           </div>
 
@@ -196,10 +198,10 @@ export default function NewQuotePage() {
                       onChange={(e) => updateItem(index, 'productId', e.target.value)}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition appearance-none bg-white"
                     >
-                      <option value="">Seleccionar producto...</option>
+                      <option value="">{t('Seleccionar producto...')}</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name} ({p.sku}) — ${p.price.toLocaleString('es-CO')} COP
+                          {p.name} ({p.sku}) — ${p.price.toLocaleString('es-CO')}{' '}{t('COP')}
                         </option>
                       ))}
                     </select>
@@ -239,7 +241,7 @@ export default function NewQuotePage() {
             href="/quotes"
             className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
           >
-            Cancelar
+            {t('Cancelar')}
           </Link>
           <button
             type="submit"
@@ -249,7 +251,7 @@ export default function NewQuotePage() {
             {submitting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Procesando...
+                {t('Procesando...')}
               </>
             ) : (
               'Enviar y Generar Cotización'

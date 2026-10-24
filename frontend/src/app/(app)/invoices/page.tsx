@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -25,6 +26,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function InvoicesPage() {
+  const t = useT();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -65,8 +67,8 @@ export default function InvoicesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Facturas</h1>
-          <p className="text-gray-500 mt-1">Gestiona la facturación de órdenes</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('Facturas')}</h1>
+          <p className="text-gray-500 mt-1">{t('Gestiona la facturación de órdenes')}</p>
         </div>
       </div>
 
@@ -75,7 +77,7 @@ export default function InvoicesPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           type="text"
-          placeholder="Buscar por número de factura, orden, cliente o estado..."
+          placeholder={t('Buscar por número de factura, orden, cliente o estado...')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
@@ -97,7 +99,7 @@ export default function InvoicesPage() {
                 onClick={loadInvoices}
                 className="mt-3 text-[#F47735] hover:underline"
               >
-                Reintentar
+                {t('Reintentar')}
               </button>
             </div>
           </div>
@@ -106,13 +108,13 @@ export default function InvoicesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Factura</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Orden</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Cliente</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Total</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Estado</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Vencimiento</th>
-                  <th className="px-6 py-3 text-right font-semibold text-gray-600">Acciones</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Factura')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Orden')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Cliente')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Total')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Estado')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Vencimiento')}</th>
+                  <th className="px-6 py-3 text-right font-semibold text-gray-600">{t('Acciones')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -134,7 +136,7 @@ export default function InvoicesPage() {
                         {inv.order?.client?.name || '—'}
                       </td>
                       <td className="px-6 py-4 font-semibold text-gray-900">
-                        ${Number(inv.totalAmount).toLocaleString('es-CO')} COP
+                        ${Number(inv.totalAmount).toLocaleString('es-CO')}{' '}{t('COP')}
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -152,7 +154,7 @@ export default function InvoicesPage() {
                         <Link
                           href={`/invoices/${inv.id}`}
                           className="inline-flex p-2 text-[#F47735] hover:bg-blue-50 rounded-lg transition"
-                          title="Ver detalle"
+                          title={t('Ver detalle')}
                         >
                           <ArrowRight className="w-4 h-4" />
                         </Link>

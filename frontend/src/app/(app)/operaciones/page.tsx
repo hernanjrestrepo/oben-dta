@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { IntegrationStatus } from '@/types';
@@ -65,6 +66,7 @@ function getStateLabel(it: IntegrationStatus): string {
 }
 
 export default function OperacionesPage() {
+  const t = useT();
   const [orders, setOrders] = useState<number | null>(null);
   const [invoices, setInvoices] = useState<number | null>(null);
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
@@ -100,28 +102,28 @@ export default function OperacionesPage() {
             <Activity className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Centro de Operaciones</h1>
-            <p className="text-gray-500 text-sm">Estado en vivo del ecosistema de integraciones</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t('Centro de Operaciones')}</h1>
+            <p className="text-gray-500 text-sm">{t('Estado en vivo del ecosistema de integraciones')}</p>
           </div>
         </div>
         <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-sm text-green-700">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          Sistema en línea
+          {t('Sistema en línea')}
         </span>
       </div>
 
       {/* KPIs reales */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <KpiCard icon={Receipt} label="Órdenes en sistema" value={orders === null ? '—' : String(orders)} hint="PostgreSQL · dato real" />
-        <KpiCard icon={FileText} label="Facturas creadas" value={invoices === null ? '—' : String(invoices)} hint="PostgreSQL · dato real" />
-        <KpiCard icon={Network} label="Integraciones" value={String(integrations.length || 11)} hint={integrations.length ? `${integrations.filter((i) => i.state === 'operational' && i.mode === 'real').length} reales · ${integrations.filter((i) => i.state === 'operational' && i.mode === 'mock').length} simuladas` : 'cargando…'} />
+        <KpiCard icon={Receipt} label={t('Órdenes en sistema')} value={orders === null ? '—' : String(orders)} hint={t('PostgreSQL · dato real')} />
+        <KpiCard icon={FileText} label={t('Facturas creadas')} value={invoices === null ? '—' : String(invoices)} hint={t('PostgreSQL · dato real')} />
+        <KpiCard icon={Network} label={t('Integraciones')} value={String(integrations.length || 11)} hint={integrations.length ? `${integrations.filter((i) => i.state === 'operational' && i.mode === 'real').length} reales · ${integrations.filter((i) => i.state === 'operational' && i.mode === 'mock').length} simuladas` : 'cargando…'} />
       </div>
 
       {/* ===== Integraciones (estado real del Integration Hub) ===== */}
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Network className="w-5 h-5 text-[#F47735]" />
-          <h2 className="font-semibold text-gray-900">Integraciones del ecosistema Oben</h2>
+          <h2 className="font-semibold text-gray-900">{t('Integraciones del ecosistema Oben')}</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {integrations.map((it) => {
@@ -145,9 +147,7 @@ export default function OperacionesPage() {
           })}
         </div>
         <p className="mt-4 text-xs text-gray-500 leading-relaxed">
-          Oben Mas (API) y el correo (M365) ya corren en modo real. El resto corre sobre un simulador funcional:
-          mismas operaciones, mismas validaciones de negocio, mismos errores que tendría la API real. Conectar
-          NetSuite, VETA o Armstrong reales solo requiere las credenciales de Oben — el resto del sistema no cambia.
+          {t('Oben Mas (API) y el correo (M365) ya corren en modo real. El resto corre sobre un simulador funcional: mismas operaciones, mismas validaciones de negocio, mismos errores que tendría la API real. Conectar NetSuite, VETA o Armstrong reales solo requiere las credenciales de Oben — el resto del sistema no cambia.')}
         </p>
       </div>
     </div>

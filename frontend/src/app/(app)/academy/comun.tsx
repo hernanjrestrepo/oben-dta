@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { createElement } from 'react';
 import { Bot, CheckCircle2, Circle, Eye, Lock, RefreshCw, Sparkles, type LucideIcon } from 'lucide-react';
 import { OPCIONES_MENU } from '@/lib/menu';
@@ -30,10 +31,11 @@ const ESTADOS: Record<EstadoModuloAcademy, { texto: string; clase: string; icono
 };
 
 export function EstadoPill({ estado, bloquea }: { estado: EstadoModuloAcademy; bloquea?: boolean }) {
+  const t = useT();
   if (bloquea) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-orange-50 text-[#C4521A] border-orange-200">
-        <Lock className="w-3 h-3" /> Bloquea operar
+        <Lock className="w-3 h-3" />{' '}{t('Bloquea operar')}
       </span>
     );
   }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import type { CuadroDelDia as Cuadro } from '@/types';
@@ -17,6 +18,7 @@ const hoy = () => new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10)
  * "Dia Factura"). "Ver" solo lee. "Cargar" lo guarda como programación del día pero NO factura nada.
  */
 export function CuadroDelDia({ puedeCargar }: { puedeCargar: boolean }) {
+  const t = useT();
   const [fecha, setFecha] = useState(hoy());
   const [cuadro, setCuadro] = useState<Cuadro | null>(null);
   const [busy, setBusy] = useState('');
@@ -57,20 +59,20 @@ export function CuadroDelDia({ puedeCargar }: { puedeCargar: boolean }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-[#F47735]" /> Cuadro del día (Excel de Oben)
+            <FileSpreadsheet className="w-4 h-4 text-[#F47735]" />{' '}{t('Cuadro del día (Excel de Oben)')}
           </h2>
           <p className="text-sm text-gray-500">
-            Se lee directo de SEGUIMIENTO DIARIO OBEN COLOMBIA (hoja MES ACTUAL, filas con &quot;Dia Factura&quot; de esa fecha). Ya no hace falta mandar la imagen.
+            {t('Se lee directo de SEGUIMIENTO DIARIO OBEN COLOMBIA (hoja MES ACTUAL, filas con "Dia Factura" de esa fecha). Ya no hace falta mandar la imagen.')}
           </p>
         </div>
         <div className="flex items-end gap-2">
           <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           <button onClick={() => void ver()} disabled={!!busy} className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#F47735] hover:bg-[#e0652a] text-white rounded-lg text-sm font-semibold disabled:opacity-60">
-            {busy === 'ver' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Ver cuadro
+            {busy === 'ver' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}{' '}{t('Ver cuadro')}
           </button>
           {puedeCargar && cuadro && cuadro.incluidas > 0 && (
             <button onClick={() => void cargar()} disabled={!!busy} className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-60">
-              {busy === 'cargar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Cargar como programación (no factura)
+              {busy === 'cargar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}{' '}{t('Cargar como programación (no factura)')}
             </button>
           )}
         </div>
@@ -90,19 +92,19 @@ export function CuadroDelDia({ puedeCargar }: { puedeCargar: boolean }) {
       {cuadro && (
         <>
           <p className="text-sm text-gray-600">
-            <b>{cuadro.fecha}</b>: {cuadro.filas.length} filas en el Excel · <b className="text-green-700">{cuadro.incluidas} para facturar</b> · {cuadro.excluidas} excluidas.
+            <b>{cuadro.fecha}</b>: {cuadro.filas.length}{' '}{t('filas en el Excel ·')}{' '}<b className="text-green-700">{cuadro.incluidas}{' '}{t('para facturar')}</b> · {cuadro.excluidas}{' '}{t('excluidas.')}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-gray-500 border-b">
-                  <th className="py-2 pr-3">Status OV</th>
+                  <th className="py-2 pr-3">{t('Status OV')}</th>
                   <th className="pr-3">OV</th>
-                  <th className="pr-3">Cliente</th>
-                  <th className="pr-3">Proforma</th>
-                  <th className="pr-3 text-right">KG</th>
-                  <th className="pr-3">Tipo</th>
-                  <th>Se factura</th>
+                  <th className="pr-3">{t('Cliente')}</th>
+                  <th className="pr-3">{t('Proforma')}</th>
+                  <th className="pr-3 text-right">{t('KG')}</th>
+                  <th className="pr-3">{t('Tipo')}</th>
+                  <th>{t('Se factura')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -114,13 +116,13 @@ export function CuadroDelDia({ puedeCargar }: { puedeCargar: boolean }) {
                     <td className="pr-3 tabular-nums">{f.pf}</td>
                     <td className="pr-3 text-right tabular-nums">{f.kg?.toLocaleString('es-CO') ?? '—'}</td>
                     <td className="pr-3">{f.tipo}</td>
-                    <td>{f.incluida ? <span className="text-green-700 font-medium">Sí</span> : <span title={f.motivo ?? ''}>No — {f.motivo}</span>}</td>
+                    <td>{f.incluida ? <span className="text-green-700 font-medium">{t('Sí')}</span> : <span title={f.motivo ?? ''}>{t('No —')}{' '}{f.motivo}</span>}</td>
                   </tr>
                 ))}
                 {cuadro.filas.length === 0 && (
                   <tr>
                     <td colSpan={7} className="py-4 text-center text-gray-400">
-                      El Excel no trae órdenes con &quot;Dia Factura&quot; = {cuadro.fecha}.
+                      {t('El Excel no trae órdenes con "Dia Factura" =')}{' '}{cuadro.fecha}.
                     </td>
                   </tr>
                 )}

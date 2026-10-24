@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -49,6 +50,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function QuoteDetailPage() {
+  const t = useT();
   const params = useParams();
   const id = params.id as string;
 
@@ -133,10 +135,10 @@ export default function QuoteDetailPage() {
           <p className="text-red-600 font-medium">{error || 'Cotización no encontrada'}</p>
           <div className="flex items-center justify-center gap-3 mt-4">
             <button onClick={loadQuote} className="text-[#F47735] hover:underline">
-              Reintentar
+              {t('Reintentar')}
             </button>
             <Link href="/quotes" className="text-gray-500 hover:underline">
-              Volver a cotizaciones
+              {t('Volver a cotizaciones')}
             </Link>
           </div>
         </div>
@@ -171,7 +173,7 @@ export default function QuoteDetailPage() {
           className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${acting ? 'animate-spin' : ''}`} />
-          Actualizar
+          {t('Actualizar')}
         </button>
       </div>
 
@@ -184,7 +186,7 @@ export default function QuoteDetailPage() {
 
       {/* Pipeline Actions */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Pipeline de la Cotización</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('Pipeline de la Cotización')}</h2>
         <div className="flex flex-wrap gap-3">
           {quote.status === 'QUOTED' && (
             <button
@@ -192,7 +194,7 @@ export default function QuoteDetailPage() {
               onClick={() => runAction(() => api.generateQuotePdf(quote.id))}
               className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
-              Generar y Enviar PDF
+              {t('Generar y Enviar PDF')}
             </button>
           )}
 
@@ -206,7 +208,7 @@ export default function QuoteDetailPage() {
                 }}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition disabled:opacity-60"
               >
-                Registrar Aprobación del Cliente
+                {t('Registrar Aprobación del Cliente')}
               </button>
               <button
                 disabled={acting}
@@ -216,7 +218,7 @@ export default function QuoteDetailPage() {
                 }}
                 className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg font-medium transition disabled:opacity-60"
               >
-                Registrar Rechazo del Cliente
+                {t('Registrar Rechazo del Cliente')}
               </button>
             </>
           )}
@@ -227,7 +229,7 @@ export default function QuoteDetailPage() {
               onClick={() => runAction(() => api.createQuotePaymentLink(quote.id))}
               className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
-              Generar Link de Pago
+              {t('Generar Link de Pago')}
             </button>
           )}
 
@@ -237,7 +239,7 @@ export default function QuoteDetailPage() {
               onClick={() => runAction(() => api.simulateQuotePayment(quote.id))}
               className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
-              Confirmar Pago Recibido
+              {t('Confirmar Pago Recibido')}
             </button>
           )}
 
@@ -247,7 +249,7 @@ export default function QuoteDetailPage() {
               onClick={() => runAction(() => api.moveQuoteToProduction(quote.id))}
               className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
-              Mover a Producción
+              {t('Mover a Producción')}
             </button>
           )}
 
@@ -257,7 +259,7 @@ export default function QuoteDetailPage() {
               onClick={() => runAction(() => api.markQuoteReady(quote.id))}
               className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
-              Marcar Lista para Entrega
+              {t('Marcar Lista para Entrega')}
             </button>
           )}
 
@@ -267,7 +269,7 @@ export default function QuoteDetailPage() {
               onClick={() => runAction(() => api.markQuoteDelivered(quote.id))}
               className="px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
             >
-              Marcar Entregada
+              {t('Marcar Entregada')}
             </button>
           )}
 
@@ -284,7 +286,7 @@ export default function QuoteDetailPage() {
               className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-60"
             >
               <FileDown className="w-4 h-4" />
-              Descargar PDF
+              {t('Descargar PDF')}
             </button>
           )}
 
@@ -296,7 +298,7 @@ export default function QuoteDetailPage() {
               className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
             >
               <LinkIcon className="w-4 h-4" />
-              Ver Link de Pago
+              {t('Ver Link de Pago')}
             </a>
           )}
         </div>
@@ -307,15 +309,15 @@ export default function QuoteDetailPage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <User className="w-5 h-5 text-[#F47735]" />
-            Cliente
+            {t('Cliente')}
           </h2>
           <div className="space-y-3">
             <div>
-              <p className="text-xs text-gray-500 uppercase">Nombre</p>
+              <p className="text-xs text-gray-500 uppercase">{t('Nombre')}</p>
               <p className="font-medium text-gray-900">{quote.client?.name || '—'}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase">Correo</p>
+              <p className="text-xs text-gray-500 uppercase">{t('Correo')}</p>
               <p className="text-gray-700">{quote.client?.email || '—'}</p>
             </div>
           </div>
@@ -324,40 +326,40 @@ export default function QuoteDetailPage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Tag className="w-5 h-5 text-[#F47735]" />
-            Información
+            {t('Información')}
           </h2>
           <div className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-gray-500">Creada</span>
+              <span className="text-gray-500">{t('Creada')}</span>
               <span className="text-gray-700">{new Date(quote.createdAt).toLocaleString('es-CO')}</span>
             </div>
             {quote.approvedAt && (
               <div className="flex justify-between">
-                <span className="text-gray-500">Aprobada</span>
+                <span className="text-gray-500">{t('Aprobada')}</span>
                 <span className="text-gray-700">{new Date(quote.approvedAt).toLocaleString('es-CO')}</span>
               </div>
             )}
             {quote.paidAt && (
               <div className="flex justify-between">
-                <span className="text-gray-500">Pagada</span>
+                <span className="text-gray-500">{t('Pagada')}</span>
                 <span className="text-gray-700">{new Date(quote.paidAt).toLocaleString('es-CO')}</span>
               </div>
             )}
             {quote.deliveredAt && (
               <div className="flex justify-between">
-                <span className="text-gray-500">Entregada</span>
+                <span className="text-gray-500">{t('Entregada')}</span>
                 <span className="text-gray-700">{new Date(quote.deliveredAt).toLocaleString('es-CO')}</span>
               </div>
             )}
             {quote.invoiceNumber && (
               <div className="flex justify-between">
-                <span className="text-gray-500">Factura</span>
+                <span className="text-gray-500">{t('Factura')}</span>
                 <span className="text-gray-700">{quote.invoiceNumber}</span>
               </div>
             )}
             {quote.notes && (
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-600 font-semibold">Notas:</p>
+                <p className="text-xs text-blue-600 font-semibold">{t('Notas:')}</p>
                 <p className="text-sm text-blue-700">{quote.notes}</p>
               </div>
             )}
@@ -370,18 +372,18 @@ export default function QuoteDetailPage() {
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <Package className="w-5 h-5 text-[#F47735]" />
-            Productos
+            {t('Productos')}
           </h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50">
-                <th className="px-6 py-3 text-left font-semibold text-gray-600">Producto</th>
+                <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Producto')}</th>
                 <th className="px-6 py-3 text-left font-semibold text-gray-600">SKU</th>
-                <th className="px-6 py-3 text-right font-semibold text-gray-600">Cant.</th>
-                <th className="px-6 py-3 text-right font-semibold text-gray-600">Precio Unit.</th>
-                <th className="px-6 py-3 text-right font-semibold text-gray-600">Total</th>
+                <th className="px-6 py-3 text-right font-semibold text-gray-600">{t('Cant.')}</th>
+                <th className="px-6 py-3 text-right font-semibold text-gray-600">{t('Precio Unit.')}</th>
+                <th className="px-6 py-3 text-right font-semibold text-gray-600">{t('Total')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -392,40 +394,40 @@ export default function QuoteDetailPage() {
                     <td className="px-6 py-4 text-gray-600 font-mono text-xs">{item.product?.sku || '—'}</td>
                     <td className="px-6 py-4 text-right">{item.quantity}</td>
                     <td className="px-6 py-4 text-right">
-                      ${Number(item.unitPrice).toLocaleString('es-CO')} COP
+                      ${Number(item.unitPrice).toLocaleString('es-CO')}{' '}{t('COP')}
                     </td>
                     <td className="px-6 py-4 text-right font-medium">
-                      ${Number(item.totalPrice).toLocaleString('es-CO')} COP
+                      ${Number(item.totalPrice).toLocaleString('es-CO')}{' '}{t('COP')}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
-                    Sin productos
+                    {t('Sin productos')}
                   </td>
                 </tr>
               )}
             </tbody>
             <tfoot className="bg-gray-50">
               <tr>
-                <td colSpan={4} className="px-6 py-3 text-right text-gray-600">Subtotal</td>
+                <td colSpan={4} className="px-6 py-3 text-right text-gray-600">{t('Subtotal')}</td>
                 <td className="px-6 py-3 text-right font-medium">
-                  ${Number(quote.subtotal).toLocaleString('es-CO')} COP
+                  ${Number(quote.subtotal).toLocaleString('es-CO')}{' '}{t('COP')}
                 </td>
               </tr>
               <tr>
-                <td colSpan={4} className="px-6 py-3 text-right text-gray-600">IVA</td>
+                <td colSpan={4} className="px-6 py-3 text-right text-gray-600">{t('IVA')}</td>
                 <td className="px-6 py-3 text-right font-medium">
-                  ${Number(quote.taxAmount).toLocaleString('es-CO')} COP
+                  ${Number(quote.taxAmount).toLocaleString('es-CO')}{' '}{t('COP')}
                 </td>
               </tr>
               <tr>
                 <td colSpan={4} className="px-6 py-4 text-right font-semibold text-gray-700">
-                  Total:
+                  {t('Total:')}
                 </td>
                 <td className="px-6 py-4 text-right font-bold text-[#F47735] text-lg">
-                  ${Number(quote.total).toLocaleString('es-CO')} COP
+                  ${Number(quote.total).toLocaleString('es-CO')}{' '}{t('COP')}
                 </td>
               </tr>
             </tfoot>

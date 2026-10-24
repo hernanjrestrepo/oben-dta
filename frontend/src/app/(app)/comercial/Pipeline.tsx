@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useState } from 'react';
 import type { CasoEstado, ComercialCaso, ComercialTablero } from '@/types';
 import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ChevronDown, Clock, Hourglass, Inbox, LayoutGrid, List, Timer, X } from 'lucide-react';
@@ -62,6 +63,7 @@ const FOCO_LABEL: Record<Foco, string> = { todas: '', esperan: 'Esperan una pers
  * abre su detalle.
  */
 export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; tablero: ComercialTablero | null; onAbrir: (id: string) => void }) {
+  const t = useT();
   const [vista, setVista] = useState<'tablero' | 'lista'>('tablero');
   const [foco, setFoco] = useState<Foco>('todas');
   const [masIndicadores, setMasIndicadores] = useState(false);
@@ -126,13 +128,13 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
 
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-center gap-4 text-xs text-gray-500">
-          <span className="font-medium text-gray-700">Tiempo en la etapa:</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500" /> normal</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-500" /> demorada</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-500" /> muy demorada</span>
+          <span className="font-medium text-gray-700">{t('Tiempo en la etapa:')}</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500" />{' '}{t('normal')}</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-500" />{' '}{t('demorada')}</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-500" />{' '}{t('muy demorada')}</span>
           {foco !== 'todas' && (
             <button onClick={() => setFoco('todas')} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-[#C4521A] font-medium">
-              Mostrando: {FOCO_LABEL[foco]} <X className="w-3 h-3" />
+              {t('Mostrando:')}{' '}{FOCO_LABEL[foco]} <X className="w-3 h-3" />
             </button>
           )}
         </div>
@@ -173,7 +175,7 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
                     </p>
                   </div>
                   <div className="p-2 space-y-2 flex-1">
-                    {items.length === 0 && <p className="text-xs text-gray-400 text-center py-6">Sin órdenes</p>}
+                    {items.length === 0 && <p className="text-xs text-gray-400 text-center py-6">{t('Sin órdenes')}</p>}
                     {items.map(({ c, d, luz }) => {
                       const sig = siguiente(c, e.quien);
                       return (
@@ -181,7 +183,7 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
                           key={c.id}
                           onClick={() => onAbrir(c.id)}
                           className={`group w-full text-left bg-white rounded-lg border border-gray-200 border-l-4 ${COLOR[luz]} p-2.5 hover:shadow-md hover:border-gray-300 transition cursor-pointer`}
-                          title="Abrir el detalle de la orden"
+                          title={t('Abrir el detalle de la orden')}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2">{c.cliente ?? 'Cliente sin identificar'}</p>
@@ -210,7 +212,7 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
                             <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-[#F47735] transition" />
                           </div>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {vencida(c) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-medium">Vencida</span>}
+                            {vencida(c) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-medium">{t('Vencida')}</span>}
                             {c.simulated && <SimuladoBadge items={c.simulatedItems} />}
                           </div>
                         </button>
@@ -225,18 +227,18 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           {visibles.length === 0 ? (
-            <p className="text-sm text-gray-500 p-6 text-center">No hay órdenes con estos filtros.</p>
+            <p className="text-sm text-gray-500 p-6 text-center">{t('No hay órdenes con estos filtros.')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 text-left text-gray-600">
-                    <th className="px-3 py-2 font-semibold">Recibida</th>
-                    <th className="px-3 py-2 font-semibold">Cliente</th>
+                    <th className="px-3 py-2 font-semibold">{t('Recibida')}</th>
+                    <th className="px-3 py-2 font-semibold">{t('Cliente')}</th>
                     <th className="px-3 py-2 font-semibold">OC</th>
-                    <th className="px-3 py-2 font-semibold">Proforma / OV</th>
-                    <th className="px-3 py-2 font-semibold">Etapa</th>
-                    <th className="px-3 py-2 font-semibold">Siguiente paso</th>
+                    <th className="px-3 py-2 font-semibold">{t('Proforma / OV')}</th>
+                    <th className="px-3 py-2 font-semibold">{t('Etapa')}</th>
+                    <th className="px-3 py-2 font-semibold">{t('Siguiente paso')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -273,7 +275,7 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
       {tablero && tablero.requierenAtencion.length > 0 && (
         <div className="bg-white rounded-xl border border-amber-200 p-4">
           <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5 mb-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600" /> Requieren atención ({tablero.requierenAtencion.length})
+            <AlertTriangle className="w-4 h-4 text-amber-600" />{' '}{t('Requieren atención (')}{tablero.requierenAtencion.length})
           </h3>
           <ul className="divide-y divide-gray-100">
             {tablero.requierenAtencion.map((a) => (
@@ -288,7 +290,7 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
                         {a.numberPF ? ` · PF ${a.numberPF}` : ''}
                       </span>
                     </span>
-                    {a.accionPendiente && <span className="block text-xs text-amber-800 mt-0.5">Confirmar: {a.accionPendiente}</span>}
+                    {a.accionPendiente && <span className="block text-xs text-amber-800 mt-0.5">{t('Confirmar:')}{' '}{a.accionPendiente}</span>}
                     {a.motivos.slice(0, 2).map((m) => (
                       <span key={m} className="block text-xs text-red-700 mt-0.5">
                         {m}
@@ -306,13 +308,13 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
       {tablero && (
         <div className="bg-white rounded-xl border border-gray-200">
           <button onClick={() => setMasIndicadores((x) => !x)} className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-gray-900">
-            Más indicadores: tiempos promedio por etapa y órdenes por cliente
+            {t('Más indicadores: tiempos promedio por etapa y órdenes por cliente')}
             <ChevronDown className={`w-4 h-4 text-gray-500 transition ${masIndicadores ? 'rotate-180' : ''}`} />
           </button>
           {masIndicadores && (
             <div className="grid md:grid-cols-2 gap-6 px-4 pb-4">
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Tiempos promedio (horas)</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t('Tiempos promedio (horas)')}</h4>
                 <ul className="text-sm space-y-1">
                   {TIEMPOS.map(([k, label]) => (
                     <li key={k} className="flex justify-between">
@@ -323,7 +325,7 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
                 </ul>
               </div>
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Por cliente (abiertas / total)</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{t('Por cliente (abiertas / total)')}</h4>
                 <ul className="text-sm space-y-1">
                   {tablero.porCliente.slice(0, 10).map((c) => (
                     <li key={c.cliente} className="flex justify-between gap-2">

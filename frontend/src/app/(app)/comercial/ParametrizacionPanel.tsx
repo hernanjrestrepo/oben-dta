@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -39,6 +40,7 @@ const s = (v: unknown) => (v === null || v === undefined ? '' : String(v));
  * cliente en el maestro de Oben y se elige uno de sus destinos (Target_Customer). Solo lectura.
  */
 export function ParametrizacionPanel() {
+  const t = useT();
   const [buscar, setBuscar] = useState('');
   const [filas, setFilas] = useState<Fila[]>([]);
   const [simuladoMaestro, setSimuladoMaestro] = useState(false);
@@ -88,26 +90,26 @@ export function ParametrizacionPanel() {
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
         <div>
-          <h2 className="font-semibold text-gray-900">Parametrización de Oben por cliente y destino</h2>
+          <h2 className="font-semibold text-gray-900">{t('Parametrización de Oben por cliente y destino')}</h2>
           <p className="text-sm text-gray-500">
-            Lo que Comercial ya definió en Oben para cada cliente y su destino: se usa para llenar la Proforma sin digitarlo de nuevo. Solo lectura.
+            {t('Lo que Comercial ya definió en Oben para cada cliente y su destino: se usa para llenar la Proforma sin digitarlo de nuevo. Solo lectura.')}
           </p>
         </div>
         <div className="flex gap-2">
           <input
             className={`${inputCls} flex-1`}
-            placeholder="Buscar cliente en el maestro de Oben (ej. OBEN US, ALADDIN…)"
+            placeholder={t('Buscar cliente en el maestro de Oben (ej. OBEN US, ALADDIN…)')}
             value={buscar}
             onChange={(e) => setBuscar(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void buscarClientes()}
           />
           <button className={btnPrimary} onClick={() => void buscarClientes()} disabled={busy === 'buscar'}>
-            {busy === 'buscar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Buscar
+            {busy === 'buscar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}{' '}{t('Buscar')}
           </button>
         </div>
         {simuladoMaestro && (
           <p className="text-xs">
-            <SimuladoBadge items={['El maestro de clientes viene del simulador, no de Oben.']} /> datos ficticios
+            <SimuladoBadge items={['El maestro de clientes viene del simulador, no de Oben.']} />{' '}{t('datos ficticios')}
           </p>
         )}
         {error && (
@@ -120,7 +122,7 @@ export function ParametrizacionPanel() {
       {clientes.length > 0 && (
         <div className="grid md:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">1. Cliente ({clientes.length})</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">{t('1. Cliente (')}{clientes.length})</h3>
             <ul className="max-h-72 overflow-auto divide-y divide-gray-100">
               {clientes.map((c) => (
                 <li key={c.codigo}>
@@ -138,9 +140,9 @@ export function ParametrizacionPanel() {
             </ul>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">2. Destino {cliente ? `(${destinos.length})` : ''}</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">{t('2. Destino')}{' '}{cliente ? `(${destinos.length})` : ''}</h3>
             {!cliente ? (
-              <p className="text-sm text-gray-400">Elige un cliente.</p>
+              <p className="text-sm text-gray-400">{t('Elige un cliente.')}</p>
             ) : (
               <ul className="max-h-72 overflow-auto divide-y divide-gray-100">
                 {destinos.map((d, i) => (
@@ -169,7 +171,7 @@ export function ParametrizacionPanel() {
             {resultado.simulado && <SimuladoBadge items={['La parametrización viene del simulador, no de Oben.']} />}
           </div>
           {!resultado.datos ? (
-            <p className="text-sm text-gray-500">Comercial no tiene una parametrización definida para este cliente y destino en Oben.</p>
+            <p className="text-sm text-gray-500">{t('Comercial no tiene una parametrización definida para este cliente y destino en Oben.')}</p>
           ) : (
             <dl className="grid md:grid-cols-2 gap-x-6">
               {CAMPOS.filter(([k]) => s(resultado.datos?.[k]) !== '').map(([k, label]) => (

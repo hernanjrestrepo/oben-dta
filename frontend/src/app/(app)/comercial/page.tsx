@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -19,6 +20,7 @@ type Tab = 'pipeline' | 'nueva' | 'simulador' | 'datos' | 'config';
  * con la bitácora, el freno de mano y la Proforma real en OBEN MAS. El Simulador hace lo que Oben aún no expone por API.
  */
 export default function ComercialPage() {
+  const t = useT();
   const [tab, setTab] = useState<Tab>('pipeline');
   const [filtros, setFiltros] = useState({ desde: '', hasta: '', cliente: '' });
   const [tablero, setTablero] = useState<ComercialTablero | null>(null);
@@ -65,15 +67,14 @@ export default function ComercialPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Briefcase className="w-6 h-6 text-[#F47735]" />
-            Comercial
+            {t('Comercial')}
           </h1>
           <p className="text-gray-500 mt-1">
-            De la orden de compra del cliente a la orden de venta activa: Proforma, cubicaje, aprobación, cartera. Clic en una orden para ver todo su
-            detalle. Lo simulado se marca siempre.
+            {t('De la orden de compra del cliente a la orden de venta activa: Proforma, cubicaje, aprobación, cartera. Clic en una orden para ver todo su detalle. Lo simulado se marca siempre.')}
           </p>
         </div>
         <button className={btnSecondary} onClick={() => void cargar()} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />{' '}{t('Actualizar')}
         </button>
       </div>
 
@@ -92,17 +93,17 @@ export default function ComercialPage() {
       {tab === 'pipeline' && (
         <div className="flex flex-col md:flex-row gap-2 md:items-end">
           <div>
-            <label className="block text-xs text-gray-500">Desde</label>
+            <label className="block text-xs text-gray-500">{t('Desde')}</label>
             <input type="date" value={filtros.desde} onChange={(e) => setFiltros({ ...filtros, desde: e.target.value })} className={inputCls} />
           </div>
           <div>
-            <label className="block text-xs text-gray-500">Hasta</label>
+            <label className="block text-xs text-gray-500">{t('Hasta')}</label>
             <input type="date" value={filtros.hasta} onChange={(e) => setFiltros({ ...filtros, hasta: e.target.value })} className={inputCls} />
           </div>
           <div className="relative flex-1">
-            <label className="block text-xs text-gray-500">Cliente</label>
+            <label className="block text-xs text-gray-500">{t('Cliente')}</label>
             <Search className="w-4 h-4 text-gray-400 absolute left-3 bottom-2.5" />
-            <input value={filtros.cliente} onChange={(e) => setFiltros({ ...filtros, cliente: e.target.value })} placeholder="Nombre del cliente" className={`${inputCls} w-full pl-9`} />
+            <input value={filtros.cliente} onChange={(e) => setFiltros({ ...filtros, cliente: e.target.value })} placeholder={t('Nombre del cliente')} className={`${inputCls} w-full pl-9`} />
           </div>
         </div>
       )}

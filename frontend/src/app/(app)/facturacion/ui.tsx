@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Hourglass, X } from 'lucide-react';
 
@@ -116,14 +117,15 @@ export function Listo({ children }: { children: ReactNode }) {
 
 /** Lo que es lectura nuestra y José aún no confirma por escrito. */
 export function PendienteConfirmar({ items }: { items: string[] }) {
+  const t = useT();
   if (items.length === 0) return null;
   return (
     <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
       <p className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
-        <Hourglass className="w-4 h-4" /> Pendiente de confirmación de Oben
+        <Hourglass className="w-4 h-4" />{' '}{t('Pendiente de confirmación de Oben')}
       </p>
       <p className="text-xs text-indigo-900/80 mt-1">
-        El cálculo se puede revisar y simular completo; el envío al ERP de Oben se habilita cuando José confirme estos puntos.
+        {t('El cálculo se puede revisar y simular completo; el envío al ERP de Oben se habilita cuando José confirme estos puntos.')}
       </p>
       <ul className="mt-2 space-y-1 text-xs text-indigo-900">
         {items.map((m) => (
@@ -141,6 +143,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Correos como chips: Enter, coma o salir del campo agregan; la X quita. */
 export function EmailChips({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
+  const t = useT();
   const [draft, setDraft] = useState('');
   const [invalido, setInvalido] = useState(false);
 
@@ -191,7 +194,7 @@ export function EmailChips({ value, onChange, placeholder }: { value: string[]; 
         placeholder={value.length ? '' : placeholder}
         className="flex-1 min-w-[180px] px-1 py-1 text-sm outline-none text-gray-900"
       />
-      {invalido && <span className="w-full text-[11px] text-red-600 px-1">Correo no válido.</span>}
+      {invalido && <span className="w-full text-[11px] text-red-600 px-1">{t('Correo no válido.')}</span>}
     </div>
   );
 }

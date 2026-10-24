@@ -3,9 +3,12 @@
  * muestra en español. Al traducir una pantalla, se envuelven sus textos en `t('…')` y se agregan aquí.
  * Términos de Oben que NO se traducen: OV, PF, OBEN MAS, COMEX, Incoterm, FOB, CIF, HMF, ISF, Inland, Oben Xmart, MIA.
  */
+import { TEXTOS_PANTALLAS } from './textos-pantallas';
+
 type T = { en: string; pt: string; fr: string };
 
-export const TEXTOS: Record<string, T> = {
+/** Textos escritos a mano (menú, inicio de sesión, MIA): ganan sobre los de las pantallas. */
+const MANUAL: Record<string, T> = {
   // ── Idioma
   Idioma: { en: 'Language', pt: 'Idioma', fr: 'Langue' },
 
@@ -105,4 +108,24 @@ export const TEXTOS: Record<string, T> = {
     pt: 'Olá, sou a MIA. Consulto em tempo real o Oben Xmart e o ERP da Oben: faturas, pedidos, liquidações, relatórios, fretes, cotações e clientes. Também preparo documentos. Pergunte, por exemplo: "quando foi a última fatura?"',
     fr: 'Bonjour, je suis MIA. Je consulte en direct Oben Xmart et l\'ERP d\'Oben : factures, commandes, liquidations, rapports, fret, devis et clients. Je prépare aussi des documents. Demandez-moi par exemple : « quand date la dernière facture ? »',
   },
+  // ── Palabras sueltas de varias pantallas
+  de: { en: 'of', pt: 'de', fr: 'sur' },
+  Guardar: { en: 'Save', pt: 'Salvar', fr: 'Enregistrer' },
+  min: { en: 'min', pt: 'min', fr: 'min' },
+  Usuario: { en: 'User', pt: 'Usuário', fr: 'Utilisateur' },
+  Correo: { en: 'Email', pt: 'E-mail', fr: 'E-mail' },
+  Fecha: { en: 'Date', pt: 'Data', fr: 'Date' },
+  'Comercial:': { en: 'Sales rep:', pt: 'Comercial:', fr: 'Commercial :' },
+  Total: { en: 'Total', pt: 'Total', fr: 'Total' },
+  De: { en: 'From', pt: 'De', fr: 'De' },
+  Cliente: { en: 'Customer', pt: 'Cliente', fr: 'Client' },
+  Para: { en: 'To', pt: 'Para', fr: 'À' },
+  nueva: { en: 'new', pt: 'nova', fr: 'nouvelle' },
+  Flete: { en: 'Freight', pt: 'Frete', fr: 'Fret' },
+  Distribución: { en: 'Distribution', pt: 'Distribuição', fr: 'Distribution' },
+  Factura: { en: 'Invoice', pt: 'Fatura', fr: 'Facture' },
+  reporte: { en: 'report', pt: 'relatório', fr: 'rapport' },
+  Reporte: { en: 'Report', pt: 'Relatório', fr: 'Rapport' },
 };
+
+export const TEXTOS: Record<string, T> = { ...TEXTOS_PANTALLAS, ...MANUAL };

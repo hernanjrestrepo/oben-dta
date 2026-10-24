@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -46,6 +47,7 @@ function errMsg(err: unknown, fallback: string) {
 }
 
 export default function AdminRolesPage() {
+  const t = useT();
   const [roles, setRoles] = useState<SecurityRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -162,8 +164,8 @@ export default function AdminRolesPage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Perfiles</h1>
-          <p className="text-gray-500 mt-1">Qué opciones del menú ve cada perfil y si solo consulta o también hace cambios.</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('Perfiles')}</h1>
+          <p className="text-gray-500 mt-1">{t('Qué opciones del menú ve cada perfil y si solo consulta o también hace cambios.')}</p>
         </div>
       </div>
 
@@ -178,7 +180,7 @@ export default function AdminRolesPage() {
           <div className="text-center">
             <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-2" />
             <p className="text-red-600">{error}</p>
-            <button onClick={load} className="mt-3 text-[#F47735] hover:underline">Reintentar</button>
+            <button onClick={load} className="mt-3 text-[#F47735] hover:underline">{t('Reintentar')}</button>
           </div>
         </div>
       ) : (
@@ -186,9 +188,9 @@ export default function AdminRolesPage() {
           {/* Lista de perfiles */}
           <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden h-fit">
             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900 text-sm">Perfiles</h2>
+              <h2 className="font-semibold text-gray-900 text-sm">{t('Perfiles')}</h2>
               <button onClick={startNew} className="inline-flex items-center gap-1 text-xs text-[#F47735] hover:underline font-medium">
-                <Plus className="w-3.5 h-3.5" /> Nuevo
+                <Plus className="w-3.5 h-3.5" />{' '}{t('Nuevo')}
               </button>
             </div>
             <div className="divide-y divide-gray-100">
@@ -203,12 +205,12 @@ export default function AdminRolesPage() {
                       {role.isSystem && <Lock className="w-3 h-3 text-gray-400" />}
                       {role.name}
                     </span>
-                    {!role.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">inactivo</span>}
+                    {!role.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{t('inactivo')}</span>}
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${tipoPerfil(role).className}`}>{tipoPerfil(role).label}</span>
                     <span className="text-xs text-gray-500">
-                      {opcionesVisibles(role)} de {OPCIONES_MENU.length} opciones del menú
+                      {opcionesVisibles(role)}{' '}{t('de')}{' '}{OPCIONES_MENU.length}{' '}{t('opciones del menú')}
                     </span>
                   </div>
                 </button>
@@ -220,7 +222,7 @@ export default function AdminRolesPage() {
           <div className="lg:col-span-2">
             {!editing ? (
               <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
-                Selecciona un perfil para ver o cambiar su acceso, o crea uno nuevo.
+                {t('Selecciona un perfil para ver o cambiar su acceso, o crea uno nuevo.')}
               </div>
             ) : (
               <form onSubmit={handleSave} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
@@ -233,7 +235,7 @@ export default function AdminRolesPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del perfil *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('Nombre del perfil *')}</label>
                     <input
                       type="text"
                       value={editForm.name}
@@ -244,13 +246,13 @@ export default function AdminRolesPage() {
                           ...(isNew ? { key: claveDesdeNombre(e.target.value) } : {}),
                         }))
                       }
-                      placeholder="Ej. Comercial consulta"
+                      placeholder={t('Ej. Comercial consulta')}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
                     />
-                    {isNew && editForm.key && <p className="text-[11px] text-gray-500 mt-1 font-mono">Clave: {editForm.key}</p>}
+                    {isNew && editForm.key && <p className="text-[11px] text-gray-500 mt-1 font-mono">{t('Clave:')}{' '}{editForm.key}</p>}
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('Descripción')}</label>
                     <input
                       type="text"
                       value={editForm.description}
@@ -261,24 +263,23 @@ export default function AdminRolesPage() {
                   {!isNew && (
                     <label className="inline-flex items-center gap-2 text-sm text-gray-700">
                       <input type="checkbox" checked={editForm.isActive} onChange={(e) => setEditForm((f) => ({ ...f, isActive: e.target.checked }))} />
-                      Perfil activo
+                      {t('Perfil activo')}
                     </label>
                   )}
                 </div>
 
                 <div>
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <h3 className="text-sm font-semibold text-gray-900">Acceso por opción del menú</h3>
+                    <h3 className="text-sm font-semibold text-gray-900">{t('Acceso por opción del menú')}</h3>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-gray-500">Todo el menú:</span>
-                      <button type="button" onClick={() => setNivelTodos('lectura')} className="px-2 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">Solo lectura</button>
-                      <button type="button" onClick={() => setNivelTodos('transaccional')} className="px-2 py-1 rounded border border-orange-200 bg-orange-50 text-[#C4521A] hover:bg-orange-100">Transaccional</button>
-                      <button type="button" onClick={() => setNivelTodos('ninguno')} className="px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50">Sin acceso</button>
+                      <span className="text-gray-500">{t('Todo el menú:')}</span>
+                      <button type="button" onClick={() => setNivelTodos('lectura')} className="px-2 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">{t('Solo lectura')}</button>
+                      <button type="button" onClick={() => setNivelTodos('transaccional')} className="px-2 py-1 rounded border border-orange-200 bg-orange-50 text-[#C4521A] hover:bg-orange-100">{t('Transaccional')}</button>
+                      <button type="button" onClick={() => setNivelTodos('ninguno')} className="px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50">{t('Sin acceso')}</button>
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 mb-3">
-                    <b>Solo lectura</b>: ve la opción en el menú y consulta su información. <b>Transaccional</b>: además puede crear, editar, enviar, aprobar o
-                    liquidar ahí. <b>Sin acceso</b>: la opción no le aparece en el menú.
+                    <b>{t('Solo lectura')}</b>{t(': ve la opción en el menú y consulta su información.')}{' '}<b>{t('Transaccional')}</b>{t(': además puede crear, editar, enviar, aprobar o liquidar ahí.')}{' '}<b>{t('Sin acceso')}</b>{t(': la opción no le aparece en el menú.')}
                   </p>
 
                   <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -296,10 +297,10 @@ export default function AdminRolesPage() {
                                   <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
                                     <Icon className="w-4 h-4 text-gray-400 shrink-0" />
                                     {opcion.label}
-                                    {parcial && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">algunas acciones</span>}
+                                    {parcial && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{t('algunas acciones')}</span>}
                                   </div>
                                   {junto.length > 0 && (
-                                    <p className="text-[11px] text-gray-400 mt-0.5 ml-6">Va junto con {junto.map((o) => o.label).join(', ')} (mismo permiso en el sistema)</p>
+                                    <p className="text-[11px] text-gray-400 mt-0.5 ml-6">{t('Va junto con')}{' '}{junto.map((o) => o.label).join(', ')}{' '}{t('(mismo permiso en el sistema)')}</p>
                                   )}
                                 </div>
                                 <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden shrink-0 self-start sm:self-auto">
@@ -331,8 +332,7 @@ export default function AdminRolesPage() {
                   </div>
                   {fueraDelMenu > 0 && (
                     <p className="text-[11px] text-gray-400 mt-2">
-                      Este perfil tiene además {fueraDelMenu} permiso(s) de funciones internas que no están en el menú (automatizaciones, inventario…); se conservan
-                      tal cual.
+                      {t('Este perfil tiene además')}{' '}{fueraDelMenu}{' '}{t('permiso(s) de funciones internas que no están en el menú (automatizaciones, inventario…); se conservan tal cual.')}
                     </p>
                   )}
                 </div>
@@ -345,7 +345,7 @@ export default function AdminRolesPage() {
                         onClick={() => handleDelete(roles.find((r) => r.key === selectedKey)!)}
                         className="inline-flex items-center gap-2 text-red-600 hover:underline text-sm"
                       >
-                        <Trash2 className="w-4 h-4" /> Eliminar perfil
+                        <Trash2 className="w-4 h-4" />{' '}{t('Eliminar perfil')}
                       </button>
                     )}
                   </div>
@@ -358,7 +358,7 @@ export default function AdminRolesPage() {
                       }}
                       className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
                     >
-                      Cancelar
+                      {t('Cancelar')}
                     </button>
                     <button
                       type="submit"
@@ -366,7 +366,7 @@ export default function AdminRolesPage() {
                       className="px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60 flex items-center gap-2"
                     >
                       {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Guardar Perfil
+                      {t('Guardar Perfil')}
                     </button>
                   </div>
                 </div>
@@ -384,6 +384,7 @@ export default function AdminRolesPage() {
  * transaccional de cada opción se habilita solo al aprobar el quiz de su módulo. Consultar nunca se bloquea.
  */
 function CertificacionAcademy() {
+  const t = useT();
   const permisos = useAuthStore((s) => s.user?.permissions ?? []);
   const puedeEditar = permisos.includes('security.update');
   const [ajustes, setAjustes] = useState<AjustesAcademy | null>(null);
@@ -418,12 +419,12 @@ function CertificacionAcademy() {
         <GraduationCap className="w-5 h-5" />
       </span>
       <div className="flex-1">
-        <p className="font-semibold text-gray-900">Certificación de Xmart Academy para operar</p>
+        <p className="font-semibold text-gray-900">{t('Certificación de Xmart Academy para operar')}</p>
         <p className="text-sm text-gray-500">
           {ajustes.exigirCertificacion
             ? `Exigida: lo transaccional se habilita al aprobar el quiz del módulo (mínimo ${ajustes.puntajeMinimo} %).`
             : 'No exigida: los perfiles transaccionales operan sin el quiz. Actívala cuando la gente haya completado su plan.'}{' '}
-          <Link href="/academy/fricciones" className="text-[#C4521A] hover:underline">Ver avance de cada persona</Link>
+          <Link href="/academy/fricciones" className="text-[#C4521A] hover:underline">{t('Ver avance de cada persona')}</Link>
         </p>
         {msg && <p className="text-xs text-gray-600 mt-1">{msg}</p>}
       </div>

@@ -13,7 +13,8 @@ const esFila = (v: unknown): v is Fila => !!v && typeof v === 'object' && !Array
 const texto = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
 
 function Filas({ filas }: { filas: unknown[] }) {
-  if (filas.length === 0) return <p className="text-sm text-gray-500">Sin filas.</p>;
+  const t = useT();
+  if (filas.length === 0) return <p className="text-sm text-gray-500">{t('Sin filas.')}</p>;
   if (!filas.every(esFila)) return <p className="text-sm text-gray-700">{filas.map(texto).join(', ')}</p>;
   const claves = [...new Set(filas.flatMap((f) => Object.keys(f)))];
   const anidadas = claves.filter((k) => filas.some((f) => Array.isArray(f[k])));
@@ -84,3 +85,4 @@ export default function VistaDatosOben({ data }: { data: unknown }) {
     </div>
   );
 }
+import { useT } from '@/i18n/idioma';

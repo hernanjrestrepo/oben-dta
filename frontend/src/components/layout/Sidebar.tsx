@@ -85,7 +85,7 @@ export function Sidebar() {
           <div className="px-6 py-5 border-b border-white/10 shrink-0">
             <div className="flex items-center gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-oben.svg" alt="Oben" className="h-8 w-auto shrink-0" />
+              <img src="/logo-oben.svg" alt={t('Oben')} className="h-8 w-auto shrink-0" />
               <div>
                 <h1 className="font-bold text-lg">OBEN XMART</h1>
                 <p className="text-xs text-white/70">{t('Digitalización Autónoma')}</p>

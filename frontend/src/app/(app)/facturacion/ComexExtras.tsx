@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -44,6 +45,7 @@ const valor = (v: unknown): string => {
  * vamos a poder consultar"). Encabezado y detalle de la liquidación de Oben + la fila del reporte de proformas.
  */
 export function ProformaModal({ pf, onClose }: { pf: string; onClose: () => void }) {
+  const t = useT();
   const [data, setData] = useState<ProformaCompleta | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -59,9 +61,9 @@ export function ProformaModal({ pf, onClose }: { pf: string; onClose: () => void
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white">
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-[#F47735]" /> Proforma {pf} en OBEN MAS
+            <FileText className="w-4 h-4 text-[#F47735]" />{' '}{t('Proforma')}{' '}{pf}{' '}{t('en OBEN MAS')}
           </h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar">
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label={t('Cerrar')}>
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
@@ -73,7 +75,7 @@ export function ProformaModal({ pf, onClose }: { pf: string; onClose: () => void
           )}
           {!data && !error && (
             <p className="text-sm text-gray-500 flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" /> Consultando la proforma en Oben…
+              <Loader2 className="w-4 h-4 animate-spin" />{' '}{t('Consultando la proforma en Oben…')}
             </p>
           )}
           {data && (
@@ -110,7 +112,7 @@ export function ProformaModal({ pf, onClose }: { pf: string; onClose: () => void
                   </tbody>
                 </table>
               </div>
-              <p className="text-[11px] text-gray-400">Datos en vivo del ERP de Oben (spCheckSettlement y reporte de proformas COMEX). Solo lectura.</p>
+              <p className="text-[11px] text-gray-400">{t('Datos en vivo del ERP de Oben (spCheckSettlement y reporte de proformas COMEX). Solo lectura.')}</p>
             </>
           )}
         </div>
@@ -124,6 +126,7 @@ export function ProformaModal({ pf, onClose }: { pf: string; onClose: () => void
  * observaciones" y el total "TOTAL VALOR CFR … INCOTERM 2020" antes de aprobar).
  */
 export function VistaFacturaCard({ ov, input, version }: { ov: number; input: LiquidacionInputPantalla; version: string }) {
+  const t = useT();
   const [vista, setVista] = useState<VistaFactura | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
@@ -149,8 +152,8 @@ export function VistaFacturaCard({ ov, input, version }: { ov: number; input: Li
     <Card>
       <CardHeader
         icon={<Receipt className="w-4 h-4 text-[#F47735]" />}
-        title="Así sale en la factura"
-        subtitle="Observaciones y totales de la factura con lo que tienes en pantalla (no se emite nada)."
+        title={t('Así sale en la factura')}
+        subtitle={t('Observaciones y totales de la factura con lo que tienes en pantalla (no se emite nada).')}
         right={cargando ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> : null}
       />
       <div className="p-4 space-y-3">
@@ -159,9 +162,9 @@ export function VistaFacturaCard({ ov, input, version }: { ov: number; input: Li
         {vista && (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              <Dato label="Término de pago" valor={vista.terminosPago ?? 'Oben no lo trae'} warn={!vista.terminosPago} />
-              <Dato label="Orden de compra" valor={vista.ordenCompra ?? '—'} />
-              <Dato label="Subtotal FOB" valor={usd(vista.subtotal)} />
+              <Dato label={t('Término de pago')} valor={vista.terminosPago ?? 'Oben no lo trae'} warn={!vista.terminosPago} />
+              <Dato label={t('Orden de compra')} valor={vista.ordenCompra ?? '—'} />
+              <Dato label={t('Subtotal FOB')} valor={usd(vista.subtotal)} />
               <Dato label={`Total ${vista.incoterm ?? ''}`.trim()} valor={usd(vista.neto)} fuerte />
             </div>
             <pre className="text-[11px] leading-5 bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap break-words font-mono text-gray-800">
@@ -205,6 +208,7 @@ function descargar(blob: Blob, nombre: string) {
  * histórico con el archivo original (Hernán: "hay que guardar histórico de los cuadros de tarifas subidos").
  */
 export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean; onCargado?: () => void }) {
+  const t = useT();
   const [historial, setHistorial] = useState<CargaTarifario[] | null>(null);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [vista, setVista] = useState<ResultadoCargaTarifario | null>(null);
@@ -267,8 +271,8 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
     <Card>
       <CardHeader
         icon={<FileSpreadsheet className="w-4 h-4 text-[#F47735]" />}
-        title="Tarifario de fletes"
-        subtitle="El Excel de COMEX (pata 2 marítimo y pata 3 Inland). Se revisa antes de cargarlo y cada carga queda en el histórico."
+        title={t('Tarifario de fletes')}
+        subtitle={t('El Excel de COMEX (pata 2 marítimo y pata 3 Inland). Se revisa antes de cargarlo y cada carga queda en el histórico.')}
       />
       <div className="p-4 space-y-3">
         {puedeCargar ? (
@@ -285,11 +289,11 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
               }}
             />
             <button className={btnSecondary} onClick={() => input.current?.click()} disabled={trabajando}>
-              {trabajando && !vista ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir tarifario (Excel)
+              {trabajando && !vista ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}{' '}{t('Subir tarifario (Excel)')}
             </button>
           </>
         ) : (
-          <p className="text-xs text-gray-500">Solo COMEX puede subir un tarifario nuevo.</p>
+          <p className="text-xs text-gray-500">{t('Solo COMEX puede subir un tarifario nuevo.')}</p>
         )}
         {error && (
           <p className="text-sm text-red-700 flex items-start gap-2">
@@ -299,12 +303,12 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
         {ok && <p className="text-sm text-emerald-700">{ok}</p>}
         {vista && (
           <div className="rounded-lg border border-orange-200 bg-orange-50/50 p-3 space-y-2 text-xs">
-            <p className="font-semibold text-gray-900">Vista previa · {vista.archivo}</p>
+            <p className="font-semibold text-gray-900">{t('Vista previa ·')}{' '}{vista.archivo}</p>
             <p>
-              <b>Marítimas:</b> {res(vista.maritimas)}
+              <b>{t('Marítimas:')}</b> {res(vista.maritimas)}
             </p>
             <p>
-              <b>Inland:</b> {res(vista.inland)}
+              <b>{t('Inland:')}</b> {res(vista.inland)}
             </p>
             {vista.cambios.length > 0 && (
               <div className="max-h-48 overflow-y-auto bg-white rounded border border-gray-200">
@@ -315,7 +319,7 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
                         <td className="px-2 py-1">{c.ruta}</td>
                         <td className="px-2 py-1 text-gray-500">{c.proveedor}</td>
                         <td className="px-2 py-1 text-right tabular-nums whitespace-nowrap">
-                          {c.antes === null ? <span className="text-emerald-700">nueva {usd(c.despues)}</span> : c.despues === null ? <span className="text-red-700">sale ({usd(c.antes)})</span> : `${usd(c.antes)} → ${usd(c.despues)}`}
+                          {c.antes === null ? <span className="text-emerald-700">{t('nueva')}{' '}{usd(c.despues)}</span> : c.despues === null ? <span className="text-red-700">{t('sale (')}{usd(c.antes)})</span> : `${usd(c.antes)} → ${usd(c.despues)}`}
                         </td>
                       </tr>
                     ))}
@@ -330,11 +334,11 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
             ))}
             {vista.descartadas.length > 0 && (
               <details>
-                <summary className="cursor-pointer text-gray-600">Filas que no se cargan ({vista.descartadas.length})</summary>
+                <summary className="cursor-pointer text-gray-600">{t('Filas que no se cargan (')}{vista.descartadas.length})</summary>
                 <ul className="mt-1 space-y-0.5 text-gray-600">
                   {vista.descartadas.map((d) => (
                     <li key={`${d.hoja}-${d.fila}`}>
-                      {d.hoja}, fila {d.fila}: {d.motivo}
+                      {d.hoja}{t(', fila')}{' '}{d.fila}: {d.motivo}
                     </li>
                   ))}
                 </ul>
@@ -342,15 +346,15 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
             )}
             <div className="grid grid-cols-2 gap-2 pt-1">
               <label className="text-[11px] font-medium text-gray-700">
-                Fecha de vigencia (desde) *
+                {t('Fecha de vigencia (desde) *')}
                 <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={`${inputCls} w-full mt-0.5`} />
               </label>
               <label className="text-[11px] font-medium text-gray-700">
-                Fecha de expiración (hasta) *
+                {t('Fecha de expiración (hasta) *')}
                 <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} className={`${inputCls} w-full mt-0.5`} />
               </label>
             </div>
-            {desde && hasta && desde > hasta && <p className="text-red-700">La fecha de vigencia no puede ser posterior a la de expiración.</p>}
+            {desde && hasta && desde > hasta && <p className="text-red-700">{t('La fecha de vigencia no puede ser posterior a la de expiración.')}</p>}
             <div className="flex gap-2 pt-1">
               <button
                 className={btnPrimary}
@@ -358,29 +362,29 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
                 disabled={trabajando || !desde || !hasta || desde > hasta}
                 title={!desde || !hasta ? 'Indica la vigencia del tarifario' : undefined}
               >
-                {trabajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Cargar este tarifario
+                {trabajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}{' '}{t('Cargar este tarifario')}
               </button>
               <button className={btnSecondary} onClick={() => (setVista(null), setArchivo(null))} disabled={trabajando}>
-                Cancelar
+                {t('Cancelar')}
               </button>
             </div>
           </div>
         )}
         <div>
           <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1 flex items-center gap-1">
-            <History className="w-3 h-3" /> Histórico de tarifarios subidos
+            <History className="w-3 h-3" />{' '}{t('Histórico de tarifarios subidos')}
           </p>
           {historial === null ? (
-            <p className="text-xs text-gray-400">Cargando…</p>
+            <p className="text-xs text-gray-400">{t('Cargando…')}</p>
           ) : historial.length === 0 ? (
-            <p className="text-xs text-gray-500">Aún no se ha subido ninguno desde aquí (el vigente se cargó el 1-oct desde el archivo de octubre).</p>
+            <p className="text-xs text-gray-500">{t('Aún no se ha subido ninguno desde aquí (el vigente se cargó el 1-oct desde el archivo de octubre).')}</p>
           ) : (
             <ul className="divide-y divide-gray-100 text-xs">
               {historial.map((h) => (
                 <li key={h.id} className="py-1.5 flex items-center gap-2">
                   <span className="min-w-0 flex-1">
                     <span className="font-medium text-gray-900 truncate block" title={h.archivo}>
-                      {h.archivo} {h.vigente && <span className="ml-1 px-1.5 rounded bg-emerald-50 text-emerald-700 text-[10px]">vigente</span>}
+                      {h.archivo} {h.vigente && <span className="ml-1 px-1.5 rounded bg-emerald-50 text-emerald-700 text-[10px]">{t('vigente')}</span>}
                     </span>
                     <span className="text-gray-500">
                       {fecha(h.fecha)}
@@ -391,7 +395,7 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
                   </span>
                   <button
                     className="p-1 rounded hover:bg-gray-100"
-                    title="Descargar el Excel original"
+                    title={t('Descargar el Excel original')}
                     onClick={() => void api.descargarCargaTarifario(h.id).then((b) => descargar(b, h.archivo))}
                   >
                     <Download className="w-4 h-4 text-gray-500" />
@@ -414,6 +418,7 @@ type Campo = Exclude<keyof typeof VACIA, 'tipo'>;
  * como opción en toda liquidación con ese destino, con su vigencia, y las cargas del archivo de fletes no las tocan.
  */
 export function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar: boolean; onCambio?: () => void }) {
+  const t = useT();
   const [datos, setDatos] = useState<TarifasManuales | null>(null);
   const [abierto, setAbierto] = useState(false);
   const [f, setF] = useState(VACIA);
@@ -486,11 +491,11 @@ export function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar:
       <div className="p-4 space-y-2">
       <div className="flex items-center gap-2">
         <p className="text-sm font-semibold text-gray-900 flex-1">
-          Tarifas fuera del tarifario <span className="text-xs font-normal text-gray-500">· agregadas a mano ({total})</span>
+          {t('Tarifas fuera del tarifario')}{' '}<span className="text-xs font-normal text-gray-500">{t('· agregadas a mano (')}{total})</span>
         </p>
         {puedeCargar && !abierto && (
-          <button className={btnSecondary} onClick={() => setAbierto(true)} title="Agregar una tarifa que no está en el cuadro">
-            <Plus className="w-4 h-4" /> Agregar tarifa
+          <button className={btnSecondary} onClick={() => setAbierto(true)} title={t('Agregar una tarifa que no está en el cuadro')}>
+            <Plus className="w-4 h-4" />{' '}{t('Agregar tarifa')}
           </button>
         )}
       </div>
@@ -545,7 +550,7 @@ export function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar:
           </p>
           <div className="flex gap-2">
             <button className={btnPrimary} onClick={() => void guardar()} disabled={guardando || !listo}>
-              {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Agregar
+              {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}{' '}{t('Agregar')}
             </button>
             <button
               className={btnSecondary}
@@ -555,7 +560,7 @@ export function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar:
               }}
               disabled={guardando}
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
           </div>
         </div>
@@ -567,37 +572,37 @@ export function TarifasManualesSeccion({ puedeCargar, onCambio }: { puedeCargar:
       )}
       {datos && total > 0 && (
         <ul className="divide-y divide-gray-100 text-xs">
-          {datos.maritimas.map((t) => (
-            <li key={t.id} className="py-1.5 flex items-center gap-2">
+          {datos.maritimas.map((x) => (
+            <li key={x.id} className="py-1.5 flex items-center gap-2">
               <span className="min-w-0 flex-1">
                 <span className="font-medium text-gray-900">
-                  {t.origen.split(',')[0]} → {t.destino}
+                  {x.origen.split(',')[0]} → {x.destino}
                 </span>
                 <span className="block text-gray-500">
-                  Marítimo · {[t.agente, t.naviera].filter(Boolean).join(' / ')} · {usd(t.valor)}
-                  {t.dias !== null ? ` · ${t.dias} días` : ''} · vence {t.validUntil ?? '—'} · {t.por}
+                  {t('Marítimo ·')}{' '}{[x.agente, x.naviera].filter(Boolean).join(' / ')} · {usd(x.valor)}
+                  {x.dias !== null ? ` · ${x.dias} días` : ''}{' '}{t('· vence')}{' '}{x.validUntil ?? '—'} · {x.por}
                 </span>
               </span>
               {puedeCargar && (
-                <button className="p-1 rounded hover:bg-gray-100" title="Quitar" onClick={() => void quitar('maritima', t.id)}>
+                <button className="p-1 rounded hover:bg-gray-100" title={t('Quitar')} onClick={() => void quitar('maritima', x.id)}>
                   <Trash2 className="w-4 h-4 text-gray-400" />
                 </button>
               )}
             </li>
           ))}
-          {datos.inland.map((t) => (
-            <li key={t.id} className="py-1.5 flex items-center gap-2">
+          {datos.inland.map((x) => (
+            <li key={x.id} className="py-1.5 flex items-center gap-2">
               <span className="min-w-0 flex-1">
                 <span className="font-medium text-gray-900">
-                  {t.puerto} → {t.direccion}
+                  {x.puerto} → {x.direccion}
                 </span>
                 <span className="block text-gray-500">
-                  Inland · {t.agente} · {usd(t.valor)}
-                  {t.comisionAduanera !== null ? ` · aduana ${usd(t.comisionAduanera)}` : ''} · vence {t.validUntil ?? '—'} · {t.por}
+                  {t('Inland ·')}{' '}{x.agente} · {usd(x.valor)}
+                  {x.comisionAduanera !== null ? ` · aduana ${usd(x.comisionAduanera)}` : ''}{' '}{t('· vence')}{' '}{x.validUntil ?? '—'} · {x.por}
                 </span>
               </span>
               {puedeCargar && (
-                <button className="p-1 rounded hover:bg-gray-100" title="Quitar" onClick={() => void quitar('inland', t.id)}>
+                <button className="p-1 rounded hover:bg-gray-100" title={t('Quitar')} onClick={() => void quitar('inland', x.id)}>
                   <Trash2 className="w-4 h-4 text-gray-400" />
                 </button>
               )}

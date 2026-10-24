@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -33,6 +34,7 @@ function fecha(s: string | null): string {
  * distribución a mano.
  */
 export default function FacturasParcialesPage() {
+  const t = useT();
   const { user } = useAuthStore();
   const puedeFacturar = !!user?.permissions?.includes('invoices.create');
   const [filas, setFilas] = useState<FacturaParcial[]>([]);
@@ -116,16 +118,15 @@ export default function FacturasParcialesPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <ReceiptText className="w-6 h-6 text-[#F47735]" />
-            Facturas parciales
+            {t('Facturas parciales')}
           </h1>
           <p className="text-gray-500 mt-1 max-w-3xl">
-            Cuando Distribución cierra un parcial, Oben envía al buzón de pedidos el correo{' '}
-            <i>&quot;Proforma … - Facturar Parcial&quot;</i> con el número de distribución, y la solicitud aparece aquí. La factura se
-            crea en OBEN MAS con la proforma y ese número. Cada distribución se factura una sola vez.
+            {t('Cuando Distribución cierra un parcial, Oben envía al buzón de pedidos el correo')}{' '}
+            <i>{t('"Proforma … - Facturar Parcial"')}</i>{' '}{t('con el número de distribución, y la solicitud aparece aquí. La factura se crea en OBEN MAS con la proforma y ese número. Cada distribución se factura una sola vez.')}
           </p>
         </div>
         <button onClick={load} className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
-          <RefreshCw className="w-4 h-4" /> Actualizar
+          <RefreshCw className="w-4 h-4" />{' '}{t('Actualizar')}
         </button>
       </div>
 
@@ -134,11 +135,11 @@ export default function FacturasParcialesPage() {
       {puedeFacturar && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Proforma</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{t('Proforma')}</label>
             <input value={pf} onChange={(e) => setPf(e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder="10770" className="w-36 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Número de distribución</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{t('Número de distribución')}</label>
             <input value={dist} onChange={(e) => setDist(e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder="11023" className="w-44 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           <button
@@ -146,9 +147,9 @@ export default function FacturasParcialesPage() {
             disabled={!pf || !dist || registrando}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium disabled:opacity-50"
           >
-            {registrando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Registrar a mano
+            {registrando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}{' '}{t('Registrar a mano')}
           </button>
-          <p className="text-xs text-gray-500 basis-full">Para pruebas o si el correo no llegó. Registrar no factura: la factura se crea con el botón de cada fila.</p>
+          <p className="text-xs text-gray-500 basis-full">{t('Para pruebas o si el correo no llegó. Registrar no factura: la factura se crea con el botón de cada fila.')}</p>
         </div>
       )}
 
@@ -164,17 +165,17 @@ export default function FacturasParcialesPage() {
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
       ) : filas.length === 0 ? (
-        <div className="text-center py-12 text-gray-400 text-sm">Todavía no ha llegado ninguna solicitud de factura parcial.</div>
+        <div className="text-center py-12 text-gray-400 text-sm">{t('Todavía no ha llegado ninguna solicitud de factura parcial.')}</div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left text-gray-600">
               <tr>
-                <th className="px-4 py-2.5 font-semibold">Proforma</th>
-                <th className="px-4 py-2.5 font-semibold">Distribución</th>
-                <th className="px-4 py-2.5 font-semibold">Origen</th>
-                <th className="px-4 py-2.5 font-semibold">Recibida</th>
-                <th className="px-4 py-2.5 font-semibold">Estado</th>
+                <th className="px-4 py-2.5 font-semibold">{t('Proforma')}</th>
+                <th className="px-4 py-2.5 font-semibold">{t('Distribución')}</th>
+                <th className="px-4 py-2.5 font-semibold">{t('Origen')}</th>
+                <th className="px-4 py-2.5 font-semibold">{t('Recibida')}</th>
+                <th className="px-4 py-2.5 font-semibold">{t('Estado')}</th>
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
@@ -189,10 +190,10 @@ export default function FacturasParcialesPage() {
                     <td className="px-4 py-3 text-gray-600">
                       {f.origen === 'correo' ? (
                         <span className="inline-flex items-center gap-1" title={f.remitente ?? ''}>
-                          <Mail className="w-3.5 h-3.5 text-gray-400" /> Correo
+                          <Mail className="w-3.5 h-3.5 text-gray-400" />{' '}{t('Correo')}
                         </span>
                       ) : f.origen === 'automatico' ? (
-                        <span title={f.remitente ?? ''}>Automática{f.remitente ? ` · ${f.remitente}` : ''}</span>
+                        <span title={f.remitente ?? ''}>{t('Automática')}{f.remitente ? ` · ${f.remitente}` : ''}</span>
                       ) : (
                         'Manual'
                       )}
@@ -204,7 +205,7 @@ export default function FacturasParcialesPage() {
                         {f.estado === 'revisar' && <AlertTriangle className="w-3.5 h-3.5" />}
                         {e.label}
                       </span>
-                      {f.modo === 'mock' && <span className="ml-1.5 text-[10px] font-semibold text-orange-700">SIMULADO</span>}
+                      {f.modo === 'mock' && <span className="ml-1.5 text-[10px] font-semibold text-orange-700">{t('SIMULADO')}</span>}
                       {f.estado === 'facturada' && <p className="text-[11px] text-gray-500 mt-1">{fecha(f.facturadaAt)}</p>}
                       {f.error && <p className="text-xs text-red-600 mt-1 max-w-md">{f.error}</p>}
                     </td>
@@ -214,9 +215,9 @@ export default function FacturasParcialesPage() {
                           onClick={() => enviarmeAviso(f)}
                           disabled={facturando !== null}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-xs font-medium disabled:opacity-50 whitespace-nowrap mr-2"
-                          title="Te envía a tu correo el resultado de esta factura (con el PDF si se creó o con la explicación si falló)"
+                          title={t('Te envía a tu correo el resultado de esta factura (con el PDF si se creó o con la explicación si falló)')}
                         >
-                          <Mail className="w-3.5 h-3.5" /> Enviarme el aviso
+                          <Mail className="w-3.5 h-3.5" />{' '}{t('Enviarme el aviso')}
                         </button>
                       )}
                       {puede && (

@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 
 export default function ClientsPage() {
+  const t = useT();
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -73,20 +75,20 @@ export default function ClientsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-          <p className="text-gray-500 mt-1">Directorio de clientes y crédito</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('Clientes')}</h1>
+          <p className="text-gray-500 mt-1">{t('Directorio de clientes y crédito')}</p>
         </div>
         <Link
           href="/clients/new"
           className="inline-flex items-center gap-2 bg-[#F47735] hover:bg-[#E5641F] text-white px-4 py-2.5 rounded-lg font-medium transition"
         >
           <Plus className="w-5 h-5" />
-          Nuevo Cliente
+          {t('Nuevo Cliente')}
         </Link>
       </div>
 
       <ImportPanel
-        title="Cargar el maestro de clientes (Excel/CSV)"
+        title={t('Cargar el maestro de clientes (Excel/CSV)')}
         columns={['Código', 'Código Oben', 'Nombre', 'Correo (compras)', 'Dominios autorizados', 'Email comercial', 'Cliente final en asunto (sí/no)']}
         onImport={(dto) => api.importClients(dto)}
         onDone={loadClients}
@@ -96,7 +98,7 @@ export default function ClientsPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           type="text"
-          placeholder="Buscar por nombre, ID o correo..."
+          placeholder={t('Buscar por nombre, ID o correo...')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
@@ -117,7 +119,7 @@ export default function ClientsPage() {
                 onClick={loadClients}
                 className="mt-3 text-[#F47735] hover:underline"
               >
-                Reintentar
+                {t('Reintentar')}
               </button>
             </div>
           </div>
@@ -153,6 +155,7 @@ function ClientCard({
   onDelete: (id: string) => void;
   deleting: boolean;
 }) {
+  const t = useT();
   // Values arrive as decimal strings from the API; coerce explicitly and
   // guard against a 0 credit limit (0/0 -> NaN previously painted a full red
   // "critical" bar for clients that simply have no limit set).
@@ -184,7 +187,7 @@ function ClientCard({
           <Link
             href={`/clients/${client.id}`}
             className="p-2 text-[#F47735] hover:bg-blue-50 rounded-lg transition"
-            title="Ver detalle"
+            title={t('Ver detalle')}
           >
             <ArrowRight className="w-4 h-4" />
           </Link>
@@ -192,7 +195,7 @@ function ClientCard({
             onClick={() => onDelete(client.id)}
             disabled={deleting}
             className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
-            title="Eliminar"
+            title={t('Eliminar')}
           >
             {deleting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -222,9 +225,9 @@ function ClientCard({
         )}
         {(client.obenCode || (client.authorizedDomains?.length ?? 0) > 0 || client.comercialEmail) && (
           <div className="text-xs text-gray-500 space-y-0.5 pt-1">
-            {client.obenCode && <p>Código OBEN MAS: <span className="font-mono">{client.obenCode}</span></p>}
-            {(client.authorizedDomains?.length ?? 0) > 0 && <p>Dominios autorizados: {client.authorizedDomains!.join(', ')}</p>}
-            {client.comercialEmail && <p>Comercial: {client.comercialEmail}</p>}
+            {client.obenCode && <p>{t('Código OBEN MAS:')}{' '}<span className="font-mono">{client.obenCode}</span></p>}
+            {(client.authorizedDomains?.length ?? 0) > 0 && <p>{t('Dominios autorizados:')}{' '}{client.authorizedDomains!.join(', ')}</p>}
+            {client.comercialEmail && <p>{t('Comercial:')}{' '}{client.comercialEmail}</p>}
           </div>
         )}
       </div>
@@ -232,7 +235,7 @@ function ClientCard({
       <div className="mt-4 pt-4 border-t border-gray-100">
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-500 flex items-center gap-1">
-            <CreditCard className="w-4 h-4" /> Crédito
+            <CreditCard className="w-4 h-4" />{' '}{t('Crédito')}
           </span>
           <span className="font-semibold text-gray-900">
             {hasLimit
@@ -250,10 +253,10 @@ function ClientCard({
         </div>
         <div className="flex justify-between text-xs mt-1">
           <span className="text-gray-400">
-            Usado: ${Number(client.usedCredit).toLocaleString('es-CO')} COP
+            {t('Usado: $')}{Number(client.usedCredit).toLocaleString('es-CO')}{' '}{t('COP')}
           </span>
           <span className="text-gray-400">
-            Disponible: ${Number(availableCredit).toLocaleString('es-CO')} COP
+            {t('Disponible: $')}{Number(availableCredit).toLocaleString('es-CO')}{' '}{t('COP')}
           </span>
         </div>
       </div>

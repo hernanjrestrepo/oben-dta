@@ -210,7 +210,7 @@ export function EvaWidget() {
               <div className="flex justify-start">
                 <div className="bg-white border border-gray-200 rounded-xl px-3 py-2 flex items-center gap-2 text-xs text-gray-500">
                   <Loader2 className="w-4 h-4 animate-spin text-[#F47735]" />
-                  MIA está consultando…
+                  {t('MIA está consultando…')}
                 </div>
               </div>
             )}

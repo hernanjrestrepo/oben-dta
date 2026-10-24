@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -17,6 +18,7 @@ function errMsg(err: unknown, fallback: string): string {
  * correo sale con el texto de siempre.
  */
 export default function FormatosPage() {
+  const t = useT();
   const { user } = useAuthStore();
   const puedeEditar = !!user?.permissions?.includes('configuracion.update');
   const [formatos, setFormatos] = useState<FormatoEnvio[]>([]);
@@ -40,12 +42,11 @@ export default function FormatosPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <FileText className="w-6 h-6 text-[#F47735]" />
-          Formatos de correo
+          {t('Formatos de correo')}
         </h1>
         <p className="text-gray-500 mt-1">
-          El asunto y el texto de cada correo que envía Oben Xmart. Usa las variables entre llaves (por ejemplo{' '}
-          <code className="px-1 rounded bg-gray-100 text-gray-700">{'{ov}'}</code>) y el sistema pone el dato real. Los adjuntos y
-          el contenido de los reportes no cambian.
+          {t('El asunto y el texto de cada correo que envía Oben Xmart. Usa las variables entre llaves (por ejemplo')}{' '}
+          <code className="px-1 rounded bg-gray-100 text-gray-700">{'{ov}'}</code>{t(') y el sistema pone el dato real. Los adjuntos y el contenido de los reportes no cambian.')}
         </p>
       </div>
 
@@ -77,10 +78,10 @@ export default function FormatosPage() {
                         <p className="font-medium text-gray-900 flex items-center gap-2">
                           {f.label}
                           {f.personalizado && (
-                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-100 text-[#C4521A]">personalizado</span>
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-100 text-[#C4521A]">{t('personalizado')}</span>
                           )}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">Asunto: {f.asunto}</p>
+                        <p className="text-xs text-gray-500 truncate">{t('Asunto:')}{' '}{f.asunto}</p>
                       </div>
                       <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition ${abierto === f.clave ? 'rotate-180' : ''}`} />
                     </button>
@@ -96,6 +97,7 @@ export default function FormatosPage() {
 }
 
 function Editor({ formato, puedeEditar, onGuardado }: { formato: FormatoEnvio; puedeEditar: boolean; onGuardado: (f: FormatoEnvio) => void }) {
+  const t = useT();
   const [asunto, setAsunto] = useState(formato.asunto);
   const [cuerpo, setCuerpo] = useState(formato.cuerpo);
   const [vista, setVista] = useState<{ asunto: string; cuerpoHtml: string } | null>(null);
@@ -146,7 +148,7 @@ function Editor({ formato, puedeEditar, onGuardado }: { formato: FormatoEnvio; p
   return (
     <div className="px-4 pb-4 space-y-3">
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Asunto</label>
+        <label className="block text-xs font-medium text-gray-600 mb-1">{t('Asunto')}</label>
         <input
           value={asunto}
           onChange={(e) => setAsunto(e.target.value)}
@@ -156,7 +158,7 @@ function Editor({ formato, puedeEditar, onGuardado }: { formato: FormatoEnvio; p
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Texto del correo</label>
+        <label className="block text-xs font-medium text-gray-600 mb-1">{t('Texto del correo')}</label>
         <textarea
           ref={cuerpoRef}
           value={cuerpo}
@@ -166,10 +168,10 @@ function Editor({ formato, puedeEditar, onGuardado }: { formato: FormatoEnvio; p
           maxLength={5000}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"
         />
-        <p className="text-[11px] text-gray-500 mt-1">Una línea en blanco separa párrafos. La lista de adjuntos se agrega sola cuando aplica.</p>
+        <p className="text-[11px] text-gray-500 mt-1">{t('Una línea en blanco separa párrafos. La lista de adjuntos se agrega sola cuando aplica.')}</p>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-gray-500">Variables:</span>
+        <span className="text-xs text-gray-500">{t('Variables:')}</span>
         {formato.variables.map((v) => (
           <button
             key={v.nombre}
@@ -185,7 +187,7 @@ function Editor({ formato, puedeEditar, onGuardado }: { formato: FormatoEnvio; p
 
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => correr('vista')} disabled={!!ocupado} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
-          {ocupado === 'vista' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />} Vista previa
+          {ocupado === 'vista' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}{' '}{t('Vista previa')}
         </button>
         {puedeEditar && (
           <>
@@ -194,11 +196,11 @@ function Editor({ formato, puedeEditar, onGuardado }: { formato: FormatoEnvio; p
               disabled={!!ocupado || !cambios}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg text-sm font-medium disabled:opacity-50"
             >
-              {ocupado === 'guardar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Guardar
+              {ocupado === 'guardar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}{' '}{t('Guardar')}
             </button>
             {formato.personalizado && (
               <button onClick={() => correr('restablecer')} disabled={!!ocupado} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900">
-                <RotateCcw className="w-4 h-4" /> Texto por defecto
+                <RotateCcw className="w-4 h-4" />{' '}{t('Texto por defecto')}
               </button>
             )}
           </>
@@ -207,7 +209,7 @@ function Editor({ formato, puedeEditar, onGuardado }: { formato: FormatoEnvio; p
 
       {vista && (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
-          <p className="text-xs text-gray-500">Así se vería (con datos de ejemplo de la OV 11187):</p>
+          <p className="text-xs text-gray-500">{t('Así se vería (con datos de ejemplo de la OV 11187):')}</p>
           <p className="mt-1 font-semibold text-gray-900">{vista.asunto}</p>
           {/* HTML generado por el servidor con todo el texto escapado. */}
           <div className="mt-1 text-gray-700 space-y-2" dangerouslySetInnerHTML={{ __html: vista.cuerpoHtml }} />

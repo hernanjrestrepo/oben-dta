@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -17,6 +18,7 @@ const ORDEN_GRUPOS = ['Fundamentos', 'Inicio', 'Comercial', 'Despacho y facturac
  * el panel de fricciones.
  */
 export default function AcademyPage() {
+  const t = useT();
   const [plan, setPlan] = useState<PlanAcademy | null>(null);
   const [glosario, setGlosario] = useState<TerminoGlosario[]>([]);
   const [error, setError] = useState('');
@@ -43,13 +45,13 @@ export default function AcademyPage() {
             <Lock className="w-5 h-5" />
           </span>
           <div className="flex-1">
-            <p className="font-semibold text-gray-900">Para operar debes aprobar {pendientesParaOperar.length === 1 ? 'este módulo' : `estos ${pendientesParaOperar.length} módulos`}</p>
+            <p className="font-semibold text-gray-900">{t('Para operar debes aprobar')}{' '}{pendientesParaOperar.length === 1 ? 'este módulo' : `estos ${pendientesParaOperar.length} módulos`}</p>
             <p className="text-sm text-gray-600">
-              Tu perfil es transaccional en {pendientesParaOperar.map((m) => m.titulo).join(', ')}. Mientras no apruebes su quiz (mínimo {plan.ajustes.puntajeMinimo} %), puedes consultar pero no crear, aprobar ni enviar.
+              {t('Tu perfil es transaccional en')}{' '}{pendientesParaOperar.map((m) => m.titulo).join(', ')}{t('. Mientras no apruebes su quiz (mínimo')}{' '}{plan.ajustes.puntajeMinimo}{' '}{t('%), puedes consultar pero no crear, aprobar ni enviar.')}
             </p>
           </div>
           <Link href={`/academy/${pendientesParaOperar[0].key}`} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F47735] text-white text-sm font-semibold hover:bg-[#E5641F]">
-            Empezar <ArrowRight className="w-4 h-4" />
+            {t('Empezar')}{' '}<ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       )}
@@ -77,6 +79,7 @@ function Cargando() {
 }
 
 function Portada({ plan, siguiente, avance }: { plan: PlanAcademy; siguiente: ModuloPlanAcademy | undefined; avance: number }) {
+  const t = useT();
   return (
     <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#2E2E31] via-[#3D3D41] to-[#56565A] text-white academy-subir">
       <div className="absolute inset-0 academy-cuadricula" />
@@ -98,17 +101,17 @@ function Portada({ plan, siguiente, avance }: { plan: PlanAcademy; siguiente: Mo
       <div className="relative px-6 py-10 md:px-12 md:py-14 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-center">
         <div>
           <div className="flex items-center gap-4">
-            <Image src="/brand/oben-logo-blanco.svg" alt="Oben Group" width={132} height={60} priority />
+            <Image src="/brand/oben-logo-blanco.svg" alt={t('Oben Group')} width={132} height={60} priority />
             <span className="h-8 w-px bg-white/25" />
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-[0.2em] uppercase text-white/70">
-              <GraduationCap className="w-4 h-4 text-[#F47735]" /> Academy
+              <GraduationCap className="w-4 h-4 text-[#F47735]" />{' '}{t('Academy')}
             </span>
           </div>
           <h1 className="mt-6 text-4xl md:text-5xl font-extrabold tracking-tight leading-[1.05]">
-            Xmart <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F9A66F] to-[#F47735]">Academy</span>
+            {t('Xmart')}{' '}<span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F9A66F] to-[#F47735]">{t('Academy')}</span>
           </h1>
           <p className="mt-4 max-w-2xl text-white/75 text-base md:text-lg leading-relaxed">
-            Aprende Oben Xmart de punta a punta: qué hace solo, qué decides tú y cómo se conecta cada módulo con el recorrido de un pedido. Tu plan está armado según tu perfil.
+            {t('Aprende Oben Xmart de punta a punta: qué hace solo, qué decides tú y cómo se conecta cada módulo con el recorrido de un pedido. Tu plan está armado según tu perfil.')}
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             {siguiente && (
@@ -117,11 +120,11 @@ function Portada({ plan, siguiente, avance }: { plan: PlanAcademy; siguiente: Mo
               </Link>
             )}
             <a href="#recorrido" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 font-semibold transition">
-              Ver el viaje de un pedido
+              {t('Ver el viaje de un pedido')}
             </a>
             {plan.esAdmin && (
               <Link href="/academy/fricciones" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 font-semibold transition">
-                <BarChart3 className="w-4 h-4" /> Panel de fricciones
+                <BarChart3 className="w-4 h-4" />{' '}{t('Panel de fricciones')}
               </Link>
             )}
           </div>
@@ -131,11 +134,11 @@ function Portada({ plan, siguiente, avance }: { plan: PlanAcademy; siguiente: Mo
           <Anillo valor={avance} tam={124} grosor={10} claro>
             <div className="text-center">
               <p className="text-3xl font-extrabold">{avance}%</p>
-              <p className="text-[10px] uppercase tracking-wider text-white/60">tu avance</p>
+              <p className="text-[10px] uppercase tracking-wider text-white/60">{t('tu avance')}</p>
             </div>
           </Anillo>
           <div className="text-center text-sm">
-            <p className="font-semibold">{plan.resumen.total} módulos en tu plan</p>
+            <p className="font-semibold">{plan.resumen.total}{' '}{t('módulos en tu plan')}</p>
             <p className="text-white/60">
               {plan.resumen.obligatorios
                 ? `${plan.resumen.aprobados} de ${plan.resumen.obligatorios} quizzes para operar aprobados`
@@ -144,10 +147,10 @@ function Portada({ plan, siguiente, avance }: { plan: PlanAcademy; siguiente: Mo
           </div>
           {plan.ajustes.exigirCertificacion ? (
             <span className="inline-flex items-center gap-1 text-[11px] text-[#F9A66F]">
-              <ShieldCheck className="w-3.5 h-3.5" /> Certificación obligatoria para operar
+              <ShieldCheck className="w-3.5 h-3.5" />{' '}{t('Certificación obligatoria para operar')}
             </span>
           ) : (
-            <span className="text-[11px] text-white/50">La certificación aún no es obligatoria</span>
+            <span className="text-[11px] text-white/50">{t('La certificación aún no es obligatoria')}</span>
           )}
         </div>
       </div>
@@ -166,6 +169,7 @@ function Titulo({ eyebrow, titulo, texto, id }: { eyebrow: string; titulo: strin
 }
 
 function QueEs({ plan }: { plan: PlanAcademy }) {
+  const t = useT();
   const q = plan.intro.queEs;
   return (
     <section className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-8 items-start">
@@ -173,7 +177,7 @@ function QueEs({ plan }: { plan: PlanAcademy }) {
         <Titulo eyebrow="La plataforma" titulo={q.titulo} />
         <p className="mt-4 text-gray-700 leading-relaxed text-[15px]">{q.texto}</p>
         <button onClick={() => preguntarAMia('¿Qué hace Oben Xmart solo y qué tengo que hacer yo en mi cargo?')} className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#C4521A] hover:underline">
-          <HelpCircle className="w-4 h-4" /> Pregúntale a MIA qué te toca a ti
+          <HelpCircle className="w-4 h-4" />{' '}{t('Pregúntale a MIA qué te toca a ti')}
         </button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -190,6 +194,7 @@ function QueEs({ plan }: { plan: PlanAcademy }) {
 }
 
 function Recorrido({ plan }: { plan: PlanAcademy }) {
+  const t = useT();
   const paradas = plan.intro.recorrido;
   const [activa, setActiva] = useState(0);
   const [tocado, setTocado] = useState(false);
@@ -242,19 +247,19 @@ function Recorrido({ plan }: { plan: PlanAcademy }) {
               <IconoModulo moduloKey={p.modulo} href={modulo?.href ?? null} className="w-7 h-7 text-[#F47735]" />
             </span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-[#F47735]">Parada {activa + 1} de {paradas.length}</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-[#F47735]">{t('Parada')}{' '}{activa + 1}{' '}{t('de')}{' '}{paradas.length}</p>
               <p className="text-lg font-bold text-gray-900">{p.titulo}</p>
               <p className="mt-1 text-sm text-gray-600 leading-relaxed">{p.texto}</p>
             </div>
             <div className="flex md:flex-col gap-2">
               {enPlan.has(p.modulo) && (
                 <Link href={`/academy/${p.modulo}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[#F47735] text-white text-sm font-semibold hover:bg-[#E5641F]">
-                  <BookOpen className="w-4 h-4" /> Ver la lección
+                  <BookOpen className="w-4 h-4" />{' '}{t('Ver la lección')}
                 </Link>
               )}
               {modulo?.href && (
                 <Link href={modulo.href} onClick={() => api.registrarEventoAcademy('ir_al_modulo', modulo.key, { desde: 'recorrido' })} className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                  Ir al módulo <ArrowRight className="w-4 h-4" />
+                  {t('Ir al módulo')}{' '}<ArrowRight className="w-4 h-4" />
                 </Link>
               )}
             </div>
@@ -289,6 +294,7 @@ function MiPlan({ plan }: { plan: PlanAcademy }) {
 }
 
 function TarjetaModulo({ m, i }: { m: ModuloPlanAcademy; i: number }) {
+  const t = useT();
   const aprobado = m.estado === 'aprobado';
   return (
     <Link
@@ -309,11 +315,11 @@ function TarjetaModulo({ m, i }: { m: ModuloPlanAcademy; i: number }) {
           <p className="mt-1.5 text-sm text-gray-600 leading-snug line-clamp-2">{m.resumen}</p>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
             <span className="inline-flex items-center gap-1">
-              <Clock className="w-3 h-3" /> {m.minutos} min
+              <Clock className="w-3 h-3" /> {m.minutos}{' '}{t('min')}
             </span>
-            <span>{m.preguntas} preguntas</span>
-            {m.obligatorio ? <span className="font-semibold text-[#C4521A]">Quiz obligatorio para operar</span> : <span>Quiz recomendado</span>}
-            {m.puntaje !== null && <span className="font-semibold text-gray-700">Mejor puntaje: {m.puntaje} %</span>}
+            <span>{m.preguntas}{' '}{t('preguntas')}</span>
+            {m.obligatorio ? <span className="font-semibold text-[#C4521A]">{t('Quiz obligatorio para operar')}</span> : <span>{t('Quiz recomendado')}</span>}
+            {m.puntaje !== null && <span className="font-semibold text-gray-700">{t('Mejor puntaje:')}{' '}{m.puntaje} %</span>}
           </div>
         </div>
       </div>
@@ -322,10 +328,11 @@ function TarjetaModulo({ m, i }: { m: ModuloPlanAcademy; i: number }) {
 }
 
 function Glosario({ terminos, plan }: { terminos: TerminoGlosario[]; plan: PlanAcademy }) {
+  const t = useT();
   const [q, setQ] = useState('');
   const enPlan = new Set(plan.modulos.map((m) => m.key));
   const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const filtrados = terminos.filter((t) => !q || norm(`${t.termino} ${t.definicion}`).includes(norm(q)));
+  const filtrados = terminos.filter((g) => !q || norm(`${g.termino} ${g.definicion}`).includes(norm(q)));
   if (!terminos.length) return null;
   return (
     <section className="space-y-5">
@@ -337,28 +344,28 @@ function Glosario({ terminos, plan }: { terminos: TerminoGlosario[]; plan: PlanA
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onBlur={() => q && api.registrarEventoAcademy('glosario', null, { busqueda: q.slice(0, 80) })}
-            placeholder="Buscar un término (PF, Incoterm, pata 3…)"
+            placeholder={t('Buscar un término (PF, Incoterm, pata 3…)')}
             className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#F47735]/30"
           />
         </label>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-        {filtrados.map((t) => (
-          <div key={t.termino} className="rounded-xl bg-white border border-gray-100 p-4 hover:border-orange-200 transition">
-            <p className="font-bold text-gray-900">{t.termino}</p>
-            <p className="mt-1 text-sm text-gray-600 leading-snug">{t.definicion}</p>
-            {enPlan.has(t.modulo) && (
-              <Link href={`/academy/${t.modulo}`} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#C4521A] hover:underline">
-                Ver en la lección <ArrowRight className="w-3 h-3" />
+        {filtrados.map((g) => (
+          <div key={g.termino} className="rounded-xl bg-white border border-gray-100 p-4 hover:border-orange-200 transition">
+            <p className="font-bold text-gray-900">{g.termino}</p>
+            <p className="mt-1 text-sm text-gray-600 leading-snug">{g.definicion}</p>
+            {enPlan.has(g.modulo) && (
+              <Link href={`/academy/${g.modulo}`} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#C4521A] hover:underline">
+                {t('Ver en la lección')}{' '}<ArrowRight className="w-3 h-3" />
               </Link>
             )}
           </div>
         ))}
         {filtrados.length === 0 && (
           <div className="sm:col-span-2 xl:col-span-3 rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 flex items-center justify-between gap-3">
-            <span>No hay un término con «{q}».</span>
+            <span>{t('No hay un término con «')}{q}».</span>
             <button onClick={() => preguntarAMia(`¿Qué significa "${q}" en Oben Xmart?`)} className="inline-flex items-center gap-1.5 font-semibold text-[#C4521A] hover:underline">
-              <Sparkles className="w-4 h-4" /> Preguntar a MIA
+              <Sparkles className="w-4 h-4" />{' '}{t('Preguntar a MIA')}
             </button>
           </div>
         )}
@@ -368,21 +375,22 @@ function Glosario({ terminos, plan }: { terminos: TerminoGlosario[]; plan: PlanA
 }
 
 function Paradixe({ plan }: { plan: PlanAcademy }) {
+  const t = useT();
   const p = plan.intro.paradixe;
   return (
     <section className="relative overflow-hidden rounded-3xl bg-[#2E2E31] text-white">
       <div className="absolute inset-0 academy-cuadricula opacity-60" />
       <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-8 items-center p-8 md:p-10">
         <div className="w-28 h-28 rounded-2xl bg-white flex items-center justify-center p-4">
-          <Image src="/paradixe-logo.png" alt="Paradixe" width={96} height={96} className="object-contain" />
+          <Image src="/paradixe-logo.png" alt={t('Paradixe')} width={96} height={96} className="object-contain" />
         </div>
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#F47735]">Detrás de la plataforma</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#F47735]">{t('Detrás de la plataforma')}</p>
           <h2 className="mt-1 text-2xl font-extrabold">{p.titulo}</h2>
           <p className="mt-3 text-white/75 leading-relaxed max-w-3xl">{p.texto}</p>
         </div>
         <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#2E2E31] font-semibold hover:bg-orange-50">
-          paradixe.xyz <ArrowRight className="w-4 h-4" />
+          {t('paradixe.xyz')}{' '}<ArrowRight className="w-4 h-4" />
         </a>
       </div>
     </section>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -93,6 +94,7 @@ export function LiquidacionPanel({
   factura: FacturacionDraft;
   onEstado: (e: LiquidacionEstado) => void;
 }) {
+  const t = useT();
   const pf = factura.proforma;
   const [reglas, setReglas] = useState<IncotermRegla[] | null>(null);
   const [incoterm, setIncoterm] = useState<string | null>(null);
@@ -205,7 +207,7 @@ export function LiquidacionPanel({
     return (
       <Card className="p-6">
         <p className="text-sm text-red-700 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4" /> La orden no trae número de Proforma en Oben: sin él no se puede liquidar.
+          <AlertCircle className="w-4 h-4" />{' '}{t('La orden no trae número de Proforma en Oben: sin él no se puede liquidar.')}
         </p>
       </Card>
     );
@@ -238,15 +240,15 @@ export function LiquidacionPanel({
       <Card>
         <CardHeader
           icon={<Ship className="w-4 h-4 text-[#F47735]" />}
-          title="1 · Incoterm de la proforma"
-          subtitle="Qué incluye y hasta dónde va (Incoterms 2020). Define qué se liquida."
+          title={t('1 · Incoterm de la proforma')}
+          subtitle={t('Qué incluye y hasta dónde va (Incoterms 2020). Define qué se liquida.')}
           right={
             <button
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F47735] text-white text-sm font-semibold shadow-sm hover:bg-[#E5641F] focus:outline-none focus:ring-2 focus:ring-[#F47735]/40"
               onClick={() => setVerProforma(true)}
-              title="La proforma tal como está en OBEN MAS (puertos, Incoterm, término de pago, precios)"
+              title={t('La proforma tal como está en OBEN MAS (puertos, Incoterm, término de pago, precios)')}
             >
-              <FileText className="w-4 h-4" /> Ver proforma
+              <FileText className="w-4 h-4" />{' '}{t('Ver proforma')}
             </button>
           }
         />
@@ -288,24 +290,24 @@ export function LiquidacionPanel({
         )}
 
         <Card>
-          <CardHeader title={`${liq?.ruta ? '4' : '2'} · Encabezado`} subtitle="Dirección y puertos vienen del ERP de Oben; se pueden modificar." />
+          <CardHeader title={`${liq?.ruta ? '4' : '2'} · Encabezado`} subtitle={t('Dirección y puertos vienen del ERP de Oben; se pueden modificar.')} />
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field
               className="sm:col-span-2"
               label={
                 <>
-                  Dirección <OrigenBadge origen={origen('direccion')} />
+                  {t('Dirección')}{' '}<OrigenBadge origen={origen('direccion')} />
                 </>
               }
               hint={
                 !textoValor('direccion') && factura.direccionEntrega ? (
                   <button className="text-[#E5641F] hover:underline" onClick={() => setTextos((t) => ({ ...t, direccion: factura.direccionEntrega! }))}>
-                    Usar la dirección de entrega del pedido
+                    {t('Usar la dirección de entrega del pedido')}
                   </button>
                 ) : undefined
               }
             >
-              <input value={textoValor('direccion')} onChange={(e) => setTextos((t) => ({ ...t, direccion: e.target.value }))} className={`${inputCls} w-full`} placeholder="Dirección del consignatario" />
+              <input value={textoValor('direccion')} onChange={(e) => setTextos((t) => ({ ...t, direccion: e.target.value }))} className={`${inputCls} w-full`} placeholder={t('Dirección del consignatario')} />
             </Field>
             {TEXTOS.map(([k, label, ph]) => (
               <Field
@@ -323,7 +325,7 @@ export function LiquidacionPanel({
               className="sm:col-span-2"
               label={
                 <>
-                  Junto a la partida NCM en la factura <OrigenBadge origen={ncmTexto !== undefined || ncmSin !== undefined ? 'usuario' : (liq?.factura?.origen ?? undefined)} />
+                  {t('Junto a la partida NCM en la factura')}{' '}<OrigenBadge origen={ncmTexto !== undefined || ncmSin !== undefined ? 'usuario' : (liq?.factura?.origen ?? undefined)} />
                 </>
               }
               hint={
@@ -333,7 +335,7 @@ export function LiquidacionPanel({
                     checked={ncmSin ?? liq?.factura?.ncmConDescripcion === false}
                     onChange={(e) => setNcmSin(e.target.checked)}
                   />
-                  Sin nombre del producto (la partida va sola). Lo que dejes queda para este cliente.
+                  {t('Sin nombre del producto (la partida va sola). Lo que dejes queda para este cliente.')}
                 </label>
               }
             >
@@ -345,7 +347,7 @@ export function LiquidacionPanel({
                 placeholder={liq?.factura?.ncmDescripcionPorDefecto ? `Por defecto: ${liq.factura.ncmDescripcionPorDefecto}` : 'Descripción de la película (por defecto la de Oben)'}
               />
             </Field>
-            <Field label="Notas (opcional)" className="sm:col-span-2">
+            <Field label={t('Notas (opcional)')} className="sm:col-span-2">
               <input value={textoValor('notes')} onChange={(e) => setTextos((t) => ({ ...t, notes: e.target.value }))} className={`${inputCls} w-full`} />
             </Field>
           </div>
@@ -361,7 +363,7 @@ export function LiquidacionPanel({
             right={
               calculando ? (
                 <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Recalculando
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />{' '}{t('Recalculando')}
                 </span>
               ) : liq?.incoterm ? (
                 <span className="px-2 py-0.5 rounded-full bg-orange-50 text-[#C4521A] text-xs font-bold tracking-wider">{liq.incoterm}</span>
@@ -384,19 +386,19 @@ export function LiquidacionPanel({
               <>
                 {/* Sin "Valor mercancía" (Hernán, 23-oct: "solo confunde"): el resultado es el FOB final y el total. */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <Kpi label="Flete" value={usd(tot.flete)} tone={isNum(tot.flete) ? 'default' : 'muted'} />
-                  <Kpi label="Seguro" value={usd(tot.seguro)} tone={isNum(tot.seguro) ? 'default' : 'muted'} />
-                  <Kpi label="Otros gastos" value={usd(tot.otros)} tone={isNum(tot.otros) ? 'default' : 'muted'} />
-                  <Kpi label="FOB final" value={usd(tot.fob)} tone={isNum(tot.fob) ? 'brand' : 'muted'} />
+                  <Kpi label={t('Flete')} value={usd(tot.flete)} tone={isNum(tot.flete) ? 'default' : 'muted'} />
+                  <Kpi label={t('Seguro')} value={usd(tot.seguro)} tone={isNum(tot.seguro) ? 'default' : 'muted'} />
+                  <Kpi label={t('Otros gastos')} value={usd(tot.otros)} tone={isNum(tot.otros) ? 'default' : 'muted'} />
+                  <Kpi label={t('FOB final')} value={usd(tot.fob)} tone={isNum(tot.fob) ? 'brand' : 'muted'} />
                   <Kpi label={`Total ${liq.incoterm ?? 'factura'}`} value={usd(totalFactura)} tone={isNum(totalFactura) ? 'brand' : 'muted'} />
                 </div>
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600">
                   <span>
-                    <span className="text-gray-400">Término de pago:</span>{' '}
+                    <span className="text-gray-400">{t('Término de pago:')}</span>{' '}
                     <span className={liq.terminoPago ? 'font-medium text-gray-900' : 'text-amber-700'}>{liq.terminoPago ?? 'Oben no lo trae para esta proforma'}</span>
                   </span>
                   <span>
-                    <span className="text-gray-400">Orden de compra del cliente:</span> <span className="font-medium text-gray-900">{liq.ordenCompra || '—'}</span>
+                    <span className="text-gray-400">{t('Orden de compra del cliente:')}</span> <span className="font-medium text-gray-900">{liq.ordenCompra || '—'}</span>
                   </span>
                 </div>
 
@@ -415,16 +417,16 @@ export function LiquidacionPanel({
                   <table className="w-full text-xs text-gray-800 whitespace-nowrap">
                     <thead>
                       <tr className="bg-gray-50 text-gray-500">
-                        <th className="px-4 py-2 text-left font-semibold">Película</th>
-                        <th className="px-3 py-2 text-right font-semibold">Kilos</th>
-                        <th className="px-3 py-2 text-right font-semibold">Precio/kg</th>
-                        <th className="px-3 py-2 text-right font-semibold">Valor total</th>
-                        <th className="px-3 py-2 text-right font-semibold">Flete</th>
-                        <th className="px-3 py-2 text-right font-semibold">Seguro</th>
-                        <th className="px-3 py-2 text-right font-semibold">Otros</th>
-                        <th className="px-3 py-2 text-right font-semibold">FOB final</th>
-                        <th className="px-4 py-2 text-right font-semibold" title="KilosTotalUnit: precio negociado − flete, seguro y otros por kg">
-                          Precio final/kg
+                        <th className="px-4 py-2 text-left font-semibold">{t('Película')}</th>
+                        <th className="px-3 py-2 text-right font-semibold">{t('Kilos')}</th>
+                        <th className="px-3 py-2 text-right font-semibold">{t('Precio/kg')}</th>
+                        <th className="px-3 py-2 text-right font-semibold">{t('Valor total')}</th>
+                        <th className="px-3 py-2 text-right font-semibold">{t('Flete')}</th>
+                        <th className="px-3 py-2 text-right font-semibold">{t('Seguro')}</th>
+                        <th className="px-3 py-2 text-right font-semibold">{t('Otros')}</th>
+                        <th className="px-3 py-2 text-right font-semibold">{t('FOB final')}</th>
+                        <th className="px-4 py-2 text-right font-semibold" title={t('KilosTotalUnit: precio negociado − flete, seguro y otros por kg')}>
+                          {t('Precio final/kg')}
                         </th>
                       </tr>
                     </thead>
@@ -436,7 +438,7 @@ export function LiquidacionPanel({
                             <td className="px-4 py-2">
                               <p className="font-medium text-gray-900">{l.tipoPelicula}</p>
                               {l.descripcion && <p className="text-[10px] text-gray-600 max-w-[260px] whitespace-normal">{l.descripcion}</p>}
-                              <p className="text-[10px] text-gray-400">Línea {l.codSecLineFilm}</p>
+                              <p className="text-[10px] text-gray-400">{t('Línea')}{' '}{l.codSecLineFilm}</p>
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums">
                               {kg(l.kilosTotal)}
@@ -458,7 +460,7 @@ export function LiquidacionPanel({
                     {lines.length > 1 && (
                       <tfoot>
                         <tr className="bg-gray-50 font-semibold text-gray-900">
-                          <td className="px-4 py-2">Total</td>
+                          <td className="px-4 py-2">{t('Total')}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{kg(tot.kilos)}</td>
                           <td />
                           <td className="px-3 py-2 text-right tabular-nums">{num2(tot.valor)}</td>
@@ -477,7 +479,7 @@ export function LiquidacionPanel({
                   <div key={a} className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 flex gap-2">
                     <Sparkles className="w-4 h-4 shrink-0 mt-px" />
                     <span>
-                      <strong>Ajuste automático.</strong> {a}
+                      <strong>{t('Ajuste automático.')}</strong> {a}
                     </span>
                   </div>
                 ))}
@@ -485,7 +487,7 @@ export function LiquidacionPanel({
                 {faltantes.visibles.length > 0 ? (
                   <Faltantes items={faltantes.visibles} />
                 ) : (
-                  <Listo>Liquidación completa: todos los valores calculados con datos reales de Oben.</Listo>
+                  <Listo>{t('Liquidación completa: todos los valores calculados con datos reales de Oben.')}</Listo>
                 )}
                 <PendienteConfirmar items={liq.sinConfirmar} />
               </>
@@ -496,7 +498,7 @@ export function LiquidacionPanel({
             <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap items-center gap-2 bg-gray-50/50 rounded-b-xl">
               {liq.aprobacion?.vigente ? (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
-                  <BadgeCheck className="w-4 h-4" /> Aprobada por COMEX{liq.aprobacion.por ? ` · ${liq.aprobacion.por}` : ''}
+                  <BadgeCheck className="w-4 h-4" />{' '}{t('Aprobada por COMEX')}{liq.aprobacion.por ? ` · ${liq.aprobacion.por}` : ''}
                 </span>
               ) : puedeAprobar ? (
                 <button
@@ -507,9 +509,9 @@ export function LiquidacionPanel({
                   {liq.aprobacion?.existe ? 'Aprobar de nuevo (COMEX)' : 'Aprobar liquidación (COMEX)'}
                 </button>
               ) : null}
-              {liq.readyToSubmit && !liq.aprobacion?.vigente && <span className="text-[11px] text-amber-700">Falta la aprobación de COMEX</span>}
+              {liq.readyToSubmit && !liq.aprobacion?.vigente && <span className="text-[11px] text-amber-700">{t('Falta la aprobación de COMEX')}</span>}
               {liq.aprobacion?.vigente && (
-                <span className="text-[11px] text-gray-500">Al aprobar sale el correo de revisión (proforma, lista de empaque y liquidación) y se pide la factura; Facturación recibe el aviso.</span>
+                <span className="text-[11px] text-gray-500">{t('Al aprobar sale el correo de revisión (proforma, lista de empaque y liquidación) y se pide la factura; Facturación recibe el aviso.')}</span>
               )}
             </div>
           )}
@@ -529,10 +531,11 @@ function esAvisoDeFaltante(a: string): boolean {
 }
 
 function Monto({ valor, porKg }: { valor?: number | null; porKg?: number | null }) {
+  const t = useT();
   return (
     <td className="px-3 py-2 text-right tabular-nums">
       <span className={isNum(valor) ? 'text-gray-900' : 'text-gray-300'}>{num2(valor)}</span>
-      {isNum(porKg) && isNum(valor) && valor !== 0 && <span className="block text-[10px] text-gray-400">{unit(porKg)}/kg</span>}
+      {isNum(porKg) && isNum(valor) && valor !== 0 && <span className="block text-[10px] text-gray-400">{unit(porKg)}{t('/kg')}</span>}
     </td>
   );
 }

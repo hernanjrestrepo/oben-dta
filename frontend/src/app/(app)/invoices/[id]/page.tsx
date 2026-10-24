@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -40,6 +41,7 @@ const dianStatusLabels: Record<string, string> = {
 };
 
 export default function InvoiceDetailPage() {
+  const t = useT();
   const params = useParams();
   const id = params.id as string;
 
@@ -102,10 +104,10 @@ export default function InvoiceDetailPage() {
               onClick={loadInvoice}
               className="text-[#F47735] hover:underline"
             >
-              Reintentar
+              {t('Reintentar')}
             </button>
             <Link href="/invoices" className="text-gray-500 hover:underline">
-              Volver a facturas
+              {t('Volver a facturas')}
             </Link>
           </div>
         </div>
@@ -156,7 +158,7 @@ export default function InvoiceDetailPage() {
             className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
-            Actualizar
+            {t('Actualizar')}
           </button>
 
           {nextStatuses.length > 0 && (
@@ -166,7 +168,7 @@ export default function InvoiceDetailPage() {
                 disabled={updating}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60"
               >
-                Cambiar Estado
+                {t('Cambiar Estado')}
                 <ChevronDown className="w-4 h-4" />
               </button>
 
@@ -200,11 +202,11 @@ export default function InvoiceDetailPage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <FileText className="w-5 h-5 text-[#F47735]" />
-            Orden y Cliente
+            {t('Orden y Cliente')}
           </h2>
           <div className="space-y-3">
             <div>
-              <p className="text-xs text-gray-500 uppercase">Orden</p>
+              <p className="text-xs text-gray-500 uppercase">{t('Orden')}</p>
               {invoice.order ? (
                 <Link
                   href={`/orders/${invoice.order.id}`}
@@ -217,11 +219,11 @@ export default function InvoiceDetailPage() {
               )}
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase">Cliente</p>
+              <p className="text-xs text-gray-500 uppercase">{t('Cliente')}</p>
               <p className="text-gray-700">{invoice.order?.client?.name || '—'}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase">Correo</p>
+              <p className="text-xs text-gray-500 uppercase">{t('Correo')}</p>
               <p className="text-gray-700">{invoice.order?.client?.email || '—'}</p>
             </div>
           </div>
@@ -231,27 +233,27 @@ export default function InvoiceDetailPage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Tag className="w-5 h-5 text-[#F47735]" />
-            Información
+            {t('Información')}
           </h2>
           <div className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-gray-500">Emitida</span>
+              <span className="text-gray-500">{t('Emitida')}</span>
               <span className="text-gray-700">{new Date(invoice.createdAt).toLocaleString('es-CO')}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">Vencimiento</span>
+              <span className="text-gray-500">{t('Vencimiento')}</span>
               <span className="text-gray-700">
                 {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('es-CO') : '—'}
               </span>
             </div>
             {invoice.paidAt && (
               <div className="flex justify-between">
-                <span className="text-gray-500">Pagada el</span>
+                <span className="text-gray-500">{t('Pagada el')}</span>
                 <span className="text-gray-700">{new Date(invoice.paidAt).toLocaleString('es-CO')}</span>
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-gray-500">Estado DIAN</span>
+              <span className="text-gray-500">{t('Estado DIAN')}</span>
               <span className="text-gray-700">{dianStatusLabels[invoice.dianStatus] || invoice.dianStatus}</span>
             </div>
             {invoice.dianCufe && (
@@ -267,25 +269,25 @@ export default function InvoiceDetailPage() {
       {/* Amounts */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Montos</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('Montos')}</h2>
         </div>
         <div className="divide-y divide-gray-100">
           <div className="flex justify-between px-6 py-4">
-            <span className="text-gray-500">Subtotal</span>
+            <span className="text-gray-500">{t('Subtotal')}</span>
             <span className="text-gray-900 font-medium">
-              ${Number(invoice.amount).toLocaleString('es-CO')} COP
+              ${Number(invoice.amount).toLocaleString('es-CO')}{' '}{t('COP')}
             </span>
           </div>
           <div className="flex justify-between px-6 py-4">
-            <span className="text-gray-500">IVA</span>
+            <span className="text-gray-500">{t('IVA')}</span>
             <span className="text-gray-900 font-medium">
-              ${Number(invoice.taxAmount).toLocaleString('es-CO')} COP
+              ${Number(invoice.taxAmount).toLocaleString('es-CO')}{' '}{t('COP')}
             </span>
           </div>
           <div className="flex justify-between px-6 py-4 bg-gray-50">
-            <span className="font-semibold text-gray-700">Total</span>
+            <span className="font-semibold text-gray-700">{t('Total')}</span>
             <span className="font-bold text-[#F47735] text-lg">
-              ${Number(invoice.totalAmount).toLocaleString('es-CO')} COP
+              ${Number(invoice.totalAmount).toLocaleString('es-CO')}{' '}{t('COP')}
             </span>
           </div>
         </div>

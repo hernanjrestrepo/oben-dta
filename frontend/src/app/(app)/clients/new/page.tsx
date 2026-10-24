@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -7,6 +8,7 @@ import { api } from '@/lib/api';
 import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 
 export default function NewClientPage() {
+  const t = useT();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -65,8 +67,8 @@ export default function NewClientPage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nuevo Cliente</h1>
-          <p className="text-gray-500 text-sm">Registra un cliente en el directorio</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('Nuevo Cliente')}</h1>
+          <p className="text-gray-500 text-sm">{t('Registra un cliente en el directorio')}</p>
         </div>
       </div>
 
@@ -79,44 +81,44 @@ export default function NewClientPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Información General</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('Información General')}</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ID de Cliente *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('ID de Cliente *')}</label>
               <input
                 type="text"
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
-                placeholder="CLI-0001"
+                placeholder={t('CLI-0001')}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Nombre *')}</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Nombre de la empresa"
+                placeholder={t('Nombre de la empresa')}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Correo *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Correo *')}</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="contacto@empresa.com"
+                placeholder={t('contacto@empresa.com')}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Teléfono')}</label>
               <input
                 type="text"
                 value={phone}
@@ -127,7 +129,7 @@ export default function NewClientPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Límite de Crédito (COP)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Límite de Crédito (COP)')}</label>
               <input
                 type="number"
                 min={0}
@@ -140,11 +142,11 @@ export default function NewClientPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Dirección')}</label>
             <textarea
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="Calle 00 # 00-00, Ciudad, Colombia"
+              placeholder={t('Calle 00 # 00-00, Ciudad, Colombia')}
               rows={2}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition resize-none"
             />
@@ -157,7 +159,7 @@ export default function NewClientPage() {
             href="/clients"
             className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
           >
-            Cancelar
+            {t('Cancelar')}
           </Link>
           <button
             type="submit"
@@ -167,7 +169,7 @@ export default function NewClientPage() {
             {submitting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Creando...
+                {t('Creando...')}
               </>
             ) : (
               'Crear Cliente'

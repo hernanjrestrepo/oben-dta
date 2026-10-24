@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -27,6 +28,7 @@ function generarContrasenaTemporal(): string {
 }
 
 export default function AdminUsersPage() {
+  const t = useT();
   const [users, setUsers] = useState<TenantUser[]>([]);
   const [roles, setRoles] = useState<SecurityRole[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,8 +182,8 @@ export default function AdminUsersPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Usuarios</h1>
-          <p className="text-gray-500 mt-1">Administra los usuarios y perfiles del tenant</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('Usuarios')}</h1>
+          <p className="text-gray-500 mt-1">{t('Administra los usuarios y perfiles del tenant')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -189,21 +191,21 @@ export default function AdminUsersPage() {
             className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
           >
             <ShieldCheck className="w-4 h-4" />
-            Perfiles y Permisos
+            {t('Perfiles y Permisos')}
           </Link>
           <button
             onClick={() => setShowCreate(true)}
             className="inline-flex items-center gap-2 bg-[#F47735] hover:bg-[#E5641F] text-white px-4 py-2.5 rounded-lg font-medium transition"
           >
             <Plus className="w-5 h-5" />
-            Nuevo Usuario
+            {t('Nuevo Usuario')}
           </button>
         </div>
       </div>
 
       {showCreate && (
         <form onSubmit={handleCreate} className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Nuevo Usuario</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('Nuevo Usuario')}</h2>
           {createError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
@@ -212,7 +214,7 @@ export default function AdminUsersPage() {
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Nombre *')}</label>
               <input
                 type="text"
                 value={form.firstName}
@@ -221,7 +223,7 @@ export default function AdminUsersPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Apellido *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Apellido *')}</label>
               <input
                 type="text"
                 value={form.lastName}
@@ -230,7 +232,7 @@ export default function AdminUsersPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Correo *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Correo *')}</label>
               <input
                 type="email"
                 value={form.email}
@@ -239,18 +241,18 @@ export default function AdminUsersPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña temporal *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Contraseña temporal *')}</label>
               <input
                 type="text"
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                placeholder="Mínimo 8 caracteres"
+                placeholder={t('Mínimo 8 caracteres')}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Perfiles</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('Perfiles')}</label>
             <div className="flex flex-wrap gap-2">
               {roles.map((role) => (
                 <label
@@ -280,7 +282,7 @@ export default function AdminUsersPage() {
               onClick={() => setShowCreate(false)}
               className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               type="submit"
@@ -288,7 +290,7 @@ export default function AdminUsersPage() {
               className="px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition disabled:opacity-60 flex items-center gap-2"
             >
               {creating && <Loader2 className="w-4 h-4 animate-spin" />}
-              Crear Usuario
+              {t('Crear Usuario')}
             </button>
           </div>
         </form>
@@ -297,7 +299,7 @@ export default function AdminUsersPage() {
       {resetTarget && (
         <form onSubmit={handleResetPassword} className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">
-            Reiniciar contraseña — {resetTarget.firstName} {resetTarget.lastName}
+            {t('Reiniciar contraseña —')}{' '}{resetTarget.firstName} {resetTarget.lastName}
           </h2>
           {resetError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
@@ -310,30 +312,29 @@ export default function AdminUsersPage() {
               type="text"
               value={resetPassword}
               onChange={(e) => setResetPassword(e.target.value)}
-              placeholder="Nueva contraseña temporal (mínimo 8 caracteres)"
+              placeholder={t('Nueva contraseña temporal (mínimo 8 caracteres)')}
               className="flex-1 min-w-0 px-4 py-2.5 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
             />
             <button
               type="button"
               onClick={() => setResetPassword(generarContrasenaTemporal())}
               className="inline-flex items-center gap-1.5 px-3 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
-              title="Generar una contraseña aleatoria"
+              title={t('Generar una contraseña aleatoria')}
             >
-              <Wand2 className="w-4 h-4" /> Generar
+              <Wand2 className="w-4 h-4" />{' '}{t('Generar')}
             </button>
             <button
               type="button"
               disabled={!resetPassword}
               onClick={() => { navigator.clipboard?.writeText(resetPassword).catch(() => undefined); }}
               className="inline-flex items-center gap-1.5 px-3 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-              title="Copiar"
+              title={t('Copiar')}
             >
-              <Copy className="w-4 h-4" /> Copiar
+              <Copy className="w-4 h-4" />{' '}{t('Copiar')}
             </button>
           </div>
           <p className="text-xs text-gray-500">
-            Es temporal: al entrar con ella, el sistema le pedirá a {resetTarget.firstName} que la cambie antes de usar Oben Xmart.
-            Envíasela por un medio distinto al correo (por ejemplo, WhatsApp).
+            {t('Es temporal: al entrar con ella, el sistema le pedirá a')}{' '}{resetTarget.firstName}{' '}{t('que la cambie antes de usar Oben Xmart. Envíasela por un medio distinto al correo (por ejemplo, WhatsApp).')}
           </p>
           <div className="flex items-center justify-end gap-3">
             <button
@@ -341,13 +342,13 @@ export default function AdminUsersPage() {
               onClick={() => { setResetTarget(null); setResetPassword(''); setResetError(''); }}
               className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               type="submit"
               className="px-6 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition"
             >
-              Reiniciar Contraseña
+              {t('Reiniciar Contraseña')}
             </button>
           </div>
         </form>
@@ -363,7 +364,7 @@ export default function AdminUsersPage() {
             <div className="text-center">
               <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-2" />
               <p className="text-red-600">{error}</p>
-              <button onClick={load} className="mt-3 text-[#F47735] hover:underline">Reintentar</button>
+              <button onClick={load} className="mt-3 text-[#F47735] hover:underline">{t('Reintentar')}</button>
             </div>
           </div>
         ) : (
@@ -371,11 +372,11 @@ export default function AdminUsersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Usuario</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Correo</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Perfiles</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Estado</th>
-                  <th className="px-6 py-3 text-right font-semibold text-gray-600">Acciones</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Usuario')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Correo')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Perfiles')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Estado')}</th>
+                  <th className="px-6 py-3 text-right font-semibold text-gray-600">{t('Acciones')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -422,12 +423,12 @@ export default function AdminUsersPage() {
                           </span>
                           {user.mustChangePassword && (
                             <span className="inline-flex w-fit px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
-                              Contraseña temporal
+                              {t('Contraseña temporal')}
                             </span>
                           )}
                           {user.isLocked && (
                             <span className="inline-flex w-fit px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                              Bloqueado
+                              {t('Bloqueado')}
                             </span>
                           )}
                         </div>
@@ -454,7 +455,7 @@ export default function AdminUsersPage() {
                             onClick={() => { setResetTarget(user); setResetPassword(''); setResetError(''); }}
                             disabled={busyId === user.id}
                             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
-                            title="Reiniciar contraseña"
+                            title={t('Reiniciar contraseña')}
                           >
                             <KeyRound className="w-4 h-4" />
                           </button>
@@ -462,7 +463,7 @@ export default function AdminUsersPage() {
                             onClick={() => handleDelete(user)}
                             disabled={busyId === user.id}
                             className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
-                            title="Eliminar"
+                            title={t('Eliminar')}
                           >
                             {busyId === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                           </button>
@@ -473,7 +474,7 @@ export default function AdminUsersPage() {
                 ) : (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
-                      No hay usuarios registrados
+                      {t('No hay usuarios registrados')}
                     </td>
                   </tr>
                 )}

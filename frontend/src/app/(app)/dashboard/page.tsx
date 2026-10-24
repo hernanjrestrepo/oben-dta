@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -40,6 +41,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const t = useT();
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -80,7 +82,7 @@ export default function DashboardPage() {
             onClick={loadDashboard}
             className="mt-4 text-[#F47735] hover:underline"
           >
-            Reintentar
+            {t('Reintentar')}
           </button>
         </div>
       </div>
@@ -91,33 +93,33 @@ export default function DashboardPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Resumen de operaciones y métricas clave</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t('Dashboard')}</h1>
+        <p className="text-gray-500 mt-1">{t('Resumen de operaciones y métricas clave')}</p>
       </div>
 
       {/* KPI Cards */}
       <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <KPICard
-            title="Total Órdenes"
+            title={t('Total Órdenes')}
             value={kpis?.totalOrders ?? 0}
             icon={ShoppingCart}
             color="bg-[#F47735]"
           />
           <KPICard
-            title="Órdenes Activas"
+            title={t('Órdenes Activas')}
             value={kpis?.activeOrders ?? 0}
             icon={Package}
             color="bg-[#009966]"
           />
           <KPICard
-            title="Total Clientes"
+            title={t('Total Clientes')}
             value={kpis?.totalClients ?? 0}
             icon={Users}
             color="bg-[#FF6600]"
           />
           <KPICard
-            title="Ingresos Totales"
+            title={t('Ingresos Totales')}
             value={`$${(kpis?.totalRevenue ?? 0).toLocaleString('es-CO')} COP`}
             icon={DollarSign}
             color="bg-[#E5641F]"
@@ -128,7 +130,7 @@ export default function DashboardPage() {
         <>
           <h2 className="text-lg font-semibold text-gray-900 mt-8 mb-4 flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-[#F47735]" />
-            Órdenes por Estado
+            {t('Órdenes por Estado')}
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {Object.entries(kpis?.ordersByStatus ?? {}).map(([status, count]) => (
@@ -146,12 +148,12 @@ export default function DashboardPage() {
         {/* Recent Orders */}
         <>
           <div className="flex items-center justify-between mt-8 mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Órdenes Recientes</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t('Órdenes Recientes')}</h2>
             <Link
               href="/orders"
               className="text-sm text-[#F47735] hover:underline flex items-center gap-1"
             >
-              Ver todas
+              {t('Ver todas')}
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -161,11 +163,11 @@ export default function DashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-6 py-3 text-left font-semibold text-gray-600">Orden</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-600">Cliente</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-600">Total</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-600">Estado</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-600">Fecha</th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Orden')}</th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Cliente')}</th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Total')}</th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Estado')}</th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Fecha')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -176,7 +178,7 @@ export default function DashboardPage() {
                   ) : (
                     <tr>
                       <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
-                        No hay órdenes registradas
+                        {t('No hay órdenes registradas')}
                       </td>
                     </tr>
                   )}
@@ -218,6 +220,7 @@ function KPICard({
 }
 
 function OrderRow({ order }: { order: Order }) {
+  const t = useT();
   return (
     <tr className="hover:bg-gray-50 transition">
       <td className="px-6 py-4">
@@ -230,7 +233,7 @@ function OrderRow({ order }: { order: Order }) {
       </td>
       <td className="px-6 py-4 text-gray-700">{order.client?.name || '—'}</td>
       <td className="px-6 py-4 font-semibold text-gray-900">
-        ${Number(order.totalAmount).toLocaleString('es-CO')} COP
+        ${Number(order.totalAmount).toLocaleString('es-CO')}{' '}{t('COP')}
       </td>
       <td className="px-6 py-4">
         <span

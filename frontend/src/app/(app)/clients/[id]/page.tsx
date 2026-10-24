@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 
 export default function ClientDetailPage() {
+  const t = useT();
   const params = useParams();
   const id = params.id as string;
 
@@ -113,10 +115,10 @@ export default function ClientDetailPage() {
               onClick={loadClient}
               className="text-[#F47735] hover:underline"
             >
-              Reintentar
+              {t('Reintentar')}
             </button>
             <Link href="/clients" className="text-gray-500 hover:underline">
-              Volver a clientes
+              {t('Volver a clientes')}
             </Link>
           </div>
         </div>
@@ -148,14 +150,14 @@ export default function ClientDetailPage() {
             className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
           >
             <RefreshCw className="w-4 h-4" />
-            Actualizar
+            {t('Actualizar')}
           </button>
           <button
             onClick={startEditing}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition"
           >
             <Pencil className="w-4 h-4" />
-            Editar
+            {t('Editar')}
           </button>
         </div>
       </div>
@@ -165,7 +167,7 @@ export default function ClientDetailPage() {
           onSubmit={handleSave}
           className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 space-y-4"
         >
-          <h2 className="text-lg font-semibold text-gray-900">Editar Cliente</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('Editar Cliente')}</h2>
 
           {saveError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
@@ -176,7 +178,7 @@ export default function ClientDetailPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Nombre *')}</label>
               <input
                 type="text"
                 value={form.name}
@@ -185,7 +187,7 @@ export default function ClientDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Correo *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Correo *')}</label>
               <input
                 type="email"
                 value={form.email}
@@ -194,7 +196,7 @@ export default function ClientDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Teléfono')}</label>
               <input
                 type="text"
                 value={form.phone}
@@ -203,7 +205,7 @@ export default function ClientDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Límite de Crédito (COP)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Límite de Crédito (COP)')}</label>
               <input
                 type="number"
                 min={0}
@@ -214,7 +216,7 @@ export default function ClientDetailPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Dirección')}</label>
             <textarea
               value={form.address}
               onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -229,7 +231,7 @@ export default function ClientDetailPage() {
               onClick={() => setEditing(false)}
               className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               type="submit"
@@ -239,7 +241,7 @@ export default function ClientDetailPage() {
               {saving ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Guardando...
+                  {t('Guardando...')}
                 </>
               ) : (
                 'Guardar Cambios'
@@ -252,12 +254,12 @@ export default function ClientDetailPage() {
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Información de Contacto</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('Información de Contacto')}</h2>
           <div className="space-y-4">
             <div className="flex items-start gap-3">
               <Mail className="w-5 h-5 text-[#F47735] mt-0.5" />
               <div>
-                <p className="text-xs text-gray-500">Correo electrónico</p>
+                <p className="text-xs text-gray-500">{t('Correo electrónico')}</p>
                 <p className="text-gray-900">{client.email}</p>
               </div>
             </div>
@@ -265,7 +267,7 @@ export default function ClientDetailPage() {
               <div className="flex items-start gap-3">
                 <Phone className="w-5 h-5 text-[#F47735] mt-0.5" />
                 <div>
-                  <p className="text-xs text-gray-500">Teléfono</p>
+                  <p className="text-xs text-gray-500">{t('Teléfono')}</p>
                   <p className="text-gray-900">{client.phone}</p>
                 </div>
               </div>
@@ -274,7 +276,7 @@ export default function ClientDetailPage() {
               <div className="flex items-start gap-3">
                 <MapPin className="w-5 h-5 text-[#F47735] mt-0.5" />
                 <div>
-                  <p className="text-xs text-gray-500">Dirección</p>
+                  <p className="text-xs text-gray-500">{t('Dirección')}</p>
                   <p className="text-gray-900">{client.address}</p>
                 </div>
               </div>
@@ -282,7 +284,7 @@ export default function ClientDetailPage() {
             <div className="flex items-start gap-3">
               <Calendar className="w-5 h-5 text-[#F47735] mt-0.5" />
               <div>
-                <p className="text-xs text-gray-500">Registrado</p>
+                <p className="text-xs text-gray-500">{t('Registrado')}</p>
                 <p className="text-gray-900">
                   {new Date(client.createdAt).toLocaleDateString('es-CO')}
                 </p>
@@ -294,29 +296,29 @@ export default function ClientDetailPage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-[#F47735]" />
-            Información de Crédito
+            {t('Información de Crédito')}
           </h2>
           <div className="space-y-4">
             <div>
-              <p className="text-xs text-gray-500">Límite de Crédito</p>
+              <p className="text-xs text-gray-500">{t('Límite de Crédito')}</p>
               <p className="text-xl font-bold text-[#F47735]">
-                ${Number(client.creditLimit).toLocaleString('es-CO')} COP
+                ${Number(client.creditLimit).toLocaleString('es-CO')}{' '}{t('COP')}
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Crédito Usado</p>
+              <p className="text-xs text-gray-500">{t('Crédito Usado')}</p>
               <p className="text-lg font-semibold text-gray-900">
-                ${Number(client.usedCredit).toLocaleString('es-CO')} COP
+                ${Number(client.usedCredit).toLocaleString('es-CO')}{' '}{t('COP')}
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Disponible</p>
+              <p className="text-xs text-gray-500">{t('Disponible')}</p>
               <p
                 className={`text-lg font-semibold ${
                   availableCredit > 0 ? 'text-green-600' : 'text-red-600'
                 }`}
               >
-                ${Number(availableCredit).toLocaleString('es-CO')} COP
+                ${Number(availableCredit).toLocaleString('es-CO')}{' '}{t('COP')}
               </p>
             </div>
             <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -343,17 +345,17 @@ export default function ClientDetailPage() {
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <ShoppingCart className="w-5 h-5 text-[#F47735]" />
-              Órdenes del Cliente
+              {t('Órdenes del Cliente')}
             </h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Orden</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Total</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Estado</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Fecha</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Orden')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Total')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Estado')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Fecha')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -368,7 +370,7 @@ export default function ClientDetailPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4">
-                      ${Number(order.totalAmount).toLocaleString('es-CO')} COP
+                      ${Number(order.totalAmount).toLocaleString('es-CO')}{' '}{t('COP')}
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">

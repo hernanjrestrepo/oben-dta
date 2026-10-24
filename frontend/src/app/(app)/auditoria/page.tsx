@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { WorkflowEvent } from '@/types';
@@ -32,6 +33,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AuditoriaPage() {
+  const t = useT();
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -62,8 +64,8 @@ export default function AuditoriaPage() {
           <History className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Auditoría</h1>
-          <p className="text-gray-500 mt-1">Trazabilidad de eventos de negocio del tenant</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('Auditoría')}</h1>
+          <p className="text-gray-500 mt-1">{t('Trazabilidad de eventos de negocio del tenant')}</p>
         </div>
       </div>
 
@@ -77,7 +79,7 @@ export default function AuditoriaPage() {
             <div className="text-center">
               <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-2" />
               <p className="text-red-600">{error}</p>
-              <button onClick={load} className="mt-3 text-[#F47735] hover:underline">Reintentar</button>
+              <button onClick={load} className="mt-3 text-[#F47735] hover:underline">{t('Reintentar')}</button>
             </div>
           </div>
         ) : (
@@ -85,12 +87,12 @@ export default function AuditoriaPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Fecha</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Flujo</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Acción</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Entidad</th>
-                  <th className="px-6 py-3 text-left font-semibold text-gray-600">Estado</th>
-                  <th className="px-6 py-3 text-right font-semibold text-gray-600">Detalle</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Fecha')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Flujo')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Acción')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Entidad')}</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-600">{t('Estado')}</th>
+                  <th className="px-6 py-3 text-right font-semibold text-gray-600">{t('Detalle')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -136,7 +138,7 @@ export default function AuditoriaPage() {
                 ) : (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
-                      No hay eventos registrados todavía
+                      {t('No hay eventos registrados todavía')}
                     </td>
                   </tr>
                 )}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AlertCircle, AlertTriangle, ArrowLeft, Bot, CheckCircle2, Code2, Loader2, Lock, MessageCircleQuestion, ShieldCheck, Users } from 'lucide-react';
@@ -14,6 +15,7 @@ import { Anillo } from '../comun';
  * más dificultad, encontrando las fricciones para mejorar la experiencia"). Solo administradores.
  */
 export default function FriccionesPage() {
+  const t = useT();
   const permisos = useAuthStore((s) => s.user?.permissions ?? []);
   const puedeEditar = permisos.includes('security.update');
   const [dias, setDias] = useState(30);
@@ -43,15 +45,15 @@ export default function FriccionesPage() {
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <Link href="/academy" className="inline-flex items-center gap-1 text-xs font-semibold text-[#C4521A]">
-            <ArrowLeft className="w-3.5 h-3.5" /> Xmart Academy
+            <ArrowLeft className="w-3.5 h-3.5" />{' '}{t('Xmart Academy')}
           </Link>
-          <h1 className="mt-2 text-3xl font-extrabold text-gray-900 tracking-tight">Panel de fricciones</h1>
-          <p className="text-gray-600 mt-1 max-w-3xl">Dónde se equivoca la gente, qué pregunta, qué falla en cada módulo, quién va atrasado y qué contenido quedó viejo frente al código. Con esto se prioriza qué mejorar.</p>
+          <h1 className="mt-2 text-3xl font-extrabold text-gray-900 tracking-tight">{t('Panel de fricciones')}</h1>
+          <p className="text-gray-600 mt-1 max-w-3xl">{t('Dónde se equivoca la gente, qué pregunta, qué falla en cada módulo, quién va atrasado y qué contenido quedó viejo frente al código. Con esto se prioriza qué mejorar.')}</p>
         </div>
         <div className="flex gap-1 rounded-xl bg-white border border-gray-200 p-1">
           {[7, 30, 90].map((d) => (
             <button key={d} onClick={() => setDias(d)} className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${dias === d ? 'bg-[#2E2E31] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-              {d} días
+              {d}{' '}{t('días')}
             </button>
           ))}
         </div>
@@ -66,9 +68,9 @@ export default function FriccionesPage() {
             <span className="text-xs font-extrabold">{totalObligatorios ? Math.round((totalAprobados / totalObligatorios) * 100) : 0}%</span>
           </Anillo>
           <div>
-            <p className="text-[11px] uppercase tracking-wider text-gray-500">Certificación</p>
+            <p className="text-[11px] uppercase tracking-wider text-gray-500">{t('Certificación')}</p>
             <p className="text-sm font-semibold text-gray-900">
-              {totalAprobados} de {totalObligatorios} quizzes obligatorios
+              {totalAprobados}{' '}{t('de')}{' '}{totalObligatorios}{' '}{t('quizzes obligatorios')}
             </p>
           </div>
         </div>
@@ -77,10 +79,10 @@ export default function FriccionesPage() {
       <Ajustes datos={datos} puedeEditar={puedeEditar} onGuardado={(a) => setDatos((d) => (d ? { ...d, ajustes: a } : d))} />
 
       <section className="rounded-3xl bg-white border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-extrabold text-gray-900">Módulos con más fricción</h2>
-        <p className="text-sm text-gray-500">Peso: errores ×2, bloqueos ×3, preguntas falladas ×2, preguntas a MIA ×1.</p>
+        <h2 className="text-lg font-extrabold text-gray-900">{t('Módulos con más fricción')}</h2>
+        <p className="text-sm text-gray-500">{t('Peso: errores ×2, bloqueos ×3, preguntas falladas ×2, preguntas a MIA ×1.')}</p>
         {conFriccion.length === 0 ? (
-          <p className="mt-4 text-sm text-gray-500">Sin fricción registrada en el periodo.</p>
+          <p className="mt-4 text-sm text-gray-500">{t('Sin fricción registrada en el periodo.')}</p>
         ) : (
           <div className="mt-5 space-y-4">
             {conFriccion.map((m) => (
@@ -90,7 +92,7 @@ export default function FriccionesPage() {
                     {m.titulo}
                   </Link>
                   <span className="text-xs text-gray-500">
-                    {m.errores} errores · {m.bloqueos} bloqueos · {m.fallosQuiz} quizzes con fallas · {m.preguntasMia} preguntas a MIA · {m.aperturas} lecturas
+                    {m.errores}{' '}{t('errores ·')}{' '}{m.bloqueos}{' '}{t('bloqueos ·')}{' '}{m.fallosQuiz}{' '}{t('quizzes con fallas ·')}{' '}{m.preguntasMia}{' '}{t('preguntas a MIA ·')}{' '}{m.aperturas}{' '}{t('lecturas')}
                   </span>
                 </div>
                 <div className="mt-1.5 h-2.5 rounded-full bg-gray-100 overflow-hidden">
@@ -118,17 +120,17 @@ export default function FriccionesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className="rounded-3xl bg-white border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-extrabold text-gray-900">Preguntas que más se fallan</h2>
-          <p className="text-sm text-gray-500">Si muchos fallan la misma, la pantalla o la explicación no es clara.</p>
+          <h2 className="text-lg font-extrabold text-gray-900">{t('Preguntas que más se fallan')}</h2>
+          <p className="text-sm text-gray-500">{t('Si muchos fallan la misma, la pantalla o la explicación no es clara.')}</p>
           {datos.preguntasDificiles.length === 0 ? (
-            <p className="mt-4 text-sm text-gray-500">Aún no hay suficientes intentos.</p>
+            <p className="mt-4 text-sm text-gray-500">{t('Aún no hay suficientes intentos.')}</p>
           ) : (
             <ul className="mt-4 space-y-3">
               {datos.preguntasDificiles.map((p) => (
                 <li key={`${p.modulo}:${p.id}`} className="rounded-xl border border-gray-100 p-3">
                   <p className="text-sm font-semibold text-gray-900">{p.pregunta}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {p.modulo} · falla el {p.tasaFallo} % ({p.fallos} de {p.intentos})
+                    {p.modulo}{' '}{t('· falla el')}{' '}{p.tasaFallo} % ({p.fallos}{' '}{t('de')}{' '}{p.intentos})
                   </p>
                 </li>
               ))}
@@ -138,12 +140,12 @@ export default function FriccionesPage() {
 
         <section className="rounded-3xl bg-white border border-gray-100 shadow-sm p-6">
           <h2 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
-            <Code2 className="w-5 h-5 text-[#F47735]" /> Contenido por revisar
+            <Code2 className="w-5 h-5 text-[#F47735]" />{' '}{t('Contenido por revisar')}
           </h2>
-          <p className="text-sm text-gray-500">El código de estas pantallas cambió después de la última revisión de su lección.</p>
+          <p className="text-sm text-gray-500">{t('El código de estas pantallas cambió después de la última revisión de su lección.')}</p>
           {datos.porRevisar.length === 0 ? (
             <p className="mt-4 text-sm text-emerald-700 flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4" /> Todas las lecciones están al día con el código.
+              <CheckCircle2 className="w-4 h-4" />{' '}{t('Todas las lecciones están al día con el código.')}
             </p>
           ) : (
             <ul className="mt-4 space-y-3">
@@ -151,7 +153,7 @@ export default function FriccionesPage() {
                 <li key={r.modulo} className="rounded-xl border border-gray-100 p-3">
                   <p className="text-sm font-semibold text-gray-900">{r.titulo}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Lección revisada el {r.revisado}; código cambiado el {r.codigoCambio} ({r.commit}): {r.resumen}
+                    {t('Lección revisada el')}{' '}{r.revisado}{t('; código cambiado el')}{' '}{r.codigoCambio} ({r.commit}): {r.resumen}
                   </p>
                 </li>
               ))}
@@ -162,16 +164,16 @@ export default function FriccionesPage() {
 
       <section className="rounded-3xl bg-white border border-gray-100 shadow-sm p-6">
         <h2 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
-          <Users className="w-5 h-5 text-[#F47735]" /> Avance por persona
+          <Users className="w-5 h-5 text-[#F47735]" />{' '}{t('Avance por persona')}
         </h2>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-[11px] uppercase tracking-wider text-gray-500 border-b border-gray-100">
               <tr>
-                <th className="py-2 pr-3">Persona</th>
-                <th className="py-2 pr-3">Lecciones vistas</th>
-                <th className="py-2 pr-3">Quizzes para operar</th>
-                <th className="py-2">Le falta</th>
+                <th className="py-2 pr-3">{t('Persona')}</th>
+                <th className="py-2 pr-3">{t('Lecciones vistas')}</th>
+                <th className="py-2 pr-3">{t('Quizzes para operar')}</th>
+                <th className="py-2">{t('Le falta')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -182,7 +184,7 @@ export default function FriccionesPage() {
                     <p className="text-xs text-gray-500">{p.email}</p>
                   </td>
                   <td className="py-2.5 pr-3 text-gray-700">
-                    {p.vistos} de {p.modulos}
+                    {p.vistos}{' '}{t('de')}{' '}{p.modulos}
                   </td>
                   <td className="py-2.5 pr-3">
                     <div className="flex items-center gap-2">
@@ -192,10 +194,10 @@ export default function FriccionesPage() {
                       <span className="text-xs text-gray-600">
                         {p.aprobados}/{p.obligatorios}
                       </span>
-                      {p.exento && <span className="text-[10px] px-1.5 rounded bg-gray-100 text-gray-500">exento</span>}
+                      {p.exento && <span className="text-[10px] px-1.5 rounded bg-gray-100 text-gray-500">{t('exento')}</span>}
                     </div>
                   </td>
-                  <td className="py-2.5 text-xs text-gray-600">{p.pendientes.length ? p.pendientes.join(', ') : <span className="text-emerald-700 font-semibold">Al día</span>}</td>
+                  <td className="py-2.5 text-xs text-gray-600">{p.pendientes.length ? p.pendientes.join(', ') : <span className="text-emerald-700 font-semibold">{t('Al día')}</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -217,6 +219,7 @@ function Kpi({ etiqueta, valor, icono: Icono }: { etiqueta: string; valor: numbe
 }
 
 function Ajustes({ datos, puedeEditar, onGuardado }: { datos: FriccionesAcademy; puedeEditar: boolean; onGuardado: (a: FriccionesAcademy['ajustes']) => void }) {
+  const t = useT();
   const [exigir, setExigir] = useState(datos.ajustes.exigirCertificacion);
   const [minimo, setMinimo] = useState(datos.ajustes.puntajeMinimo);
   const [exentos, setExentos] = useState<string[]>(datos.ajustes.exentos);
@@ -249,10 +252,10 @@ function Ajustes({ datos, puedeEditar, onGuardado }: { datos: FriccionesAcademy;
       <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
         <div className="flex-1">
           <h2 className="text-lg font-extrabold flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-[#F47735]" /> Certificación para operar
+            <ShieldCheck className="w-5 h-5 text-[#F47735]" />{' '}{t('Certificación para operar')}
           </h2>
           <p className="text-sm text-white/70 mt-1 max-w-2xl">
-            Activa, lo transaccional de cada módulo (crear, aprobar, liquidar, enviar) se habilita solo cuando la persona aprueba su quiz con el puntaje mínimo. Consultar nunca se bloquea.
+            {t('Activa, lo transaccional de cada módulo (crear, aprobar, liquidar, enviar) se habilita solo cuando la persona aprueba su quiz con el puntaje mínimo. Consultar nunca se bloquea.')}
           </p>
           <label className={`mt-4 inline-flex items-center gap-3 ${puedeEditar ? 'cursor-pointer' : 'opacity-60'}`}>
             <span className={`relative w-12 h-7 rounded-full transition ${exigir ? 'bg-[#F47735]' : 'bg-white/20'}`}>
@@ -261,11 +264,11 @@ function Ajustes({ datos, puedeEditar, onGuardado }: { datos: FriccionesAcademy;
             <input type="checkbox" className="hidden" checked={exigir} disabled={!puedeEditar} onChange={(e) => setExigir(e.target.checked)} />
             <span className="font-semibold">{exigir ? 'Certificación obligatoria activa' : 'Certificación obligatoria apagada'}</span>
           </label>
-          {sinCertificar.length > 0 && <p className="mt-2 text-xs text-[#F9A66F]">{sinCertificar.length} persona(s) aún no aprueban todos sus quizzes obligatorios.</p>}
+          {sinCertificar.length > 0 && <p className="mt-2 text-xs text-[#F9A66F]">{sinCertificar.length}{' '}{t('persona(s) aún no aprueban todos sus quizzes obligatorios.')}</p>}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:w-[460px]">
           <label className="text-sm">
-            <span className="text-white/70">Puntaje mínimo</span>
+            <span className="text-white/70">{t('Puntaje mínimo')}</span>
             <select value={minimo} disabled={!puedeEditar} onChange={(e) => setMinimo(Number(e.target.value))} className="mt-1 w-full rounded-lg bg-white text-gray-900 px-3 py-2">
               {[60, 70, 75, 80, 85, 90, 100].map((v) => (
                 <option key={v} value={v}>
@@ -275,7 +278,7 @@ function Ajustes({ datos, puedeEditar, onGuardado }: { datos: FriccionesAcademy;
             </select>
           </label>
           <label className="text-sm">
-            <span className="text-white/70">Exentos (no se les exige)</span>
+            <span className="text-white/70">{t('Exentos (no se les exige)')}</span>
             <select
               multiple
               value={exentos}
@@ -293,7 +296,7 @@ function Ajustes({ datos, puedeEditar, onGuardado }: { datos: FriccionesAcademy;
           {puedeEditar && (
             <div className="sm:col-span-2 flex items-center gap-3">
               <button onClick={() => void guardar()} disabled={guardando} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#F47735] hover:bg-[#E5641F] font-semibold">
-                {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Guardar
+                {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}{' '}{t('Guardar')}
               </button>
               {msg && <span className="text-xs text-white/80">{msg}</span>}
             </div>

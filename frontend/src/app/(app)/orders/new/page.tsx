@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function NewOrderPage() {
+  const t = useT();
   const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -127,8 +129,8 @@ export default function NewOrderPage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nueva Orden</h1>
-          <p className="text-gray-500 text-sm">Crea una orden de exportación</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('Nueva Orden')}</h1>
+          <p className="text-gray-500 text-sm">{t('Crea una orden de exportación')}</p>
         </div>
       </div>
 
@@ -142,29 +144,29 @@ export default function NewOrderPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Order Info */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Información General</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('Información General')}</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Número de Orden *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Número de Orden *')}</label>
               <input
                 type="text"
                 value={orderNumber}
                 onChange={(e) => setOrderNumber(e.target.value)}
-                placeholder="ORD-2026-0001"
+                placeholder={t('ORD-2026-0001')}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Cliente *')}</label>
               <div className="relative">
                 <select
                   value={clientId}
                   onChange={(e) => setClientId(e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition appearance-none bg-white"
                 >
-                  <option value="">Seleccionar cliente...</option>
+                  <option value="">{t('Seleccionar cliente...')}</option>
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
                       {client.name} ({client.clientId})
@@ -177,11 +179,11 @@ export default function NewOrderPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Notas')}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notas adicionales sobre la orden..."
+              placeholder={t('Notas adicionales sobre la orden...')}
               rows={3}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition resize-none"
             />
@@ -193,7 +195,7 @@ export default function NewOrderPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Package className="w-5 h-5 text-[#F47735]" />
-              Productos
+              {t('Productos')}
             </h2>
             <button
               type="button"
@@ -201,7 +203,7 @@ export default function NewOrderPage() {
               className="inline-flex items-center gap-1 text-sm text-[#F47735] hover:underline"
             >
               <Plus className="w-4 h-4" />
-              Agregar
+              {t('Agregar')}
             </button>
           </div>
 
@@ -216,10 +218,10 @@ export default function NewOrderPage() {
                       onChange={(e) => updateItem(index, 'productId', e.target.value)}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none transition appearance-none bg-white"
                     >
-                      <option value="">Seleccionar producto...</option>
+                      <option value="">{t('Seleccionar producto...')}</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name} — ${p.price.toLocaleString('es-CO')} COP
+                          {p.name} — ${p.price.toLocaleString('es-CO')}{' '}{t('COP')}
                         </option>
                       ))}
                     </select>
@@ -254,7 +256,7 @@ export default function NewOrderPage() {
 
           <div className="flex justify-end pt-2 border-t border-gray-100">
             <p className="text-lg font-bold text-[#F47735]">
-              Total: ${getTotal().toLocaleString('es-CO')} COP
+              {t('Total: $')}{getTotal().toLocaleString('es-CO')}{' '}{t('COP')}
             </p>
           </div>
         </div>
@@ -265,7 +267,7 @@ export default function NewOrderPage() {
             href="/orders"
             className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
           >
-            Cancelar
+            {t('Cancelar')}
           </Link>
           <button
             type="submit"
@@ -275,7 +277,7 @@ export default function NewOrderPage() {
             {submitting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Creando...
+                {t('Creando...')}
               </>
             ) : (
               'Crear Orden'

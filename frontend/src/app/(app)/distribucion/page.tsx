@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -46,6 +47,7 @@ function errMsg(err: unknown, fallback: string): string {
  * escogido del catálogo de documentos y reportes de Oben Xmart.
  */
 export default function DistribucionPage() {
+  const t = useT();
   const { user } = useAuthStore();
   const esAdmin = !!user?.permissions?.includes('configuracion.update');
   const [lists, setLists] = useState<DistributionList[]>([]);
@@ -81,11 +83,10 @@ export default function DistribucionPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Users className="w-6 h-6 text-[#F47735]" />
-            Listas de Distribución
+            {t('Listas de Distribución')}
           </h1>
           <p className="text-gray-500 mt-1 max-w-3xl">
-            Quién recibe cada documento. Cada lista tiene <b>dueños</b> que la mantienen, un <b>disparador</b> (automático cuando
-            el sistema genera el documento, o manual con &quot;Enviar ahora&quot;) y <b>lo que envía</b>.
+            {t('Quién recibe cada documento. Cada lista tiene')}{' '}<b>{t('dueños')}</b>{' '}{t('que la mantienen, un')}{' '}<b>{t('disparador')}</b>{' '}{t('(automático cuando el sistema genera el documento, o manual con "Enviar ahora") y')}{' '}<b>{t('lo que envía')}</b>.
           </p>
         </div>
         {esAdmin && (
@@ -93,7 +94,7 @@ export default function DistribucionPage() {
             onClick={() => setShowForm((v) => !v)}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-medium transition"
           >
-            <Plus className="w-4 h-4" /> Nueva lista
+            <Plus className="w-4 h-4" />{' '}{t('Nueva lista')}
           </button>
         )}
       </div>
@@ -135,6 +136,7 @@ export default function DistribucionPage() {
 }
 
 function NuevaLista({ onCreada, onCancelar }: { onCreada: () => void; onCancelar: () => void }) {
+  const t = useT();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
@@ -156,15 +158,15 @@ function NuevaLista({ onCreada, onCancelar }: { onCreada: () => void; onCancelar
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Lista de Empaque — COMEX)" className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Para qué se usa (opcional)" className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Nombre (ej: Lista de Empaque — COMEX)')} className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('Para qué se usa (opcional)')} className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
       </div>
-      <p className="text-xs text-gray-500">Después de crearla, agrega destinatarios, dueños y lo que envía.</p>
+      <p className="text-xs text-gray-500">{t('Después de crearla, agrega destinatarios, dueños y lo que envía.')}</p>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
-        <button onClick={onCancelar} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
+        <button onClick={onCancelar} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">{t('Cancelar')}</button>
         <button onClick={crear} disabled={saving || !name.trim()} className="inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg text-sm font-medium disabled:opacity-50">
-          {saving && <Loader2 className="w-4 h-4 animate-spin" />} Crear lista
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}{' '}{t('Crear lista')}
         </button>
       </div>
     </div>
@@ -186,6 +188,7 @@ function ListaCard({
   esDueno: boolean;
   onChanged: () => Promise<void>;
 }) {
+  const t = useT();
   const puedeGestionar = esAdmin || esDueno;
   const [error, setError] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -219,7 +222,7 @@ function ListaCard({
         <div>
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             {list.name}
-            {esDueno && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-100 text-[#C4521A]">Eres dueño</span>}
+            {esDueno && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-100 text-[#C4521A]">{t('Eres dueño')}</span>}
           </h3>
           {list.description && <p className="text-sm text-gray-500">{list.description}</p>}
         </div>
@@ -233,7 +236,7 @@ function ListaCard({
             <button
               onClick={() => confirm(`¿Eliminar la lista "${list.name}"?`) && accion(() => api.deleteDistributionList(list.id), 'No se pudo eliminar la lista.')}
               className="text-gray-400 hover:text-red-500 p-1.5"
-              title="Eliminar lista"
+              title={t('Eliminar lista')}
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -245,7 +248,7 @@ function ListaCard({
         {/* Dueños */}
         <Seccion titulo="Dueños" ayuda="Mantienen la lista y pueden enviar a mano.">
           <div className="flex flex-wrap gap-1.5">
-            {(list.ownerUserIds ?? []).length === 0 && <span className="text-xs text-gray-400">Sin dueño: solo administración la gestiona.</span>}
+            {(list.ownerUserIds ?? []).length === 0 && <span className="text-xs text-gray-400">{t('Sin dueño: solo administración la gestiona.')}</span>}
             {(list.ownerUserIds ?? []).map((id) => (
               <span key={id} className="inline-flex items-center gap-1 text-xs bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1 text-gray-700">
                 <UserRound className="w-3 h-3 text-gray-400" />
@@ -254,7 +257,7 @@ function ListaCard({
                   <button
                     onClick={() => accion(() => api.updateDistributionList(list.id, { ownerUserIds: list.ownerUserIds.filter((x) => x !== id) }), 'No se pudo quitar el dueño.')}
                     className="hover:text-red-600"
-                    title="Quitar dueño"
+                    title={t('Quitar dueño')}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -271,7 +274,7 @@ function ListaCard({
               }
               className="mt-2 w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
             >
-              <option value="">+ Agregar dueño…</option>
+              <option value="">{t('+ Agregar dueño…')}</option>
               {usuarios
                 .filter((u) => u.isActive && !(list.ownerUserIds ?? []).includes(u.id))
                 .map((u) => (
@@ -286,14 +289,14 @@ function ListaCard({
         {/* Qué envía */}
         <Seccion titulo="Qué envía" ayuda="Documentos y reportes que reciben los destinatarios.">
           <div className="flex flex-wrap gap-1.5">
-            {asociadas.length === 0 && <span className="text-xs text-gray-400">Nada todavía.</span>}
+            {asociadas.length === 0 && <span className="text-xs text-gray-400">{t('Nada todavía.')}</span>}
             {asociadas.map((a) => {
               const c = porClave.get(a.entityKey);
               return (
                 <span key={a.id} title={c?.descripcion} className="inline-flex items-center gap-1.5 text-xs bg-[#FFF1E8] text-[#B34E14] rounded-full px-2.5 py-1">
                   {c?.label ?? a.entityKey}
                   {esAdmin && (
-                    <button onClick={() => accion(() => api.dissociateDistributionList(list.id, a.id), 'No se pudo quitar.')} className="hover:text-red-600" title="Quitar">
+                    <button onClick={() => accion(() => api.dissociateDistributionList(list.id, a.id), 'No se pudo quitar.')} className="hover:text-red-600" title={t('Quitar')}>
                       <X className="w-3 h-3" />
                     </button>
                   )}
@@ -308,7 +311,7 @@ function ListaCard({
               onChange={(e) => e.target.value && accion(() => api.associateDistributionList(list.id, 'document', e.target.value), 'No se pudo agregar.')}
               className="mt-2 w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
             >
-              <option value="">+ Agregar documento o reporte…</option>
+              <option value="">{t('+ Agregar documento o reporte…')}</option>
               {[...new Set(disponibles.map((d) => d.grupo))].map((g) => (
                 <optgroup key={g} label={g}>
                   {disponibles
@@ -327,9 +330,9 @@ function ListaCard({
         {/* Enviar ahora */}
         <Seccion titulo="Enviar ahora" ayuda="Envía un documento de una orden solo a esta lista.">
           {!puedeGestionar ? (
-            <span className="text-xs text-gray-400">Solo los dueños o administración.</span>
+            <span className="text-xs text-gray-400">{t('Solo los dueños o administración.')}</span>
           ) : enviables.length === 0 ? (
-            <span className="text-xs text-gray-400">Esta lista no tiene documentos que se envíen a mano.</span>
+            <span className="text-xs text-gray-400">{t('Esta lista no tiene documentos que se envíen a mano.')}</span>
           ) : (
             <EnviarAhora lista={list} enviables={enviables} />
           )}
@@ -382,6 +385,7 @@ function Disparador({ valor, editable, onCambiar }: { valor: DisparadorLista; ed
 }
 
 function EnviarAhora({ lista, enviables }: { lista: DistributionList; enviables: EnvioCatalogo[] }) {
+  const t = useT();
   const [clave, setClave] = useState(enviables[0]?.clave ?? '');
   const [ov, setOv] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -419,7 +423,7 @@ function EnviarAhora({ lista, enviables }: { lista: DistributionList; enviables:
           value={ov}
           onChange={(e) => setOv(e.target.value.replace(/\D/g, ''))}
           inputMode="numeric"
-          placeholder="N.º de OV"
+          placeholder={t('N.º de OV')}
           className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
         />
         <button
@@ -427,13 +431,13 @@ function EnviarAhora({ lista, enviables }: { lista: DistributionList; enviables:
           disabled={!valido || enviando}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg text-xs font-medium disabled:opacity-50"
         >
-          {enviando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Enviar
+          {enviando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}{' '}{t('Enviar')}
         </button>
       </div>
       {resultado && (
         <p className="text-xs text-emerald-700 flex items-start gap-1">
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-px" />
-          Enviado: {resultado.documento} de la OV {resultado.ov} ({resultado.adjuntos.length} adjunto{resultado.adjuntos.length === 1 ? '' : 's'}).
+          {t('Enviado:')}{' '}{resultado.documento}{' '}{t('de la OV')}{' '}{resultado.ov} ({resultado.adjuntos.length}{' '}{t('adjunto')}{resultado.adjuntos.length === 1 ? '' : 's'}).
         </p>
       )}
       {error && <p className="text-xs text-red-600">{error}</p>}
@@ -442,6 +446,7 @@ function EnviarAhora({ lista, enviables }: { lista: DistributionList; enviables:
 }
 
 function Destinatarios({ list, editable, onGuardado }: { list: DistributionList; editable: boolean; onGuardado: () => Promise<void> }) {
+  const t = useT();
   const [editando, setEditando] = useState(false);
   const [filas, setFilas] = useState<RecipientDraft[]>([]);
   const [guardando, setGuardando] = useState(false);
@@ -474,17 +479,17 @@ function Destinatarios({ list, editable, onGuardado }: { list: DistributionList;
     <div>
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-600">
-          Destinatarios <span className="font-normal normal-case text-gray-400">({list.recipients.length})</span>
+          {t('Destinatarios')}{' '}<span className="font-normal normal-case text-gray-400">({list.recipients.length})</span>
         </p>
         {editable && !editando && (
           <button onClick={empezar} className="inline-flex items-center gap-1 text-xs font-medium text-[#C4521A] hover:underline">
-            <Pencil className="w-3.5 h-3.5" /> Editar
+            <Pencil className="w-3.5 h-3.5" />{' '}{t('Editar')}
           </button>
         )}
       </div>
       {!editando ? (
         <div className="flex flex-wrap gap-1.5">
-          {list.recipients.length === 0 && <span className="text-xs text-gray-400">Sin destinatarios.</span>}
+          {list.recipients.length === 0 && <span className="text-xs text-gray-400">{t('Sin destinatarios.')}</span>}
           {list.recipients.map((r) => (
             <span key={r.id} className="inline-flex items-center gap-1 text-xs bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1 text-gray-700">
               <Mail className="w-3 h-3 text-gray-400" />
@@ -500,7 +505,7 @@ function Destinatarios({ list, editable, onGuardado }: { list: DistributionList;
               <input
                 value={r.email}
                 onChange={(e) => setFilas((f) => f.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))}
-                placeholder="correo@ejemplo.com"
+                placeholder={t('correo@ejemplo.com')}
                 className="flex-1 min-w-0 px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
               />
               <select
@@ -508,23 +513,23 @@ function Destinatarios({ list, editable, onGuardado }: { list: DistributionList;
                 onChange={(e) => setFilas((f) => f.map((x, j) => (j === i ? { ...x, role: e.target.value as DistributionRecipientRole } : x)))}
                 className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
               >
-                <option value="to">Para</option>
-                <option value="cc">Copia</option>
-                <option value="bcc">Copia oculta</option>
+                <option value="to">{t('Para')}</option>
+                <option value="cc">{t('Copia')}</option>
+                <option value="bcc">{t('Copia oculta')}</option>
               </select>
-              <button onClick={() => setFilas((f) => f.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 p-1.5" title="Quitar">
+              <button onClick={() => setFilas((f) => f.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 p-1.5" title={t('Quitar')}>
                 <X className="w-4 h-4" />
               </button>
             </div>
           ))}
           <div className="flex items-center justify-between">
             <button onClick={() => setFilas((f) => [...f, { email: '', name: '', role: 'to' }])} className="text-sm text-[#F47735] hover:text-[#E5641F] font-medium">
-              + Agregar destinatario
+              {t('+ Agregar destinatario')}
             </button>
             <div className="flex gap-2">
-              <button onClick={() => setEditando(false)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
+              <button onClick={() => setEditando(false)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900">{t('Cancelar')}</button>
               <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg text-sm font-medium disabled:opacity-50">
-                {guardando && <Loader2 className="w-4 h-4 animate-spin" />} Guardar
+                {guardando && <Loader2 className="w-4 h-4 animate-spin" />}{' '}{t('Guardar')}
               </button>
             </div>
           </div>

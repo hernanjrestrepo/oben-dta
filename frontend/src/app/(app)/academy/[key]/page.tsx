@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -11,6 +12,7 @@ import { Anillo, EstadoPill, IconoModulo, OBEN, preguntarAMia } from '../comun';
 
 /** Una lección de Xmart Academy: para qué sirve, cómo se ve, paso a paso, reglas y el quiz. */
 export default function LeccionPage() {
+  const t = useT();
   const { key } = useParams<{ key: string }>();
   const [l, setL] = useState<LeccionAcademy | null>(null);
   const [plan, setPlan] = useState<PlanAcademy | null>(null);
@@ -40,7 +42,7 @@ export default function LeccionPage() {
       <div className="max-w-3xl mx-auto mt-10 space-y-4">
         <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-4">{error}</p>
         <Link href="/academy" className="inline-flex items-center gap-1 text-sm font-semibold text-[#C4521A]">
-          <ArrowLeft className="w-4 h-4" /> Volver a Xmart Academy
+          <ArrowLeft className="w-4 h-4" />{' '}{t('Volver a Xmart Academy')}
         </Link>
       </div>
     );
@@ -58,7 +60,7 @@ export default function LeccionPage() {
         <div className="absolute -top-20 -right-10 w-72 h-72 rounded-full bg-[#F47735] opacity-25 blur-3xl" />
         <div className="relative p-6 md:p-10">
           <nav className="flex items-center gap-1 text-xs text-white/60">
-            <Link href="/academy" className="hover:text-white">Xmart Academy</Link>
+            <Link href="/academy" className="hover:text-white">{t('Xmart Academy')}</Link>
             <ChevronRight className="w-3 h-3" />
             <span>{l.grupo}</span>
           </nav>
@@ -74,11 +76,11 @@ export default function LeccionPage() {
               <p className="mt-2 text-white/75 text-base md:text-lg">{l.resumen}</p>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/60">
                 <span className="inline-flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> {l.minutos} min
+                  <Clock className="w-3.5 h-3.5" /> {l.minutos}{' '}{t('min')}
                 </span>
-                <span>{l.quiz.length} preguntas · mínimo {l.puntajeMinimo} %</span>
-                {l.obligatorio ? <span className="font-semibold text-[#F9A66F]">Quiz obligatorio para operar</span> : <span>Quiz recomendado</span>}
-                <span>Revisado el {l.revisado}</span>
+                <span>{l.quiz.length}{' '}{t('preguntas · mínimo')}{' '}{l.puntajeMinimo} %</span>
+                {l.obligatorio ? <span className="font-semibold text-[#F9A66F]">{t('Quiz obligatorio para operar')}</span> : <span>{t('Quiz recomendado')}</span>}
+                <span>{t('Revisado el')}{' '}{l.revisado}</span>
               </div>
             </div>
           </div>
@@ -89,11 +91,11 @@ export default function LeccionPage() {
                 onClick={() => api.registrarEventoAcademy('ir_al_modulo', l.key, { desde: 'leccion' })}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#F47735] hover:bg-[#E5641F] font-semibold shadow-lg shadow-[#F47735]/30"
               >
-                Ir al módulo en vivo <ExternalLink className="w-4 h-4" />
+                {t('Ir al módulo en vivo')}{' '}<ExternalLink className="w-4 h-4" />
               </Link>
             )}
             <a href="#quiz" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 font-semibold">
-              <Target className="w-4 h-4" /> Ir al quiz
+              <Target className="w-4 h-4" />{' '}{t('Ir al quiz')}
             </a>
             <button
               onClick={() => {
@@ -102,7 +104,7 @@ export default function LeccionPage() {
               }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 font-semibold"
             >
-              <Sparkles className="w-4 h-4" /> Preguntar a MIA
+              <Sparkles className="w-4 h-4" />{' '}{t('Preguntar a MIA')}
             </button>
           </div>
         </div>
@@ -111,12 +113,12 @@ export default function LeccionPage() {
       {/* Para qué sirve */}
       <section className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr] gap-5">
         <div className="academy-subir rounded-2xl bg-white border border-gray-100 shadow-sm p-6">
-          <Etiqueta>Para qué sirve</Etiqueta>
+          <Etiqueta>{t('Para qué sirve')}</Etiqueta>
           <p className="mt-2 text-gray-800 leading-relaxed text-[15px]">{l.paraQue}</p>
         </div>
         <div className="academy-subir rounded-2xl bg-white border border-gray-100 shadow-sm p-6" style={{ animationDelay: '100ms' }}>
           <Etiqueta>
-            <Users className="w-3.5 h-3.5" /> Quiénes lo usan
+            <Users className="w-3.5 h-3.5" />{' '}{t('Quiénes lo usan')}
           </Etiqueta>
           <ul className="mt-3 flex flex-wrap gap-2">
             {l.quienes.map((q) => (
@@ -177,19 +179,19 @@ export default function LeccionPage() {
           <Link href={`/academy/${anterior.key}`} className="group flex items-center gap-3 rounded-2xl bg-white border border-gray-100 px-5 py-4 hover:border-orange-200">
             <ArrowLeft className="w-4 h-4 text-gray-400 group-hover:text-[#F47735]" />
             <span>
-              <span className="block text-[11px] uppercase tracking-wider text-gray-400">Anterior</span>
+              <span className="block text-[11px] uppercase tracking-wider text-gray-400">{t('Anterior')}</span>
               <span className="font-semibold text-gray-900">{anterior.titulo}</span>
             </span>
           </Link>
         ) : (
           <Link href="/academy" className="flex items-center gap-2 text-sm font-semibold text-[#C4521A]">
-            <ArrowLeft className="w-4 h-4" /> Volver a Xmart Academy
+            <ArrowLeft className="w-4 h-4" />{' '}{t('Volver a Xmart Academy')}
           </Link>
         )}
         {siguiente && (
           <Link href={`/academy/${siguiente.key}`} className="group flex items-center justify-end gap-3 rounded-2xl bg-white border border-gray-100 px-5 py-4 hover:border-orange-200 text-right">
             <span>
-              <span className="block text-[11px] uppercase tracking-wider text-gray-400">Siguiente</span>
+              <span className="block text-[11px] uppercase tracking-wider text-gray-400">{t('Siguiente')}</span>
               <span className="font-semibold text-gray-900">{siguiente.titulo}</span>
             </span>
             <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-[#F47735]" />
@@ -259,6 +261,7 @@ function Captura({ c, modulo }: { c: LeccionAcademy['capturas'][number]; modulo:
 }
 
 function Quiz({ l, onAprobado }: { l: LeccionAcademy; onAprobado: (puntaje: number) => void }) {
+  const t = useT();
   const [paso, setPaso] = useState(0);
   const [respuestas, setRespuestas] = useState<Record<string, number>>({});
   const [resultado, setResultado] = useState<ResultadoQuizAcademy | null>(null);
@@ -292,9 +295,9 @@ function Quiz({ l, onAprobado }: { l: LeccionAcademy; onAprobado: (puntaje: numb
       <div className="px-6 md:px-8 pt-6 flex items-center justify-between gap-4">
         <div>
           <Etiqueta>
-            <Target className="w-3.5 h-3.5" /> Quiz
+            <Target className="w-3.5 h-3.5" />{' '}{t('Quiz')}
           </Etiqueta>
-          <h2 className="text-xl md:text-2xl font-extrabold text-gray-900">¿Quedó claro?</h2>
+          <h2 className="text-xl md:text-2xl font-extrabold text-gray-900">{t('¿Quedó claro?')}</h2>
           <p className="text-sm text-gray-500">
             {l.obligatorio ? `Obligatorio para operar en este módulo: necesitas ${l.puntajeMinimo} % o más.` : `Recomendado: ${l.puntajeMinimo} % o más lo da por aprobado.`}
             {l.intentos > 0 && ` Llevas ${l.intentos} intento${l.intentos === 1 ? '' : 's'}${l.puntaje !== null ? `; tu mejor puntaje es ${l.puntaje} %` : ''}.`}
@@ -339,11 +342,11 @@ function Quiz({ l, onAprobado }: { l: LeccionAcademy; onAprobado: (puntaje: numb
           )}
           <div className="mt-6 flex items-center justify-between gap-3">
             <button onClick={() => setPaso((p) => Math.max(0, p - 1))} disabled={paso === 0} className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-30">
-              Anterior
+              {t('Anterior')}
             </button>
             {paso < total - 1 ? (
               <button onClick={() => setPaso((p) => p + 1)} disabled={respuestas[q?.id ?? ''] === undefined} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2E2E31] text-white text-sm font-semibold hover:bg-black disabled:opacity-30">
-                Siguiente <ArrowRight className="w-4 h-4" />
+                {t('Siguiente')}{' '}<ArrowRight className="w-4 h-4" />
               </button>
             ) : (
               <button
@@ -351,7 +354,7 @@ function Quiz({ l, onAprobado }: { l: LeccionAcademy; onAprobado: (puntaje: numb
                 disabled={enviando || Object.keys(respuestas).length < total}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#F47735] text-white text-sm font-semibold hover:bg-[#E5641F] disabled:opacity-40"
               >
-                {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Calificar
+                {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}{' '}{t('Calificar')}
               </button>
             )}
           </div>
@@ -364,6 +367,7 @@ function Quiz({ l, onAprobado }: { l: LeccionAcademy; onAprobado: (puntaje: numb
 }
 
 function Resultado({ l, r, onReintentar }: { l: LeccionAcademy; r: ResultadoQuizAcademy; onReintentar: () => void }) {
+  const t = useT();
   return (
     <div className="relative p-6 md:p-8 pt-4 overflow-hidden">
       {r.aprobado && <Confeti />}
@@ -374,19 +378,19 @@ function Resultado({ l, r, onReintentar }: { l: LeccionAcademy; r: ResultadoQuiz
         <div className="flex-1 text-center md:text-left">
           <p className={`text-xl font-extrabold ${r.aprobado ? 'text-emerald-700' : 'text-[#C4521A]'}`}>{r.aprobado ? '¡Aprobado!' : 'Aún no: repasa y vuelve a intentarlo'}</p>
           <p className="mt-1 text-sm text-gray-600">
-            {r.buenas} de {r.total} correctas · mínimo {r.puntajeMinimo} %.{' '}
+            {r.buenas}{' '}{t('de')}{' '}{r.total}{' '}{t('correctas · mínimo')}{' '}{r.puntajeMinimo} %.{' '}
             {r.aprobado && l.obligatorio ? 'Ya puedes operar en este módulo.' : r.aprobado ? 'Módulo completado.' : 'Las preguntas que fallaste te dicen qué repasar.'}
           </p>
         </div>
         <div className="flex gap-2">
           {r.aprobado && l.puedeIr && l.href && (
             <Link href={l.href} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#F47735] text-white text-sm font-semibold hover:bg-[#E5641F]">
-              Ir al módulo <ArrowRight className="w-4 h-4" />
+              {t('Ir al módulo')}{' '}<ArrowRight className="w-4 h-4" />
             </Link>
           )}
           {!r.aprobado && (
             <button onClick={onReintentar} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2E2E31] text-white text-sm font-semibold">
-              <RotateCcw className="w-4 h-4" /> Intentar de nuevo
+              <RotateCcw className="w-4 h-4" />{' '}{t('Intentar de nuevo')}
             </button>
           )}
         </div>
@@ -401,8 +405,8 @@ function Resultado({ l, r, onReintentar }: { l: LeccionAcademy; r: ResultadoQuiz
                 <p className="font-semibold text-gray-900">
                   {i + 1}. {q?.pregunta}
                 </p>
-                {p.respuesta !== null && q && <p className="text-gray-600 mt-0.5">Respuesta: {q.opciones[p.respuesta]}</p>}
-                {p.explicacion ? <p className="text-gray-500 mt-0.5">{p.explicacion}</p> : !p.correcta && <p className="text-gray-500 mt-0.5">Repasa el paso a paso y las reglas de arriba.</p>}
+                {p.respuesta !== null && q && <p className="text-gray-600 mt-0.5">{t('Respuesta:')}{' '}{q.opciones[p.respuesta]}</p>}
+                {p.explicacion ? <p className="text-gray-500 mt-0.5">{p.explicacion}</p> : !p.correcta && <p className="text-gray-500 mt-0.5">{t('Repasa el paso a paso y las reglas de arriba.')}</p>}
               </div>
             </li>
           );

@@ -12,6 +12,8 @@ const diccionario = readFileSync(join(raiz, 'i18n', 'textos.ts'), 'utf8');
 const claves = new Set();
 for (const m of diccionario.matchAll(/^\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|([\wÁÉÍÓÚáéíóúñÑ]+)): \{ ?en:/gm)) claves.add((m[1] ?? m[2] ?? m[3]).replace(/\\'/g, "'"));
 for (const m of diccionario.matchAll(/^\s*'((?:[^'\\]|\\.)*)': \{\s*$/gm)) claves.add(m[1].replace(/\\'/g, "'"));
+const pantallas = readFileSync(join(raiz, 'i18n', 'textos-pantallas.ts'), 'utf8');
+for (const k of Object.keys(JSON.parse(pantallas.slice(pantallas.indexOf('= ') + 2, pantallas.lastIndexOf(';'))))) claves.add(k);
 
 const archivos = [];
 const recorrer = (d) => {

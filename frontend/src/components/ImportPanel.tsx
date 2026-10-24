@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useState } from 'react';
 import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import { extractMessage } from '@/lib/errors';
@@ -22,6 +23,7 @@ export function ImportPanel({
   onImport: (dto: TabularImportInput) => Promise<TabularImportResult>;
   onDone?: () => void;
 }) {
+  const t = useT();
   const [file, setFile] = useState<{ name: string; base64: string } | null>(null);
   const [preview, setPreview] = useState<TabularImportResult | null>(null);
   const [done, setDone] = useState<TabularImportResult | null>(null);
@@ -68,8 +70,7 @@ export function ImportPanel({
         <h2 className="font-semibold text-gray-900">{title}</h2>
       </div>
       <p className="text-xs text-gray-500">
-        Excel (.xlsx/.xls) o CSV, primera hoja. Columnas: <span className="font-mono">{columns.join(' · ')}</span>. Primero se revisa sin guardar; si
-        una sola fila tiene un error no se carga ninguna.
+        {t('Excel (.xlsx/.xls) o CSV, primera hoja. Columnas:')}{' '}<span className="font-mono">{columns.join(' · ')}</span>{t('. Primero se revisa sin guardar; si una sola fila tiene un error no se carga ninguna.')}
       </p>
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
         <input
@@ -84,14 +85,14 @@ export function ImportPanel({
           className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium disabled:opacity-50"
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-          Revisar (sin guardar)
+          {t('Revisar (sin guardar)')}
         </button>
         <button
           onClick={() => run(false)}
           disabled={!preview || preview.errores.length > 0 || busy}
           className="inline-flex items-center gap-2 px-4 py-2 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg text-sm font-medium disabled:opacity-50"
         >
-          <Upload className="w-4 h-4" /> Cargar
+          <Upload className="w-4 h-4" />{' '}{t('Cargar')}
         </button>
       </div>
 
@@ -103,15 +104,15 @@ export function ImportPanel({
       {preview && (
         <div className="text-sm space-y-2">
           <p className="text-gray-700">
-            {preview.total} fila(s): <strong>{preview.creados}</strong> nueva(s), <strong>{preview.actualizados}</strong> a actualizar.
+            {preview.total}{' '}{t('fila(s):')}{' '}<strong>{preview.creados}</strong>{' '}{t('nueva(s),')}{' '}<strong>{preview.actualizados}</strong>{' '}{t('a actualizar.')}
           </p>
           {preview.errores.length > 0 && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="font-medium text-red-700 mb-1">No se carga nada hasta corregir {preview.errores.length} fila(s):</p>
+              <p className="font-medium text-red-700 mb-1">{t('No se carga nada hasta corregir')}{' '}{preview.errores.length}{' '}{t('fila(s):')}</p>
               <ul className="list-disc ml-5 text-red-700 text-xs space-y-0.5">
                 {preview.errores.slice(0, 30).map((e) => (
                   <li key={e.fila}>
-                    Fila {e.fila}: {e.error}
+                    {t('Fila')}{' '}{e.fila}: {e.error}
                   </li>
                 ))}
               </ul>
@@ -121,7 +122,7 @@ export function ImportPanel({
       )}
       {done && (
         <p className="text-sm text-green-700 flex items-center gap-1.5">
-          <CheckCircle2 className="w-4 h-4" /> Cargado: {done.creados} nueva(s), {done.actualizados} actualizada(s).
+          <CheckCircle2 className="w-4 h-4" />{' '}{t('Cargado:')}{' '}{done.creados}{' '}{t('nueva(s),')}{' '}{done.actualizados}{' '}{t('actualizada(s).')}
         </p>
       )}
     </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -45,6 +46,7 @@ export function EnvioPanel({
   historial: FacturacionHistorial | null;
   onEnviado: () => void;
 }) {
+  const t = useT();
   const [to, setTo] = useState<string[]>([]);
   const [cc, setCc] = useState<string[]>([]);
   const [origenDest, setOrigenDest] = useState<'lista' | 'ultimos' | null>(null);
@@ -127,7 +129,7 @@ export function EnvioPanel({
       type="button"
       onClick={() => void abrirAdjunto()}
       disabled={abriendo}
-      title="Abrir el PDF"
+      title={t('Abrir el PDF')}
       className={`inline-flex items-center gap-1.5 text-[#C4521A] hover:underline disabled:opacity-60 disabled:no-underline ${clase}`}
     >
       {abriendo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />} {nombre}
@@ -151,24 +153,24 @@ export function EnvioPanel({
           <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center animate-[pulse_1.2s_ease-out_1]">
             <CheckCircle2 className="w-9 h-9 text-emerald-600" />
           </div>
-          <h3 className="mt-4 text-xl font-bold text-gray-900">Documento de facturación enviado</h3>
+          <h3 className="mt-4 text-xl font-bold text-gray-900">{t('Documento de facturación enviado')}</h3>
           <p className="mt-1 text-sm text-gray-600">
-            Orden {n} · {draft.cliente}
+            {t('Orden')}{' '}{n} · {draft.cliente}
           </p>
           <div className="mt-5 inline-flex flex-col items-stretch gap-2 text-left text-sm max-w-xl w-full">
             <div className="rounded-lg bg-white border border-gray-200 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-wide text-gray-500">Enviado a</p>
+              <p className="text-[11px] uppercase tracking-wide text-gray-500">{t('Enviado a')}</p>
               <p className="text-gray-900">{resultado.to.join(', ')}</p>
-              {resultado.cc.length > 0 && <p className="text-gray-600 text-xs mt-0.5">CC: {resultado.cc.join(', ')}</p>}
+              {resultado.cc.length > 0 && <p className="text-gray-600 text-xs mt-0.5">{t('CC:')}{' '}{resultado.cc.join(', ')}</p>}
             </div>
             <div className="rounded-lg bg-white border border-gray-200 px-4 py-3">
               <p className="text-[11px] uppercase tracking-wide text-gray-500 flex items-center gap-2">
-                Factura electrónica · CUFE
-                {resultado.cufeSimulado && <span className="px-1.5 py-px rounded bg-purple-100 text-purple-800 font-semibold normal-case">SIMULADO · sin validez fiscal</span>}
+                {t('Factura electrónica · CUFE')}
+                {resultado.cufeSimulado && <span className="px-1.5 py-px rounded bg-purple-100 text-purple-800 font-semibold normal-case">{t('SIMULADO · sin validez fiscal')}</span>}
               </p>
               <div className="flex items-center gap-2 mt-1">
                 <code className="text-xs text-gray-800 break-all flex-1">{resultado.cufe}</code>
-                <button onClick={() => void copiarCufe(resultado.cufe)} className="p-1.5 rounded hover:bg-gray-100 shrink-0" title="Copiar CUFE">
+                <button onClick={() => void copiarCufe(resultado.cufe)} className="p-1.5 rounded hover:bg-gray-100 shrink-0" title={t('Copiar CUFE')}>
                   {copiado ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-gray-500" />}
                 </button>
               </div>
@@ -180,7 +182,7 @@ export function EnvioPanel({
           </div>
           <div className="mt-6">
             <button className={btnSecondary} onClick={() => setResultado(null)}>
-              Volver al envío
+              {t('Volver al envío')}
             </button>
           </div>
         </div>
@@ -194,7 +196,7 @@ export function EnvioPanel({
         <Card>
           <CardHeader
             icon={<Mail className="w-4 h-4 text-[#F47735]" />}
-            title="Destinatarios"
+            title={t('Destinatarios')}
             subtitle={
               origenDest === 'lista'
                 ? 'Precargados desde la lista de distribución "facturacion". Los cambios aplican solo a este envío.'
@@ -205,36 +207,36 @@ export function EnvioPanel({
           />
           <div className="p-4 space-y-3">
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Para</p>
-              <EmailChips value={to} onChange={setTo} placeholder="correo@obengroup.com" />
+              <p className="text-xs font-medium text-gray-600 mb-1">{t('Para')}</p>
+              <EmailChips value={to} onChange={setTo} placeholder={t('correo@obengroup.com')} />
             </div>
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Con copia</p>
-              <EmailChips value={cc} onChange={setCc} placeholder="Opcional" />
+              <p className="text-xs font-medium text-gray-600 mb-1">{t('Con copia')}</p>
+              <EmailChips value={cc} onChange={setCc} placeholder={t('Opcional')} />
             </div>
           </div>
         </Card>
 
         <Card>
-          <CardHeader icon={<FileText className="w-4 h-4 text-[#F47735]" />} title="Qué se envía" />
+          <CardHeader icon={<FileText className="w-4 h-4 text-[#F47735]" />} title={t('Qué se envía')} />
           <dl className="p-4 grid grid-cols-[auto,1fr] gap-x-4 gap-y-2.5 text-sm">
-            <dt className="text-gray-500">Asunto</dt>
-            <dd className="text-gray-900">Borrador de Facturación — Orden {n}</dd>
-            <dt className="text-gray-500">Adjunto</dt>
+            <dt className="text-gray-500">{t('Asunto')}</dt>
+            <dd className="text-gray-900">{t('Borrador de Facturación — Orden')}{' '}{n}</dd>
+            <dt className="text-gray-500">{t('Adjunto')}</dt>
             <dd>{adjunto(`Factura_Borrador-OV${n}.pdf`)}</dd>
-            <dt className="text-gray-500">Factura electrónica</dt>
+            <dt className="text-gray-500">{t('Factura electrónica')}</dt>
             <dd className="text-gray-900">
               {factura ? (
                 <>
-                  Ya emitida · CUFE <code className="text-xs">{factura.cufe.slice(0, 16)}…</code>
-                  {factura.simulated && <span className="ml-1.5 text-[10px] font-semibold text-purple-700">SIMULADO</span>}
-                  <span className="block text-xs text-gray-500">Reenviar reutiliza el mismo CUFE: nunca se emite dos veces.</span>
+                  {t('Ya emitida · CUFE')}{' '}<code className="text-xs">{factura.cufe.slice(0, 16)}…</code>
+                  {factura.simulated && <span className="ml-1.5 text-[10px] font-semibold text-purple-700">{t('SIMULADO')}</span>}
+                  <span className="block text-xs text-gray-500">{t('Reenviar reutiliza el mismo CUFE: nunca se emite dos veces.')}</span>
                 </>
               ) : (
                 <>
-                  Se emite al enviar, una sola vez por orden.
+                  {t('Se emite al enviar, una sola vez por orden.')}
                   <span className="block text-xs text-gray-500">
-                    Mientras no esté conectado el proveedor de facturación real, el CUFE es SIMULADO (sin validez fiscal) y el correo lo indica.
+                    {t('Mientras no esté conectado el proveedor de facturación real, el CUFE es SIMULADO (sin validez fiscal) y el correo lo indica.')}
                   </span>
                 </>
               )}
@@ -251,7 +253,7 @@ export function EnvioPanel({
                 <Receipt className="w-5 h-5 text-[#F47735]" />
               </div>
               <div>
-                <p className="font-semibold text-gray-900">Orden {n}</p>
+                <p className="font-semibold text-gray-900">{t('Orden')}{' '}{n}</p>
                 <p className="text-xs text-gray-500">{draft.cliente}</p>
               </div>
             </div>
@@ -260,7 +262,7 @@ export function EnvioPanel({
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex gap-2">
                 <ShieldAlert className="w-4 h-4 shrink-0" />
                 <span>
-                  Ya se envió el {fecha(envioPrevio.fecha)} a {[...envioPrevio.to, ...envioPrevio.cc].join(', ')}. Enviar de nuevo es un reenvío.
+                  {t('Ya se envió el')}{' '}{fecha(envioPrevio.fecha)} a {[...envioPrevio.to, ...envioPrevio.cc].join(', ')}{t('. Enviar de nuevo es un reenvío.')}
                 </span>
               </div>
             )}
@@ -272,13 +274,13 @@ export function EnvioPanel({
             <button className={`${btnPrimary} w-full py-3 text-base`} onClick={() => setConfirmar(true)} disabled={!puedeEnviar}>
               <Send className="w-4 h-4" /> {envioPrevio ? 'Reenviar a Facturación' : 'Enviar a Facturación'}
             </button>
-            {to.length === 0 && <p className="text-[11px] text-gray-500 text-center">Agrega al menos un destinatario.</p>}
+            {to.length === 0 && <p className="text-[11px] text-gray-500 text-center">{t('Agrega al menos un destinatario.')}</p>}
           </div>
         </Card>
 
         {historial && historial.envios.length > 0 && (
           <Card>
-            <CardHeader icon={<History className="w-4 h-4 text-gray-400" />} title="Historial de envíos" />
+            <CardHeader icon={<History className="w-4 h-4 text-gray-400" />} title={t('Historial de envíos')} />
             <ul className="divide-y divide-gray-100">
               {historial.envios.map((e) => (
                 <li key={e.fecha} className="px-4 py-2.5 text-xs flex gap-2">
@@ -300,9 +302,9 @@ export function EnvioPanel({
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between p-5 border-b border-gray-100">
               <div>
-                <h3 className="font-semibold text-gray-900">{envioPrevio ? 'Reenviar' : 'Enviar'} documento de facturación</h3>
+                <h3 className="font-semibold text-gray-900">{envioPrevio ? 'Reenviar' : 'Enviar'}{' '}{t('documento de facturación')}</h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Orden {n} · {draft.cliente}
+                  {t('Orden')}{' '}{n} · {draft.cliente}
                 </p>
               </div>
               <button onClick={() => setConfirmar(false)} disabled={enviando} className="p-1 rounded hover:bg-gray-100">
@@ -310,7 +312,7 @@ export function EnvioPanel({
               </button>
             </div>
             <div className="p-5 space-y-3 text-sm">
-              <p className="text-gray-700">Se enviará un correo real con el PDF adjunto a:</p>
+              <p className="text-gray-700">{t('Se enviará un correo real con el PDF adjunto a:')}</p>
               <ul className="space-y-1">
                 {to.map((e) => (
                   <li key={e} className="flex items-center gap-2 text-gray-900">
@@ -319,14 +321,14 @@ export function EnvioPanel({
                 ))}
                 {cc.map((e) => (
                   <li key={e} className="flex items-center gap-2 text-gray-600">
-                    <Mail className="w-3.5 h-3.5 text-gray-400" /> {e} <span className="text-[10px] text-gray-400">CC</span>
+                    <Mail className="w-3.5 h-3.5 text-gray-400" /> {e} <span className="text-[10px] text-gray-400">{t('CC')}</span>
                   </li>
                 ))}
               </ul>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
               <button className={btnSecondary} onClick={() => setConfirmar(false)} disabled={enviando}>
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button className={btnPrimary} onClick={() => void enviar()} disabled={enviando}>
                 {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

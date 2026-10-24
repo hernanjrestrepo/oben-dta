@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge } from '@/types';
@@ -8,6 +9,7 @@ import { Truck, Loader2, AlertCircle, MapPin, Clock, Ship, Percent } from 'lucid
 type Tab = 'inland' | 'transload' | 'surcharges';
 
 export default function FletesPage() {
+  const t = useT();
   const [tab, setTab] = useState<Tab>('inland');
   const [inland, setInland] = useState<FreightInlandRate[]>([]);
   const [transload, setTransload] = useState<FreightTransloadRate[]>([]);
@@ -48,10 +50,10 @@ export default function FletesPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Truck className="w-6 h-6 text-[#F47735]" />
-          Tarifas de Flete
+          {t('Tarifas de Flete')}
         </h1>
         <p className="text-gray-500 mt-1">
-          Maestro real cargado desde el forwarder de Oben — precisión de origen, sin estimaciones.
+          {t('Maestro real cargado desde el forwarder de Oben — precisión de origen, sin estimaciones.')}
         </p>
       </div>
 
@@ -94,20 +96,20 @@ export default function FletesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">País</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Forwarder</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Puerto destino</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Estado / Dirección</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Peso (lbs)</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Tarifa 40HC</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Tránsito</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">{t('País')}</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">{t('Forwarder')}</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">{t('Puerto destino')}</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">{t('Estado / Dirección')}</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">{t('Peso (lbs)')}</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">{t('Tarifa 40HC')}</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">{t('Tránsito')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {inland.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
-                      Sin tarifas cargadas
+                      {t('Sin tarifas cargadas')}
                     </td>
                   </tr>
                 ) : (
@@ -154,18 +156,18 @@ export default function FletesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Puerto destino</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Dirección de entrega</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Peso unit. (lbs)</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Tarifa transload</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Tarifa transporte</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">{t('Puerto destino')}</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">{t('Dirección de entrega')}</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">{t('Peso unit. (lbs)')}</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">{t('Tarifa transload')}</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">{t('Tarifa transporte')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {transload.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-10 text-center text-gray-400">
-                      Sin tarifas cargadas
+                      {t('Sin tarifas cargadas')}
                     </td>
                   </tr>
                 ) : (
@@ -196,17 +198,17 @@ export default function FletesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">País</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Recargo</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Valor</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Fórmula</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">{t('País')}</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">{t('Recargo')}</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">{t('Valor')}</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">{t('Fórmula')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {surcharges.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-10 text-center text-gray-400">
-                      Sin recargos cargados
+                      {t('Sin recargos cargados')}
                     </td>
                   </tr>
                 ) : (

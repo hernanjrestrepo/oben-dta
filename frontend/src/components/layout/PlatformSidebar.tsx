@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -26,6 +27,7 @@ const navItems = [
 ];
 
 export function PlatformSidebar() {
+  const t = useT();
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -51,8 +53,8 @@ export function PlatformSidebar() {
                 <ShieldCheck className="w-6 h-6 text-gray-900" />
               </div>
               <div>
-                <h1 className="font-bold text-lg">Paradixe</h1>
-                <p className="text-xs text-gray-400">Panel SuperAdmin</p>
+                <h1 className="font-bold text-lg">{t('Paradixe')}</h1>
+                <p className="text-xs text-gray-400">{t('Panel SuperAdmin')}</p>
               </div>
             </div>
           </div>
@@ -90,7 +92,7 @@ export function PlatformSidebar() {
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition"
             >
               <LogOut className="w-5 h-5" />
-              <span>Cerrar Sesión</span>
+              <span>{t('Cerrar Sesión')}</span>
             </button>
           </div>
         </div>

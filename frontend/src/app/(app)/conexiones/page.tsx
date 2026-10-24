@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { ConexionMicrosoft, DiagnosticoSharepoint } from '@/types';
@@ -34,6 +35,7 @@ function Dato({ k, v, mono = false }: { k: string; v: string | null; mono?: bool
  * la respuesta de cada intento. Solo lectura; nunca muestra el secreto ni el token.
  */
 export default function ConexionesPage() {
+  const t = useT();
   const [conf, setConf] = useState<ConexionMicrosoft | null>(null);
   const [diag, setDiag] = useState<DiagnosticoSharepoint | null>(null);
   const [probando, setProbando] = useState(false);
@@ -63,11 +65,10 @@ export default function ConexionesPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <PlugZap className="w-6 h-6 text-[#F47735]" />
-          Conexión con Microsoft 365
+          {t('Conexión con Microsoft 365')}
         </h1>
         <p className="text-gray-500 mt-1">
-          Cómo entra Oben Xmart a Microsoft 365 (correo y SharePoint) y si puede leer el cuadro diario de facturación. La prueba se
-          ejecuta desde el servidor de Oben Xmart, en solo lectura.
+          {t('Cómo entra Oben Xmart a Microsoft 365 (correo y SharePoint) y si puede leer el cuadro diario de facturación. La prueba se ejecuta desde el servidor de Oben Xmart, en solo lectura.')}
         </p>
       </div>
 
@@ -81,7 +82,7 @@ export default function ConexionesPage() {
       <div className="grid md:grid-cols-2 gap-4">
         <section className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
-            <KeyRound className="w-4 h-4 text-[#F47735]" /> Aplicación que lee el archivo (SharePoint)
+            <KeyRound className="w-4 h-4 text-[#F47735]" />{' '}{t('Aplicación que lee el archivo (SharePoint)')}
           </h2>
           <Dato k="Nombre en Microsoft" v={c?.app.nombre ?? (diag ? null : 'se ve al probar')} />
           <Dato k="Application (client) ID" v={c?.app.clientId ?? null} mono />
@@ -89,19 +90,19 @@ export default function ConexionesPage() {
           <Dato k="Secreto" v={c?.app.secreto ?? null} />
           <p className="mt-3 text-xs text-gray-600 bg-gray-50 rounded-lg p-3">{c?.app.autenticacion}</p>
           <p className="mt-2 text-xs text-gray-500">
-            El correo usa <b>otra</b> aplicación (ID <span className="font-mono">{c?.appCorreo.clientId ?? '—'}</span>) con permisos de correo; no sirve para SharePoint.
+            {t('El correo usa')}{' '}<b>{t('otra')}</b>{' '}{t('aplicación (ID')}{' '}<span className="font-mono">{c?.appCorreo.clientId ?? '—'}</span>{t(') con permisos de correo; no sirve para SharePoint.')}
           </p>
         </section>
 
         <section className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
-            <FileSpreadsheet className="w-4 h-4 text-[#F47735]" /> Archivo que se quiere leer
+            <FileSpreadsheet className="w-4 h-4 text-[#F47735]" />{' '}{t('Archivo que se quiere leer')}
           </h2>
           <Dato k="Archivo" v={c?.archivo.nombre ?? null} />
           <Dato k="Sitio de SharePoint" v={c?.archivo.sitio ?? null} mono />
           <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
             <Mail className="w-4 h-4 text-gray-400" />
-            Buzón de correo del sistema: <span className="font-medium text-gray-900">{c?.buzonCorreo ?? '—'}</span>
+            {t('Buzón de correo del sistema:')}{' '}<span className="font-medium text-gray-900">{c?.buzonCorreo ?? '—'}</span>
           </div>
           <button
             onClick={probar}
@@ -122,22 +123,21 @@ export default function ConexionesPage() {
               {r.titulo}
             </div>
             <dl className="mt-3 space-y-2 text-sm">
-              <div><dt className="font-semibold inline">Qué pasó: </dt><dd className="inline">{diag.explicacion.quePaso}</dd></div>
-              <div><dt className="font-semibold inline">Qué significa: </dt><dd className="inline">{diag.explicacion.queSignifica}</dd></div>
-              <div><dt className="font-semibold inline">Qué hacer: </dt><dd className="inline">{diag.explicacion.queHacer}</dd></div>
+              <div><dt className="font-semibold inline">{t('Qué pasó:')}{' '}</dt><dd className="inline">{diag.explicacion.quePaso}</dd></div>
+              <div><dt className="font-semibold inline">{t('Qué significa:')}{' '}</dt><dd className="inline">{diag.explicacion.queSignifica}</dd></div>
+              <div><dt className="font-semibold inline">{t('Qué hacer:')}{' '}</dt><dd className="inline">{diag.explicacion.queHacer}</dd></div>
             </dl>
-            <p className="mt-3 text-xs opacity-75">Probado el {new Date(diag.probadoEn).toLocaleString('es-CO')}</p>
+            <p className="mt-3 text-xs opacity-75">{t('Probado el')}{' '}{new Date(diag.probadoEn).toLocaleString('es-CO')}</p>
           </section>
 
           {diag.token && (
             <section className="bg-white rounded-xl border border-gray-200 p-5">
-              <h2 className="font-semibold text-gray-900 mb-1">Permisos que Microsoft le da HOY a la app</h2>
+              <h2 className="font-semibold text-gray-900 mb-1">{t('Permisos que Microsoft le da HOY a la app')}</h2>
               <p className="text-xs text-gray-500 mb-3">
-                Leídos del token que Microsoft acaba de emitir{diag.token.emitido ? ` (${new Date(diag.token.emitido).toLocaleString('es-CO')})` : ''}. Para leer el
-                Excel debe aparecer uno de SharePoint (Sites.Selected o Sites.Read.All).
+                {t('Leídos del token que Microsoft acaba de emitir')}{diag.token.emitido ? ` (${new Date(diag.token.emitido).toLocaleString('es-CO')})` : ''}{t('. Para leer el Excel debe aparecer uno de SharePoint (Sites.Selected o Sites.Read.All).')}
               </p>
               <div className="flex flex-wrap gap-2">
-                {diag.token.permisos.length === 0 && <span className="text-sm text-gray-500">(ninguno)</span>}
+                {diag.token.permisos.length === 0 && <span className="text-sm text-gray-500">{t('(ninguno)')}</span>}
                 {diag.token.permisos.map((p) => (
                   <span
                     key={p}
@@ -147,14 +147,14 @@ export default function ConexionesPage() {
                   </span>
                 ))}
                 {diag.token.permisosSharepoint.length === 0 && (
-                  <span className="px-2.5 py-1 rounded-full text-xs border bg-red-50 border-red-200 text-red-700">Falta: Sites.Selected</span>
+                  <span className="px-2.5 py-1 rounded-full text-xs border bg-red-50 border-red-200 text-red-700">{t('Falta: Sites.Selected')}</span>
                 )}
               </div>
             </section>
           )}
 
           <section className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="font-semibold text-gray-900 mb-3">Intentos, uno por uno</h2>
+            <h2 className="font-semibold text-gray-900 mb-3">{t('Intentos, uno por uno')}</h2>
             <ol className="space-y-3">
               {diag.pasos.map((p, i) => (
                 <li key={i} className="flex gap-3">
@@ -176,11 +176,11 @@ export default function ConexionesPage() {
 
           {diag.hojas.length > 0 && (
             <section className="bg-white rounded-xl border border-gray-200 p-5">
-              <h2 className="font-semibold text-gray-900 mb-3">Hojas del Excel</h2>
+              <h2 className="font-semibold text-gray-900 mb-3">{t('Hojas del Excel')}</h2>
               <ul className="text-sm space-y-1">
                 {diag.hojas.map((h) => (
                   <li key={h.nombre}>
-                    <span className="font-medium">{h.nombre}</span> — {h.filas ?? '?'} filas × {h.columnas ?? '?'} columnas{' '}
+                    <span className="font-medium">{h.nombre}</span> — {h.filas ?? '?'}{' '}{t('filas ×')}{' '}{h.columnas ?? '?'}{' '}{t('columnas')}{' '}
                     <span className="text-gray-400 font-mono text-xs">{h.rango}</span>
                   </li>
                 ))}

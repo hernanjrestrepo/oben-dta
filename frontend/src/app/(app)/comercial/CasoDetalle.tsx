@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
@@ -45,6 +46,7 @@ const FASES: Array<[string, string]> = [
 type EdicionLinea = { codigoOben: string; kilos: string; anchoMm: string; precio: string; guardarEquivalencia: boolean };
 
 export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: () => void; onChange: () => void }) {
+  const t = useT();
   const [caso, setCaso] = useState<ComercialCaso | null>(null);
   const [oben, setOben] = useState<ProformaOben | null>(null);
   const [busy, setBusy] = useState('');
@@ -132,10 +134,10 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
             {caso.simulated && <SimuladoBadge items={caso.simulatedItems} />}
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            OC {caso.ocNumero ?? '(sin número)'} · Proforma {caso.numberPF ?? '—'} · OV {caso.numberOrderSales ?? (['retenida', 'activa', 'cerrada'].includes(caso.estado) ? 'creada (Oben no informa el número)' : '—')} · {caso.tipo ?? '—'} {caso.pais ? `(${caso.pais})` : ''}
+            OC {caso.ocNumero ?? '(sin número)'}{' '}{t('· Proforma')}{' '}{caso.numberPF ?? '—'}{' '}{t('· OV')}{' '}{caso.numberOrderSales ?? (['retenida', 'activa', 'cerrada'].includes(caso.estado) ? 'creada (Oben no informa el número)' : '—')} · {caso.tipo ?? '—'} {caso.pais ? `(${caso.pais})` : ''}
           </p>
           <p className="text-xs text-gray-400">
-            De {caso.contactoEmail} · comercial {caso.comercialEmail ?? '—'} · leída por {caso.extraidoPor === 'ia' ? 'IA' : 'reglas'} · recibida {fecha(caso.ocRecibidaEn)}
+            {t('De')}{' '}{caso.contactoEmail}{' '}{t('· comercial')}{' '}{caso.comercialEmail ?? '—'}{' '}{t('· leída por')}{' '}{caso.extraidoPor === 'ia' ? 'IA' : 'reglas'}{' '}{t('· recibida')}{' '}{fecha(caso.ocRecibidaEn)}
           </p>
         </div>
 
@@ -151,7 +153,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
 
         {caso.simulated && (
           <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-900">
-            <p className="font-semibold mb-1">Este caso usa datos SIMULADOS (nunca se escriben en un OBEN MAS real ni salen a un cliente real):</p>
+            <p className="font-semibold mb-1">{t('Este caso usa datos SIMULADOS (nunca se escriben en un OBEN MAS real ni salen a un cliente real):')}</p>
             <ul className="list-disc ml-5">
               {caso.simulatedItems.map((s) => (
                 <li key={s}>{s}</li>
@@ -163,7 +165,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
         {caso.accionPendiente && (
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
             <p className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4" /> Esperando tu confirmación: {ACCION_LABEL[caso.accionPendiente.tipo] ?? caso.accionPendiente.tipo}
+              <ShieldAlert className="w-4 h-4" />{' '}{t('Esperando tu confirmación:')}{' '}{ACCION_LABEL[caso.accionPendiente.tipo] ?? caso.accionPendiente.tipo}
             </p>
             <p className="text-xs text-amber-900">{caso.accionPendiente.detalle}</p>
             <div className="flex flex-wrap gap-2">
@@ -173,10 +175,10 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
               <button
                 className={btnSecondary}
                 disabled={!!busy}
-                title="Solo si un intento anterior quedó sin respuesta (timeout) y ya verificaste en OBEN MAS qué quedó hecho"
+                title={t('Solo si un intento anterior quedó sin respuesta (timeout) y ya verificaste en OBEN MAS qué quedó hecho')}
                 onClick={() => confirm('¿Ya verificaste en OBEN MAS qué quedó hecho del intento anterior?') && accion('confirmar', () => api.confirmComercialCaso(id, true))}
               >
-                Confirmar (ya verifiqué en OBEN MAS)
+                {t('Confirmar (ya verifiqué en OBEN MAS)')}
               </button>
             </div>
           </div>
@@ -184,7 +186,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
 
         {(caso.missing.length > 0 || caso.atencion.length > 0) && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm space-y-1">
-            {caso.missing.length > 0 && <p className="font-semibold text-red-800">Falta (no se rellena con supuestos):</p>}
+            {caso.missing.length > 0 && <p className="font-semibold text-red-800">{t('Falta (no se rellena con supuestos):')}</p>}
             <ul className="list-disc ml-5 text-red-800 text-xs space-y-0.5">
               {caso.missing.map((m) => (
                 <li key={m}>{m}</li>
@@ -193,7 +195,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
             {caso.atencion.length > 0 && (
               <>
                 <p className="font-semibold text-red-800 flex items-center gap-1 mt-2">
-                  <AlertTriangle className="w-4 h-4" /> Para revisar:
+                  <AlertTriangle className="w-4 h-4" />{' '}{t('Para revisar:')}
                 </p>
                 <ul className="list-disc ml-5 text-red-800 text-xs space-y-0.5">
                   {caso.atencion.map((m) => (
@@ -206,18 +208,18 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
         )}
 
         <section>
-          <h3 className="text-sm font-semibold text-gray-900 mb-2">Líneas</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">{t('Líneas')}</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50 text-left text-gray-600">
                   <th className="px-2 py-1.5">#</th>
-                  <th className="px-2 py-1.5">Como lo pidió el cliente</th>
-                  <th className="px-2 py-1.5">Ref. Oben</th>
-                  <th className="px-2 py-1.5">Kg</th>
-                  <th className="px-2 py-1.5">Ancho mm</th>
-                  <th className="px-2 py-1.5">Precio</th>
-                  <th className="px-2 py-1.5">Conversiones / faltantes</th>
+                  <th className="px-2 py-1.5">{t('Como lo pidió el cliente')}</th>
+                  <th className="px-2 py-1.5">{t('Ref. Oben')}</th>
+                  <th className="px-2 py-1.5">{t('Kg')}</th>
+                  <th className="px-2 py-1.5">{t('Ancho mm')}</th>
+                  <th className="px-2 py-1.5">{t('Precio')}</th>
+                  <th className="px-2 py-1.5">{t('Conversiones / faltantes')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -230,11 +232,11 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
                       <td className="px-2 py-1.5">
                         {editable ? (
                           <div className="space-y-1">
-                            <input value={e.codigoOben} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, codigoOben: ev.target.value } })} className={`${inputCls} w-28 !py-1`} placeholder="Ref. Oben" />
+                            <input value={e.codigoOben} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, codigoOben: ev.target.value } })} className={`${inputCls} w-28 !py-1`} placeholder={t('Ref. Oben')} />
                             {!l.equivalenciaId && e.codigoOben && (
                               <label className="flex items-center gap-1 text-[11px] text-gray-500">
                                 <input type="checkbox" checked={e.guardarEquivalencia} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, guardarEquivalencia: ev.target.checked } })} />
-                                guardar en Equivalencias
+                                {t('guardar en Equivalencias')}
                               </label>
                             )}
                           </div>
@@ -250,7 +252,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
                       </td>
                       <td className="px-2 py-1.5">
                         {editable ? (
-                          <input value={e.precio} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, precio: ev.target.value } })} className={`${inputCls} w-20 !py-1 tabular-nums`} placeholder="USD/kg" />
+                          <input value={e.precio} onChange={(ev) => setEdits({ ...edits, [l.n]: { ...e, precio: ev.target.value } })} className={`${inputCls} w-20 !py-1 tabular-nums`} placeholder={t('USD/kg')} />
                         ) : l.precioUnitario !== null ? (
                           `${l.precioUnitario} ${l.moneda ?? ''}`
                         ) : (
@@ -275,19 +277,19 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
           </div>
           {editable && Object.keys(edits).length > 0 && (
             <button className={`${btnPrimary} mt-2`} disabled={!!busy} onClick={guardarLineas}>
-              {busy === 'lineas' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Guardar correcciones
+              {busy === 'lineas' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}{' '}{t('Guardar correcciones')}
             </button>
           )}
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div>
-            <h3 className="font-semibold text-gray-900 mb-1">Destino</h3>
+            <h3 className="font-semibold text-gray-900 mb-1">{t('Destino')}</h3>
             <p className="text-gray-700">{caso.destino ? `${caso.destino.direccion}${caso.destino.ciudad ? `, ${caso.destino.ciudad}` : ''} (${caso.destino.pais})` : '—'}</p>
             <p className="text-xs text-gray-400">{caso.destino ? `Fuente: ${caso.destino.fuente}` : ''}</p>
-            <p className="text-gray-700 mt-2">Fecha requerida: {caso.fechaRequerida ?? '—'}</p>
-            {caso.clienteFinal && <p className="text-gray-700">Cliente final: {caso.clienteFinal}</p>}
-            {caso.entregaComprometida && <p className="text-gray-700">Entrega comprometida: {caso.entregaComprometida}</p>}
+            <p className="text-gray-700 mt-2">{t('Fecha requerida:')}{' '}{caso.fechaRequerida ?? '—'}</p>
+            {caso.clienteFinal && <p className="text-gray-700">{t('Cliente final:')}{' '}{caso.clienteFinal}</p>}
+            {caso.entregaComprometida && <p className="text-gray-700">{t('Entrega comprometida:')}{' '}{caso.entregaComprometida}</p>}
             {caso.entregaHistorial.length > 1 && (
               <ul className="text-xs text-gray-500 mt-1">
                 {caso.entregaHistorial.map((h) => (
@@ -299,7 +301,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
             )}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900 mb-1">Fechas de cada fase</h3>
+            <h3 className="font-semibold text-gray-900 mb-1">{t('Fechas de cada fase')}</h3>
             <ul className="text-xs text-gray-700 space-y-0.5">
               {FASES.filter(([k]) => caso.fechas[k]).map(([k, label]) => (
                 <li key={k}>
@@ -309,7 +311,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
             </ul>
             {caso.seguimiento.tipo && (
               <p className="text-xs text-gray-500 mt-2">
-                Seguimiento ({caso.seguimiento.tipo === 'firma' ? 'recordatorio al cliente' : 'cartera → comercial'}): {caso.seguimiento.enviados} enviado(s), próximo {fecha(caso.seguimiento.proximoEn)}
+                {t('Seguimiento (')}{caso.seguimiento.tipo === 'firma' ? 'recordatorio al cliente' : 'cartera → comercial'}): {caso.seguimiento.enviados}{' '}{t('enviado(s), próximo')}{' '}{fecha(caso.seguimiento.proximoEn)}
               </p>
             )}
           </div>
@@ -324,7 +326,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
           )}
           {caso.proformaFirmadaNombre && (
             <button className={btnSecondary} disabled={!!busy} onClick={descargarFirmada}>
-              <Download className="w-4 h-4" /> Proforma firmada
+              <Download className="w-4 h-4" />{' '}{t('Proforma firmada')}
             </button>
           )}
           {abierto && (
@@ -336,21 +338,21 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
                 if (motivo?.trim()) void accion('anular', () => api.cancelComercialCaso(id, motivo.trim()));
               }}
             >
-              Dar de baja
+              {t('Dar de baja')}
             </button>
           )}
         </section>
 
         {puedeResponder && (!caso.accionPendiente || caso.accionPendiente.tipo === 'modificar') && (
           <section className="p-3 bg-gray-50 rounded-lg space-y-2">
-            <h3 className="text-sm font-semibold text-gray-900">Registrar respuesta del cliente (llegó por teléfono / WhatsApp)</h3>
+            <h3 className="text-sm font-semibold text-gray-900">{t('Registrar respuesta del cliente (llegó por teléfono / WhatsApp)')}</h3>
             <div className="flex flex-col md:flex-row gap-2">
               <select value={respuesta.tipo} onChange={(e) => setRespuesta({ ...respuesta, tipo: e.target.value as typeof respuesta.tipo })} className={inputCls}>
-                <option value="aprueba">Aprueba</option>
-                <option value="rechaza">Rechaza</option>
-                <option value="modifica">Pide modificar</option>
+                <option value="aprueba">{t('Aprueba')}</option>
+                <option value="rechaza">{t('Rechaza')}</option>
+                <option value="modifica">{t('Pide modificar')}</option>
               </select>
-              <input value={respuesta.nota} onChange={(e) => setRespuesta({ ...respuesta, nota: e.target.value })} placeholder="Qué dijo y por dónde (queda en la bitácora)" className={`${inputCls} flex-1`} />
+              <input value={respuesta.nota} onChange={(e) => setRespuesta({ ...respuesta, nota: e.target.value })} placeholder={t('Qué dijo y por dónde (queda en la bitácora)')} className={`${inputCls} flex-1`} />
               <button
                 className={btnPrimary}
                 disabled={!!busy || !respuesta.nota.trim() || (respuesta.tipo === 'modifica' && lineasModificacion(respuesta.lineas) === null)}
@@ -364,7 +366,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
                   )
                 }
               >
-                Registrar
+                {t('Registrar')}
               </button>
             </div>
             {respuesta.tipo === 'modifica' && (
@@ -373,11 +375,11 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
                   value={respuesta.lineas}
                   onChange={(e) => setRespuesta({ ...respuesta, lineas: e.target.value })}
                   rows={3}
-                  placeholder={'Nuevas líneas, una por renglón: código del cliente; kg; ancho mm; ref. Oben (opcional)\nBOPP 15; 2000; 425'}
+                  placeholder={t('Nuevas líneas, una por renglón: código del cliente; kg; ancho mm; ref. Oben (opcional) BOPP 15; 2000; 425')}
                   className={`${inputCls} w-full font-mono text-xs`}
                 />
                 {respuesta.lineas.trim() && lineasModificacion(respuesta.lineas) === null && (
-                  <p className="text-xs text-red-700">Cada renglón: código; kg (&gt;0); ancho mm (&gt;0); ref. Oben opcional.</p>
+                  <p className="text-xs text-red-700">{t('Cada renglón: código; kg (>0); ancho mm (>0); ref. Oben opcional.')}</p>
                 )}
               </div>
             )}
@@ -385,7 +387,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
         )}
 
         <section>
-          <h3 className="text-sm font-semibold text-gray-900 mb-2">Bitácora</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">{t('Bitácora')}</h3>
           <ol className="space-y-1.5 text-xs max-h-72 overflow-y-auto">
             {[...caso.eventos].reverse().map((e, i) => (
               <li key={`${e.fecha}-${i}`} className="border-l-2 border-gray-200 pl-2">
@@ -401,8 +403,9 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
 
 /** Línea de etapas del caso: hechas, la actual y las que faltan. */
 function Progreso({ estado }: { estado: CasoEstado }) {
+  const t = useT();
   if (estado === 'rechazada' || estado === 'anulada') {
-    return <p className="text-sm font-medium text-red-700">Caso {estado === 'rechazada' ? 'rechazado por el cliente' : 'dado de baja'}.</p>;
+    return <p className="text-sm font-medium text-red-700">{t('Caso')}{' '}{estado === 'rechazada' ? 'rechazado por el cliente' : 'dado de baja'}.</p>;
   }
   const actual = PASOS.findIndex((p) => p.estados.includes(estado));
   return (
@@ -430,6 +433,7 @@ function Progreso({ estado }: { estado: CasoEstado }) {
 
 /** La Proforma REAL en OBEN MAS: números, estado y lo que respondió Oben en cada paso. */
 function TarjetaOben({ p, onGuardarOV, ocupado }: { p: ProformaOben; onGuardarOV: (n: number) => void; ocupado: boolean }) {
+  const t = useT();
   const [ov, setOv] = useState('');
   const ovCreada = p.estado === 'ov_creada' || p.estado === 'activa';
   const estado: Record<ProformaOben['estado'], string> = {
@@ -444,37 +448,37 @@ function TarjetaOben({ p, onGuardarOV, ocupado }: { p: ProformaOben; onGuardarOV
     <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <Building2 className="w-4 h-4 text-sky-700" />
-        <span className="text-sm font-semibold text-sky-900">Proforma en OBEN MAS</span>
+        <span className="text-sm font-semibold text-sky-900">{t('Proforma en OBEN MAS')}</span>
         {p.servidor === 'pruebas' && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">
-            <FlaskConical className="w-3 h-3" /> Servidor de pruebas de Oben
+            <FlaskConical className="w-3 h-3" />{' '}{t('Servidor de pruebas de Oben')}
           </span>
         )}
       </div>
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
         <div>
-          <dt className="text-[11px] text-gray-500">Proforma (oficial)</dt>
+          <dt className="text-[11px] text-gray-500">{t('Proforma (oficial)')}</dt>
           <dd className="font-bold text-gray-900 tabular-nums">{p.numeroPF ?? '—'}</dd>
         </div>
         <div>
-          <dt className="text-[11px] text-gray-500">Código interno</dt>
+          <dt className="text-[11px] text-gray-500">{t('Código interno')}</dt>
           <dd className="text-gray-700 tabular-nums">{p.codigoInterno ?? '—'}</dd>
         </div>
         <div>
-          <dt className="text-[11px] text-gray-500">Orden de venta</dt>
+          <dt className="text-[11px] text-gray-500">{t('Orden de venta')}</dt>
           <dd className="font-bold text-gray-900 tabular-nums">{p.ordenVenta ?? (ovCreada ? 'creada · Oben no informa el número' : '—')}</dd>
         </div>
         <div>
-          <dt className="text-[11px] text-gray-500">Estado en Oben</dt>
+          <dt className="text-[11px] text-gray-500">{t('Estado en Oben')}</dt>
           <dd className="text-gray-900">{estado[p.estado]}</dd>
         </div>
       </dl>
       {ovCreada && !p.ordenVenta && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-gray-600">Oben no devuelve el número de la orden de venta. Míralo en OBEN MAS y regístralo aquí:</span>
-          <input value={ov} onChange={(e) => setOv(e.target.value.replace(/\D/g, ''))} placeholder="Nº de la OV" className={`${inputCls} w-28 py-1`} inputMode="numeric" />
+          <span className="text-gray-600">{t('Oben no devuelve el número de la orden de venta. Míralo en OBEN MAS y regístralo aquí:')}</span>
+          <input value={ov} onChange={(e) => setOv(e.target.value.replace(/\D/g, ''))} placeholder={t('Nº de la OV')} className={`${inputCls} w-28 py-1`} inputMode="numeric" />
           <button className={btnPrimary} disabled={ocupado || !ov} onClick={() => onGuardarOV(Number(ov))}>
-            Guardar número
+            {t('Guardar número')}
           </button>
         </div>
       )}
@@ -491,17 +495,18 @@ function TarjetaOben({ p, onGuardarOV, ocupado }: { p: ProformaOben; onGuardarOV
           </li>
         ))}
       </ul>
-      <p className="text-[11px] text-gray-500">El cubicaje de Planeación, el PDF de la Proforma y la cartera aún se simulan: Oben no tiene API para eso.</p>
+      <p className="text-[11px] text-gray-500">{t('El cubicaje de Planeación, el PDF de la Proforma y la cartera aún se simulan: Oben no tiene API para eso.')}</p>
     </div>
   );
 }
 
 function Panel({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
       <div className="w-full max-w-3xl h-full bg-white shadow-xl overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-end">
-          <button onClick={onClose} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" aria-label="Cerrar">
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" aria-label={t('Cerrar')}>
             <X className="w-5 h-5" />
           </button>
         </div>
