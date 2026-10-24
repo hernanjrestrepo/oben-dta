@@ -1,3 +1,4 @@
+import { leerIdioma } from '@/i18n/idioma';
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import {
   ApiError, AuditPage, AuthResponse, Client, CommercialLicense,
@@ -43,6 +44,8 @@ class ApiClient {
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        // Idioma escogido en Oben Xmart (24-oct): el servidor lo usa para sus mensajes.
+        config.headers['Accept-Language'] = leerIdioma();
         return config;
       },
       (error) => Promise.reject(error),

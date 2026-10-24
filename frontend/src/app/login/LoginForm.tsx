@@ -1,5 +1,7 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
+import { SelectorIdioma } from '@/i18n/SelectorIdioma';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -9,6 +11,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isLoading, error, clearError } = useAuthStore();
+  const t = useT();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,11 +29,11 @@ export function LoginForm() {
     setValidationError('');
 
     if (!email.trim()) {
-      setValidationError('El correo electrónico es obligatorio');
+      setValidationError(t('El correo electrónico es obligatorio'));
       return;
     }
     if (!password.trim()) {
-      setValidationError('La contraseña es obligatoria');
+      setValidationError(t('La contraseña es obligatoria'));
       return;
     }
 
@@ -51,14 +54,17 @@ export function LoginForm() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-oben.svg" alt="Oben" className="h-12 w-auto mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-white">OBEN XMART</h1>
-          <p className="text-white/70 text-sm mt-1">Digitalización Total Autónoma</p>
+          <p className="text-white/70 text-sm mt-1">{t('Digitalización Total Autónoma')}</p>
+          <div className="mt-4 flex justify-center">
+            <SelectorIdioma tono="claro" />
+          </div>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
             <LogIn className="w-5 h-5 text-[#F47735]" />
-            Iniciar Sesión
+            {t('Iniciar Sesión')}
           </h2>
 
           {/* Errors */}
@@ -71,7 +77,7 @@ export function LoginForm() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Correo electrónico')}</label>
               <input
                 type="email"
                 value={email}
@@ -83,7 +89,7 @@ export function LoginForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Contraseña')}</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -111,12 +117,12 @@ export function LoginForm() {
               {isLoading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Iniciando sesión...
+                  {t('Iniciando sesión...')}
                 </>
               ) : (
                 <>
                   <LogIn className="w-5 h-5" />
-                  Ingresar
+                  {t('Ingresar')}
                 </>
               )}
             </button>
@@ -124,7 +130,7 @@ export function LoginForm() {
 
           <div className="mt-6 text-center space-y-0.5">
             <p className="text-xs text-gray-400">
-              Oben Group — Exportaciones e Industria
+              {t('Oben Group — Exportaciones e Industria')}
             </p>
             <p className="text-[11px] text-gray-300">
               Oben Xmart by Paradixe

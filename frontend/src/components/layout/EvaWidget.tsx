@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useState, useRef, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -29,6 +30,7 @@ export function EvaWidget() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const t = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([SALUDO]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,7 +68,7 @@ export function EvaWidget() {
       setMessages((m) => [...m, { role: 'eva', text: result.reply, acciones: result.acciones }]);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setMessages((m) => [...m, { role: 'eva', text: msg || 'Hubo un error conectando con MIA. Intenta de nuevo.' }]);
+      setMessages((m) => [...m, { role: 'eva', text: msg || t('Hubo un error conectando con MIA. Intenta de nuevo.') }]);
     } finally {
       setLoading(false);
     }
@@ -115,8 +117,8 @@ export function EvaWidget() {
         <button
           onClick={() => setOpen(true)}
           className="fixed bottom-12 right-5 z-50 w-14 h-14 rounded-full bg-[#F47735] hover:bg-[#E5641F] text-white shadow-lg ring-2 ring-white flex items-center justify-center transition hover:scale-105"
-          title="Hablar con MIA"
-          aria-label="Hablar con MIA"
+          title={t('Hablar con MIA')}
+          aria-label={t('Hablar con MIA')}
         >
           <OMark className="w-7 h-7" />
         </button>
@@ -130,14 +132,14 @@ export function EvaWidget() {
               onClick={() => setMessages([SALUDO])}
               disabled={loading}
               className="w-8 h-8 rounded-full bg-white/90 shadow ring-1 ring-black/5 text-gray-600 hover:text-[#C4521A] flex items-center justify-center disabled:opacity-50"
-              title="Nueva conversación"
+              title={t('Nueva conversación')}
             >
               <RotateCcw className="w-4 h-4" />
             </button>
             <button
               onClick={() => setOpen(false)}
               className="w-8 h-8 rounded-full bg-white/90 shadow ring-1 ring-black/5 text-gray-600 hover:text-[#C4521A] flex items-center justify-center"
-              title="Cerrar"
+              title={t('Cerrar')}
             >
               <X className="w-4 h-4" />
             </button>
@@ -152,7 +154,7 @@ export function EvaWidget() {
                   {/* El nombre va debajo de la foto (no encima) para no tapar el logo del polo. */}
                   <div className="px-4 py-2.5 bg-[#F47735] text-white">
                     <p className="text-xl font-bold tracking-wide leading-none">MIA</p>
-                    <p className="text-xs text-white/90 mt-1">Asistente de Oben Xmart</p>
+                    <p className="text-xs text-white/90 mt-1">{t('Asistente de Oben Xmart')}</p>
                   </div>
                 </div>
               </div>
@@ -165,7 +167,7 @@ export function EvaWidget() {
                   </div>
                 ) : (
                   <div className="max-w-[92%] rounded-xl px-3 py-2 text-sm bg-white text-gray-800 border border-gray-200 break-words">
-                    <MiaMarkdown text={m.text} />
+                    <MiaMarkdown text={m.text === SALUDO.text ? t(m.text) : m.text} />
                   </div>
                 )}
                 {m.acciones && m.acciones.length > 0 && (
@@ -196,10 +198,10 @@ export function EvaWidget() {
                 {SUGERENCIAS.map((s) => (
                   <button
                     key={s}
-                    onClick={() => handleSend(s)}
+                    onClick={() => handleSend(t(s))}
                     className="text-xs px-2.5 py-1 rounded-full border border-gray-300 bg-white text-gray-700 hover:border-[#F47735] hover:text-[#C4521A]"
                   >
-                    {s}
+                    {t(s)}
                   </button>
                 ))}
               </div>
@@ -225,7 +227,7 @@ export function EvaWidget() {
                   handleSend();
                 }
               }}
-              placeholder="Escríbele a MIA..."
+              placeholder={t('Escríbele a MIA...')}
               disabled={loading}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 caret-[#F47735] placeholder:text-gray-500 focus:ring-2 focus:ring-[#F47735] focus:border-[#F47735] outline-none disabled:opacity-60"
             />

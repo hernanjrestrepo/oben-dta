@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/idioma';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { KeyRound, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
@@ -20,6 +21,7 @@ export default function CambiarContrasenaPage() {
   const [ver, setVer] = useState(false);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     if (!api.getUser()) router.replace('/login?redirect=/cambiar-contrasena');
@@ -28,9 +30,9 @@ export default function CambiarContrasenaPage() {
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (nueva.length < 8) return setError('La nueva contraseña debe tener al menos 8 caracteres.');
-    if (nueva !== confirmar) return setError('La confirmación no coincide con la nueva contraseña.');
-    if (nueva === actual) return setError('La nueva contraseña debe ser distinta de la actual.');
+    if (nueva.length < 8) return setError(t('La nueva contraseña debe tener al menos 8 caracteres.'));
+    if (nueva !== confirmar) return setError(t('La confirmación no coincide con la nueva contraseña.'));
+    if (nueva === actual) return setError(t('La nueva contraseña debe ser distinta de la actual.'));
     setGuardando(true);
     try {
       const res = await api.changePassword(actual, nueva);
@@ -38,7 +40,7 @@ export default function CambiarContrasenaPage() {
       router.replace('/operaciones');
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
-      setError((Array.isArray(msg) ? msg.join(' ') : msg) || 'No se pudo cambiar la contraseña.');
+      setError((Array.isArray(msg) ? msg.join(' ') : msg) || t('No se pudo cambiar la contraseña.'));
     } finally {
       setGuardando(false);
     }
@@ -58,11 +60,11 @@ export default function CambiarContrasenaPage() {
         <form onSubmit={guardar} className="bg-white rounded-2xl shadow-2xl p-8 space-y-4">
           <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <KeyRound className="w-5 h-5 text-[#F47735]" />
-            Cambiar contraseña
+            {t('Cambiar contraseña')}
           </h2>
           {obligatorio && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-              Entraste con una contraseña temporal. Para continuar, crea tu propia contraseña.
+              {t('Entraste con una contraseña temporal. Para continuar, crea tu propia contraseña.')}
             </p>
           )}
           {error && (
@@ -72,19 +74,19 @@ export default function CambiarContrasenaPage() {
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña actual{obligatorio ? ' (la temporal)' : ''}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Contraseña actual')}{obligatorio ? ` ${t('(la temporal)')}` : ''}</label>
             <input type={ver ? 'text' : 'password'} value={actual} onChange={(e) => setActual(e.target.value)} className={campo} autoComplete="current-password" required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña (mínimo 8 caracteres)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Nueva contraseña (mínimo 8 caracteres)')}</label>
             <input type={ver ? 'text' : 'password'} value={nueva} onChange={(e) => setNueva(e.target.value)} className={campo} autoComplete="new-password" required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar nueva contraseña</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Confirmar nueva contraseña')}</label>
             <input type={ver ? 'text' : 'password'} value={confirmar} onChange={(e) => setConfirmar(e.target.value)} className={campo} autoComplete="new-password" required />
           </div>
           <button type="button" onClick={() => setVer((v) => !v)} className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1.5">
-            {ver ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />} {ver ? 'Ocultar' : 'Mostrar'} contraseñas
+            {ver ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />} {ver ? t('Ocultar contraseñas') : t('Mostrar contraseñas')}
           </button>
           <button
             type="submit"
@@ -92,11 +94,11 @@ export default function CambiarContrasenaPage() {
             className="w-full py-3 bg-[#F47735] hover:bg-[#E5641F] text-white rounded-lg font-semibold transition flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {guardando && <Loader2 className="w-4 h-4 animate-spin" />}
-            Guardar contraseña
+            {t('Guardar contraseña')}
           </button>
           {!obligatorio && (
             <button type="button" onClick={() => router.back()} className="w-full text-sm text-gray-500 hover:text-gray-700">
-              Cancelar
+              {t('Cancelar')}
             </button>
           )}
         </form>

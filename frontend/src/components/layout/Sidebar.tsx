@@ -6,6 +6,8 @@ import { useAuthStore } from '@/store/auth';
 import { LogOut, ChevronRight, ChevronDown, Menu, X, KeyRound } from 'lucide-react';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { MENU, puedeVer } from '@/lib/menu';
+import { useT } from '@/i18n/idioma';
+import { SelectorIdioma } from '@/i18n/SelectorIdioma';
 
 const PLEGADOS_KEY = 'oben-xmart.menu.plegados';
 const PLEGADOS_EVENTO = 'oben-xmart:menu-plegados';
@@ -30,6 +32,7 @@ function suscribir(cb: () => void): () => void {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout, refreshPermissions } = useAuthStore();
+  const t = useT();
   const [mobileOpen, setMobileOpen] = useState(false);
   // El menú sigue al perfil: si un administrador lo cambió, se ve al recargar sin volver a iniciar sesión.
   useEffect(() => {
@@ -85,7 +88,7 @@ export function Sidebar() {
               <img src="/logo-oben.svg" alt="Oben" className="h-8 w-auto shrink-0" />
               <div>
                 <h1 className="font-bold text-lg">OBEN XMART</h1>
-                <p className="text-xs text-white/70">Digitalización Autónoma</p>
+                <p className="text-xs text-white/70">{t('Digitalización Autónoma')}</p>
               </div>
             </div>
           </div>
@@ -103,7 +106,7 @@ export function Sidebar() {
                     onClick={() => alternar(g.titulo)}
                     className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/60 hover:text-white"
                   >
-                    {g.titulo}
+                    {t(g.titulo)}
                     <ChevronDown className={`w-3.5 h-3.5 transition ${abierto ? '' : '-rotate-90'}`} />
                   </button>
                   {abierto && (
@@ -121,7 +124,7 @@ export function Sidebar() {
                             }`}
                           >
                             <Icon className="w-[18px] h-[18px] shrink-0" />
-                            <span className="leading-tight">{item.label}</span>
+                            <span className="leading-tight">{t(item.label)}</span>
                             {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
                           </Link>
                         );
@@ -135,6 +138,9 @@ export function Sidebar() {
 
           {/* User + Logout */}
           <div className="p-4 border-t border-white/10 shrink-0">
+            <div className="mb-3 px-2">
+              <SelectorIdioma tono="claro" />
+            </div>
             {user && (
               <div className="mb-3 px-2">
                 <p className="text-sm font-medium truncate">{user.firstName} {user.lastName}</p>
@@ -146,14 +152,14 @@ export function Sidebar() {
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition"
             >
               <KeyRound className="w-5 h-5" />
-              <span>Cambiar contraseña</span>
+              <span>{t('Cambiar contraseña')}</span>
             </Link>
             <button
               onClick={logout}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition"
             >
               <LogOut className="w-5 h-5" />
-              <span>Cerrar Sesión</span>
+              <span>{t('Cerrar Sesión')}</span>
             </button>
             <a
               href="https://www.paradixe.xyz/"

@@ -1,5 +1,6 @@
 'use client';
 
+import { IdiomaDelDocumento } from '@/i18n/SelectorIdioma';
 import { useEffect } from 'react';
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -46,6 +47,7 @@ export default function RootLayout({
           <LicenseGate>{children}</LicenseGate>
         </AuthInitializer>
         <ParadixeFirma />
+        <IdiomaDelDocumento />
       </body>
     </html>
   );
