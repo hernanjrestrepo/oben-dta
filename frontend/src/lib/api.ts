@@ -15,6 +15,7 @@ import {
   CuadroIntegracion,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
   LiquidacionFacturaInput, LiquidacionInputPantalla, VistaFactura, ProformaCompleta, ResultadoCargaTarifario, CargaTarifario, TarifasManuales, TarifaManualInput,
+  PlanAcademy, LeccionAcademy, ResultadoQuizAcademy, TerminoGlosario, FriccionesAcademy, AjustesAcademy,
 } from '@/types';
 
 // Misma dirección desde la que se abrió la app (Next la reenvía al backend, ver
@@ -200,6 +201,46 @@ class ApiClient {
 
   // MIA (Claude Haiku): reenvía la conversación y la pantalla actual; sus
   // herramientas consultan Oben en vivo, por eso el timeout es largo.
+  // ── Xmart Academy ──
+  async getAcademyPlan(): Promise<PlanAcademy> {
+    const { data } = await this.client.get<PlanAcademy>('/academy/plan');
+    return data;
+  }
+
+  async getAcademyLeccion(key: string): Promise<LeccionAcademy> {
+    const { data } = await this.client.get<LeccionAcademy>(`/academy/modulos/${encodeURIComponent(key)}`);
+    return data;
+  }
+
+  async getAcademyGlosario(): Promise<TerminoGlosario[]> {
+    const { data } = await this.client.get<TerminoGlosario[]>('/academy/glosario');
+    return data;
+  }
+
+  async marcarLeccionVista(key: string, segundos: number): Promise<void> {
+    await this.client.post(`/academy/modulos/${encodeURIComponent(key)}/visto`, { segundos: Math.min(3600, Math.max(0, Math.round(segundos))) });
+  }
+
+  async responderQuizAcademy(key: string, respuestas: Record<string, number>): Promise<ResultadoQuizAcademy> {
+    const { data } = await this.client.post<ResultadoQuizAcademy>(`/academy/modulos/${encodeURIComponent(key)}/quiz`, { respuestas });
+    return data;
+  }
+
+  /** Uso de la Academy (para el panel de fricciones). Nunca interrumpe la pantalla. */
+  registrarEventoAcademy(tipo: string, modulo: string | null, detalle: Record<string, string | number | boolean> = {}): void {
+    void this.client.post('/academy/eventos', { tipo, modulo, detalle }).catch(() => undefined);
+  }
+
+  async getFriccionesAcademy(dias = 30): Promise<FriccionesAcademy> {
+    const { data } = await this.client.get<FriccionesAcademy>('/academy/fricciones', { params: { dias } });
+    return data;
+  }
+
+  async guardarAjustesAcademy(ajustes: Partial<AjustesAcademy>): Promise<AjustesAcademy> {
+    const { data } = await this.client.put<AjustesAcademy>('/academy/ajustes', ajustes);
+    return data;
+  }
+
   async evaChat(message: string, historial: MiaTurno[] = [], contexto: MiaContexto = {}): Promise<MiaRespuesta> {
     const { data } = await this.client.post<MiaRespuesta>('/eva/chat', { message, historial, contexto }, { timeout: 180000 });
     return data;

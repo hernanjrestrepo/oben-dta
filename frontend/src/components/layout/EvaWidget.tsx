@@ -38,6 +38,18 @@ export function EvaWidget() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, open]);
 
+  // Otras pantallas (p. ej. Xmart Academy) abren a MIA con una pregunta: window.dispatchEvent(new CustomEvent('mia:preguntar', { detail: '…' })).
+  const enviarRef = useRef<(texto?: string) => void>(() => undefined);
+  useEffect(() => {
+    const escuchar = (e: Event) => {
+      const texto = (e as CustomEvent<string>).detail;
+      setOpen(true);
+      if (typeof texto === 'string' && texto.trim()) enviarRef.current(texto);
+    };
+    window.addEventListener('mia:preguntar', escuchar);
+    return () => window.removeEventListener('mia:preguntar', escuchar);
+  }, []);
+
   async function handleSend(preset?: string) {
     const text = (preset ?? input).trim();
     if (!text || loading) return;
@@ -59,6 +71,10 @@ export function EvaWidget() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    enviarRef.current = (texto) => void handleSend(texto);
+  });
 
   async function ejecutar(accion: MiaAccion) {
     if (accion.tipo === 'navegar') {

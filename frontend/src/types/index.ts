@@ -1236,3 +1236,105 @@ export interface CuadroDelDia {
   incluidas: number;
   excluidas: number;
 }
+
+// ── Xmart Academy ──
+export type EstadoModuloAcademy = 'pendiente' | 'visto' | 'aprobado' | 'actualizado';
+
+export interface ModuloPlanAcademy {
+  key: string;
+  href: string | null;
+  titulo: string;
+  grupo: string;
+  resumen: string;
+  minutos: number;
+  preguntas: number;
+  obligatorio: boolean;
+  estado: EstadoModuloAcademy;
+  puntaje: number | null;
+  intentos: number;
+  bloqueaTransaccional: boolean;
+}
+
+export interface ParadaRecorrido {
+  key: string;
+  titulo: string;
+  texto: string;
+  modulo: string;
+}
+
+export interface PlanAcademy {
+  intro: {
+    queEs: { titulo: string; texto: string; pilares: Array<{ titulo: string; texto: string }> };
+    paradixe: { titulo: string; texto: string; url: string };
+    recorrido: ParadaRecorrido[];
+  };
+  modulos: ModuloPlanAcademy[];
+  resumen: { total: number; vistos: number; obligatorios: number; aprobados: number };
+  ajustes: { exigirCertificacion: boolean; puntajeMinimo: number; exento: boolean };
+  esAdmin: boolean;
+}
+
+export interface LeccionAcademy {
+  key: string;
+  href: string | null;
+  titulo: string;
+  grupo: string;
+  resumen: string;
+  paraQue: string;
+  quienes: string[];
+  pasos: Array<{ titulo: string; detalle: string }>;
+  reglas: string[];
+  capturas: Array<{ archivo: string; titulo: string; marcas: Array<{ x: number; y: number; titulo: string; texto: string }> }>;
+  quiz: Array<{ id: string; pregunta: string; opciones: string[] }>;
+  minutos: number;
+  version: number;
+  revisado: string;
+  enPlan: boolean;
+  obligatorio: boolean;
+  estado: EstadoModuloAcademy;
+  puntaje: number | null;
+  intentos: number;
+  puntajeMinimo: number;
+  puedeIr: boolean;
+}
+
+export interface ResultadoQuizAcademy {
+  puntaje: number;
+  aprobado: boolean;
+  puntajeMinimo: number;
+  buenas: number;
+  total: number;
+  preguntas: Array<{ id: string; correcta: boolean; explicacion: string | null; respuesta: number | null }>;
+}
+
+export interface TerminoGlosario {
+  termino: string;
+  definicion: string;
+  modulo: string;
+}
+
+export interface AjustesAcademy {
+  exigirCertificacion: boolean;
+  puntajeMinimo: number;
+  exentos: string[];
+}
+
+export interface FriccionesAcademy {
+  desde: string;
+  ajustes: AjustesAcademy;
+  modulos: Array<{
+    key: string;
+    titulo: string;
+    errores: number;
+    bloqueos: number;
+    preguntasMia: number;
+    fallosQuiz: number;
+    aperturas: number;
+    friccion: number;
+    erroresFrecuentes: Array<{ mensaje: string; veces: number }>;
+    ejemplosMia: string[];
+  }>;
+  preguntasDificiles: Array<{ modulo: string; id: string; pregunta: string; intentos: number; fallos: number; tasaFallo: number }>;
+  personas: Array<{ id: string; nombre: string; email: string; modulos: number; vistos: number; obligatorios: number; aprobados: number; pendientes: string[]; exento: boolean }>;
+  porRevisar: Array<{ modulo: string; titulo: string; revisado: string; codigoCambio: string; commit: string; resumen: string }>;
+}

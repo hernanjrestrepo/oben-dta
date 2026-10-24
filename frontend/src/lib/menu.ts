@@ -5,6 +5,7 @@ import {
   FilePenLine,
   FileSpreadsheet,
   FileText,
+  GraduationCap,
   History,
   LayoutDashboard,
   Mail,
@@ -87,6 +88,11 @@ export const MENU: GrupoMenu[] = [
     items: [{ href: '/reportes', label: 'Reportes Oben', icon: FileSpreadsheet, ...ORDENES }],
   },
   {
+    titulo: 'Aprendizaje',
+    // Para todos (sin permiso propio): cada persona ve su plan según su perfil. No se configura en Perfiles.
+    items: [{ href: '/academy', label: 'Xmart Academy', icon: GraduationCap, ver: [], operar: [] }],
+  },
+  {
     titulo: 'Configuración',
     items: [
       // Cada dueño de lista (WO-026) cambia sus destinatarios sin permiso de configuración; crear o borrar listas sí lo exige.
@@ -100,7 +106,8 @@ export const MENU: GrupoMenu[] = [
   },
 ];
 
-export const OPCIONES_MENU: OpcionMenu[] = MENU.flatMap((g) => g.items);
+/** Opciones que se configuran en Perfiles: las que exigen algún permiso (Xmart Academy es para todos). */
+export const OPCIONES_MENU: OpcionMenu[] = MENU.flatMap((g) => g.items).filter((o) => o.ver.length > 0 || o.operar.length > 0);
 
 export type NivelAcceso = 'ninguno' | 'lectura' | 'transaccional';
 

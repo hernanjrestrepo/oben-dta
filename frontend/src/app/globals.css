@@ -59,3 +59,50 @@ body {
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   line-height: 1.4;
 }
+
+/* ── Xmart Academy (23-oct): movimiento sutil con la paleta de Oben Group ── */
+@keyframes academy-subir {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes academy-trazo {
+  from { stroke-dashoffset: 1200; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes academy-flujo {
+  to { stroke-dashoffset: -40; }
+}
+@keyframes academy-pulso {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 119, 53, 0.45); }
+  50% { box-shadow: 0 0 0 10px rgba(244, 119, 53, 0); }
+}
+@keyframes academy-brillo {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes academy-flotar {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes academy-confeti {
+  0% { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(160px) rotate(540deg); opacity: 0; }
+}
+.academy-subir { animation: academy-subir 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.academy-trazo { stroke-dasharray: 1200; animation: academy-trazo 2.4s ease-out both; }
+.academy-flujo { stroke-dasharray: 6 14; animation: academy-flujo 1.2s linear infinite; }
+.academy-pulso { animation: academy-pulso 2.2s ease-in-out infinite; }
+.academy-flotar { animation: academy-flotar 5s ease-in-out infinite; }
+.academy-brillo {
+  background-image: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: academy-brillo 3.5s linear infinite;
+}
+.academy-confeti { animation: academy-confeti 1.6s ease-in forwards; }
+.academy-cuadricula {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .academy-subir, .academy-trazo, .academy-flujo, .academy-pulso, .academy-flotar, .academy-brillo, .academy-confeti { animation: none; }
+}

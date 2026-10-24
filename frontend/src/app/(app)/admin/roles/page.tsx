@@ -279,10 +279,10 @@ export default function AdminRolesPage() {
 
                   <div className="border border-gray-200 rounded-lg overflow-hidden">
                     <div className="max-h-[520px] overflow-y-auto divide-y divide-gray-100">
-                      {MENU.map((grupo) => (
+                      {MENU.filter((grupo) => grupo.items.some((o) => OPCIONES_MENU.includes(o))).map((grupo) => (
                         <div key={grupo.titulo}>
                           <div className="sticky top-0 z-10 bg-gray-50 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{grupo.titulo}</div>
-                          {grupo.items.map((opcion) => {
+                          {grupo.items.filter((o) => OPCIONES_MENU.includes(o)).map((opcion) => {
                             const { nivel, parcial } = nivelOpcion(opcion, editForm.permissions);
                             const Icon = opcion.icon;
                             const junto = compartenPermiso(opcion);
