@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { SecurityRole } from '@/types';
 import { MENU, OPCIONES_MENU, PERMISOS_DEL_MENU, compartenPermiso, conNivel, nivelOpcion, type NivelAcceso, type OpcionMenu } from '@/lib/menu';
-import { ArrowLeft, Plus, Loader2, AlertCircle, Trash2, Lock } from 'lucide-react';
+import { ArrowLeft, Plus, Loader2, AlertCircle, Trash2, Lock, GraduationCap } from 'lucide-react';
+import { useAuthStore } from '@/store/auth';
+import type { AjustesAcademy } from '@/types';
 
 const NIVELES: Array<{ nivel: NivelAcceso; label: string; activo: string }> = [
   { nivel: 'ninguno', label: 'Sin acceso', activo: 'bg-gray-700 text-white border-gray-700' },
@@ -164,6 +166,8 @@ export default function AdminRolesPage() {
           <p className="text-gray-500 mt-1">Qué opciones del menú ve cada perfil y si solo consulta o también hace cambios.</p>
         </div>
       </div>
+
+      <CertificacionAcademy />
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -371,6 +375,70 @@ export default function AdminRolesPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Xmart Academy (Hernán, 24-oct: "pon un botón en Perfiles para ver si exigimos o no la certificación"). Activa: lo
+ * transaccional de cada opción se habilita solo al aprobar el quiz de su módulo. Consultar nunca se bloquea.
+ */
+function CertificacionAcademy() {
+  const permisos = useAuthStore((s) => s.user?.permissions ?? []);
+  const puedeEditar = permisos.includes('security.update');
+  const [ajustes, setAjustes] = useState<AjustesAcademy | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    api.getAjustesAcademy().then(setAjustes).catch(() => setAjustes(null));
+  }, []);
+
+  if (!ajustes) return null;
+
+  async function cambiar() {
+    if (!ajustes) return;
+    const exigir = !ajustes.exigirCertificacion;
+    if (exigir && !window.confirm('Al exigir la certificación, quien no haya aprobado el quiz de un módulo podrá consultarlo pero no operar en él (crear, aprobar, liquidar, enviar) hasta aprobarlo. ¿Exigirla ahora?')) return;
+    try {
+      setGuardando(true);
+      setMsg('');
+      setAjustes(await api.guardarAjustesAcademy({ exigirCertificacion: exigir }));
+      setMsg('Guardado: aplica en máximo 30 segundos.');
+    } catch (e) {
+      setMsg(errMsg(e, 'No se pudo guardar.'));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col md:flex-row md:items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <span className="w-10 h-10 rounded-lg bg-orange-50 text-[#F47735] flex items-center justify-center shrink-0">
+        <GraduationCap className="w-5 h-5" />
+      </span>
+      <div className="flex-1">
+        <p className="font-semibold text-gray-900">Certificación de Xmart Academy para operar</p>
+        <p className="text-sm text-gray-500">
+          {ajustes.exigirCertificacion
+            ? `Exigida: lo transaccional se habilita al aprobar el quiz del módulo (mínimo ${ajustes.puntajeMinimo} %).`
+            : 'No exigida: los perfiles transaccionales operan sin el quiz. Actívala cuando la gente haya completado su plan.'}{' '}
+          <Link href="/academy/fricciones" className="text-[#C4521A] hover:underline">Ver avance de cada persona</Link>
+        </p>
+        {msg && <p className="text-xs text-gray-600 mt-1">{msg}</p>}
+      </div>
+      <button
+        onClick={() => void cambiar()}
+        disabled={!puedeEditar || guardando}
+        title={puedeEditar ? undefined : 'Solo quien puede editar perfiles'}
+        className="inline-flex items-center gap-3 disabled:opacity-50"
+        aria-pressed={ajustes.exigirCertificacion}
+      >
+        <span className={`relative w-12 h-7 rounded-full transition ${ajustes.exigirCertificacion ? 'bg-[#F47735]' : 'bg-gray-300'}`}>
+          <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${ajustes.exigirCertificacion ? 'left-6' : 'left-1'}`} />
+        </span>
+        <span className="text-sm font-semibold text-gray-800 w-20 text-left">{guardando ? 'Guardando…' : ajustes.exigirCertificacion ? 'Exigida' : 'No exigida'}</span>
+      </button>
     </div>
   );
 }

@@ -236,6 +236,11 @@ class ApiClient {
     return data;
   }
 
+  async getAjustesAcademy(): Promise<AjustesAcademy> {
+    const { data } = await this.client.get<AjustesAcademy>('/academy/ajustes');
+    return data;
+  }
+
   async guardarAjustesAcademy(ajustes: Partial<AjustesAcademy>): Promise<AjustesAcademy> {
     const { data } = await this.client.put<AjustesAcademy>('/academy/ajustes', ajustes);
     return data;
