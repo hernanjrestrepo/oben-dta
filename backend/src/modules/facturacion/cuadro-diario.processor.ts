@@ -6,11 +6,11 @@ import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { Tenant } from '../../entities/tenant.entity';
 import { CuadroDiarioService } from './cuadro-diario.service';
 
-const INTERVALO_MS = 30 * 60_000;
+const INTERVALO_MS = 5 * 60_000;
 
 /**
  * Carga SOLA el cuadro de facturación del día desde el Excel de SharePoint (27-oct: Comercial lo actualiza ahí y nadie
- * lo cargaba en Oben Xmart). Cada 30 min lee la hoja y la guarda como programación de hoy (reemplaza la de hoy, el plan
+ * lo cargaba en Oben Xmart). Cada 5 min lee la hoja y la guarda como programación de hoy (reemplaza la de hoy, el plan
  * cambia durante el día). Solo PROGRAMA: no factura nada — facturar depende de la suspensión, de las guardas y del
  * cierre de cada orden. Solo para tenants con `settings.facturacion.soloProgramadas`.
  */
