@@ -510,47 +510,59 @@ describe('PackingListAutomationService', () => {
   });
 });
 
-describe('exportación: la Lista de Empaque sale solo con la liquidación aprobada por COMEX (Hernán, 23-oct)', () => {
-  const armar = (aprobada: boolean, exportacion = true) => {
+describe('exportación: la Lista de Empaque sale apenas llega "Aprobada en corte", sin esperar a COMEX (José, 27-oct)', () => {
+  const armar = (exportacion = true) => {
     const hubCall = jest.fn().mockResolvedValue({ ok: true, data: { id: 'msg-x' } });
     const hub = { call: hubCall } as any;
     const ctx = { userId: 'u1', tenantId: 't1' } as any;
     const eventos: Array<{ action: string; outputData?: Record<string, unknown> }> = [];
     const audit = {
-      log: jest.fn(async (e: { action: string; entityId: string }) => eventos.push({ action: e.action })),
+      log: jest.fn(async (e: { action: string; outputData?: Record<string, unknown> }) => eventos.push({ action: e.action, outputData: e.outputData })),
       listForEntity: jest.fn(async () => eventos),
     } as any;
     const listas = { resolveRecipients: jest.fn().mockResolvedValue({ to: ['ops@oben.com'], cc: [], bcc: [] }) } as any;
     const reports = { buildDocumentPackage: jest.fn().mockResolvedValue(COMPLETE_PACKAGE), confirmApproveComex: jest.fn().mockResolvedValue({ ok: true }) } as any;
     const retries = { findOne: jest.fn(), create: jest.fn((x: unknown) => x), save: jest.fn(), update: jest.fn() } as any;
     const cartera = { evaluar: jest.fn().mockResolvedValue({ action: 'continuar', verificada: true, simulated: false, motivo: 'ok' }) } as any;
-    const estado = { aprobada };
     const aviso = {
-      esperaAprobacionComex: jest.fn(async () => ({ exportacion, numberPF: '11599', aprobada: estado.aprobada })),
+      esperaAprobacionComex: jest.fn(async () => ({ exportacion, numberPF: '11599', aprobada: false })),
       avisarExportacion: jest.fn().mockResolvedValue({ estado: 'avisada' }),
     } as any;
     const service = new PackingListAutomationService(hub, ctx, audit, listas, reports, retries, cartera, undefined, undefined, aviso);
     const correos = () => hubCall.mock.calls.filter((c) => c[0] === 'email');
-    return { service, aviso, correos, estado, reports };
+    return { service, aviso, correos, eventos, reports };
   };
 
-  it('sin aprobación: no sale el correo, se avisa a COMEX y al aprobar sale', async () => {
-    const { service, aviso, correos, estado, reports } = armar(false);
+  it('exportación sin liquidación aprobada: la lista SALE y después se avisa a COMEX (un aviso por orden)', async () => {
+    const { service, aviso, correos, reports } = armar(true);
     const r = await service.handleOvApproved(11433);
-    expect(r).toMatchObject({ sent: false, held: true, esperaComex: expect.stringContaining('PF 11599') });
-    expect(reports.buildDocumentPackage).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ sent: true });
+    expect(r.esperaComex).toBeUndefined();
+    expect(reports.buildDocumentPackage).toHaveBeenCalledWith(11433);
+    expect(correos()).toHaveLength(1);
+    expect(aviso.avisarExportacion).toHaveBeenCalledTimes(1);
     expect(aviso.avisarExportacion).toHaveBeenCalledWith(11433);
-    expect(correos()).toHaveLength(0);
+  });
 
-    estado.aprobada = true;
+  it('un fallo del aviso a COMEX no frena ni tumba la lista', async () => {
+    const { service, aviso, correos } = armar(true);
+    aviso.avisarExportacion.mockRejectedValue(new Error('sin lista'));
+    expect((await service.handleOvApproved(11433)).sent).toBe(true);
+    expect(correos()).toHaveLength(1);
+  });
+
+  it('nacional: sale como siempre', async () => {
+    const { service, correos } = armar(false);
+    expect((await service.handleOvApproved(11348)).sent).toBe(true);
+    expect(correos()).toHaveLength(1);
+  });
+
+  it('las que quedaron retenidas por la regla anterior se sueltan con liberarTrasAprobacionComex (y no se envían dos veces)', async () => {
+    const { service, correos, eventos } = armar(true);
+    eventos.push({ action: 'ov_approved_espera_liquidacion_comex' });
     expect(await service.liberarTrasAprobacionComex([11433])).toEqual([{ ov: 11433, resultado: 'enviada' }]);
     expect(correos()).toHaveLength(1);
     expect(await service.liberarTrasAprobacionComex([11433])).toEqual([{ ov: 11433, resultado: 'ya había salido' }]);
-  });
-
-  it('nacional: sale como siempre, sin esperar liquidación', async () => {
-    const { service, correos } = armar(false, false);
-    expect((await service.handleOvApproved(11348)).sent).toBe(true);
     expect(correos()).toHaveLength(1);
   });
 });

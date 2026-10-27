@@ -118,30 +118,9 @@ export class PackingListAutomationService {
       return { sent: false, queued: true, held: true, carteraMotivo: gate.decision.motivo, client: '', included: [], failed: [] };
     }
 
-    // Exportación (Hernán, 23-oct): el correo sale solo con la liquidación aprobada por COMEX. Mientras tanto se le
-    // avisa a COMEX para que la apruebe; al aprobar, `liberarTrasAprobacionComex` manda este mismo correo.
-    const espera = await this.avisoLiquidacion?.esperaAprobacionComex(numberOrderSales).catch(() => null);
-    if (espera?.exportacion && !espera.aprobada) {
-      const motivo = `Pedido de exportación: la Lista de Empaque sale cuando COMEX apruebe la liquidación de la PF ${espera.numberPF}.`;
-      await this.audit.log({
-        workflowName: 'packing-list-automation',
-        eventType: WorkflowEventType.ACTION_EXECUTED,
-        action: 'ov_approved_espera_liquidacion_comex',
-        entityType: 'packing_list',
-        entityId: String(numberOrderSales),
-        actorId: this.ctx.userId,
-        outputData: { numberPF: espera.numberPF },
-        reason: motivo,
-      });
-      try {
-        const l = await this.avisoLiquidacion?.avisarExportacion(numberOrderSales);
-        if (l) this.logger.log(`Orden ${numberOrderSales}: liquidación para COMEX → ${l.estado}${l.motivo ? ` (${l.motivo})` : ''}.`);
-      } catch (err) {
-        this.logger.error(`Orden ${numberOrderSales}: el aviso de liquidación a COMEX falló: ${(err as Error).message}`);
-      }
-      this.logger.log(`Orden ${numberOrderSales}: ${motivo}`);
-      return { sent: false, queued: false, held: true, esperaComex: motivo, client: '', included: [], failed: [] };
-    }
+    // Procesos SEPARADOS (José, 27-oct: "deja que la Lista de Empaque se genere apenas te llegue el correo de APROBADO EN
+    // CORTE"): también la de exportación sale ya. La liquidación con COMEX sigue por su lado: el aviso a COMEX se manda
+    // al final de este método (un correo por orden) y ya no frena nada. Sustituye la regla del 23-oct.
 
     const documentPackage = await this.reports.buildDocumentPackage(numberOrderSales);
     const includedKeys = documentPackage.included.map((r) => r.key);
@@ -208,8 +187,9 @@ export class PackingListAutomationService {
   }
 
   /**
-   * COMEX aprobó la liquidación: sale el correo de Lista de Empaque de las OV de exportación que lo esperaban (y que
-   * aún no lo tienen). Devuelve qué pasó con cada una.
+   * Envía el correo de Lista de Empaque de las OV de exportación que quedaron retenidas esperando a COMEX (regla del
+   * 23-oct, retirada el 27-oct) y aún no lo tienen. Ya no se usa en el flujo normal; sirve para soltar las retenidas.
+   * Devuelve qué pasó con cada una.
    */
   async liberarTrasAprobacionComex(ovs: number[]): Promise<Array<{ ov: number; resultado: string }>> {
     const salida: Array<{ ov: number; resultado: string }> = [];

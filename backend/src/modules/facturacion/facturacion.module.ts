@@ -22,6 +22,7 @@ import { TrmService } from './trm.service';
 import { LiquidacionModule } from '../liquidacion/liquidacion.module';
 import { ConexionesModule } from '../conexiones/conexiones.module';
 import { CuadroDiarioService } from './cuadro-diario.service';
+import { CuadroDiarioProcessor } from './cuadro-diario.processor';
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ import { CuadroDiarioService } from './cuadro-diario.service';
     ConexionesModule,
   ],
   controllers: [FacturacionController, FacturasParcialesController, FacturacionProgramadaController],
-  providers: [FacturacionService, FacturacionPdfService, TrmService, FacturasParcialesService, FacturasEsperaProcessor, CuadroDiarioService, AprobacionComexService, { provide: APROBACION_COMEX, useExisting: AprobacionComexService }],
+  providers: [FacturacionService, FacturacionPdfService, TrmService, FacturasParcialesService, FacturasEsperaProcessor, CuadroDiarioService, CuadroDiarioProcessor, AprobacionComexService, { provide: APROBACION_COMEX, useExisting: AprobacionComexService }],
   exports: [FacturacionService, FacturasParcialesService],
 })
 export class FacturacionModule {}
