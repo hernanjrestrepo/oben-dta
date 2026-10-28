@@ -363,6 +363,59 @@ export const MIA_TOOLS: Array<{
     },
   },
   {
+    permiso: 'reports.create',
+    tool: {
+      name: 'generar_imagen',
+      description:
+        'Genera una imagen con IA (ilustraciones, piezas gráficas, fondos) y deja un botón para descargarla. Un modo inteligente escoge el modelo de mejor costo-beneficio según el nivel y respeta los topes de costo del tenant; cada imagen cuesta centavos. Solo úsala si el usuario la pide explícitamente. Describe la imagen en inglés para mejores resultados. No pongas texto ni logos reales en la imagen.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          descripcion: { type: 'string', description: 'Qué debe mostrar la imagen (estilo, colores, composición).' },
+          nivel: { type: 'string', enum: ['economico', 'estandar', 'alta'], description: 'Calidad. Por defecto economico.' },
+        },
+        required: ['descripcion'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    permiso: 'reports.create',
+    tool: {
+      name: 'generar_video',
+      description:
+        'Pide un video corto con IA (4 a 8 segundos, 720p, con audio). Un modo inteligente escoge el modelo de mejor costo-beneficio y verifica los topes de costo ANTES de gastar; un video económico de 6 segundos cuesta unos US$0,30. Es asíncrono: tarda cerca de un minuto, así que responde de inmediato con el costo estimado y dile al usuario que te pregunte "cómo va el video" para entregarlo (usa estado_video). Solo úsala si el usuario lo pide explícitamente. Describe la escena en inglés para mejores resultados; no pongas texto ni logos reales.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          descripcion: { type: 'string', description: 'La escena: qué se ve, movimiento de cámara, ambiente y sonido.' },
+          duracion: { type: 'integer', enum: [4, 6, 8], description: 'Segundos (por defecto 6).' },
+          formato: { type: 'string', enum: ['16:9', '9:16'], description: 'Horizontal 16:9 (por defecto) o vertical 9:16.' },
+          audio: { type: 'boolean', description: 'Con audio (por defecto sí).' },
+          nivel: { type: 'string', enum: ['economico', 'estandar', 'alta'], description: 'Calidad. Por defecto economico.' },
+        },
+        required: ['descripcion'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    permiso: 'reports.create',
+    tool: {
+      name: 'estado_video',
+      description: 'Revisa el video que el usuario pidió con generar_video: si ya terminó deja un botón para descargarlo y dice cuánto costó; si sigue en proceso, pídele que espere unos segundos más. Sin id usa el último video del usuario.',
+      input_schema: { type: 'object', properties: { id: { type: 'string', description: 'Id devuelto por generar_video (opcional).' } }, additionalProperties: false },
+    },
+  },
+  {
+    permiso: 'reports.read',
+    tool: {
+      name: 'gasto_ia',
+      description: 'Cuánto se ha gastado hoy y en el mes en imágenes y videos de IA, cuántos videos hay en proceso y cuáles son los topes de costo (por pedido, por día y por mes).',
+      input_schema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+  },
+  {
     permiso: 'quotes.create',
     tool: {
       name: 'crear_cotizacion',

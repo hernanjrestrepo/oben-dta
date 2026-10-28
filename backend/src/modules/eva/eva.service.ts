@@ -6,6 +6,7 @@ import { Quote } from '../../entities/quote.entity';
 import { Client } from '../../entities/client.entity';
 import { ComercialCase } from '../../entities/comercial-case.entity';
 import { ProformaOben } from '../../entities/proforma-oben.entity';
+import { IaModelosService } from '../ia/ia-modelos.service';
 import { Invoice } from '../../entities/invoice.entity';
 import { FreightInlandRate } from '../../entities/freight-inland-rate.entity';
 import { FreightDestinationSurcharge } from '../../entities/freight-destination-surcharge.entity';
@@ -105,6 +106,7 @@ Cómo trabajas:
 - crear_cotizacion crea una cotización real y se la envía al cliente: úsala solo si el usuario lo pide explícitamente para un cliente identificado por su correo.
 - No puedes enviar facturas, enviar liquidaciones a Oben ni modificar datos. Si te lo piden, explica que se hace desde la pantalla correspondiente y ofrece abrirla.
 - Módulo Comercial (pestaña CRM de la pantalla Comercial): cuando preguntan por una orden de compra de un cliente, su proforma o en qué va, usa consultar_casos_comercial. Si trae "proformaEnObenMas", la Proforma y la orden de venta se crearon DE VERDAD en OBEN MAS (hoy en el servidor de PRUEBAS de Oben, que es lo que dice "servidor"): da el número oficial de la Proforma (el de seguimiento) y, si te lo piden, el código interno. Lo que Oben todavía no tiene por API sigue simulado: el cubicaje de Planeación, el PDF de la Proforma y la liberación de Cartera. Si la orden de venta está creada pero sin número, di que Oben todavía no devuelve ese número por su API y que se consulta en OBEN MAS; nunca lo inventes. Si el caso es "simulado", la proforma y la OV son de prueba y no existen en Oben. Tú no creas ni confirmas nada de Comercial: eso lo hace una persona desde la pantalla Comercial (puedes ofrecer abrirla con abrir_pantalla).
+- Imágenes y videos con IA: usa generar_imagen o generar_video SOLO si el usuario lo pide. Un modo inteligente escoge el modelo de mejor costo-beneficio y verifica los topes de costo antes de gastar; si un tope lo impide, di el motivo tal cual y ofrece una versión más barata (más corta o de nivel económico). El video es asíncrono: confirma el costo estimado y, cuando el usuario pregunte cómo va, usa estado_video. Para saber cuánto se ha gastado usa gasto_ia. Nunca pongas logos ni textos de marcas reales en lo que generas, y avisa que es contenido genérico generado por IA, no la planta ni los productos reales de Oben.
 - Perfiles: cada perfil se arma con las mismas opciones del menú y en cada una tiene Sin acceso, Solo lectura (ve y consulta) o Transaccional (además crea, edita, envía, aprueba o liquida). Los administra quien tiene acceso a Configuración → Perfiles. Si alguien no ve una opción del menú o no puede hacer un cambio, explícale que su perfil no lo incluye y que lo pida a un administrador.
 - Estado actual de la facturación: Oben Xmart crea en el ERP de Oben SOLO las facturas de pedidos NACIONALES que Oben programó en el cuadro de facturación del día (corte 4 p. m.), y los parciales al llegar el correo "Facturar parcial" si están en ese cuadro. Lo que no está programado NO se factura. La exportación se pide a Oben cuando COMEX aprueba la liquidación (una vez por proforma; si Oben la rechaza no se reintenta sola), y sus Listas de Empaque solo salen con la liquidación aprobada por COMEX; los pedidos nacionales no llevan liquidación. El envío automático a la DIAN es una segunda fase: hoy no hay CUFE real.
 - En consultar_facturacion_orden, "vistaPreviaOxmart" es solo una VISTA PREVIA que Oben Xmart calcula con los datos del ERP: NO es una factura ni un borrador en el ERP de Oben. Para decir si una OV tiene factura en el ERP usa ÚNICAMENTE "facturaEnErp": si dice que no hay, di claramente que NO tiene factura en el ERP y da el motivo que trae. El PDF de generar_documento (factura_pdf) es esa vista previa con marca de agua BORRADOR: dilo así, no digas que es un borrador del ERP.
@@ -151,6 +153,7 @@ export class EvaService {
     private readonly llm: MiaLlm | null = null,
     @Optional() @InjectRepository(ComercialCase) private readonly casosComercial?: Repository<ComercialCase>,
     @Optional() @InjectRepository(ProformaOben) private readonly proformasOben?: Repository<ProformaOben>,
+    @Optional() private readonly ia?: IaModelosService,
     @Optional() @InjectRepository(AcademyEvento) private readonly academyEventos?: Repository<AcademyEvento>,
   ) {}
 
@@ -717,6 +720,42 @@ export class EvaService {
         const etiqueta = `${titulo} (${f.nombre})`;
         acciones.push({ tipo: 'archivo', id, nombre, etiqueta });
         return { contenido: `Listo: en el chat aparece el botón "${etiqueta}" para descargarlo.` };
+      }
+      case 'generar_imagen': {
+        if (!this.ia) return { error: 'La generación de imágenes no está disponible.' };
+        const img = await this.ia.generarImagen(a.descripcion, a.nivel);
+        const ext = img.mime.includes('png') ? 'png' : 'jpg';
+        const nombre = `imagen-mia.${ext}`;
+        const id = MIA_ARCHIVOS.guardar(this.ctx.userId ?? 'anonimo', nombre, img.mime, img.buffer);
+        acciones.push({ tipo: 'archivo', id, nombre, etiqueta: 'Descargar la imagen' });
+        return { contenido: `Imagen lista (modelo ${img.modelo}, nivel ${img.nivel}, costó US$${img.costoUsd.toFixed(3)}): en el chat aparece el botón para descargarla.` };
+      }
+      case 'generar_video': {
+        if (!this.ia) return { error: 'La generación de videos no está disponible.' };
+        const v = await this.ia.generarVideo(a.descripcion, {
+          duracion: typeof a.duracion === 'number' ? a.duracion : undefined,
+          formato: a.formato ? String(a.formato) : undefined,
+          audio: typeof a.audio === 'boolean' ? a.audio : undefined,
+          nivel: a.nivel as never,
+        });
+        return {
+          contenido: `Video en proceso (id ${v.usoId}): modelo ${v.modelo}, nivel ${v.nivel}, ${v.duracion} s a ${v.resolucion}${v.audio ? ' con audio' : ' sin audio'}, costo estimado US$${v.estimadoUsd.toFixed(2)}. Tarda cerca de un minuto: dile al usuario que te pregunte "¿cómo va el video?" para entregárselo.`,
+        };
+      }
+      case 'estado_video': {
+        if (!this.ia) return { error: 'La generación de videos no está disponible.' };
+        const e = await this.ia.estadoVideo(a.id ? String(a.id) : undefined);
+        if (e.estado === 'en_proceso') return { contenido: 'El video sigue en proceso. Pídele al usuario que espere unos segundos y vuelva a preguntar.' };
+        if (e.estado === 'fallido') return { contenido: `El video falló y no se cobró: ${e.error ?? 'el proveedor no pudo generarlo'}. Ofrécele pedirlo de nuevo.` };
+        const nombre = 'video-mia.mp4';
+        const id = MIA_ARCHIVOS.guardar(this.ctx.userId ?? 'anonimo', nombre, 'video/mp4', e.buffer!);
+        acciones.push({ tipo: 'archivo', id, nombre, etiqueta: 'Descargar el video' });
+        return { contenido: `Video listo (modelo ${e.modelo}, costó US$${(e.costoUsd ?? 0).toFixed(2)}): en el chat aparece el botón para descargarlo.` };
+      }
+      case 'gasto_ia': {
+        if (!this.ia) return { error: 'El registro de gasto de IA no está disponible.' };
+        const g = await this.ia.gasto();
+        return { hoyUsd: Number(g.hoyUsd.toFixed(3)), mesUsd: Number(g.mesUsd.toFixed(3)), videosEnProceso: g.enProceso, topes: g.topes };
       }
       case 'consultar_academy': {
         const pregunta = texto(a.pregunta, 'pregunta');

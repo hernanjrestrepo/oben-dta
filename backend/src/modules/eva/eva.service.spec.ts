@@ -107,6 +107,12 @@ function build(
   const proformasOben = {
     find: jest.fn(async () => [{ casoId: 'caso-real', servidor: 'pruebas', numeroPF: '11546', codigoInterno: 13395, estado: 'activa', ordenVenta: null, error: null }]),
   };
+  const ia = {
+    generarImagen: jest.fn(async () => ({ usoId: 'i1', modelo: 'google/gemini-3.1-flash-lite-image', nivel: 'economico', costoUsd: 0.0336, mime: 'image/jpeg', buffer: Buffer.from('jpg') })),
+    generarVideo: jest.fn(async () => ({ usoId: 'v1', modelo: 'google/veo-3.1-lite', nivel: 'economico', estimadoUsd: 0.3, duracion: 6, resolucion: '720p', audio: true })),
+    estadoVideo: jest.fn(async () => ({ usoId: 'v1', estado: 'completado', modelo: 'google/veo-3.1-lite', costoUsd: 0.3, buffer: Buffer.from('mp4') })),
+    gasto: jest.fn(async () => ({ hoyUsd: 0.3, mesUsd: 1.2, enProceso: 0, topes: { porPedidoUsd: 1, porDiaUsd: 5, porMesUsd: 50 } })),
+  };
   const ctx = {
     tenantId: T,
     tenantIdOrNull: T,
@@ -131,8 +137,9 @@ function build(
     opts.sinCliente ? null : client,
     casosComercial as never,
     proformasOben as never,
+    ia as never,
   );
-  return { svc, pedidos, client, audit, authz, quotesService };
+  return { svc, pedidos, client, audit, authz, quotesService, ia };
 }
 
 describe('EvaService (MIA sobre Kimi, con Ollama de respaldo)', () => {
@@ -201,6 +208,30 @@ describe('EvaService (MIA sobre Kimi, con Ollama de respaldo)', () => {
     await svc.chat('¿en qué va la proforma 11546?');
     const resultado = String((pedidos[1].at(-1) as { content: string }).content);
     for (const dato of ['"numeroOficial":"11546"', '"codigoInterno":13395', 'servidor de PRUEBAS de Oben', 'Oben todavía no devuelve su número', '"ordenDeVentaActiva":true']) expect(resultado).toContain(dato);
+  });
+
+  it('generar_video / estado_video / generar_imagen: el modo inteligente entrega botones de descarga; MIA no toca la API directamente', async () => {
+    const { svc, pedidos, ia } = build({
+      respuestas: [
+        respuesta([usar('generar_video', { descripcion: 'A BOPP film line', duracion: 6 })], 'tool_use'),
+        respuesta([usar('estado_video', {})], 'tool_use'),
+        respuesta([usar('generar_imagen', { descripcion: 'plastic film roll illustration' })], 'tool_use'),
+        respuesta([texto('Listo.')], 'end_turn'),
+      ],
+    });
+    const r = await svc.chat('hazme un video y una imagen');
+    expect(ia.generarVideo).toHaveBeenCalledWith('A BOPP film line', expect.objectContaining({ duracion: 6 }));
+    expect(String((pedidos[1].at(-1) as { content: string }).content)).toContain('costo estimado US$0.30');
+    expect(r.acciones?.map((a) => ('etiqueta' in a ? a.etiqueta : ''))).toEqual(['Descargar el video', 'Descargar la imagen']);
+  });
+
+  it('sin permiso de reportes MIA no genera nada: ni imágenes, ni videos ni consulta el gasto', async () => {
+    const { svc, ia } = build({
+      permitir: (p) => p !== 'reports.create' && p !== 'reports.read',
+      respuestas: [respuesta([usar('generar_video', { descripcion: 'A BOPP film line' })], 'tool_use'), respuesta([texto('No tienes permiso.')], 'end_turn')],
+    });
+    await svc.chat('hazme un video');
+    expect(ia.generarVideo).not.toHaveBeenCalled();
   });
 
   it('sin el permiso de la herramienta no consulta nada y se lo dice al modelo', async () => {

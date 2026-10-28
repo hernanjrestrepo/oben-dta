@@ -14,6 +14,7 @@ import { EvaController } from './eva.controller';
 import { EvaService } from './eva.service';
 import { MIA_LLM, crearMiaLlm } from './mia-llm';
 import { QuotesModule } from '../quotes/quotes.module';
+import { IaModule } from '../ia/ia.module';
 import { AuthModule } from '../auth/auth.module';
 import { FacturacionModule } from '../facturacion/facturacion.module';
 import { LiquidacionModule } from '../liquidacion/liquidacion.module';
@@ -34,6 +35,7 @@ import { IntegrationHubModule } from '../integrations/hub/integration-hub.module
       AcademyEvento,
     ]),
     QuotesModule,
+    IaModule,
     AuthModule,
     FacturacionModule,
     LiquidacionModule,

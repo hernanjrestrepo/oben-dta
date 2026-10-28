@@ -46,6 +46,7 @@ import { ComercialCase } from './entities/comercial-case.entity';
 import { FormatoEnvio } from './entities/formato-envio.entity';
 import { FacturaParcial } from './entities/factura-parcial.entity';
 import { FacturaLlamada } from './entities/factura-llamada.entity';
+import { IaUso } from './entities/ia-uso.entity';
 import { AcademyEvento, AcademyIntento, AcademyProgreso } from './entities/academy.entities';
 import { FacturaProgramada } from './entities/factura-programada.entity';
 import { LiquidacionAprobacion } from './entities/liquidacion-aprobacion.entity';
@@ -184,6 +185,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
           FormatoEnvio,
           FacturaParcial,
           FacturaLlamada,
+          IaUso,
           AcademyProgreso,
           AcademyIntento,
           AcademyEvento,
