@@ -18,6 +18,20 @@ describe('modelo de MIA', () => {
     expect(crearMiaLlm({})).toBeNull();
   });
 
+  it('OpenRouter (27-oct): va primero con GLM Flash y DeepSeek V4 Flash de respaldo; los modelos se cambian por variable y no manda "thinking"', () => {
+    const p = proveedoresMia({ OPENROUTER_API_KEY: 'r', KIMI_API_KEY: 'k', OLLAMA_API_KEY: 'o' });
+    expect(p.map((x) => `${x.nombre}:${x.modelo}`)).toEqual([
+      'openrouter:~z-ai/glm-flash-latest',
+      'openrouter:~deepseek/deepseek-v4-flash-latest',
+      'kimi:kimi-k2.6',
+      'ollama:gemma4:31b',
+    ]);
+    expect(p[0]).toMatchObject({ baseUrl: 'https://openrouter.ai/api/v1', temperatura: 0.2 });
+    const solo = proveedoresMia({ OPENROUTER_API_KEY: 'r', MIA_OPENROUTER_MODEL: 'x/y', MIA_OPENROUTER_BACKUP_MODEL: 'ninguno' });
+    expect(solo.map((x) => x.modelo)).toEqual(['x/y']);
+    expect(proveedoresMia({})).toEqual([]);
+  });
+
   it('a Kimi no le manda temperature (kimi-k2.6 solo acepta el default)', async () => {
     const fetchMock = jest.fn(async (_url: string, _init: { body: string }) => respuestaChat('ok'));
     global.fetch = fetchMock as never;

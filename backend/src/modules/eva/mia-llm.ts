@@ -55,7 +55,7 @@ export function esSinSaldo(err: unknown): boolean {
 }
 
 export interface MiaProveedor {
-  nombre: 'kimi' | 'ollama';
+  nombre: 'openrouter' | 'kimi' | 'ollama';
   baseUrl: string;
   modelo: string;
   apiKey: string;
@@ -63,9 +63,23 @@ export interface MiaProveedor {
   temperatura?: number;
 }
 
-/** Proveedores configurados, en orden de preferencia: Kimi y después Ollama. */
+/**
+ * Modelos de OpenRouter (27-oct, elegidos por precio y calidad con una tarea real de MIA: llamar la herramienta, leer
+ * su resultado y responder en español sin inventar). Los alias "~…-latest" enrutan al proveedor más barato.
+ * GLM Flash: US$0,038/0,077 por millón de tokens (entrada/salida); DeepSeek V4 Flash de respaldo: US$0,042/0,169.
+ */
+export const MIA_OPENROUTER_MODELO = '~z-ai/glm-flash-latest';
+export const MIA_OPENROUTER_RESPALDO = '~deepseek/deepseek-v4-flash-latest';
+
+/** Proveedores configurados, en orden de preferencia: OpenRouter (modelo barato y su respaldo), Kimi y después Ollama. */
 export function proveedoresMia(env: NodeJS.ProcessEnv = process.env): MiaProveedor[] {
   const lista: MiaProveedor[] = [];
+  if (env.OPENROUTER_API_KEY) {
+    const baseUrl = env.OPENROUTER_URL || 'https://openrouter.ai/api/v1';
+    for (const modelo of [env.MIA_OPENROUTER_MODEL || MIA_OPENROUTER_MODELO, env.MIA_OPENROUTER_BACKUP_MODEL || MIA_OPENROUTER_RESPALDO]) {
+      if (modelo && modelo !== 'ninguno') lista.push({ nombre: 'openrouter', baseUrl, modelo, apiKey: env.OPENROUTER_API_KEY, temperatura: 0.2 });
+    }
+  }
   if (env.KIMI_API_KEY) {
     lista.push({
       nombre: 'kimi',
