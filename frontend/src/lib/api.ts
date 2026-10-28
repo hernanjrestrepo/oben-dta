@@ -429,6 +429,12 @@ class ApiClient {
   }
 
   /** La proforma tal como la tiene Oben, para revisarla antes de liquidar. */
+  /** Excel de la proforma tal como la tiene Oben (para validar consignatario y detalles). */
+  async downloadProformaExcel(numberPF: string): Promise<Blob> {
+    const { data } = await this.client.get(`/liquidacion/${numberPF}/proforma/excel`, { responseType: 'blob', ...this.OBEN_LIVE });
+    return data as Blob;
+  }
+
   async getProformaCompleta(numberPF: string): Promise<ProformaCompleta> {
     const { data } = await this.client.get<ProformaCompleta>(`/liquidacion/${numberPF}/proforma`, this.OBEN_LIVE);
     return data;

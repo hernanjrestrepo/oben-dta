@@ -9,6 +9,7 @@ import { RequirePermission } from '../security/require-permission.decorator';
 import { LiquidacionService } from './liquidacion.service';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import { CONCEPTOS_POR_INCOTERM } from './incoterm-rules';
+import { proformaExcel } from './proforma-excel';
 import { APROBACION_COMEX, LIBERAR_EXPORTACION, type LiberarExportacion, type TrasAprobacionComex } from './aprobacion-comex.token';
 import type { LiquidacionDraft } from './liquidacion.types';
 import type { LiquidacionFacturaInput, LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotalesInput } from './liquidacion.types';
@@ -234,6 +235,17 @@ export class LiquidacionController {
   @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
   proforma(@Param('numberPF') numberPF: string) {
     return this.liquidacion.proformaCompleta(numberPF);
+  }
+
+  /** Excel de la proforma tal como la tiene Oben, para validar consignatario y detalles (María, 28-oct). Solo lectura. */
+  @Get(':numberPF/proforma/excel')
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
+  async proformaExcel(@Param('numberPF') numberPF: string, @Res() res: Response) {
+    const p = await this.liquidacion.proformaCompleta(numberPF);
+    const buffer = await proformaExcel(p);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`Proforma-${p.numberPF}.xlsx`)}`);
+    res.send(buffer);
   }
 
   /** COMEX ya la liquidó por fuera: sale de la lista de pendientes (20-oct). */

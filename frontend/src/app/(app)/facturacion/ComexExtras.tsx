@@ -48,6 +48,7 @@ export function ProformaModal({ pf, onClose }: { pf: string; onClose: () => void
   const t = useT();
   const [data, setData] = useState<ProformaCompleta | null>(null);
   const [error, setError] = useState('');
+  const [bajando, setBajando] = useState(false);
   useEffect(() => {
     api
       .getProformaCompleta(pf)
@@ -63,9 +64,32 @@ export function ProformaModal({ pf, onClose }: { pf: string; onClose: () => void
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="w-4 h-4 text-[#F47735]" />{' '}{t('Proforma')}{' '}{pf}{' '}{t('en OBEN MAS')}
           </h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label={t('Cerrar')}>
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className={btnSecondary}
+              disabled={!data || bajando}
+              onClick={() => {
+                setBajando(true);
+                api
+                  .downloadProformaExcel(pf)
+                  .then((b) => {
+                    const url = URL.createObjectURL(b);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Proforma-${pf}.xlsx`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  })
+                  .catch((err) => setError(extractMessage(err, 'No se pudo descargar la proforma.')))
+                  .finally(() => setBajando(false));
+              }}
+            >
+              {bajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {t('Descargar Excel')}
+            </button>
+            <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label={t('Cerrar')}>
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
         </div>
         <div className="p-5 space-y-5">
           {error && (
