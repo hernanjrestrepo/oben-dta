@@ -4,94 +4,80 @@ import { useT } from '@/i18n/idioma';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
-import type { CargaTarifario, LiquidacionInputPantalla, ProformaCompleta, ResultadoCargaTarifario, TarifaManualInput, TarifasManuales, VistaFactura } from '@/types';
+import type { CargaTarifario, LiquidacionInputPantalla, ProformaDocumento, ResultadoCargaTarifario, TarifaManualInput, TarifasManuales, VistaFactura } from '@/types';
 import { AlertCircle, Download, FileSpreadsheet, FileText, History, Loader2, Plus, Receipt, Trash2, Upload, X } from 'lucide-react';
 import { Card, CardHeader, btnPrimary, btnSecondary, fecha, inputCls, usd } from './ui';
 
-/** Nombres legibles de los campos que entrega Oben para la proforma (los demás se muestran tal cual). */
-const ETIQUETAS: Record<string, string> = {
-  Proforma: 'Proforma',
-  NroProforma: 'Proforma',
-  OrdenVenta: 'Orden de venta',
-  OrdenCompra: 'Orden de compra del cliente',
-  Cliente: 'Cliente',
-  Direccion: 'Dirección',
-  PuertoEmbarque: 'Puerto de embarque',
-  PuertoArribo: 'Puerto de arribo',
-  Incoterms: 'Incoterm',
-  Incoterm: 'Incoterm',
-  TerminoPago: 'Término de pago',
-  Pais: 'País',
-  Mercado: 'Mercado',
-  TipoPelicula: 'Película',
-  Precio: 'Precio/kg',
-  KilosTotales: 'Kilos',
-  Partida: 'Partida',
-  DescripcionSKU: 'Descripción',
-  TipoMaterial: 'Tipo de material',
-  Linea: 'Línea',
-  CodSed_LineFilm: 'Línea',
-};
-const etiqueta = (k: string) => ETIQUETAS[k] ?? k;
-const valor = (v: unknown): string => {
-  if (v === null || v === undefined || v === '') return '—';
-  if (Array.isArray(v)) return v.map((x) => (x && typeof x === 'object' ? Object.values(x as Record<string, unknown>).join(' ') : String(x))).join(', ');
-  if (typeof v === 'object') return JSON.stringify(v);
-  return String(v);
-};
-
 /**
- * La proforma tal como la tiene Oben (María, 20-oct: "cuando vamos a liquidar consultamos la proforma, aquí no la
- * vamos a poder consultar"). Encabezado y detalle de la liquidación de Oben + la fila del reporte de proformas.
+ * La proforma con el formato del documento de OBEN MAS (María Escobar, 28-oct: "que salga tal cual como la muestra
+ * Oben MAS o que permita descargar para validar información"). Lo que Oben no entrega por ninguna fuente sale como
+ * "no disponible" y se lista al pie: nada se inventa.
  */
 export function ProformaModal({ pf, onClose }: { pf: string; onClose: () => void }) {
   const t = useT();
-  const [data, setData] = useState<ProformaCompleta | null>(null);
+  const [data, setData] = useState<ProformaDocumento | null>(null);
   const [error, setError] = useState('');
-  const [bajando, setBajando] = useState(false);
+  const [bajando, setBajando] = useState('');
   useEffect(() => {
     api
-      .getProformaCompleta(pf)
+      .getProformaDocumento(pf)
       .then(setData)
       .catch((err) => setError(extractMessage(err, `No se pudo consultar la proforma ${pf} en Oben.`)));
   }, [pf]);
-  const columnas = data ? [...new Set(data.detalle.flatMap((d) => Object.keys(d)))] : [];
-  const extra = data?.reporte ? Object.entries(data.reporte).filter(([k]) => !(k in (data?.campos ?? {})) && k !== 'OrdenesVenta') : [];
+
+  const descargar = (tipo: 'pdf' | 'xlsx') => {
+    setBajando(tipo);
+    (tipo === 'pdf' ? api.downloadProformaPdf(pf) : api.downloadProformaExcel(pf))
+      .then((b) => {
+        const url = URL.createObjectURL(b);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Proforma-${pf}.${tipo}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch((err) => setError(extractMessage(err, 'No se pudo descargar la proforma.')))
+      .finally(() => setBajando(''));
+  };
+
+  const nd = <span className="italic text-amber-700">{t('no disponible')}</span>;
+  const dato = (v: string | number | null | undefined) => (v === null || v === undefined || v === '' ? nd : v);
+  const bloque = (titulo: string, contenido: React.ReactNode, ancho = '') => (
+    <div className={`border border-gray-800 p-2 ${ancho}`}>
+      <p className="text-[11px] font-bold text-gray-900">{titulo}</p>
+      <div className="text-sm text-gray-900 whitespace-pre-line break-words">{contenido}</div>
+    </div>
+  );
+  const direccion = (b: { nombre: string | null; direccion: string | null }) =>
+    b.nombre || b.direccion ? (
+      <>
+        {b.nombre}
+        {b.direccion ? `\n${b.direccion}` : ''}
+      </>
+    ) : (
+      nd
+    );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="w-4 h-4 text-[#F47735]" />{' '}{t('Proforma')}{' '}{pf}{' '}{t('en OBEN MAS')}
           </h3>
           <div className="flex items-center gap-2">
-            <button
-              className={btnSecondary}
-              disabled={!data || bajando}
-              onClick={() => {
-                setBajando(true);
-                api
-                  .downloadProformaExcel(pf)
-                  .then((b) => {
-                    const url = URL.createObjectURL(b);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `Proforma-${pf}.xlsx`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  })
-                  .catch((err) => setError(extractMessage(err, 'No se pudo descargar la proforma.')))
-                  .finally(() => setBajando(false));
-              }}
-            >
-              {bajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {t('Descargar Excel')}
+            <button className={btnPrimary} disabled={!data || !!bajando} onClick={() => descargar('pdf')}>
+              {bajando === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {t('Descargar PDF')}
+            </button>
+            <button className={btnSecondary} disabled={!data || !!bajando} onClick={() => descargar('xlsx')}>
+              {bajando === 'xlsx' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} {t('Excel')}
             </button>
             <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label={t('Cerrar')}>
               <X className="w-5 h-5 text-gray-500" />
             </button>
           </div>
         </div>
-        <div className="p-5 space-y-5">
+        <div className="p-5 space-y-3">
           {error && (
             <p className="text-sm text-red-700 flex items-center gap-2">
               <AlertCircle className="w-4 h-4" /> {error}
@@ -104,39 +90,89 @@ export function ProformaModal({ pf, onClose }: { pf: string; onClose: () => void
           )}
           {data && (
             <>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                {[...Object.entries(data.campos), ...extra].map(([k, v]) => (
-                  <div key={k} className={k === 'Direccion' ? 'sm:col-span-2' : ''}>
-                    <dt className="text-[11px] uppercase tracking-wide text-gray-400">{etiqueta(k)}</dt>
-                    <dd className="font-medium text-gray-900 whitespace-pre-line break-words">{valor(v)}</dd>
-                  </div>
-                ))}
-              </dl>
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-sm font-bold text-gray-900">{data.embarcador}</p>
+                  <p className="text-[11px] text-gray-500">{t('Fecha')}: {dato(data.fechas.proforma)}</p>
+                </div>
+                <p className="text-gray-700">
+                  {t('Proforma')}: <span className="text-3xl font-extrabold text-gray-900 align-middle">{data.numberPF}</span>
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-0">
+                {bloque('Pedido Cliente Nro: (Customer Order)', <span className="text-lg">{dato(data.ordenCompra)}</span>, 'md:col-span-3')}
+                <div className="md:col-span-2 border border-gray-800 divide-y divide-gray-800 text-[11px]">
+                  {([['Fecha Estimada Embarque (Estimated Date of Shipment)', data.fechas.estimadaEmbarque], ['Fecha Estimada Entrega (Estimated Date of Delivery)', data.fechas.estimadaEntrega], ['Fecha Requerida Cliente (Customer Required Date)', data.fechas.requeridaCliente]] as const).map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                      <span className="font-bold text-gray-900">{k}</span>
+                      <span className="text-gray-900 font-semibold">{dato(v)}</span>
+                    </div>
+                  ))}
+                </div>
+                {bloque('Vendido a: (Sold To)', direccion(data.vendidoA), 'md:col-span-3')}
+                {bloque('Puerto Destino (Destination Port)', dato(data.puertoDestino), 'md:col-span-2')}
+                {bloque('Entregado en: (Shipped To)', direccion(data.entregadoEn), 'md:col-span-3')}
+                {bloque('Mercado / País', dato([data.mercado, data.pais].filter(Boolean).join(' — ')), 'md:col-span-2')}
+                {bloque('Consignado a: (consigned to)', dato(data.consignadoA), 'md:col-span-5')}
+                {bloque('Embarcador Por: (Shipped by)', data.embarcador, 'md:col-span-3')}
+                {bloque('Origen: (Origin)', data.origen, 'md:col-span-2')}
+                {bloque('Desde: (From)', dato(data.desde), 'md:col-span-3')}
+                {bloque('Hasta: (To)', dato(data.hasta), 'md:col-span-2')}
+                {bloque('Contenedores: (Nº Containers)', dato(data.contenedores), 'md:col-span-3')}
+                {bloque('Forma de Pago: (Payment Terms)', dato(data.formaPago), 'md:col-span-2')}
+                {bloque('Embalaje: (Package)', dato(data.embalaje), 'md:col-span-3')}
+                {bloque('Incoterm 2020', dato(data.incoterm), 'md:col-span-2')}
+              </div>
+
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-gray-800">
+                <table className="w-full text-xs text-gray-900 border border-gray-800 border-collapse">
                   <thead>
-                    <tr className="bg-gray-50 text-gray-500">
-                      {columnas.map((c) => (
-                        <th key={c} className="px-3 py-2 text-left font-semibold whitespace-nowrap">
-                          {etiqueta(c)}
+                    <tr className="bg-gray-50 text-[10px]">
+                      {['Item', 'Cant. (Quantity) Kg', 'Rollos (Rolls)', 'Descripción del Producto (Product Description)', 'Diámetro (mm)', 'Core (plg)', 'P.A.', 'Precio Unit. (Unit Price)', 'Total US$'].map((c) => (
+                        <th key={c} className="border border-gray-800 px-2 py-1.5 font-bold text-center">
+                          {t(c)}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {data.detalle.map((d, i) => (
-                      <tr key={i}>
-                        {columnas.map((c) => (
-                          <td key={c} className="px-3 py-2 align-top">
-                            {valor(d[c])}
-                          </td>
-                        ))}
+                  <tbody>
+                    {data.lineas.map((l) => (
+                      <tr key={l.sku}>
+                        <td className="border border-gray-800 px-2 py-1.5 text-center">{l.item}</td>
+                        <td className="border border-gray-800 px-2 py-1.5 text-right tabular-nums">{l.kilos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border border-gray-800 px-2 py-1.5 text-center">{l.rollos ?? '—'}</td>
+                        <td className="border border-gray-800 px-2 py-1.5">{l.descripcion}</td>
+                        <td className="border border-gray-800 px-2 py-1.5 text-center">{l.diametroMm ?? '—'}</td>
+                        <td className="border border-gray-800 px-2 py-1.5 text-center">{l.core ?? '—'}</td>
+                        <td className="border border-gray-800 px-2 py-1.5 text-center">{l.partida ?? '—'}</td>
+                        <td className="border border-gray-800 px-2 py-1.5 text-right tabular-nums">{l.precio === null ? '—' : l.precio.toFixed(4)}</td>
+                        <td className="border border-gray-800 px-2 py-1.5 text-right tabular-nums">{l.total === null ? '—' : l.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="text-[11px] text-gray-400">{t('Datos en vivo del ERP de Oben (spCheckSettlement y reporte de proformas COMEX). Solo lectura.')}</p>
+              <div className="flex justify-between text-sm font-bold text-gray-900">
+                <span>{t('Total kilos')}: {data.totalKilos.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                <span>{t('Total US$')}: {data.totalUsd === null ? nd : data.totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              </div>
+
+              <div className="text-[11px] text-gray-500 space-y-1">
+                <p>
+                  {data.fuenteLiquidacion === 'vivo'
+                    ? t('Precios y partida: liquidación de Oben en vivo.')
+                    : data.fuenteLiquidacion === 'copia'
+                      ? `${t('Precios y partida: copia de la liquidación de Oben guardada el')} ${fecha(data.copiaDe)}.`
+                      : t('Sin liquidación de Oben disponible para esta proforma.')}{' '}
+                  {t('Cantidades: reporte de proformas COMEX. Rollos y contenedor: Lista de Empaque. Solo lectura.')}
+                </p>
+                {data.faltantes.length > 0 && (
+                  <p className="text-amber-700">
+                    <b>{t('No disponible en las fuentes de Oben')}:</b> {data.faltantes.join('; ')}.
+                  </p>
+                )}
+              </div>
             </>
           )}
         </div>

@@ -26,8 +26,8 @@ describe('LiquidacionController — control de acceso', () => {
     expect(LIQUIDACION_CONSULTA_PERMISSION).toBe('exportations.read');
   });
 
-  it('tiene exactamente las 14 rutas esperadas (incoterms, draft GET/POST, aprobar, ruta de COMEX y sus adjuntos, submit, correo de cierre, proforma y descartar/restaurar pendientes)', () => {
-    expect(routes.sort()).toEqual(['adjuntarRuta', 'adjuntoRuta', 'approve', 'cierreEnviar', 'cierrePreview', 'descartar', 'draft', 'draftWithInput', 'incoterms', 'proforma', 'proformaExcel', 'restaurar', 'ruta', 'submit']);
+  it('tiene exactamente las 16 rutas esperadas (incoterms, draft GET/POST, aprobar, ruta de COMEX y sus adjuntos, submit, correo de cierre, proforma y descartar/restaurar pendientes)', () => {
+    expect(routes.sort()).toEqual(['adjuntarRuta', 'adjuntoRuta', 'approve', 'cierreEnviar', 'cierrePreview', 'descartar', 'draft', 'draftWithInput', 'incoterms', 'proforma', 'proformaDocumento', 'proformaExcel', 'proformaPdfDoc', 'restaurar', 'ruta', 'submit']);
   });
 
   it('aprobar exige exportations.approve (COMEX), distinto de liquidar', () => {
@@ -37,7 +37,7 @@ describe('LiquidacionController — control de acceso', () => {
   });
 
   // Perfil "Solo lectura" (22-oct): ve el borrador (también recalculado con lo que digita, sin escribir nada), la proforma y la vista previa del cierre.
-  it.each(['incoterms', 'draft', 'draftWithInput', 'adjuntoRuta', 'proforma', 'proformaExcel', 'cierrePreview'])('la consulta %s exige exportations.read', (name) => {
+  it.each(['incoterms', 'draft', 'draftWithInput', 'adjuntoRuta', 'proforma', 'proformaDocumento', 'proformaExcel', 'proformaPdfDoc', 'cierrePreview'])('la consulta %s exige exportations.read', (name) => {
     const req = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto[name] as object) as { permissions: string[]; mode: string };
     expect(req).toEqual({ permissions: ['exportations.read'], mode: 'all' });
   });

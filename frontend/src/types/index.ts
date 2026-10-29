@@ -883,6 +883,34 @@ export interface VistaFactura {
   avisos: string[];
 }
 
+/** La proforma con el formato del documento de OBEN MAS (GET /liquidacion/:pf/proforma/documento). */
+export interface ProformaDocumento {
+  numberPF: string;
+  ordenCompra: string | null;
+  ordenesVenta: string[];
+  mercado: string | null;
+  pais: string | null;
+  vendidoA: { nombre: string | null; direccion: string | null };
+  entregadoEn: { nombre: string | null; direccion: string | null };
+  consignadoA: string | null;
+  embarcador: string;
+  origen: string;
+  desde: string | null;
+  hasta: string | null;
+  puertoDestino: string | null;
+  contenedores: string | null;
+  formaPago: string | null;
+  embalaje: string | null;
+  incoterm: string | null;
+  fechas: { proforma: string | null; estimadaEmbarque: string | null; estimadaEntrega: string | null; requeridaCliente: string | null };
+  lineas: Array<{ item: number; sku: string; ov: string | null; kilos: number; rollos: number | null; descripcion: string; diametroMm: number | null; core: string | null; partida: string | null; precio: number | null; total: number | null }>;
+  totalKilos: number;
+  totalUsd: number | null;
+  fuenteLiquidacion: 'vivo' | 'copia' | 'sin_liquidacion';
+  copiaDe: string | null;
+  faltantes: string[];
+}
+
 /** La proforma tal como la tiene Oben (GET /liquidacion/:pf/proforma). */
 export interface ProformaCompleta {
   numberPF: string;

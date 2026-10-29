@@ -15,7 +15,7 @@ import {
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
-  LiquidacionFacturaInput, LiquidacionInputPantalla, VistaFactura, ProformaCompleta, ResultadoCargaTarifario, CargaTarifario, TarifasManuales, TarifaManualInput,
+  LiquidacionFacturaInput, LiquidacionInputPantalla, VistaFactura, ProformaCompleta, ProformaDocumento, ResultadoCargaTarifario, CargaTarifario, TarifasManuales, TarifaManualInput,
   PlanAcademy, LeccionAcademy, ResultadoQuizAcademy, TerminoGlosario, FriccionesAcademy, AjustesAcademy,
 } from '@/types';
 
@@ -429,6 +429,18 @@ class ApiClient {
   }
 
   /** La proforma tal como la tiene Oben, para revisarla antes de liquidar. */
+  /** La proforma con el formato del documento de OBEN MAS. */
+  async getProformaDocumento(numberPF: string): Promise<ProformaDocumento> {
+    const { data } = await this.client.get<ProformaDocumento>(`/liquidacion/${numberPF}/proforma/documento`, this.OBEN_LIVE);
+    return data;
+  }
+
+  /** PDF de la proforma con el formato de OBEN MAS. */
+  async downloadProformaPdf(numberPF: string): Promise<Blob> {
+    const { data } = await this.client.get(`/liquidacion/${numberPF}/proforma/pdf`, { responseType: 'blob', ...this.OBEN_LIVE });
+    return data as Blob;
+  }
+
   /** Excel de la proforma tal como la tiene Oben (para validar consignatario y detalles). */
   async downloadProformaExcel(numberPF: string): Promise<Blob> {
     const { data } = await this.client.get(`/liquidacion/${numberPF}/proforma/excel`, { responseType: 'blob', ...this.OBEN_LIVE });

@@ -10,6 +10,8 @@ import { LiquidacionService } from './liquidacion.service';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import { CONCEPTOS_POR_INCOTERM } from './incoterm-rules';
 import { proformaExcel } from './proforma-excel';
+import { ProformaDocumentoService } from './proforma-documento.service';
+import { proformaPdf } from './proforma-pdf';
 import { APROBACION_COMEX, LIBERAR_EXPORTACION, type LiberarExportacion, type TrasAprobacionComex } from './aprobacion-comex.token';
 import type { LiquidacionDraft } from './liquidacion.types';
 import type { LiquidacionFacturaInput, LiquidacionHeaderValues, LiquidacionLineValues, LiquidacionTotalesInput } from './liquidacion.types';
@@ -125,6 +127,7 @@ export class LiquidacionController {
   constructor(
     private readonly liquidacion: LiquidacionService,
     private readonly cierre: LiquidacionCierreService,
+    private readonly proformaDoc: ProformaDocumentoService,
     @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
 
@@ -235,6 +238,24 @@ export class LiquidacionController {
   @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
   proforma(@Param('numberPF') numberPF: string) {
     return this.liquidacion.proformaCompleta(numberPF);
+  }
+
+  /** La proforma con el formato del documento de OBEN MAS (María, 28-oct): encabezado, bloques y tabla de ítems. Solo lectura. */
+  @Get(':numberPF/proforma/documento')
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
+  proformaDocumento(@Param('numberPF') numberPF: string) {
+    return this.proformaDoc.documento(numberPF);
+  }
+
+  /** PDF de la proforma con el formato de OBEN MAS. */
+  @Get(':numberPF/proforma/pdf')
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
+  async proformaPdfDoc(@Param('numberPF') numberPF: string, @Res() res: Response) {
+    const d = await this.proformaDoc.documento(numberPF);
+    const buffer = await proformaPdf(d);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(`Proforma-${d.numberPF}.pdf`)}`);
+    res.send(buffer);
   }
 
   /** Excel de la proforma tal como la tiene Oben, para validar consignatario y detalles (María, 28-oct). Solo lectura. */

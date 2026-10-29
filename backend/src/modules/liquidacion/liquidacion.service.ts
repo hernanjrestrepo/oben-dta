@@ -20,6 +20,7 @@ import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normaliza
 import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-settlement-defaults';
 import { SP_PROFORMAS_COMEX, incotermDeCheck, incotermDeProforma, paisDeProforma, parsearProformasComex } from './incoterm-de-oben';
 import { unwrapCheckSettlement } from './check-settlement-respuesta';
+import { ProformaDocumentoService } from './proforma-documento.service';
 import { ARANCEL_USA_PCT, partidaComun } from './partidas-arancelarias';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
@@ -252,6 +253,7 @@ export class LiquidacionService {
     @Optional()
     @InjectRepository(LiquidacionDescarte)
     private readonly descartes?: Repository<LiquidacionDescarte>,
+    @Optional() private readonly proformaDoc?: ProformaDocumentoService,
   ) {}
 
   /** Borrador + estado de la aprobación de COMEX (si la PF ya está lista para aprobarse). */
@@ -1335,6 +1337,8 @@ export class LiquidacionService {
         throw new BadRequestException(`Línea de liquidación inválida para la PF ${pf}: ${JSON.stringify(l).slice(0, 200)}`);
       }
     }
+    // Oben deja de entregar la proforma al liquidarse: se guarda una copia cada vez que responde (María, 28-oct).
+    if (this.proformaDoc) await this.proformaDoc.guardarCopia(pf, d as unknown as Record<string, unknown>);
     return d as CheckSettlementResponse;
   }
 

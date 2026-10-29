@@ -6,6 +6,8 @@ import { LiquidacionRuta } from '../../entities/liquidacion-ruta.entity';
 import { LiquidacionRutaAdjunto } from '../../entities/liquidacion-ruta-adjunto.entity';
 import { LiquidacionPreferenciaCliente } from '../../entities/liquidacion-preferencia-cliente.entity';
 import { LiquidacionDescarte } from '../../entities/liquidacion-descarte.entity';
+import { ProformaCopia } from '../../entities/proforma-copia.entity';
+import { ProformaDocumentoService } from './proforma-documento.service';
 import { IntegrationHubModule } from '../integrations/hub/integration-hub.module';
 import { AuthModule } from '../auth/auth.module';
 import { FreightRatesModule } from '../freight-rates/freight-rates.module';
@@ -20,7 +22,7 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ComercialCase, LiquidacionAprobacion, LiquidacionRuta, LiquidacionRutaAdjunto, LiquidacionPreferenciaCliente, LiquidacionDescarte]),
+    TypeOrmModule.forFeature([ComercialCase, LiquidacionAprobacion, LiquidacionRuta, LiquidacionRutaAdjunto, LiquidacionPreferenciaCliente, LiquidacionDescarte, ProformaCopia]),
     IntegrationHubModule,
     AuthModule,
     FreightRatesModule,
@@ -31,6 +33,7 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
   controllers: [LiquidacionController],
   providers: [
     LiquidacionService,
+    ProformaDocumentoService,
     {
       // Valores provisionales (partida, HMF, flete en 0) mientras Oben entrega
       // sus tablas: activos salvo LIQUIDACION_VALORES_PROVISIONALES=false.
@@ -58,6 +61,6 @@ import { LIQUIDACION_SIMULATION_ENV, LIQUIDACION_VALUE_CALCULATOR, calculatorFro
       },
     },
   ],
-  exports: [LiquidacionService, LiquidacionAvisoService, LiquidacionCierreService],
+  exports: [LiquidacionService, LiquidacionAvisoService, LiquidacionCierreService, ProformaDocumentoService],
 })
 export class LiquidacionModule {}
