@@ -70,6 +70,44 @@ export function valorEncabezado(v: unknown): string {
     .join('');
 }
 
+/** Una orden de venta que Oben creó al aprobar la proforma, con los SKU y kilos que quedaron en ella. */
+export interface OrdenVentaCreada {
+  numero: number;
+  skus: Array<{ codSecSku: number | null; sku: string; cantidad: number }>;
+}
+
+/**
+ * Respuesta de APISalesOrderOV (ejemplo de José, 29-oct):
+ * `[{"NroOrdenVenta":"11517","DetalleSKU":[{"CodSec_SKU":7325,"SKU":"ML---0017MN0400S0570","Cantidad":995.04}]}]`.
+ * Una proforma puede generar varias órdenes de venta. Cualquier otra cosa (el "OK" de antes, un error) da [].
+ */
+export function ordenesDeRespuesta(data: unknown): OrdenVentaCreada[] {
+  let v: unknown = data;
+  for (let i = 0; i < 2 && typeof v === 'string'; i++) {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  const filas = Array.isArray(v) ? v : v && typeof v === 'object' ? [v] : [];
+  const ordenes: OrdenVentaCreada[] = [];
+  for (const f of filas as Array<Record<string, unknown>>) {
+    const numero = Number(f?.NroOrdenVenta);
+    if (!Number.isInteger(numero) || numero <= 0) continue;
+    const detalle = Array.isArray(f.DetalleSKU) ? (f.DetalleSKU as Array<Record<string, unknown>>) : [];
+    ordenes.push({
+      numero,
+      skus: detalle.map((d) => ({
+        codSecSku: Number.isFinite(Number(d.CodSec_SKU)) ? Number(d.CodSec_SKU) : null,
+        sku: String(d.SKU ?? '').trim(),
+        cantidad: Number(d.Cantidad) || 0,
+      })),
+    });
+  }
+  return ordenes;
+}
+
 /**
  * Interpreta la respuesta de una escritura. El encabezado devuelve, desde el 22-oct (cambio de José),
  * "CodSec_SalesOrderHeadPF: 13393; Number PF: 11600":
@@ -81,7 +119,7 @@ export function valorEncabezado(v: unknown): string {
 export function resultadoEscritura(
   paso: EscrituraComercial,
   data: unknown,
-): { ok: true; codigoInterno?: number; numeroPF?: string | null; ordenVenta?: number } {
+): { ok: true; codigoInterno?: number; numeroPF?: string | null; ordenVenta?: number; ordenesVenta?: OrdenVentaCreada[] } {
   const crudo = typeof data === 'string' || typeof data === 'number' ? String(data) : JSON.stringify(data ?? '');
   const texto = crudo.trim().replace(/^"|"$/g, '').trim();
   if (paso === 'encabezado') {
@@ -94,7 +132,10 @@ export function resultadoEscritura(
   } else if (/^ok$/i.test(texto)) {
     return { ok: true };
   } else if (paso === 'ov') {
-    // Hoy responde "OK" a secas; si Oben agrega el número de la orden de venta (como hizo con el encabezado), se toma.
+    // Desde el 29-oct (José) devuelve la lista de órdenes de venta que generó, cada una con sus SKU.
+    const ordenes = ordenesDeRespuesta(data);
+    if (ordenes.length) return { ok: true, ordenVenta: ordenes[0].numero, ordenesVenta: ordenes };
+    // Antes respondía "OK" a secas; si Oben agrega el número en texto (como hizo con el encabezado), también se toma.
     const ov = texto.match(/(?:Number\s*_?OV|Number\s*_?Order\s*_?Sales|N(?:ro|[uú]mero)\.?\s*(?:de\s*)?(?:la\s*)?(?:orden\s*de\s*venta|OV))\s*:\s*(\d+)/i);
     if (ov && Number(ov[1]) > 0) return { ok: true, ordenVenta: Number(ov[1]) };
   }

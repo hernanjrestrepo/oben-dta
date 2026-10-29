@@ -62,9 +62,13 @@ export class ProformaOben extends TenantScopedEntity {
   @Column({ name: 'caso_id', type: 'uuid', nullable: true })
   casoId: string | null;
 
-  /** Orden de venta que creó Oben al aprobar (la API no la devuelve: se lee del reporte de proformas). */
+  /** Orden de venta que creó Oben al aprobar (la primera, si fueron varias; antes de 29-oct se leía del reporte de proformas). */
   @Column({ name: 'orden_venta', type: 'int', nullable: true })
   ordenVenta: number | null;
+
+  /** Todas las órdenes de venta que devolvió Oben al aprobar, con sus SKU y cantidades (respuesta de APISalesOrderOV). */
+  @Column({ name: 'ordenes_venta', type: 'jsonb', default: () => "'[]'::jsonb" })
+  ordenesVenta: Array<{ numero: number; skus: Array<{ codSecSku: number | null; sku: string; cantidad: number }> }>;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   cliente: string | null;

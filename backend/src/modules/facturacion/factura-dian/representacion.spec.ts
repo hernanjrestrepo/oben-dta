@@ -115,6 +115,12 @@ describe('construirFacturaDian', () => {
     expect(f.valorLetras).toBe('SON: UN MILLON CIENTO NOVENTA MIL PESOS');
     expect(f.valorLetrasIngles).toBe('ARE:  ONE MILLION ONE HUNDRED NINETY THOUSAND PESOS');
     expect(f.fechaEmision).toBe('2026-07-27 16:35:17-05:00');
+    // José (29-oct): en nacionales las observaciones llevan en letras cada subtotal (en pesos, sin retefuente en 0).
+    expect(f.observaciones.filter((o) => /COP/.test(o))).toEqual([
+      'SUBTOTAL 1000000.0000 COP - UN MILLON CON 00/100 COP',
+      'IVA 190000.0000 COP - CIENTO NOVENTA MIL CON 00/100 COP',
+      'TOTAL 1190000.0000 COP - UN MILLON  CIENTO NOVENTA MIL CON 00/100 COP',
+    ]);
   });
 
   it('nacional en dólares (precio por kilo de Oben 2.60, OV 11402): USD, TRM y totales en pesos en observaciones; sin Incoterm', () => {

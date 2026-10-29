@@ -405,7 +405,16 @@ export class ComercialFlujoService {
             throw new BadRequestException(conOV.error ?? `OBEN MAS no creó la orden de venta (la Proforma quedó "${conOV.estado}").`);
           }
           ovReal = conOV.ordenVenta;
-          this.evento(caso, 'ov_creada', `Orden de venta${ovReal ? ` ${ovReal}` : ''} creada en OBEN MAS para la Proforma ${caso.numberPF}${ovReal ? '' : ' (Oben todavía no devuelve el número de la orden de venta por su API: consúltalo en OBEN MAS)'}${quien}.`, opts.confirmadoPor);
+          const todas = (conOV.ordenesVenta ?? []).map((o) => o.numero);
+          this.evento(
+            caso,
+            'ov_creada',
+            `${todas.length > 1 ? `Órdenes de venta ${todas.join(', ')} creadas` : `Orden de venta${ovReal ? ` ${ovReal}` : ''} creada`} en OBEN MAS para la Proforma ${caso.numberPF}${ovReal ? '' : ' (Oben no devolvió el número de la orden de venta: consúltalo en OBEN MAS)'}${quien}.`,
+            opts.confirmadoPor,
+          );
+          if (todas.length > 1) {
+            caso.atencion = [...caso.atencion, `Oben generó ${todas.length} órdenes de venta para la Proforma ${caso.numberPF} (${todas.join(', ')}): el caso sigue la ${todas[0]}; revisa las demás en OBEN MAS.`];
+          }
         }
         const r = await this.escribir<{ numberOrderSales?: unknown }>(caso, 'proforma.aprobar', 'aprobar', { numberPF: caso.numberPF, ...(real ? { numberOrderSales: ovReal } : {}) }, opts);
         const ov = real ? (ovReal ?? NaN) : Number(r.numberOrderSales);
@@ -606,7 +615,11 @@ export class ComercialFlujoService {
     if (!caso.numberPF || (caso.estado !== 'cubicada' && caso.estado !== 'enviada_cliente')) {
       throw new BadRequestException(`La Proforma solo se envía cuando está cubicada (el caso está "${caso.estado}").`);
     }
-    const pdfRes = await this.hub.call<Record<string, unknown>>('obenPlus', 'proforma.pdf', { numberPF: caso.numberPF }, OBEN_QUERY_OPTIONS);
+    // El PDF oficial llega adjunto al correo de cubicación de OBEN MAS; solo si no llegó se pide al simulador.
+    const oficial = await this.proformaPdfOficial(caso.id);
+    const pdfRes: { ok: boolean; mode?: string; error?: string | null; data?: Record<string, unknown> } = oficial
+      ? { ok: true, mode: 'real', data: { contentBase64: oficial.buffer.toString('base64'), filename: oficial.nombre } }
+      : await this.hub.call<Record<string, unknown>>('obenPlus', 'proforma.pdf', { numberPF: caso.numberPF }, OBEN_QUERY_OPTIONS);
     const base64 = pdfRes.ok && typeof pdfRes.data?.contentBase64 === 'string' ? pdfRes.data.contentBase64 : null;
     const pdf = base64 ? Buffer.from(base64, 'base64') : null;
     if (!pdf || pdf.subarray(0, 4).toString() !== '%PDF') {
@@ -681,7 +694,7 @@ export class ComercialFlujoService {
    * con esa Proforma pasa a "cubicada" y sigue solo (la Proforma sale al cliente). Reemplaza el botón "Planeación
    * cubica" del Simulador, que queda como respaldo. null si ningún caso abierto tiene esa Proforma.
    */
-  async registrarCubicacionDesdeCorreo(correo: { from: string; subject: string; body: string; messageId?: string | null }): Promise<{ caso: ComercialCase | null; numberPF: string; detalle: string }> {
+  async registrarCubicacionDesdeCorreo(correo: { from: string; subject: string; body: string; messageId?: string | null; attachments?: OcAdjunto[] }): Promise<{ caso: ComercialCase | null; numberPF: string; detalle: string }> {
     const numberPF = parsearCorreoCubicacion(correo.subject, correo.body);
     if (!numberPF) throw new BadRequestException('No es un correo de cubicación de OBEN MAS.');
     const dominio = (correo.from.split('@')[1] ?? '').replace(/>.*$/, '').toLowerCase().trim();
@@ -694,6 +707,13 @@ export class ComercialFlujoService {
     }
     if (correo.messageId && caso.eventos.some((e) => e.detalle.includes(correo.messageId!))) {
       return { caso, numberPF, detalle: 'Correo ya procesado.' };
+    }
+    // PDF oficial de la Proforma (adjunto del correo): lo que se envía al cliente. El último que llegue manda.
+    const pdf = pdfDeProforma(correo.attachments ?? [], numberPF);
+    if (pdf) {
+      caso.proformaPdf = pdf.content;
+      caso.proformaPdfNombre = pdf.filename;
+      this.evento(caso, 'proforma_pdf', `Llegó el PDF oficial de la Proforma ${numberPF} adjunto al correo de cubicación (${pdf.filename}).${ref}`);
     }
     if (caso.estado !== 'sin_cubicar') {
       this.evento(caso, 'cubicada', `OBEN MAS confirmó otra vez el cubicaje de la Proforma ${numberPF} ("${correo.subject.trim()}"); el caso ya estaba "${caso.estado}".${ref}`);
@@ -1022,6 +1042,16 @@ export class ComercialFlujoService {
     this.evento(caso, 'reenvio_cartera', res.ok ? `Aprobación reenviada a cartera (${to}).` : `No se pudo reenviar a cartera: ${res.error}`);
   }
 
+  /** PDF oficial de la Proforma que OBEN MAS adjuntó al correo de cubicación (null si todavía no llegó). */
+  async proformaPdfOficial(id: string): Promise<{ nombre: string; buffer: Buffer } | null> {
+    const row = await this.casos
+      .createQueryBuilder('c')
+      .addSelect('c.proformaPdf')
+      .where('c.id = :id AND c.tenant_id = :t', { id, t: this.ctx.tenantId })
+      .getOne();
+    return row?.proformaPdf ? { nombre: row.proformaPdfNombre ?? 'Proforma.pdf', buffer: row.proformaPdf } : null;
+  }
+
   async proformaFirmada(id: string): Promise<{ nombre: string; buffer: Buffer } | null> {
     const row = await this.casos
       .createQueryBuilder('c')
@@ -1228,6 +1258,16 @@ export function parsearCorreoCubicacion(asunto: string, cuerpo: string): string 
   const c = cuerpo.match(/cubicaci[oó]n\s+de\s+la\s+Proforma\s*(?:#|N[°º.o]*\s*)?\s*(\d+)/i);
   if (c && c[1] !== a[1]) throw new BadRequestException(`El asunto dice Proforma ${a[1]} pero el cuerpo dice ${c[1]}: no se toma como cubicada.`);
   return a[1];
+}
+
+/**
+ * PDF de la Proforma que OBEN MAS adjunta al correo de cubicación (José, 29-oct): el adjunto que de verdad es un PDF
+ * (empieza con "%PDF"); si hay varios, el que lleva "proforma" en el nombre. null si no trae ninguno.
+ */
+export function pdfDeProforma(adjuntos: OcAdjunto[], numberPF: string): { filename: string; content: Buffer } | null {
+  const pdfs = adjuntos.filter((a): a is OcAdjunto & { content: Buffer } => !!a.content && a.content.subarray(0, 4).toString() === '%PDF');
+  const elegido = pdfs.find((a) => /proforma/i.test(a.filename) && a.filename.includes(numberPF)) ?? pdfs.find((a) => /proforma/i.test(a.filename)) ?? pdfs[0];
+  return elegido ? { filename: elegido.filename || `Proforma-PF${numberPF}.pdf`, content: elegido.content } : null;
 }
 
 /** Solo el sistema de Oben confirma un cubicaje. */

@@ -720,6 +720,11 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
       // (settings.comercial.habilitado): una respuesta del cliente a una
       // Proforma se reconoce por el hilo, ANTES del clasificador general.
       const comercial = await this.comercialHabilitado(tenantId);
+      const fullAttachments = (parsed.attachments ?? []).map((a) => ({
+        filename: a.filename ?? 'archivo',
+        contentType: a.contentType ?? null,
+        content: a.content as Buffer,
+      }));
 
       // "Cubicación de Proforma #N" de OBEN MAS (23-oct): confirmación real del cubicaje de Planeación.
       let pfCubicada: string | null = null;
@@ -735,7 +740,7 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         provider = 'rules';
         try {
           if (errorCubicacion) throw new Error(errorCubicacion);
-          const r = await this.callRequestScoped(tenantId, ComercialFlujoService, (svc) => svc.registrarCubicacionDesdeCorreo({ from, subject, body, messageId }));
+          const r = await this.callRequestScoped(tenantId, ComercialFlujoService, (svc) => svc.registrarCubicacionDesdeCorreo({ from, subject, body, messageId, attachments: fullAttachments }));
           resultRef = `${r.numberPF}:${r.caso ? r.caso.estado : 'sin_caso'}`;
         } catch (e) {
           status = 'failed';
@@ -753,11 +758,6 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         await this.markSeenAndMove(client, msg.uid, cfg, cfg.processedFolder ?? 'Procesados');
         return;
       }
-      const fullAttachments = (parsed.attachments ?? []).map((a) => ({
-        filename: a.filename ?? 'archivo',
-        contentType: a.contentType ?? null,
-        content: a.content as Buffer,
-      }));
       if (comercial) {
         const references = Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : [];
         const respuesta = await this.callRequestScoped(tenantId, ComercialFlujoService, (svc) =>

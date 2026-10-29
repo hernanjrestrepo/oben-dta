@@ -204,6 +204,13 @@ export class ComercialCase extends TenantScopedEntity {
   @Column({ type: 'jsonb', default: () => "'[]'" })
   eventos: CasoEvento[];
 
+  /** PDF oficial de la Proforma que OBEN MAS adjunta al correo de cubicación (José, 29-oct): es el que se envía al cliente. */
+  @Column({ name: 'proforma_pdf', type: 'bytea', nullable: true, select: false })
+  proformaPdf: Buffer | null;
+
+  @Column({ name: 'proforma_pdf_nombre', type: 'varchar', nullable: true })
+  proformaPdfNombre: string | null;
+
   /** Proforma firmada/aprobada que devolvió el cliente (adjunto de su respuesta). */
   @Column({ name: 'proforma_firmada', type: 'bytea', nullable: true, select: false })
   proformaFirmada: Buffer | null;

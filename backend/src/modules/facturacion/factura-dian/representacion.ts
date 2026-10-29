@@ -265,6 +265,9 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
       else if (datos.trmDeOrdenCompra)
         avisos.push(`${draft.cliente} factura con la TRM de su orden de compra${draft.ordenCompra ? ` (OC ${draft.ordenCompra})` : ''}, no con la oficial: digítala para que salgan los totales en pesos.`);
       else avisos.push('Factura nacional en dólares sin TRM (no se pudo consultar datos.gov.co): faltan los totales en pesos de las observaciones.');
+    } else {
+      // Nacional en pesos (José, 29-oct): también lleva en letras cada subtotal (subtotal, IVA, retefuente y total).
+      observaciones.push(...totalesEnPesos([['SUBTOTAL', subtotal], ['IVA', iva], ['RETEFUENTE', retefuente], ['TOTAL', neto]], 1));
     }
   }
 

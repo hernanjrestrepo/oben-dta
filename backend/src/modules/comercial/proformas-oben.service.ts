@@ -7,7 +7,7 @@ import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { WorkflowEventType } from '../../entities/workflow-event.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import { ProformaOben, type LineaProformaOben, type PasoProformaOben } from '../../entities/proforma-oben.entity';
-import { COMERCIAL_URL_PRUEBAS, type EscrituraComercial } from '../integrations/hub/adapters/oben-comercial';
+import { COMERCIAL_URL_PRUEBAS, type EscrituraComercial, type OrdenVentaCreada } from '../integrations/hub/adapters/oben-comercial';
 import { SP_PROFORMAS_COMEX, parsearProformasComex } from '../liquidacion/incoterm-de-oben';
 import { ComercialMaestrosService } from './comercial-maestros.service';
 
@@ -333,6 +333,7 @@ export class ProformasObenService {
     const r = await this.escribir(p, 'ov', { CodSecSalesOrderHeadPF: p.codigoInterno }, usuario);
     if (r.ok) {
       p.estado = 'ov_creada';
+      p.ordenesVenta = r.ordenesVenta;
       p.ordenVenta = r.ordenVenta ?? (await this.ordenVentaDe(p));
     }
     return this.guardar(p, `Orden de venta de la proforma ${this.nombrePF(p)} creada en OBEN MAS`, usuario);
@@ -399,7 +400,7 @@ export class ProformasObenService {
 
   /** Una escritura en Oben, registrada en `pasos`. Un timeout deja la proforma en "revisar" (nunca se repite sola). */
   private async escribir(p: ProformaOben, paso: EscrituraComercial, valores: Record<string, unknown>, usuario: string | null, linea?: number) {
-    const r = await this.hub.call<{ ok?: boolean; codigoInterno?: number; numeroPF?: string | null; ordenVenta?: number }>(
+    const r = await this.hub.call<{ ok?: boolean; codigoInterno?: number; numeroPF?: string | null; ordenVenta?: number; ordenesVenta?: OrdenVentaCreada[] }>(
       'obenCostOrder',
       'comercial.escribir',
       { paso, valores },
@@ -410,12 +411,20 @@ export class ProformasObenService {
       registro.respuesta =
         paso === 'encabezado'
           ? `PF ${r.data?.numeroPF ?? '(Oben no devolvió el número oficial)'} · código interno ${r.data?.codigoInterno}`
-          : paso === 'ov' && r.data?.ordenVenta
-            ? `OK · orden de venta ${r.data.ordenVenta}`
-            : 'OK';
+          : paso === 'ov' && r.data?.ordenesVenta?.length
+            ? `OK · ${r.data.ordenesVenta.map((o) => `orden de venta ${o.numero} (${o.skus.length} SKU)`).join(', ')}`
+            : paso === 'ov' && r.data?.ordenVenta
+              ? `OK · orden de venta ${r.data.ordenVenta}`
+              : 'OK';
       p.pasos = [...(p.pasos ?? []), registro];
       p.error = null;
-      return { ok: true as const, codigoInterno: r.data?.codigoInterno, numeroPF: r.data?.numeroPF ?? null, ordenVenta: r.data?.ordenVenta ?? null };
+      return {
+        ok: true as const,
+        codigoInterno: r.data?.codigoInterno,
+        numeroPF: r.data?.numeroPF ?? null,
+        ordenVenta: r.data?.ordenVenta ?? null,
+        ordenesVenta: r.data?.ordenesVenta ?? [],
+      };
     }
     const error = String(r.error ?? 'sin respuesta');
     const sinRespuesta = /timeout|aborted|fetch failed|ECONN|socket|circuit_open/i.test(error) && !/BUSINESS_ERROR/.test(error);

@@ -4,7 +4,7 @@ import { StaticScenarioProvider } from '../integrations/hub/static-scenario-prov
 import { ObenPlusMockAdapter } from '../integrations/hub/adapters/oben-plus.mock';
 import { InMemoryObenPlusSimStore } from '../integrations/hub/oben-plus-sim.store';
 import type { ComercialCase } from '../../entities/comercial-case.entity';
-import { ComercialFlujoService, parsearCorreoCubicacion } from './comercial-flujo.service';
+import { ComercialFlujoService, parsearCorreoCubicacion, pdfDeProforma } from './comercial-flujo.service';
 import { ComercialIntakeService } from './comercial-intake.service';
 import { ProformasObenService } from './proformas-oben.service';
 
@@ -46,7 +46,21 @@ class Mem<T extends { id?: string }> {
     return this.rows.filter((x) => this.match(x, where)).map((r) => structuredClone(r));
   }
   createQueryBuilder() {
-    const qb = { addSelect: () => qb, where: () => qb, getOne: async () => null };
+    let id: string | undefined;
+    const qb = {
+      addSelect: () => qb,
+      where: (_sql: string, p: { id: string }) => {
+        id = p.id;
+        return qb;
+      },
+      // Como TypeORM: las columnas bytea vuelven como Buffer (structuredClone las deja en Uint8Array).
+      getOne: async () => {
+        const r = this.rows.find((x) => x.id === id) as unknown as Record<string, unknown> | undefined;
+        if (!r) return null;
+        const b = (v: unknown) => (v ? Buffer.from(v as Uint8Array) : null);
+        return { ...r, proformaPdf: b(r.proformaPdf), proformaFirmada: b(r.proformaFirmada) };
+      },
+    };
     return qb;
   }
 }
@@ -255,6 +269,36 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect((await w.flujo.registrarCubicacionDesdeCorreo({ ...correo, subject: 'Cubicación de Proforma #11691 - OBEN US', body: '', messageId: '<3>' })).caso).toBeNull();
   });
 
+  it('si el correo de cubicación trae el PDF de la Proforma, ese PDF oficial es el que sale al cliente (no el del simulador)', async () => {
+    const w = world();
+    let caso = await w.flujo.recibirOc(OC, 'correo');
+    caso = await w.flujo.confirmar(caso.id);
+    const oficial = Buffer.from('%PDF-1.7 proforma oficial de OBEN MAS');
+    const r = await w.flujo.registrarCubicacionDesdeCorreo({
+      from: 'Sistemas <notif.app.co@obengroup.com>',
+      subject: 'Cubicación de Proforma #11547 - OBEN US, LLC (Multi-Plastics )',
+      body: 'Se realizó la cubicación de la Proforma #11547 por parte del area de Planeación, favor validar.',
+      messageId: '<cub-pdf@obengroup.com>',
+      attachments: [
+        { filename: 'logo.png', contentType: 'image/png', content: Buffer.from('PNG') },
+        { filename: 'Proforma 11547.pdf', contentType: 'application/pdf', content: oficial },
+      ],
+    });
+    expect(r.caso).toMatchObject({ estado: 'enviada_cliente', numberPF: '11547' });
+    expect(r.caso!.eventos.some((e) => e.tipo === 'proforma_pdf')).toBe(true);
+    const enviado = w.emails.at(-1) as { subject: string; attachments: Array<{ filename: string; content: string }> };
+    expect(enviado.subject).not.toMatch(/SIMULADO/);
+    expect(enviado.attachments[0]).toMatchObject({ filename: 'Proforma 11547.pdf', content: oficial.toString('base64') });
+  });
+
+  it('pdfDeProforma: solo toma un adjunto que de verdad es PDF y prefiere el que dice "proforma"', () => {
+    const pdf = (n: string, c = '%PDF-1.4') => ({ filename: n, contentType: 'application/pdf', content: Buffer.from(c) });
+    expect(pdfDeProforma([], '11547')).toBeNull();
+    expect(pdfDeProforma([{ filename: 'a.pdf', content: Buffer.from('no es pdf') }], '11547')).toBeNull();
+    expect(pdfDeProforma([pdf('otro.pdf'), pdf('Proforma-11547.pdf')], '11547')?.filename).toBe('Proforma-11547.pdf');
+    expect(pdfDeProforma([pdf('otro.pdf')], '11547')?.filename).toBe('otro.pdf');
+  });
+
   it('parsearCorreoCubicacion: el correo real, reenvíos y nada más', () => {
     expect(parsearCorreoCubicacion('Cubicación de Proforma #11691 - OBEN US, LLC (Multi-Plastics )', 'Se realizó la cubicación de la Proforma #11691 por parte del area de Planeación, favor validar.')).toBe('11691');
     expect(parsearCorreoCubicacion('RV: Cubicacion de Proforma #11691', '')).toBe('11691');
@@ -271,7 +315,7 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     caso = await w.flujo.registrarRespuesta(caso, { tipo: 'aprueba', motivo: 'Aprobada', via: 'manual' });
     caso = await w.flujo.confirmar(caso.id);
     expect(caso).toMatchObject({ estado: 'retenida', numberOrderSales: null });
-    expect(caso.eventos.find((e) => e.tipo === 'ov_creada')!.detalle).toMatch(/^Orden de venta creada en OBEN MAS para la Proforma 11547 \(Oben todavía no devuelve el número/);
+    expect(caso.eventos.find((e) => e.tipo === 'ov_creada')!.detalle).toMatch(/^Orden de venta creada en OBEN MAS para la Proforma 11547 \(Oben no devolvió el número/);
     await w.sim('sim.liberarCartera', '11547');
     caso = await w.tick(caso.id);
     expect(caso.accionPendiente!.detalle).toMatch(/^Cartera liberó la OV \(PF 11547\)/);

@@ -145,11 +145,28 @@ describe('Proformas en OBEN MAS (APIs comerciales, servidor de pruebas)', () => 
     await expect(svc.activar(String(p.id), 'Hernán')).rejects.toThrow(/sin orden de venta/);
     const conOV = await svc.crearOV(String(p.id), 'Hernán');
     expect(conOV.estado).toBe('ov_creada');
+    expect(conOV.ordenesVenta ?? []).toEqual([]); // el simulador solo responde "OK"
     const sinActivar = await svc.activar(String(p.id), 'Hernán');
     expect(sinActivar.estado).toBe('ov_creada');
     expect(sinActivar.error).toMatch(/Planeación no tiene cargado el tiempo de producción \(Lead Time\) de la película FCH--0030TN/);
     lead = false;
     expect((await svc.activar(String(p.id), 'Hernán')).estado).toBe('activa');
+  });
+
+  it('la orden de venta que devuelve Oben se guarda con sus SKU, sin buscarla en el reporte', async () => {
+    const ordenes = [{ numero: 11517, skus: [{ codSecSku: 7325, sku: 'ML---0017MN0400S0570', cantidad: 995.04 }] }];
+    const { svc } = armar({
+      escribir: (paso) =>
+        paso === 'encabezado'
+          ? { ok: true, data: { ok: true, codigoInterno: 13391, numeroPF: '11599' } }
+          : paso === 'ov'
+            ? { ok: true, data: { ok: true, ordenVenta: 11517, ordenesVenta: ordenes } }
+            : { ok: true, data: { ok: true } },
+    });
+    const p = await svc.crear({ ...ENTRADA, lineas: [{ referencia: 'FCH--0030TN0400T0570', kilos: 1000, precio: 2.5 }] }, 'Hernán');
+    const conOV = await svc.crearOV(String(p.id), 'Hernán');
+    expect(conOV).toMatchObject({ estado: 'ov_creada', ordenVenta: 11517, ordenesVenta: ordenes });
+    expect(conOV.pasos.find((x) => x.paso === 'ov')?.respuesta).toBe('OK · orden de venta 11517 (1 SKU)');
   });
 
   it('si Oben no responde a tiempo queda "revisar" y no se repite sin verificar en OBEN MAS', async () => {
@@ -175,6 +192,17 @@ describe('respuestas de las escrituras de Oben (200 aunque rechacen)', () => {
     expect(resultadoEscritura('ov', '"OK; Number OV: 11400"')).toEqual({ ok: true, ordenVenta: 11400 });
     expect(resultadoEscritura('ov', 'NumberOrderSales: 11401')).toEqual({ ok: true, ordenVenta: 11401 });
     expect(() => resultadoEscritura('ov', 'No se pudo insertar')).toThrow(/BUSINESS_ERROR/);
+    // Desde el 29-oct (José) devuelve la lista de órdenes de venta con sus SKU (ejemplo real de la OV 11517), como objeto o como texto.
+    const lista = [{ NroOrdenVenta: '11517', DetalleSKU: [{ CodSec_SKU: 7325, SKU: 'ML---0017MN0400S0570', Cantidad: 995.04 }, { CodSec_SKU: 7973, SKU: 'ML---0017MN0480S0570', Cantidad: 1194 }] }];
+    const esperado = { ok: true, ordenVenta: 11517, ordenesVenta: [{ numero: 11517, skus: [{ codSecSku: 7325, sku: 'ML---0017MN0400S0570', cantidad: 995.04 }, { codSecSku: 7973, sku: 'ML---0017MN0480S0570', cantidad: 1194 }] }] };
+    expect(resultadoEscritura('ov', lista)).toEqual(esperado);
+    expect(resultadoEscritura('ov', JSON.stringify(lista))).toEqual(esperado);
+    expect(resultadoEscritura('ov', JSON.stringify(JSON.stringify(lista)))).toEqual(esperado);
+    // Varias órdenes de venta de una misma proforma: la primera es la del caso, todas quedan guardadas.
+    const dos = resultadoEscritura('ov', [...lista, { NroOrdenVenta: '11518', DetalleSKU: [] }]);
+    expect(dos.ordenVenta).toBe(11517);
+    expect(dos.ordenesVenta?.map((o) => o.numero)).toEqual([11517, 11518]);
+    expect(() => resultadoEscritura('ov', [])).toThrow(/BUSINESS_ERROR/);
     expect(() => resultadoEscritura('activar', 'No existe Lead Time Production para la pelicula FCH--0030TN')).toThrow(/BUSINESS_ERROR: No existe Lead Time/);
     expect(() => resultadoEscritura('encabezado', 'OK')).toThrow(/BUSINESS_ERROR/);
   });
