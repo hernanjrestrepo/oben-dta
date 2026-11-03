@@ -30,7 +30,7 @@ export function unidadPeso(u: string): UnidadPeso | null {
 export function unidadLongitud(u: string): UnidadLongitud | null {
   const n = norm(u);
   if (/^(mm|milimetro|milimetros)$/.test(n)) return 'mm';
-  if (/^(cm|centimetro|centimetros)$/.test(n)) return 'cm';
+  if (/^(cm|cms|centimetro|centimetros)$/.test(n)) return 'cm';
   if (/^(m|metro|metros)$/.test(n)) return 'm';
   if (/^(in|inch|inches|pulg|pulgada|pulgadas|"|'')$/.test(n)) return 'in';
   return null;

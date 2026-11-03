@@ -238,3 +238,19 @@ describe('sinLineasRepetidas (el correo y el adjunto traen las mismas líneas)',
     expect(r.quitadas).toBe(0);
   });
 });
+
+describe('extraerConReglas — OC en PDF (DORFAN, 3-nov)', () => {
+  const texto = [
+    'RV: OC 4990 - 4991 - 4992',
+    'ORDEN DE COMPRA No.: 4992',
+    '| Fecha despacho: 18 de Diciembre de 2026 |',
+    '| 1 | BOPP SC 20 MICRAS X 90.5 CMS | 4,700.00 | Kg(s) | US$ 2.50 | 11,750 |',
+  ].join('\n');
+  it('lee ancho en CMS, el número del encabezado y la fecha en letras', () => {
+    const r = extraerConReglas(texto, 'RV: OC 4990 - 4991 - 4992', []);
+    expect(r.numero).toBe('4992');
+    expect(r.fechaRequerida).toBe('2026-12-18');
+    expect(r.lineas[0].anchoMm).toBe(905);
+    expect(r.lineas[0].kilos).toBe(4700);
+  });
+});

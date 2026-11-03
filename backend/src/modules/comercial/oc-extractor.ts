@@ -232,14 +232,19 @@ const NUM = String.raw`(\d[\d.,]*)`;
 const SEP = String.raw`\s*(?:\|\s*)?`;
 const RE_PESO = new RegExp(`${NUM}${SEP}(kgs?|kilos?|kilogramos?|lbs?|libras?|pounds?|toneladas?|tons?)\\b`, 'i');
 const RE_ANCHO_ETIQUETA = new RegExp(`(?:ancho|width|anch\\.?)\\s*[:=]?\\s*${NUM}${SEP}(mm|cm|m|in|inch(?:es)?|pulg(?:adas)?|"|'')?`, 'i');
-const RE_ANCHO_SUELTO = new RegExp(`${NUM}${SEP}(mm|cm|pulgadas|pulg|in|inch(?:es)?|")(?![a-z])`, 'i');
+const RE_ANCHO_SUELTO = new RegExp(`${NUM}${SEP}(mm|cms|cm|pulgadas|pulg|in|inch(?:es)?|")(?![a-z])`, 'i');
 // "2 mil kg" es "dos mil kilos", no 2 mils de espesor.
 const RE_ESPESOR = new RegExp(`${NUM}${SEP}(µm|μm|um|micras?|micrones|mic|mils?|g/m2|g/m²|gsm|grs?|g)(?![a-z])(?!\\s*(?:kg|kilos?|lbs?|libras?)\\b)`, 'i');
 const RE_PRECIO = new RegExp(`(?:precio(?:\\s+unitario)?|price|unit\\s+price|valor\\s+unitario|p\\.?\\s*unit\\.?)\\s*[:=]?\\s*(usd|us\\$|cop|\\$)?\\s*${NUM}\\s*(usd|cop)?`, 'i');
 const RE_PRECIO_SIMBOLO = new RegExp(`(us\\$|\\$)\\s*${NUM}`, 'i');
 // El número debe tener al menos un dígito: en "Orden de compra urgente" no hay número (no se inventa).
 const RE_OC = /(?:orden\s+de\s+compra|purchase\s+order|\bO\.?C\.?|\bP\.?O\.?)\s*(?:n[°º.o]*|no\.?|#|number|num\.?)?\s*[:#-]?\s*((?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{2,})/i;
-const RE_FECHA = /(?:fecha\s+(?:de\s+)?(?:entrega|requerida|requerimiento)|delivery\s+date|required\s+date|need\s+by)\s*[:=-]?\s*(\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i;
+const RE_FECHA = /(?:fecha\s+(?:de\s+)?(?:entrega|despacho|requerida|requerimiento)|delivery\s+date|required\s+date|need\s+by)\s*[:=-]?\s*(\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i;
+// "Fecha despacho: 18 de Diciembre de 2026" (órdenes de compra en PDF).
+const RE_FECHA_LETRAS = /fecha\s+(?:de\s+)?(?:entrega|despacho|requerida|requerimiento)\s*[:=-]?\s*(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})/i;
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+// El encabezado explícito del documento manda sobre un "OC 4990" suelto del asunto o del cuerpo reenviado.
+const RE_OC_ENCABEZADO = /orden\s+de\s+compra\s+(?:n[°º.o]*|no\.?|#)\s*[:#-]?\s*(\d[A-Z0-9-]{2,})/i;
 const RE_DIRECCION = /(?:direcci[oó]n\s+de\s+(?:entrega|despacho)|ship\s+to|deliver\s+to|entregar\s+en|lugar\s+de\s+entrega)\s*[:=-]\s*(.+)/i;
 const RE_CLIENTE_FINAL = /(?:cliente\s+final|end\s+customer|final\s+customer|customer)\s*[:\-]\s*([^|/\n]+)/i;
 
@@ -286,13 +291,19 @@ export function extraerConReglas(
   if (campos.length === 0) notas.push('No se encontró ninguna línea con cantidad en kg/lb en el correo ni en los adjuntos legibles.');
 
   const fecha = todo.match(RE_FECHA);
-  const fechaNorm = fecha ? normalizarFecha(fecha[1]) : null;
+  const fechaLetras = fecha ? null : todo.match(RE_FECHA_LETRAS);
+  const mesLetras = fechaLetras ? MESES.indexOf(fechaLetras[2].toLowerCase()) + 1 : 0;
+  const fechaNorm = fecha
+    ? normalizarFecha(fecha[1])
+    : fechaLetras && mesLetras
+      ? `${fechaLetras[3]}-${String(mesLetras).padStart(2, '0')}-${fechaLetras[1].padStart(2, '0')}`
+      : null;
   if (fecha && !fechaNorm) notas.push(`Fecha requerida "${fecha[1]}": formato día/mes ambiguo — confírmala.`);
   const clienteFinal = opts.clienteFinalEnAsunto ? (asunto.match(RE_CLIENTE_FINAL)?.[1]?.trim() ?? null) : null;
 
   return {
     // Primero el cuerpo ("Purchase Order #PO-7788"), luego el asunto.
-    numero: texto.match(RE_OC)?.[1] ?? asunto.match(RE_OC)?.[1] ?? null,
+    numero: texto.match(RE_OC_ENCABEZADO)?.[1] ?? texto.match(RE_OC)?.[1] ?? asunto.match(RE_OC)?.[1] ?? null,
     fechaRequerida: fechaNorm,
     direccionEntrega: texto.match(RE_DIRECCION)?.[1]?.trim().slice(0, 300) ?? null,
     clienteFinal,
