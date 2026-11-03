@@ -81,7 +81,12 @@ export class ComercialIntakeService {
     const original = internoOben ? remitenteReenviado(input.body, DOMINIOS_INTERNOS_OBEN) : null;
     const from = original ?? enviadoPor;
     const dominio = (from.split('@')[1] ?? '').trim();
-    const { client, ambiguous } = internoOben && !original ? { client: null, ambiguous: false } : await this.clients.findByEmailDomain(dominio);
+    let { client, ambiguous } = internoOben && !original ? { client: null, ambiguous: false } : await this.clients.findByEmailDomain(dominio);
+    // Reenvío de Oben sin remitente original ("NUEVO PEDIDO VICTOR CASTAÑEDA"): el cliente puede venir nombrado en el asunto.
+    if (!client && internoOben && !original) {
+      client = await this.clients.findByNameInText(input.subject);
+      if (client) atencion.push(`Cliente tomado del asunto del correo: ${client.name}.`);
+    }
     if (internoOben && original) {
       if (!client) {
         atencion.push(`El cliente del correo original (dominio "${dominio}") no está registrado en Clientes: créalo con ese dominio autorizado y vuelve a procesar la orden, o asigna el cliente a mano.`);
@@ -268,7 +273,9 @@ export class ComercialIntakeService {
     config: ComercialConfig,
     clienteFinalEnAsunto: boolean,
   ): Promise<OcExtraccion> {
-    if (reglas.lineas.length > 0 || !this.ia || texto.trim().length < 40) return reglas;
+    // Las reglas dejan líneas sin producto ni ancho cuando el correo está en prosa ("SC 25 - 640" arriba, "7.500 KILOS" abajo).
+    const reglasSirven = reglas.lineas.length > 0 && reglas.lineas.some((l) => l.codigoOben || l.anchoMm != null);
+    if (reglasSirven || !this.ia || texto.trim().length < 40) return reglas;
     try {
       const r = await extraerConIa({ host: '', model: 'openrouter' }, { texto, asunto, equivalencias, ejemplos: config.ejemplosOc, clienteFinalEnAsunto, llm: (p) => this.ia!.completarJson(p) });
       if (r.lineas.length === 0) return reglas;

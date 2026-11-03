@@ -167,6 +167,20 @@ export class ClientsService {
     return unique.length === 1 ? { client: unique[0], ambiguous: false } : { client: null, ambiguous: unique.length > 1 };
   }
 
+  /** Cliente que el texto nombra (≥2 palabras de su nombre, de 4+ letras) si es el único con esa coincidencia. */
+  async findByNameInText(texto: string): Promise<Client | null> {
+    const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const palabras = new Set(norm(texto ?? '').split(' ').filter((p) => p.length >= 4));
+    if (palabras.size === 0) return null;
+    const todos = await this.clientRepository.find({ where: { tenantId: this.ctx.tenantId, isActive: true } });
+    const puntajes = todos
+      .map((c) => ({ c, n: new Set(norm(c.name).split(' ').filter((p) => p.length >= 4 && palabras.has(p))).size }))
+      .filter((x) => x.n >= 2)
+      .sort((a, b) => b.n - a.n);
+    if (puntajes.length === 0 || (puntajes[1] && puntajes[1].n === puntajes[0].n)) return null;
+    return puntajes[0].c;
+  }
+
   /**
    * Sin dominio autorizado, el cliente cuyo nombre empieza por el nombre del dominio ("dorfan.com" → "DORFAN S.A.S") se
    * da por hecho si es ÚNICO (Hernán, 3-nov) y el dominio queda autorizado en su ficha. Los correos gratuitos no cuentan.

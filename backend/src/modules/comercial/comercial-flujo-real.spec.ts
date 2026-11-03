@@ -132,6 +132,7 @@ function world(opts: { rechazarEncabezado?: string; leadTime?: boolean; sinOvEnP
   const cliente = { id: 'cli-p', clientId: 'PDX', name: 'PARADIXE — CLIENTE DEMO', email: 'ceo@paradixe.xyz', authorizedDomains: ['paradixe.xyz'], obenCode: '9995', comercialEmail: 'ceo@paradixe.xyz', isActive: true, finalCustomerInSubject: false };
   const clients = {
     findByEmailDomain: jest.fn(async (d: string) => ({ client: d === 'paradixe.xyz' ? cliente : null, ambiguous: false })),
+    findByNameInText: jest.fn(async () => null),
     findOne: jest.fn(async () => cliente),
   };
   const eqDb = [

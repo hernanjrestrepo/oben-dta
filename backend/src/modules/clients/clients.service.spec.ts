@@ -44,6 +44,13 @@ describe('ClientsService — maestro de clientes para el flujo Comercial', () =>
       expect(repo.save).toHaveBeenCalled();
     });
 
+    it('findByNameInText: el asunto nombra al cliente con 2+ palabras de su nombre', async () => {
+      const { service, repo } = make();
+      repo.find.mockResolvedValue([{ id: 'v', name: 'CASTAÑEDA HERNANDEZ VICTOR ALFONSO' }, { id: 'm', name: 'CASTAÑO NEIVA MAGDALENA' }]);
+      await expect(service.findByNameInText('RV: NUEVO PEDIDO VICTOR CASTAÑEDA')).resolves.toMatchObject({ id: 'v' });
+      await expect(service.findByNameInText('RV: pedido urgente')).resolves.toBeNull();
+    });
+
     it('correo gratuito o nombre ambiguo → no se adivina', async () => {
       const { service, repo } = make();
       repo.find.mockResolvedValue([]);
