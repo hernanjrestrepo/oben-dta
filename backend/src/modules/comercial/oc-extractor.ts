@@ -137,7 +137,6 @@ export async function textoDeAdjuntos(
           if (v && v.trim()) {
             texto = v;
             leidoConIa = true;
-            notas.push(`El adjunto "${name}" era ${esPdf ? 'un PDF escaneado' : 'una imagen'}: se leyó con IA (visión). Verifica cantidades, anchos y precios antes de confirmar.`);
           }
         } catch (err) {
           logger.warn(`Lectura visual de "${name}" falló: ${(err as Error).message}`);

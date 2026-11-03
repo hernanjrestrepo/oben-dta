@@ -157,7 +157,6 @@ describe('texto de los adjuntos', () => {
     expect(leidas).toEqual(['OC 4992 OBEN COLOMBIA.pdf', 'pedido.png']); // solo lo que puede ser la orden
     expect(r.texto).toContain('(leído con IA)');
     expect(r.texto).toContain('BOPP 20 | 2.500 kg | 1020 mm');
-    expect(r.notas.join(' ')).toMatch(/PDF escaneado: se leyó con IA \(visión\)/);
     expect(r.notas.join(' ')).toMatch(/"pedido\.png" es una imagen/); // la que no se pudo leer sí se avisa
     expect(r.notas.join(' ')).not.toMatch(/firmadigital|banner|image001|icono/i);
   });

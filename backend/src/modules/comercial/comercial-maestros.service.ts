@@ -86,7 +86,9 @@ export class ComercialMaestrosService {
     const r = await this.hub.call<unknown>('obenCostOrder', 'comercial.consultar', { maestro: 'parametrizacion', parametros: p }, OPCIONES);
     if (!r.ok) {
       throw new BadRequestException(
-        `Oben no devolvió la parametrización de ese cliente y destino: ${r.error ?? 'sin detalle'}. Revisa que el destino sea exactamente el Target_Customer del cliente (incluido el punto final, p. ej. "ALADDIN PACKAGING LLC.").`,
+        /HTTP 400/.test(r.error ?? '')
+          ? `Oben no tiene parametrización comercial cargada para "${p.targetCustomer}" (cliente ${p.codSecEntity}): Comercial debe crearla en OBEN MAS (condición de pago, moneda, Incoterm, puerto y etiquetas). Sin ella no se puede crear la proforma.`
+          : `Oben no devolvió la parametrización de ese cliente y destino: ${r.error ?? 'sin detalle'}.`,
       );
     }
     let data: unknown = r.data;

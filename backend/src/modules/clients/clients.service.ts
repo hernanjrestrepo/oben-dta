@@ -40,6 +40,8 @@ export interface RequestingUser {
   role: UserRole;
 }
 
+const DOMINIOS_GRATUITOS = ['gmail', 'hotmail', 'outlook', 'yahoo', 'live', 'icloud', 'msn', 'aol', 'protonmail'];
+
 @Injectable()
 export class ClientsService {
   constructor(
@@ -161,7 +163,25 @@ export class ClientsService {
       ],
     });
     const unique = [...new Map(matches.map((c) => [c.id, c])).values()];
+    if (unique.length === 0) return this.porNombreDeDominio(d, tenantId);
     return unique.length === 1 ? { client: unique[0], ambiguous: false } : { client: null, ambiguous: unique.length > 1 };
+  }
+
+  /**
+   * Sin dominio autorizado, el cliente cuyo nombre empieza por el nombre del dominio ("dorfan.com" → "DORFAN S.A.S") se
+   * da por hecho si es ÚNICO (Hernán, 3-nov) y el dominio queda autorizado en su ficha. Los correos gratuitos no cuentan.
+   */
+  private async porNombreDeDominio(dominio: string, tenantId: string): Promise<{ client: Client | null; ambiguous: boolean }> {
+    const etiqueta = dominio.split('.').slice(0, -1).filter((p) => !['com', 'co', 'net', 'org', 'mx', 'us', 'ec', 'pe'].includes(p)).pop() ?? '';
+    if (etiqueta.length < 4 || DOMINIOS_GRATUITOS.includes(etiqueta)) return { client: null, ambiguous: false };
+    const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const todos = await this.clientRepository.find({ where: { tenantId, isActive: true } });
+    const coinciden = todos.filter((c) => norm(c.name).split(' ')[0] === etiqueta);
+    if (coinciden.length !== 1) return { client: null, ambiguous: coinciden.length > 1 };
+    const client = coinciden[0];
+    client.authorizedDomains = [...new Set([...(client.authorizedDomains ?? []), dominio])];
+    await this.clientRepository.save(client);
+    return { client, ambiguous: false };
   }
 
   /**

@@ -140,7 +140,7 @@ export class ProformasObenService {
         par = r.datos;
         simulado = r.simulado;
       } catch (err) {
-        bloqueos.push(`Oben no tiene parametrización comercial para ${destino}: ${(err as Error).message}`);
+        bloqueos.push((err as Error).message);
       }
       if (!par) bloqueos.push(`Oben no devolvió la parametrización comercial de ${destino} (condición de pago, Incoterm, moneda, puerto).`);
     }

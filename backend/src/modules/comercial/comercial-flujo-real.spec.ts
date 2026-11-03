@@ -319,7 +319,7 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(caso.ocNumero).toBe('OC-PARADIXE-0002');
     expect(caso.lineas).toHaveLength(1);
     expect(caso.lineas[0]).toMatchObject({ codigoOben: 'SC---0015TN', kilos: 1000 });
-    expect(caso.atencion.join(' ')).toMatch(/Reenviada por alejandramolinares@obengroup\.com \(Oben\): el cliente se tomó del remitente original/);
+    expect(caso.atencion.join(' ')).not.toMatch(/Verifícalo/);
     expect(caso.atencion.join(' ')).not.toMatch(/suplantación/);
     expect(JSON.stringify(caso.lineas)).not.toMatch(/base64|<img|margin/i);
   });
@@ -365,8 +365,7 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
       ['SC---0015TN', 1000, 1000],
       ['SC---0020TN', 500, 609.6],
     ]);
-    expect(caso.atencion.join(' ')).toMatch(/se leyó con IA \(visión\)/);
-    expect(caso.atencion.join(' ')).toMatch(/las leyó la IA \(2\)/);
+    expect(caso.atencion.join(' ')).not.toMatch(/Verifica/);
     expect(caso.atencion.join(' ')).not.toMatch(/firmadigital/);
     expect(caso.ocAdjuntos.find((x) => x.filename === 'OC 4992.pdf')!.leido).toBe(true);
   });

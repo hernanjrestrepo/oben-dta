@@ -35,6 +35,23 @@ describe('ClientsService — maestro de clientes para el flujo Comercial', () =>
       await expect(service.findByEmailDomain('gmail.com')).resolves.toEqual({ client: null, ambiguous: true });
     });
 
+    it('sin dominio autorizado, el cliente cuyo nombre coincide con el dominio (único) se da por hecho y queda autorizado', async () => {
+      const { service, repo } = make();
+      repo.find.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'c1', name: 'DORFAN S.A.S', authorizedDomains: [] }, { id: 'c2', name: 'OTRA SAS', authorizedDomains: [] }]);
+      repo.save = jest.fn(async (c: unknown) => c);
+      const r = await service.findByEmailDomain('dorfan.com');
+      expect(r.client).toMatchObject({ id: 'c1', authorizedDomains: ['dorfan.com'] });
+      expect(repo.save).toHaveBeenCalled();
+    });
+
+    it('correo gratuito o nombre ambiguo → no se adivina', async () => {
+      const { service, repo } = make();
+      repo.find.mockResolvedValue([]);
+      await expect(service.findByEmailDomain('gmail.com')).resolves.toEqual({ client: null, ambiguous: false });
+      repo.find.mockReset().mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'a', name: 'ABAC UNO' }, { id: 'b', name: 'ABAC DOS' }]);
+      await expect(service.findByEmailDomain('abac.com')).resolves.toEqual({ client: null, ambiguous: true });
+    });
+
     it('dominio vacío → nada, sin consultar', async () => {
       const { service, repo } = make();
       await expect(service.findByEmailDomain('')).resolves.toEqual({ client: null, ambiguous: false });

@@ -48,7 +48,7 @@ describe('maestros comerciales de Oben (APIs del Excel comercial, servidor de pr
 
   it('la parametrización rechazada por Oben se explica: el destino debe ser exactamente el Target_Customer', async () => {
     const { svc } = armar(() => ({ ok: false, error: 'HTTP 400: No se pudo consultar con los parámetros suministrados' }));
-    await expect(svc.parametrizacion({ codSecEntity: 11, targetCustomer: 'X' })).rejects.toThrow(/Target_Customer/);
+    await expect(svc.parametrizacion({ codSecEntity: 11, targetCustomer: 'X' })).rejects.toThrow(/no tiene parametrización comercial cargada.*Comercial debe crearla/);
   });
 
   it('parametrización (ejemplo de José, 22-oct): devuelve la primera fila con condición comercial, moneda, Incoterm y puerto', async () => {

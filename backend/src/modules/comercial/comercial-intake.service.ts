@@ -83,7 +83,6 @@ export class ComercialIntakeService {
     const dominio = (from.split('@')[1] ?? '').trim();
     const { client, ambiguous } = internoOben && !original ? { client: null, ambiguous: false } : await this.clients.findByEmailDomain(dominio);
     if (internoOben && original) {
-      atencion.push(`Reenviada por ${enviadoPor} (Oben): el cliente se tomó del remitente original del correo (${original}). Verifícalo antes de confirmar.`);
       if (!client) {
         atencion.push(`El cliente del correo original (dominio "${dominio}") no está registrado en Clientes: créalo con ese dominio autorizado y vuelve a procesar la orden, o asigna el cliente a mano.`);
       }
@@ -276,7 +275,7 @@ export class ComercialIntakeService {
       return {
         ...r,
         numero: r.numero ?? reglas.numero,
-        notas: [`Las reglas no encontraron líneas de producto: las leyó la IA (${r.lineas.length}). Verifica cada línea contra la orden antes de confirmar.`, ...r.notas],
+        notas: [...r.notas],
       };
     } catch (err) {
       this.logger.warn(`Lectura de la orden con IA (respaldo) falló: ${(err as Error).message}`);
