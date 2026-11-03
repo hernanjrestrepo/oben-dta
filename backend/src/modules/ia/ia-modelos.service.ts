@@ -277,7 +277,7 @@ export class IaModelosService {
         const r = await this.json<{ choices?: Array<{ message?: { content?: string | null } }>; usage?: { cost?: number }; error?: { message?: string } }>(`${BASE}/chat/completions`, {
           method: 'POST',
           timeoutMs: 120_000,
-          body: JSON.stringify({ model: modelo, max_tokens: 4000, temperature: 0, messages: [{ role: 'user', content: contenido }], ...(esPdf ? { plugins: [{ id: 'file-parser', pdf: { engine: 'native' } }] } : {}) }),
+          body: JSON.stringify({ model: modelo, max_tokens: 4000, temperature: 0, messages: [{ role: 'user', content: contenido }], ...(esPdf ? { plugins: [{ id: 'file-parser', pdf: { engine: 'mistral-ocr' } }] } : {}) }),
         });
         const texto = (r.data?.choices?.[0]?.message?.content ?? '').trim();
         if (r.status !== 200 || !texto) throw new Error(r.data?.error?.message ?? `respuesta vacía (HTTP ${r.status})`);
