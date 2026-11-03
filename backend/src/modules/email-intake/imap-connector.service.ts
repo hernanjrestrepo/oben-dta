@@ -1,3 +1,4 @@
+import { cuerpoLegible } from '../../common/correo-texto';
 import {
   Injectable,
   Logger,
@@ -618,7 +619,8 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
 
     const from = parsed.from?.value?.[0]?.address ?? '';
     const subject = parsed.subject ?? '(sin asunto)';
-    const body = parsed.text ?? parsed.html?.toString() ?? '';
+    // Cuerpo legible: si el correo solo trae HTML (reenvíos de Outlook), se convierte a texto (3-nov: llegaba el HTML crudo).
+    const body = cuerpoLegible(parsed.text, parsed.html || null);
     const attachments: ClassificationAttachment[] = (
       parsed.attachments ?? []
     ).map((a) => ({

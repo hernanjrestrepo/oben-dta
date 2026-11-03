@@ -1,3 +1,4 @@
+import { remitenteReenviado } from '../../common/correo-texto';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
@@ -52,6 +53,10 @@ export const CLIENTE_DEMO_LABEL = 'Cliente de demostración (dominio de prueba):
  * unidades, resuelve el destino contra el maestro del cliente en OBEN MAS y
  * lista TODO lo que falta — nunca rellena un dato.
  */
+/** Dominios de Oben: un correo de aquí no es de un cliente (reenvíos internos, 3-nov). */
+export const DOMINIOS_INTERNOS_OBEN = ['obengroup.com'];
+const esDominioInterno = (correo: string): boolean => DOMINIOS_INTERNOS_OBEN.some((d) => (correo.split('@')[1] ?? '').trim() === d || (correo.split('@')[1] ?? '').trim().endsWith(`.${d}`));
+
 @Injectable()
 export class ComercialIntakeService {
   private readonly logger = new Logger(ComercialIntakeService.name);
@@ -65,11 +70,20 @@ export class ComercialIntakeService {
 
   /** Arma los datos del caso (sin guardarlo). */
   async construir(input: OcEntrada, config: ComercialConfig): Promise<Partial<ComercialCase>> {
-    const from = input.from.trim().toLowerCase();
-    const dominio = (from.split('@')[1] ?? '').trim();
-    const { client, ambiguous } = await this.clients.findByEmailDomain(dominio);
+    const enviadoPor = input.from.trim().toLowerCase();
     const atencion: string[] = [];
-    if (!client) {
+    // Reenvío de alguien de Oben ("RV:" de Comercial/Customer Service, 3-nov): el cliente es el remitente ORIGINAL del
+    // correo reenviado, no quien lo reenvía. Si no se encuentra, se dice así y no se acusa de suplantación.
+    const internoOben = esDominioInterno(enviadoPor);
+    const original = internoOben ? remitenteReenviado(input.body, DOMINIOS_INTERNOS_OBEN) : null;
+    const from = original ?? enviadoPor;
+    const dominio = (from.split('@')[1] ?? '').trim();
+    const { client, ambiguous } = internoOben && !original ? { client: null, ambiguous: false } : await this.clients.findByEmailDomain(dominio);
+    if (internoOben && original) {
+      atencion.push(`Reenviada por ${enviadoPor} (Oben): el cliente se tomó del remitente original del correo (${original}). Verifícalo antes de confirmar.`);
+    } else if (internoOben) {
+      atencion.push(`Reenviada por ${enviadoPor} (Oben): no se encontró el remitente original del cliente en el correo — elige el cliente a mano.`);
+    } else if (!client) {
       atencion.push(
         ambiguous
           ? `El dominio "${dominio}" está autorizado para más de un cliente: no se puede saber de quién es la orden — asígnala a mano.`

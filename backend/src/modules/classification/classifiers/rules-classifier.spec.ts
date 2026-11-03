@@ -66,4 +66,22 @@ describe('RulesClassifier', () => {
     });
     expect(withContext.confidence).toBeGreaterThanOrEqual(withoutContext.confidence);
   });
+
+  describe('pedidos reenviados por Comercial (3-nov)', () => {
+    const clasifica = (subject: string, body = '', attachments: Array<{ filename: string }> = []) =>
+      new RulesClassifier().classify({ from: 'alejandramolinares@obengroup.com', subject, body, attachments: attachments.map((a) => ({ filename: a.filename, mimeType: 'application/pdf' })) });
+
+    it('"PEDIDO ... CONTENEDOR ..." es una orden, no un correo de naviera (el contenedor pesa 1, el pedido 2)', async () => {
+      const r = await clasifica('RV: PEDIDO VICTOR CASTAÑEDA CONTENEDOR 1 MES NOVIEMBRE');
+      expect(r.category).toBe('purchase_order');
+    });
+
+    it('"NUEVO PEDIDO ..." es una orden', async () => {
+      expect((await clasifica('NUEVO PEDIDO VICTOR CASTAÑEDA')).category).toBe('purchase_order');
+    });
+
+    it('un correo de naviera de verdad sigue siendo naviera (booking / BL pesan más)', async () => {
+      expect((await clasifica('Booking confirmation MSC contenedor 40HC', 'bill of lading adjunto')).category).toBe('carrier');
+    });
+  });
 });

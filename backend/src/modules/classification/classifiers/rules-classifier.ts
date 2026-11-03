@@ -27,6 +27,10 @@ const TEXT_PATTERNS: Array<{
   { category: 'purchase_order', weight: 3, pattern: /purchase\s+order/i, reason: '"purchase order" en el texto' },
   { category: 'purchase_order', weight: 2, pattern: /confirmamos\s+(?:la\s+)?(?:orden|compra|pedido)/i, reason: 'confirmación de pedido' },
   { category: 'purchase_order', weight: 1, pattern: /\boc[-\s#:]*\d{3,}/i, reason: 'referencia "OC-####"' },
+  // 3-nov: Comercial reenvía los pedidos de los clientes con asuntos como "PEDIDO VICTOR CASTAÑEDA CONTENEDOR 1 MES NOVIEMBRE"
+  // o "NUEVO PEDIDO …": no dicen "orden de compra" y caían en naviera (por "contenedor") o en unknown.
+  { category: 'purchase_order', weight: 3, pattern: /\bnuevo\s+pedido\b|\bnew\s+order\b/i, reason: '"nuevo pedido" en el texto' },
+  { category: 'purchase_order', weight: 2, pattern: /\bpedidos?\b/i, reason: '"pedido" en el texto' },
 
   // Solicitud de cotización
   { category: 'quote_request', weight: 3, pattern: /solicit(?:ud|amos|o)\s+.*cotizaci[oó]n/i, reason: 'solicitud de cotización' },

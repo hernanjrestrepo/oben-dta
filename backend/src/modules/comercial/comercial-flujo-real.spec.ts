@@ -1,3 +1,4 @@
+import { cuerpoLegible } from '../../common/correo-texto';
 import { BadRequestException } from '@nestjs/common';
 import { FindOperator } from 'typeorm';
 import { StaticScenarioProvider } from '../integrations/hub/static-scenario-provider';
@@ -304,6 +305,31 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(parsearCorreoCubicacion('RV: Cubicacion de Proforma #11691', '')).toBe('11691');
     expect(parsearCorreoCubicacion('Proforma 10770 - Facturar Parcial', '')).toBeNull();
     expect(() => parsearCorreoCubicacion('Cubicación de Proforma #11691', 'Se realizó la cubicación de la Proforma #11692')).toThrow(/no se toma/);
+  });
+
+  it('3-nov: reenvío de Alejandra (Oben) en HTML con firma: el cliente es el remitente ORIGINAL, no "suplantación", y la firma no genera líneas ni número de orden', async () => {
+    const w = world();
+    const html = `<html><head><style type="text/css"> P {margin-top:0;} </style></head><body><div id="appendonsend"></div>
+<div><b>De:</b> Compras &lt;ceo@paradixe.xyz&gt;<br><b>Asunto:</b> Orden de compra OC-PARADIXE-0002</div>
+<p>Orden de compra OC-PARADIXE-0002</p><p>- BOPP 15, 1.000 kg, ancho 1000 mm, precio USD 2,85</p>
+<p style="margin: 0.1pt; font-family: Arial; font-size: 10pt;"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACE8AAAWKCAIAAACMiE40AAAACXBIWXMAAC4jAAAuIwF4pT92AAAgAElEQVR4nOzdP3AbZ54"></p></body></html>`;
+    const caso = await w.flujo.recibirOc({ from: 'alejandramolinares@obengroup.com', subject: 'RV: Orden de compra OC-PARADIXE-0002', body: cuerpoLegible(undefined, html), messageId: '<rv-1@obengroup.com>', attachments: [] }, 'correo');
+    expect(caso.clientId).toBe('cli-p');
+    expect(caso.contactoEmail).toBe('ceo@paradixe.xyz');
+    expect(caso.ocNumero).toBe('OC-PARADIXE-0002');
+    expect(caso.lineas).toHaveLength(1);
+    expect(caso.lineas[0]).toMatchObject({ codigoOben: 'SC---0015TN', kilos: 1000 });
+    expect(caso.atencion.join(' ')).toMatch(/Reenviada por alejandramolinares@obengroup\.com \(Oben\): el cliente se tomó del remitente original/);
+    expect(caso.atencion.join(' ')).not.toMatch(/suplantación/);
+    expect(JSON.stringify(caso.lineas)).not.toMatch(/base64|<img|margin/i);
+  });
+
+  it('3-nov: reenvío interno sin remitente original: pide elegir el cliente (sin acusar suplantación)', async () => {
+    const w = world();
+    const caso = await w.flujo.recibirOc({ from: 'alejandramolinares@obengroup.com', subject: 'RV: PEDIDO', body: 'Buenos días, el pedido va adjunto.', messageId: '<rv-2@obengroup.com>', attachments: [] }, 'correo');
+    expect(caso.clientId).toBeNull();
+    expect(caso.atencion.join(' ')).toMatch(/Reenviada por alejandramolinares@obengroup\.com \(Oben\): no se encontró el remitente original/);
+    expect(caso.atencion.join(' ')).not.toMatch(/suplantación/);
   });
 
   it('si Oben no informa el número de la OV, el caso sigue (sin inventar uno ni tomar el de producción) y lo dice claro', async () => {
