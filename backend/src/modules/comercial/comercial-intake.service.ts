@@ -6,6 +6,7 @@ import { ClientsService } from '../clients/clients.service';
 import { EquivalencesService } from '../equivalences/equivalences.service';
 import type { Client } from '../../entities/client.entity';
 import type { CasoDestino, CasoLinea, ComercialCase } from '../../entities/comercial-case.entity';
+import { IaModelosService } from '../ia/ia-modelos.service';
 import { extraerConIa, extraerConReglas, normTexto, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef, type OcAdjunto, type OcExtraccion } from './oc-extractor';
 import type { ComercialConfig } from './comercial-config';
 import { ComercialMaestrosService } from './comercial-maestros.service';
@@ -66,6 +67,8 @@ export class ComercialIntakeService {
     private readonly clients: ClientsService,
     private readonly equivalences: EquivalencesService,
     @Optional() private readonly maestros?: ComercialMaestrosService,
+    /** IA de OpenRouter: lee imágenes y PDF escaneados y rescata órdenes que las reglas no entienden (3-nov). */
+    @Optional() private readonly ia?: IaModelosService,
   ) {}
 
   /** Arma los datos del caso (sin guardarlo). */
@@ -81,6 +84,9 @@ export class ComercialIntakeService {
     const { client, ambiguous } = internoOben && !original ? { client: null, ambiguous: false } : await this.clients.findByEmailDomain(dominio);
     if (internoOben && original) {
       atencion.push(`Reenviada por ${enviadoPor} (Oben): el cliente se tomó del remitente original del correo (${original}). Verifícalo antes de confirmar.`);
+      if (!client) {
+        atencion.push(`El cliente del correo original (dominio "${dominio}") no está registrado en Clientes: créalo con ese dominio autorizado y vuelve a procesar la orden, o asigna el cliente a mano.`);
+      }
     } else if (internoOben) {
       atencion.push(`Reenviada por ${enviadoPor} (Oben): no se encontró el remitente original del cliente en el correo — elige el cliente a mano.`);
     } else if (!client) {
@@ -91,7 +97,10 @@ export class ComercialIntakeService {
       );
     }
 
-    const adj = await textoDeAdjuntos(input.attachments ?? []);
+    const adj = await textoDeAdjuntos(
+      input.attachments ?? [],
+      this.ia ? async (a) => (await this.ia!.leerDocumento(a))?.texto ?? null : undefined,
+    );
     const unico = sinLineasRepetidas(input.body, adj.texto);
     if (unico.quitadas > 0) adj.notas.push(`El correo y el adjunto traen las mismas líneas: se contaron una sola vez (${unico.quitadas} repetida(s) del adjunto).`);
     const texto = [input.body, unico.texto].filter(Boolean).join('\n');
@@ -240,11 +249,39 @@ export class ComercialIntakeService {
         return await extraerConIa(config.extractor, { texto, asunto, equivalencias, ejemplos: config.ejemplosOc, clienteFinalEnAsunto });
       } catch (err) {
         this.logger.warn(`Lectura de OC con IA falló (${(err as Error).message}); se usa la lectura por reglas.`);
-        const r = extraerConReglas(texto, asunto, equivalencias, { clienteFinalEnAsunto });
+        const r = await this.conRespaldoIa(extraerConReglas(texto, asunto, equivalencias, { clienteFinalEnAsunto }), texto, asunto, equivalencias, config, clienteFinalEnAsunto);
         return { ...r, notas: [`La IA no respondió (${(err as Error).message}): se leyó la orden por reglas.`, ...r.notas] };
       }
     }
-    return extraerConReglas(texto, asunto, equivalencias, { clienteFinalEnAsunto });
+    return this.conRespaldoIa(extraerConReglas(texto, asunto, equivalencias, { clienteFinalEnAsunto }), texto, asunto, equivalencias, config, clienteFinalEnAsunto);
+  }
+
+  /**
+   * Las reglas solo entienden listas tipo "- BOPP 15, 1.000 kg, ancho 425 mm". Cuando no encuentran ninguna línea pero hay
+   * texto (una tabla leída de un pantallazo o PDF escaneado, o un correo en prosa), se las pasa a la IA de OpenRouter
+   * (3-nov). Lo que la IA entregue se marca para verificar; si falla o no halla nada, queda el resultado de las reglas.
+   */
+  private async conRespaldoIa(
+    reglas: OcExtraccion,
+    texto: string,
+    asunto: string,
+    equivalencias: EquivalenciaRef[],
+    config: ComercialConfig,
+    clienteFinalEnAsunto: boolean,
+  ): Promise<OcExtraccion> {
+    if (reglas.lineas.length > 0 || !this.ia || texto.trim().length < 40) return reglas;
+    try {
+      const r = await extraerConIa({ host: '', model: 'openrouter' }, { texto, asunto, equivalencias, ejemplos: config.ejemplosOc, clienteFinalEnAsunto, llm: (p) => this.ia!.completarJson(p) });
+      if (r.lineas.length === 0) return reglas;
+      return {
+        ...r,
+        numero: r.numero ?? reglas.numero,
+        notas: [`Las reglas no encontraron líneas de producto: las leyó la IA (${r.lineas.length}). Verifica cada línea contra la orden antes de confirmar.`, ...r.notas],
+      };
+    } catch (err) {
+      this.logger.warn(`Lectura de la orden con IA (respaldo) falló: ${(err as Error).message}`);
+      return reglas;
+    }
   }
 }
 

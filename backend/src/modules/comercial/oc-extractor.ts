@@ -78,13 +78,32 @@ export function sinLineasRepetidas(cuerpo: string, textoAdjuntos: string): { tex
 
 // ─── Texto de los adjuntos ─────────────────────────────────────────────────
 
-/** Texto legible de los adjuntos: PDF con texto, Excel y CSV/TXT. Imágenes y PDF escaneados NO (quedan "no leído"). */
+/** Lee con visión una imagen o un PDF escaneado (IaModelosService.leerDocumento); null si no se pudo. */
+export type LectorVisual = (a: { filename: string; contentType: string | null; content: Buffer }) => Promise<string | null>;
+
+/** Imágenes que son firma, banner o logo del correo: nunca son la orden (3-nov: las firmas de Oben llenaban el caso de avisos). */
+const IMAGEN_DE_FIRMA = /firma|banner|logo|signature|footer|facebook|linkedin|twitter|instagram|youtube|spacer|pixel|icon/i;
+const MAX_LECTURAS_VISUALES = 4;
+const MIN_BYTES_IMAGEN_UTIL = 15_000;
+
+/**
+ * Texto legible de los adjuntos: PDF con texto, Excel y CSV/TXT. Imágenes y PDF escaneados se leen con visión si hay
+ * `leerVisual`; sin él (o si falla) quedan "no leído" para revisión humana. Las imágenes de firma/banner se ignoran.
+ */
 export async function textoDeAdjuntos(
   adjuntos: OcAdjunto[],
+  leerVisual?: LectorVisual,
 ): Promise<{ texto: string; resumen: Array<{ filename: string; contentType: string | null; bytes: number; leido: boolean }>; notas: string[] }> {
   const partes: string[] = [];
   const notas: string[] = [];
   const resumen: Array<{ filename: string; contentType: string | null; bytes: number; leido: boolean }> = [];
+  const esImg = (a: OcAdjunto) => {
+    const e = ((a.filename || '').split('.').pop() ?? '').toLowerCase();
+    return /^(png|jpe?g|gif|bmp|tiff?|heic|webp)$/.test(e) || (a.contentType ?? '').toLowerCase().startsWith('image/');
+  };
+  // Una imagen con el MISMO tamaño que una firma es la misma firma con otro nombre (image001.png = firma digital).
+  const tamanosDeFirma = new Set(adjuntos.filter((a) => esImg(a) && IMAGEN_DE_FIRMA.test(a.filename || '') && a.content).map((a) => a.content!.length));
+  let lecturasVisuales = 0;
   for (const a of adjuntos) {
     const buf = a.content ?? null;
     const name = a.filename || 'adjunto';
@@ -103,8 +122,30 @@ export async function textoDeAdjuntos(
       logger.warn(`No se pudo leer el adjunto "${name}": ${(err as Error).message}`);
       texto = null;
     }
+    let leidoConIa = false;
+    if (!(texto && texto.trim()) && buf && buf.length > 0) {
+      const esImagen = /^(png|jpe?g|gif|bmp|tiff?|heic|webp)$/.test(ext) || ct.startsWith('image/');
+      const esPdf = ext === 'pdf' || ct.includes('pdf');
+      if (esImagen && (IMAGEN_DE_FIRMA.test(name) || tamanosDeFirma.has(buf.length) || buf.length < MIN_BYTES_IMAGEN_UTIL)) {
+        resumen.push({ filename: name, contentType: a.contentType ?? null, bytes: buf.length, leido: false });
+        continue; // firma, banner o logo: ni se lee ni se avisa
+      }
+      if (leerVisual && (esImagen || esPdf) && lecturasVisuales < MAX_LECTURAS_VISUALES) {
+        lecturasVisuales++;
+        try {
+          const v = await leerVisual({ filename: name, contentType: a.contentType ?? null, content: buf });
+          if (v && v.trim()) {
+            texto = v;
+            leidoConIa = true;
+            notas.push(`El adjunto "${name}" era ${esPdf ? 'un PDF escaneado' : 'una imagen'}: se leyó con IA (visión). Verifica cantidades, anchos y precios antes de confirmar.`);
+          }
+        } catch (err) {
+          logger.warn(`Lectura visual de "${name}" falló: ${(err as Error).message}`);
+        }
+      }
+    }
     const leido = !!texto && texto.trim().length > 0;
-    if (leido) partes.push(`--- ${name} ---\n${texto}`);
+    if (leido) partes.push(`--- ${name}${leidoConIa ? ' (leído con IA)' : ''} ---\n${texto}`);
     else if (buf && buf.length > 0) {
       notas.push(
         /^(png|jpe?g|gif|bmp|tiff?|heic|webp)$/.test(ext) || ct.startsWith('image/')
@@ -270,7 +311,15 @@ export function extraerConReglas(
  */
 export async function extraerConIa(
   cfg: OcIaConfig,
-  input: { texto: string; asunto: string; equivalencias: EquivalenciaRef[]; ejemplos: EjemploOc[]; clienteFinalEnAsunto?: boolean },
+  input: {
+    texto: string;
+    asunto: string;
+    equivalencias: EquivalenciaRef[];
+    ejemplos: EjemploOc[];
+    clienteFinalEnAsunto?: boolean;
+    /** Modelo alterno (OpenRouter) en vez del Ollama de `cfg`: recibe el prompt y devuelve el JSON como texto. */
+    llm?: (prompt: string) => Promise<string>;
+  },
 ): Promise<OcExtraccion> {
   const prompt = [
     'Eres un asistente de Customer Service de una fábrica de películas plásticas (BOPP, PET, etc.).',
@@ -295,21 +344,25 @@ export async function extraerConIa(
   const timeout = setTimeout(() => controller.abort(), cfg.timeoutMs ?? 60_000);
   let raw: string;
   try {
-    const res = await fetch(`${cfg.host.replace(/\/$/, '')}/api/generate`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: cfg.model, prompt, format: 'json', stream: false }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    raw = ((await res.json()) as { response?: string }).response ?? '';
+    if (input.llm) {
+      raw = await input.llm(prompt);
+    } else {
+      const res = await fetch(`${cfg.host.replace(/\/$/, '')}/api/generate`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: cfg.model, prompt, format: 'json', stream: false }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      raw = ((await res.json()) as { response?: string }).response ?? '';
+    }
   } finally {
     clearTimeout(timeout);
   }
 
   let parsed: Record<string, unknown>;
   try {
-    parsed = JSON.parse(raw) as Record<string, unknown>;
+    parsed = JSON.parse(raw.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '')) as Record<string, unknown>;
   } catch {
     throw new Error('la IA no devolvió un JSON válido');
   }

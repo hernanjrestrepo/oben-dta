@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { TenantScopedEntity } from '../common/tenant/tenant-scoped.entity';
 
-export type TipoIa = 'imagen' | 'video';
+export type TipoIa = 'imagen' | 'video' | 'lectura';
 export type EstadoIaUso = 'en_proceso' | 'completado' | 'fallido';
 
 /** numeric llega como texto desde Postgres: se convierte al leer. */

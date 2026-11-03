@@ -1,3 +1,4 @@
+import { IaModule } from '../ia/ia.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { IntegrationHubModule } from '../integrations/hub/integration-hub.module';
@@ -31,6 +32,7 @@ import { ProformasObenController } from './proformas-oben.controller';
     EquivalencesModule,
     DistributionListsModule,
     IdempotencyModule,
+    IaModule,
   ],
   controllers: [ComercialController, ComercialCasosController, ComercialMaestrosController, ProformasObenController],
   providers: [ComercialService, ComercialIntakeService, ComercialFlujoService, ComercialProcessorService, ComercialSimuladorService, ComercialMaestrosService, ProformasObenService],

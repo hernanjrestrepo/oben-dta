@@ -127,13 +127,50 @@ describe('texto de los adjuntos', () => {
     const r = await textoDeAdjuntos([
       { filename: 'oc.xlsx', content: xlsx },
       { filename: 'oc.csv', content: Buffer.from('Ref;Kg\nBOPP 3;50 kg') },
-      { filename: 'pantallazo.png', contentType: 'image/png', content: Buffer.from([0x89, 0x50]) },
+      { filename: 'pantallazo.png', contentType: 'image/png', content: Buffer.alloc(40_000, 1) },
     ]);
     expect(r.texto).toContain('BOPP 345 | 1000 | kg | 425 mm');
     expect(r.resumen.map((a) => a.leido)).toEqual([true, true, false]);
     expect(r.notas[0]).toMatch(/pantallazo\.png" es una imagen/);
     // Y de ahí sale la línea:
     expect(extraerConReglas(r.texto, '', EQ).lineas[0]).toMatchObject({ codigoOben: 'SC15TN', kilos: 1000, anchoMm: 425 });
+  });
+
+  it('3-nov: imágenes y PDF escaneados se leen con visión; las firmas y banners se ignoran sin ruido; el tope de lecturas protege el gasto', async () => {
+    const leidas: string[] = [];
+    const lector = async (a: { filename: string; content: Buffer }) => {
+      leidas.push(a.filename);
+      return a.filename.endsWith('.pdf') ? '1 | BOPP 20 | 2.500 kg | 1020 mm' : null;
+    };
+    const firma = Buffer.alloc(64_538, 2);
+    const r = await textoDeAdjuntos(
+      [
+        { filename: 'image001.png', contentType: 'image/png', content: firma }, // misma firma con otro nombre (mismo tamaño)
+        { filename: 'firmadigital-obengroup_ing_29.png', contentType: 'image/png', content: firma },
+        { filename: '_banner-en-gif-para-firma-de-correo_.gif', contentType: 'image/gif', content: Buffer.alloc(298_343, 3) },
+        { filename: 'icono.png', contentType: 'image/png', content: Buffer.alloc(900, 4) }, // demasiado pequeña para ser una orden
+        { filename: 'OC 4992 OBEN COLOMBIA.pdf', contentType: 'application/pdf', content: Buffer.from('%PDF-1.4 escaneado sin texto') },
+        { filename: 'pedido.png', contentType: 'image/jpeg', content: Buffer.alloc(150_000, 5) }, // pantallazo útil que el lector no logra leer
+      ],
+      lector,
+    );
+    expect(leidas).toEqual(['OC 4992 OBEN COLOMBIA.pdf', 'pedido.png']); // solo lo que puede ser la orden
+    expect(r.texto).toContain('(leído con IA)');
+    expect(r.texto).toContain('BOPP 20 | 2.500 kg | 1020 mm');
+    expect(r.notas.join(' ')).toMatch(/PDF escaneado: se leyó con IA \(visión\)/);
+    expect(r.notas.join(' ')).toMatch(/"pedido\.png" es una imagen/); // la que no se pudo leer sí se avisa
+    expect(r.notas.join(' ')).not.toMatch(/firmadigital|banner|image001|icono/i);
+  });
+
+  it('sin lector visual (o con tope alcanzado) el comportamiento anterior se mantiene: se avisa y queda para revisión', async () => {
+    const r = await textoDeAdjuntos([{ filename: 'pedido.png', contentType: 'image/png', content: Buffer.alloc(80_000, 5) }]);
+    expect(r.resumen[0].leido).toBe(false);
+    expect(r.notas[0]).toMatch(/es una imagen/);
+    const tope = await textoDeAdjuntos(
+      Array.from({ length: 6 }, (_, i) => ({ filename: `p${i}.pdf`, contentType: 'application/pdf', content: Buffer.from('%PDF-1.4 x') })),
+      async () => null,
+    );
+    expect(tope.notas.length).toBe(6);
   });
 
   it('lee un PDF con texto', async () => {

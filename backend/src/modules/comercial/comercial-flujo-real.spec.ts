@@ -98,7 +98,7 @@ const OC = {
   ].join('\n'),
 };
 
-function world(opts: { rechazarEncabezado?: string; leadTime?: boolean; sinOvEnPruebas?: boolean } = {}) {
+function world(opts: { rechazarEncabezado?: string; leadTime?: boolean; sinOvEnPruebas?: boolean; ia?: { leerDocumento: jest.Mock; completarJson: jest.Mock } } = {}) {
   const store = new InMemoryObenPlusSimStore();
   const obenPlus = new ObenPlusMockAdapter(new StaticScenarioProvider(), store);
   const emails: Array<Record<string, unknown>> = [];
@@ -170,7 +170,7 @@ function world(opts: { rechazarEncabezado?: string; leadTime?: boolean; sinOvEnP
   };
   const distributionLists = { resolveRecipients: jest.fn(async () => ({ to: [], cc: [], bcc: [] })) };
   const proformas = new ProformasObenService(hub as never, CTX as never, audit as never, maestros as never, proformasRepo as never, tenants as never);
-  const intake = new ComercialIntakeService(hub as never, clients as never, equivalences as never, maestros as never);
+  const intake = new ComercialIntakeService(hub as never, clients as never, equivalences as never, maestros as never, opts.ia as never);
   const flujo = new ComercialFlujoService(
     casos as never,
     tenants as never,
@@ -322,6 +322,69 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(caso.atencion.join(' ')).toMatch(/Reenviada por alejandramolinares@obengroup\.com \(Oben\): el cliente se tomó del remitente original/);
     expect(caso.atencion.join(' ')).not.toMatch(/suplantación/);
     expect(JSON.stringify(caso.lineas)).not.toMatch(/base64|<img|margin/i);
+  });
+
+  it('3-nov: orden en PDF ESCANEADO (sin texto): se lee con visión y, como las reglas no entienden la tabla, la IA arma las líneas — marcadas para verificar', async () => {
+    const ia = {
+      leerDocumento: jest.fn(async () => ({
+        texto: ['ORDEN DE COMPRA 4992', 'Item | Referencia | Ancho mm | Kilos | Precio', '1 | BOPP 15 | 1000 | 1.000 | 2,85', '2 | BOPP 20 | 24 in | 500 | 2,95'].join('\n'),
+        modelo: 'glm',
+        costoUsd: 0.0005,
+      })),
+      completarJson: jest.fn(async () =>
+        JSON.stringify({
+          numero: '4992',
+          fechaRequerida: '2026-12-18',
+          direccionEntrega: 'ALADDIN PACKAGING LLC. - 40 GOVERNOR DR., NEWBURGH, NY 12550, USA',
+          clienteFinal: null,
+          lineas: [
+            { textoCliente: 'BOPP 15', codigoCliente: 'BOPP 15', cantidad: 1000, unidad: 'kg', ancho: 1000, unidadAncho: 'mm', espesor: null, unidadEspesor: null, precioUnitario: 2.85, moneda: 'USD' },
+            { textoCliente: 'BOPP 20', codigoCliente: 'BOPP 20', cantidad: 500, unidad: 'kg', ancho: 24, unidadAncho: 'in', espesor: null, unidadEspesor: null, precioUnitario: 2.95, moneda: 'USD' },
+          ],
+        }),
+      ),
+    };
+    const w = world({ ia });
+    const caso = await w.flujo.recibirOc(
+      {
+        from: 'ceo@paradixe.xyz',
+        subject: 'OC 4992 DORFAN',
+        body: 'Adjunto orden de compra: favor proceder con su despacho.',
+        messageId: '<esc-1@paradixe.xyz>',
+        attachments: [
+          { filename: 'OC 4992.pdf', contentType: 'application/pdf', content: Buffer.from('%PDF-1.4 escaneado') },
+          { filename: 'firmadigital-obengroup.png', contentType: 'image/png', content: Buffer.alloc(64_538, 2) },
+        ],
+      },
+      'correo',
+    );
+    expect(ia.leerDocumento).toHaveBeenCalledTimes(1); // la firma no se lee
+    expect(ia.completarJson).toHaveBeenCalledTimes(1);
+    expect(caso.ocNumero).toBe('4992');
+    expect(caso.lineas.map((l) => [l.codigoOben, l.kilos, l.anchoMm])).toEqual([
+      ['SC---0015TN', 1000, 1000],
+      ['SC---0020TN', 500, 609.6],
+    ]);
+    expect(caso.atencion.join(' ')).toMatch(/se leyó con IA \(visión\)/);
+    expect(caso.atencion.join(' ')).toMatch(/las leyó la IA \(2\)/);
+    expect(caso.atencion.join(' ')).not.toMatch(/firmadigital/);
+    expect(caso.ocAdjuntos.find((x) => x.filename === 'OC 4992.pdf')!.leido).toBe(true);
+  });
+
+  it('si la IA no encuentra líneas o falla, la orden queda para revisión humana como antes (sin romper)', async () => {
+    const ia = { leerDocumento: jest.fn(async () => null), completarJson: jest.fn(async () => { throw new Error('sin saldo'); }) };
+    const w = world({ ia });
+    const caso = await w.flujo.recibirOc({ from: 'ceo@paradixe.xyz', subject: 'Pedido', body: 'Buenas, por favor monten el pedido que les envié por WhatsApp, gracias por su atención.', messageId: '<esc-2@paradixe.xyz>', attachments: [] }, 'correo');
+    expect(caso.lineas).toHaveLength(0);
+    expect(caso.missing.join(' ')).toMatch(/ninguna línea de producto legible/);
+  });
+
+  it('3-nov: reenvío interno cuyo cliente original NO está registrado: lo dice claro (qué hacer) en vez de solo "no identificado"', async () => {
+    const w = world();
+    const caso = await w.flujo.recibirOc({ from: 'alejandramolinares@obengroup.com', subject: 'RV: OC 4990', body: ['Reenvío.', 'De: Vanessa Molina <vanessamolina@dorfan.com>', 'Asunto: OC 4990'].join('\n'), messageId: '<rv-3@obengroup.com>', attachments: [] }, 'correo');
+    expect(caso.contactoEmail).toBe('vanessamolina@dorfan.com');
+    expect(caso.clientId).toBeNull();
+    expect(caso.atencion.join(' ')).toMatch(/dominio .{0,2}dorfan\.com.{0,2} no está registrado en Clientes: créalo/);
   });
 
   it('3-nov: reenvío interno sin remitente original: pide elegir el cliente (sin acusar suplantación)', async () => {

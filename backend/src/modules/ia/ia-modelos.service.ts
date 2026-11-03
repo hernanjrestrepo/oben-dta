@@ -18,6 +18,13 @@ import {
   verificarTopes,
 } from './ia-selector';
 
+/** Modelos de visión para leer órdenes escaneadas (3-nov): GLM Flash lee 15/15 de una orden de prueba por US$0,00014; Gemma de respaldo. */
+export const MODELOS_LECTURA = ['~z-ai/glm-flash-latest', 'google/gemma-3-12b-it'];
+const PROMPT_LECTURA =
+  'Transcribe TODO el texto de este documento (una orden de compra o similar) tal cual aparece, conservando las filas de las tablas: una línea por fila, columnas separadas por " | ". No resumas, no interpretes y no inventes nada; si algo no se lee escribe [ilegible].';
+const MAX_BYTES_LECTURA = 12 * 1024 * 1024;
+/** Lo que se estima por lectura (centavos de centavo): suficiente para que los topes diarios funcionen. */
+const ESTIMADO_LECTURA_USD = 0.003;
 const BASE = (process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
 const MAX_PROMPT = 1500;
 const MAX_EN_PROCESO = 3;
@@ -243,6 +250,58 @@ export class IaModelosService {
     const buffer = Buffer.from(await archivo.arrayBuffer());
     if (uso.estado !== 'completado') await this.cerrar(uso.id, 'completado', costo, null);
     return { usoId: uso.id, estado: 'completado', modelo: uso.modelo, costoUsd: uso.estado === 'completado' ? (uso.costoRealUsd ?? costo) : costo, buffer };
+  }
+
+  /**
+   * Lee con visión una imagen o un PDF escaneado y devuelve su texto (3-nov: las órdenes de compra llegan como pantallazo
+   * o PDF escaneado y el sistema no las leía). Respeta los topes de costo y deja el gasto registrado. null si no se
+   * pudo (sin clave, tope alcanzado, archivo muy grande, o el modelo no respondió): quien llama deja la orden para revisión humana.
+   */
+  async leerDocumento(a: { filename: string; contentType: string | null; content: Buffer }): Promise<{ texto: string; modelo: string; costoUsd: number } | null> {
+    if (!process.env.OPENROUTER_API_KEY || !a.content?.length || a.content.length > MAX_BYTES_LECTURA) return null;
+    const esPdf = /\.pdf$/i.test(a.filename) || (a.contentType ?? '').toLowerCase().includes('pdf');
+    const mime = esPdf ? 'application/pdf' : /^image\//i.test(a.contentType ?? '') ? (a.contentType as string) : /\.png$/i.test(a.filename) ? 'image/png' : /\.gif$/i.test(a.filename) ? 'image/gif' : 'image/jpeg';
+    const g = await this.gasto();
+    const v = verificarTopes(ESTIMADO_LECTURA_USD, g.hoyUsd, g.mesUsd, g.topes);
+    if (!v.ok) {
+      this.logger.warn(`Lectura de "${a.filename}" omitida: ${v.motivo}`);
+      return null;
+    }
+    const dataUrl = `data:${mime};base64,${a.content.toString('base64')}`;
+    for (const modelo of MODELOS_LECTURA) {
+      const uso = await this.registrar('lectura', modelo, 'economico', ESTIMADO_LECTURA_USD, a.filename, { bytes: a.content.length, mime });
+      try {
+        const contenido = esPdf
+          ? [{ type: 'text', text: PROMPT_LECTURA }, { type: 'file', file: { filename: a.filename || 'documento.pdf', file_data: dataUrl } }]
+          : [{ type: 'text', text: PROMPT_LECTURA }, { type: 'image_url', image_url: { url: dataUrl } }];
+        const r = await this.json<{ choices?: Array<{ message?: { content?: string | null } }>; usage?: { cost?: number }; error?: { message?: string } }>(`${BASE}/chat/completions`, {
+          method: 'POST',
+          timeoutMs: 120_000,
+          body: JSON.stringify({ model: modelo, max_tokens: 4000, temperature: 0, messages: [{ role: 'user', content: contenido }], ...(esPdf ? { plugins: [{ id: 'file-parser', pdf: { engine: 'native' } }] } : {}) }),
+        });
+        const texto = (r.data?.choices?.[0]?.message?.content ?? '').trim();
+        if (r.status !== 200 || !texto) throw new Error(r.data?.error?.message ?? `respuesta vacía (HTTP ${r.status})`);
+        const costo = typeof r.data?.usage?.cost === 'number' ? r.data.usage.cost : ESTIMADO_LECTURA_USD;
+        await this.cerrar(uso.id, 'completado', costo, null);
+        return { texto, modelo, costoUsd: costo };
+      } catch (err) {
+        await this.cerrar(uso.id, 'fallido', 0, (err as Error).message);
+        this.logger.warn(`Lectura de "${a.filename}" con ${modelo} falló: ${(err as Error).message}`);
+      }
+    }
+    return null;
+  }
+
+  /** Respuesta JSON de un modelo barato (lectura de órdenes cuando las reglas no encuentran líneas). */
+  async completarJson(prompt: string): Promise<string> {
+    const r = await this.json<{ choices?: Array<{ message?: { content?: string | null } }>; error?: { message?: string } }>(`${BASE}/chat/completions`, {
+      method: 'POST',
+      timeoutMs: 90_000,
+      body: JSON.stringify({ model: MODELOS_LECTURA[0], max_tokens: 4000, temperature: 0, response_format: { type: 'json_object' }, messages: [{ role: 'user', content: prompt }] }),
+    });
+    const texto = (r.data?.choices?.[0]?.message?.content ?? '').trim();
+    if (r.status !== 200 || !texto) throw new Error(r.data?.error?.message ?? `respuesta vacía (HTTP ${r.status})`);
+    return texto;
   }
 
   private async registrar(tipo: TipoIa, modelo: string, nivel: string, estimadoUsd: number, prompt: string, detalle: Record<string, unknown>): Promise<IaUso> {
