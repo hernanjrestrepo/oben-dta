@@ -439,6 +439,11 @@ export class ProformasObenService {
       return { fecha: null, mensaje: `No se puede calcular el embarque: falta ${!puerto ? 'el puerto de destino' : 'el incoterm'}.`, puerto, incoterm, tiempo: null };
     }
     const d = await this.transitos.despacho(fechaEntrega, { pais, puerto, incoterm });
+    // El puerto de la parametrización no está en la lista de tránsitos: se prueba con el que nombra el pedido.
+    if (!d.fecha && det.puerto && det.puerto.puerto !== puerto) {
+      const d2 = await this.transitos.despacho(fechaEntrega, { pais: det.puerto.pais, puerto: det.puerto.puerto, incoterm });
+      if (d2.fecha) return { fecha: d2.fecha, mensaje: d2.mensaje, puerto: det.puerto.puerto, incoterm, tiempo: d2.tiempo };
+    }
     return { fecha: d.fecha, mensaje: d.mensaje, puerto, incoterm, tiempo: d.tiempo };
   }
 
@@ -446,14 +451,23 @@ export class ProformasObenService {
   async embarque(e: { cliente: number | null; direccion: number | null; fechaEntrega: string | null; texto: string | null }) {
     if (!e.fechaEntrega) return { fecha: null, mensaje: 'El pedido no trae fecha de entrega: no se puede calcular el embarque.', puerto: '', incoterm: '', tiempo: null };
     let par: Fila | null = null;
+    let fila: Fila | undefined;
     if (e.cliente && e.direccion) {
       try {
         const clientes = (await this.maestros.maestro('clientes', { limite: 1000, buscar: String(e.cliente) })).items;
-        const fila = clientes.find((c) => Number(c.CodSec_Entity) === Number(e.cliente) && Number(c.CodSed_CustomerAddress) === Number(e.direccion));
+        fila = clientes.find((c) => Number(c.CodSec_Entity) === Number(e.cliente) && Number(c.CodSed_CustomerAddress) === Number(e.direccion));
         const destino = txt(fila?.Target_Customer ?? fila?.Cliente_Destino);
         if (fila && destino) par = (await this.maestros.parametrizacion({ codSecEntity: Number(e.cliente), targetCustomer: destino })).datos;
       } catch {
         /* sin parametrización en Oben: se usa lo que dice el pedido */
+      }
+      // Cliente nacional sin parametrización: la "ciudad de entrega" del destino es el punto del tránsito y el incoterm es DDP.
+      if (!par && fila && /colombia/i.test(txt(fila.Pais_Cliente))) {
+        try {
+          par = await this.estandarNacional({} as ProformaEntrada, ciudadDeDestino(fila));
+        } catch {
+          /* queda sin par */
+        }
       }
     }
     const r = await this.calcularEmbarque(e.fechaEntrega, par, e.texto ?? undefined);

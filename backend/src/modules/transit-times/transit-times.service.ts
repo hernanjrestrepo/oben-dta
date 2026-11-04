@@ -129,10 +129,19 @@ export class TransitTimesService {
   async buscar(p: { pais?: string; puerto?: string; incoterm?: string }): Promise<TransitTime | null> {
     const puertoClave = claveTexto(p.puerto);
     if (!puertoClave || !p.incoterm) return null;
-    const hits = await this.repo.find({ where: { tenantId: this.ctx.tenantId, puertoClave, incoterm: incotermSigla(p.incoterm) } });
-    if (hits.length <= 1) return hits[0] ?? null;
+    const incoterm = incotermSigla(p.incoterm);
     const paisClave = claveTexto(p.pais);
-    return hits.find((h) => h.paisClave === paisClave) ?? null;
+    const hits = await this.repo.find({ where: { tenantId: this.ctx.tenantId, puertoClave, incoterm } });
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1) return hits.find((h) => h.paisClave === paisClave) ?? null;
+    // Sin coincidencia exacta: Oben llama "RIO GRANDE DO SUL" al puerto que la lista de tránsitos llama "RIO GRANDE". Si el nombre de uno
+    // contiene al otro (mínimo 5 letras) y es el único candidato con ese incoterm, es el mismo puerto.
+    if (puertoClave.length < 5) return null;
+    const mismos = await this.repo.find({ where: { tenantId: this.ctx.tenantId, incoterm } });
+    const parecidos = mismos.filter(
+      (t) => t.puertoClave.length >= 5 && (puertoClave.includes(t.puertoClave) || t.puertoClave.includes(puertoClave)) && (!paisClave || t.paisClave === paisClave || !p.pais),
+    );
+    return parecidos.length === 1 ? parecidos[0] : null;
   }
 
   /** Fecha de despacho = entrega − días hábiles de tránsito (lunes a viernes, sin festivos de Colombia). */

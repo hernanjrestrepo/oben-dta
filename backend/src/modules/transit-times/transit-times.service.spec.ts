@@ -115,3 +115,16 @@ describe('TransitTimesService — mar en días calendario, tierra en días hábi
     expect((await svc.detectarEnTexto('desde Santos hasta Rio Grande')).puerto).toBeNull();
   });
 });
+
+describe('TransitTimesService.buscar — el mismo puerto con otro nombre (Oben: RIO GRANDE DO SUL)', () => {
+  it('"RIO GRANDE DO SUL" encuentra "RIO GRANDE" CFR (25 días de mar) si es el único', async () => {
+    const { svc } = armar([fila('BRASIL', 'RIO GRANDE', 'CFR', 25, 0), fila('BRASIL', 'SANTOS', 'CFR', 12, 0)]);
+    const d = await svc.despacho('2027-01-13', { pais: 'BRASIL', puerto: 'RIO GRANDE DO SUL', incoterm: 'CFR' });
+    expect(d.tiempo?.totalDays).toBe(25);
+    expect(d.fecha).toBe('2026-12-18'); // 13-ene − 25 días = sáb 19-dic → viernes 18
+  });
+  it('si hay dos candidatos parecidos no adivina', async () => {
+    const { svc } = armar([fila('BRASIL', 'RIO GRANDE', 'CFR', 25, 0), fila('BRASIL', 'RIO GRANDE DO', 'CFR', 26, 0)]);
+    expect((await svc.buscar({ pais: 'BRASIL', puerto: 'RIO GRANDE DO SUL', incoterm: 'CFR' }))).toBeNull();
+  });
+});
