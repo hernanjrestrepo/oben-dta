@@ -29,7 +29,14 @@ const TIEMPOS: Array<[string, string]> = [
 
 const DIA = 86_400_000;
 const dias = (desde?: string | null) => (desde ? Math.max(0, (Date.now() - new Date(desde).getTime()) / DIA) : null);
-const fmtDias = (d: number | null) => (d === null ? '—' : d < 1 ? `${Math.max(1, Math.round(d * 24))} h` : `${Math.floor(d)} d`);
+// Antigüedad con un decimal: lo recién hecho sale en minutos ("12 min"), luego "1,2 h" y "2,5 d" (antes todo bajo 1 día era "1 h").
+const fmtDias = (d: number | null) => {
+  if (d === null) return '—';
+  const dec = (n: number) => n.toLocaleString(localeActivo(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  if (d * 1440 < 60) return `${Math.max(1, Math.round(d * 1440))} min`;
+  if (d < 1) return `${dec(d * 24)} h`;
+  return `${dec(d)} d`;
+};
 const kilos = (c: ComercialCaso) => c.lineas.reduce((a, l) => a + (l.kilos ?? 0), 0);
 const fmtKg = (n: number) => `${Math.round(n).toLocaleString(localeActivo())} kg`;
 const promedio = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
