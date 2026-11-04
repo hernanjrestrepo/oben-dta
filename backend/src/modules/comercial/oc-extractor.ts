@@ -367,6 +367,8 @@ export async function extraerConIa(
     '   "ancho": number|null, "unidadAncho": "mm"|"cm"|"m"|"in"|null, "espesor": number|null, "unidadEspesor": "um"|"mil"|"g"|null,',
     '   "precioUnitario": number|null, "moneda": "USD"|"COP"|null}]}',
     'Reglas: no inventes datos — si algo no está en la orden, usa null. "codigoCliente" es el nombre o código con que el cliente pide el material, copiado tal cual.',
+    'Si la tabla trae un código interno del ítem (p. ej. "02720") Y una descripción del material (p. ej. "BOPP-SC 17 MICRAS TRANSP."), "codigoCliente" es la DESCRIPCIÓN del material, nunca el código del ítem.',
+    'Si la columna de ancho no trae unidad: los valores menores a 200 son centímetros ("unidadAncho":"cm") y los de 200 o más son milímetros ("mm"). Nunca dejes un ancho sin unidad.',
     input.clienteFinalEnAsunto ? 'Este cliente es intermediario: el cliente final viene en el asunto.' : '',
     input.equivalencias.length
       ? `Nombres que este cliente suele usar: ${input.equivalencias.map((e) => JSON.stringify(e.clientCode)).join(', ')}.`
@@ -457,7 +459,9 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
   }
 
   let anchoMm: number | null = null;
-  const ul = c.unidadAncho ? unidadLongitud(c.unidadAncho) : null;
+  // Ancho sin unidad (columna "ANCHO" de una tabla): menos de 200 se toma como cm (ningún rollo mide 200 cm); de 200 en adelante NO se adivina.
+  const unidadAncho = c.unidadAncho ?? (c.ancho && c.ancho < 200 ? 'cm' : null);
+  const ul = unidadAncho ? unidadLongitud(unidadAncho) : null;
   if (c.ancho && ul) {
     const r = aMilimetros(c.ancho, ul);
     anchoMm = r.mm;
