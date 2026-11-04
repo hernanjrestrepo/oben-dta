@@ -138,6 +138,8 @@ export class AdapterRegistry {
       const costOrderConfig: ObenCostOrderAdapterConfig = {
         baseUrl: cfg.baseUrl as string | undefined,
         consultaUrl: cfg.consultaUrl as string | undefined,
+        // APIs comerciales (maestros, parametrización, proformas). Sin esto se usa el servidor de pruebas.
+        comercialUrl: (cfg.comercialUrl as string | undefined) || undefined,
         consultaLiquidacionUrl: cfg.consultaLiquidacionUrl as string | undefined,
         crearEncLiqUrl: cfg.crearEncLiqUrl as string | undefined,
         crearDetLiqUrl: cfg.crearDetLiqUrl as string | undefined,
