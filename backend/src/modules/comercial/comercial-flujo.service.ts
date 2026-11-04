@@ -587,7 +587,7 @@ export class ComercialFlujoService {
     return {
       cliente,
       direccion,
-      ordenCompra: caso.ocNumero ?? `OXM-${caso.id.slice(0, 8)}`,
+      ordenCompra: caso.ocNumero ?? '-', // sin número en la orden: un guion, nunca uno inventado (Hernán, 4-nov)
       fechaEntrega: entrega,
       fechaDespacho: despacho,
       moneda: caso.lineas.find((l) => l.moneda)?.moneda ?? undefined,
