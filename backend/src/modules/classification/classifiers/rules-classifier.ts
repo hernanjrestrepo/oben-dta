@@ -31,6 +31,10 @@ const TEXT_PATTERNS: Array<{
   // o "NUEVO PEDIDO …": no dicen "orden de compra" y caían en naviera (por "contenedor") o en unknown.
   { category: 'purchase_order', weight: 3, pattern: /\bnuevo\s+pedido\b|\bnew\s+order\b/i, reason: '"nuevo pedido" en el texto' },
   { category: 'purchase_order', weight: 2, pattern: /\bpedidos?\b/i, reason: '"pedido" en el texto' },
+  // 4-nov: avisos de venta cerrada que Oben reenvía ("cerramos la venta para Mega Goglio… PEDIDO: 1737… Por favor, enviar la PI").
+  { category: 'purchase_order', weight: 3, pattern: /cerramos\s+la\s+venta|venta\s+cerrada|closed\s+(?:the\s+)?sale/i, reason: 'venta cerrada' },
+  { category: 'purchase_order', weight: 3, pattern: /\bpedido\s*(?:n[°º.o]*|no\.?|#|:)\s*\d{2,}/i, reason: '"PEDIDO: número"' },
+  { category: 'purchase_order', weight: 3, pattern: /(?:enviar|env[ií]en?)\s+la\s+PI\b|\bproforma\s+invoice\b|\bPI\s*#?\s*\d{3,}/i, reason: 'pide la PI (proforma)' },
 
   // Solicitud de cotización
   { category: 'quote_request', weight: 3, pattern: /solicit(?:ud|amos|o)\s+.*cotizaci[oó]n/i, reason: 'solicitud de cotización' },
@@ -44,7 +48,10 @@ const TEXT_PATTERNS: Array<{
   { category: 'quote_request', weight: 1, pattern: /precio\s+de|lista\s+de\s+precios/i, reason: 'pregunta por precio' },
 
   // Naviera
-  { category: 'carrier', weight: 3, pattern: /\b(bill\s+of\s+lading|b\/l|booking\s+confirmation)\b/i, reason: 'documento de naviera (BL/booking)' },
+  // "B/L" también es una CONDICIÓN DE PAGO ("90 DAYS FROM B/L", "pago 90 días BL"): eso no es un documento de naviera (4-nov: un pedido
+  // de Mega Goglio se descartó por esto). Solo cuenta si no va precedido de "from/desde/días/after/date/contra".
+  { category: 'carrier', weight: 3, pattern: /\b(bill\s+of\s+lading|booking\s+confirmation)\b/i, reason: 'documento de naviera (BL/booking)' },
+  { category: 'carrier', weight: 3, pattern: /(?<!(?:from|desde|d[ií]as|days|after|date|fecha|contra)\s)(?<!\d\s)\bb\/l\b(?!\s*(?:date|fecha))/i, reason: 'documento de naviera (B/L)' },
   { category: 'carrier', weight: 3, pattern: /\b(maersk|msc|hapag[-\s]?lloyd|cma\s*cgm|evergreen|cosco|one\s+line)\b/i, reason: 'naviera conocida mencionada' },
   { category: 'carrier', weight: 2, pattern: /flete\s+mar[ií]timo|freight\s+rate|tarifa\s+naviera/i, reason: 'tarifa de flete' },
   { category: 'carrier', weight: 1, pattern: /\bcontenedor(?:es)?\b|\bvessel\b/i, reason: 'menciona contenedor/vessel' },

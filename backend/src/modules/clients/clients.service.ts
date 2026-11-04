@@ -185,6 +185,9 @@ export class ClientsService {
     if (porDominio.size === 1) return [...porDominio.values()][0];
     if (porDominio.size > 1) return null;
     const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    // Un cliente nombrado con 2 o más palabras distintivas ("Mega Goglio") en el texto, si es el único.
+    const porNombre = await this.findByNameInText(texto);
+    if (porNombre) return porNombre;
     const palabras = new Set(norm(texto ?? '').split(' ').filter(Boolean));
     const todos = await this.clientRepository.find({ where: { tenantId: this.ctx.tenantId, isActive: true } });
     const primera = (c: Client) => norm(c.name).split(' ')[0] ?? '';

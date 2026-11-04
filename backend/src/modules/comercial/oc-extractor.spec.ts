@@ -365,3 +365,12 @@ describe('construirLinea — la referencia de película decide la unidad', () =>
     expect(construirLinea(1, { ...base, unidad: 'm' }, eqs).kilos).toBeNull();
   });
 });
+
+describe('inferirPelicula — código compacto ET12TA (Mega Goglio, 4-nov)', () => {
+  it('"PET ET12TA" con espesor 12 µm → ET---0012TA si está en el catálogo', () => {
+    expect(inferirPelicula('PET ET12TA', ['ET---0012TA', 'ET---0012RT', 'ET---0023TA'])).toBe('ET---0012TA');
+  });
+  it('si el código compacto no está en el catálogo no inventa', () => {
+    expect(inferirPelicula('PET ET12TA', ['ET---0012RT'])).toBeNull();
+  });
+});

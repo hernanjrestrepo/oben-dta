@@ -587,6 +587,15 @@ function anioProbable(dia: number, mes: number, hoy: Date): number {
 export function inferirPelicula(texto: string, peliculas: string[]): string | null {
   if (!texto || peliculas.length === 0) return null;
   const encontrados = new Set<string>();
+  // Código compacto "ET12TA": letras + espesor + sufijo, tal cual está en el catálogo ("ET---0012TA").
+  for (const m of texto.matchAll(/\b([A-Za-z]{1,4})(\d{2,3})([A-Za-z]{2})\b/g)) {
+    const [letras, espesor, sufijo] = [m[1].toUpperCase(), Number(m[2]), m[3].toUpperCase()];
+    for (const p of peliculas) {
+      const k = p.toUpperCase().replace(/-/g, '').match(/^([A-Z]+)(\d{4})([A-Z]{2})$/);
+      if (k && k[1] === letras && Number(k[2]) === espesor && k[3] === sufijo) encontrados.add(p.toUpperCase());
+    }
+  }
+  if (encontrados.size === 1) return [...encontrados][0];
   for (const m of texto.matchAll(/\b([A-Za-z]{1,4})\s*[-.]?\s*(\d{2,3})\b/g)) {
     const letras = m[1].toUpperCase();
     const espesor = Number(m[2]);

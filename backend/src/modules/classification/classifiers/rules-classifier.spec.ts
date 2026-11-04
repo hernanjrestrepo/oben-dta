@@ -85,3 +85,25 @@ describe('RulesClassifier', () => {
     });
   });
 });
+
+describe('RulesClassifier — "B/L" como condición de pago no es un documento de naviera (4-nov)', () => {
+  const c = new RulesClassifier();
+  const nl = String.fromCharCode(10);
+  const cuerpo = [
+    'Hola Sebastian, buenos días!',
+    'Informo que cerramos la venta para Mega Goglio de 1 FCL 40" de BOPE ET12TA al precio de USD 2,60 CFR Puerto do Rio Grande y pago com 90 días BL.',
+    'PEDIDO: 1737',
+    'PRAZO DE PAGAMENTO: 90 DAYS FROM B/L',
+    'Por favor, enviar la PI.',
+  ].join(nl);
+
+  it('el aviso de venta cerrada de Mega Goglio es un pedido, no una naviera', async () => {
+    const r = await c.classify({ from: 'sebastiancastaneda@obengroup.com', subject: 'RV: PI 11831 PEDIDO 1737 - OPP FILM COLOMBIA - 23,2t BOPET ET12TA', body: cuerpo });
+    expect(r.category).toBe('purchase_order');
+  });
+
+  it('un B/L de verdad sigue siendo naviera', async () => {
+    const r = await c.classify({ from: 'ops@maersk.com', subject: 'Bill of Lading y booking confirmation', body: 'Adjunto el B/L del embarque.' });
+    expect(r.category).toBe('carrier');
+  });
+});
