@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
 import { aKilos, aMicras, aMilimetros, parseNumero, unidadEspesor, unidadLongitud, unidadPeso } from './unidades';
-import { buscarEquivalencia, construirLinea, extraerConIa, extraerConReglas, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef } from './oc-extractor';
+import { buscarEquivalencia, construirLinea, extraerConIa, extraerConReglas, inferirPelicula, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef } from './oc-extractor';
 
 const EQ: EquivalenciaRef[] = [
   { id: 'e1', clientCode: 'BOPP 3', obenCode: 'SC3' },
@@ -314,5 +314,25 @@ describe('extraerConReglas — PDF de INTALPEL (4-nov): número y despacho', () 
 
   it('DESPACHO: 2026/11/18 es la fecha requerida', () => {
     expect(extraerConReglas(texto, '', []).fechaRequerida).toBe('2026-11-18');
+  });
+});
+
+describe('inferirPelicula — SKU sin equivalencia cuando hay una sola opción', () => {
+  const catalogo = ['SC---0017TN', 'SC---0020TN', 'SC---0030TN', 'ML---0015MN', 'ML---0015MS', 'ML---0020MN', 'ET---0012RT'];
+
+  it('letras + espesor únicos → la película', () => {
+    expect(inferirPelicula('BOPP-SC 17 MICRAS TRANSP.', catalogo)).toBe('SC---0017TN');
+    expect(inferirPelicula('SC 30', catalogo)).toBe('SC---0030TN');
+  });
+
+  it('varias del mismo espesor: desempata "transparente" / "metalizado"; sin pista no adivina', () => {
+    expect(inferirPelicula('BOPP-SC 25 MICRAS TRANSP.', ['SC---0025TN', 'SC---0025MN'])).toBe('SC---0025TN');
+    expect(inferirPelicula('BOPP-SC 25 MICRAS METALIZADO', ['SC---0025TN', 'SC---0025MN'])).toBe('SC---0025MN');
+    expect(inferirPelicula('BOPP-SC 25 MICRAS', ['SC---0025TN', 'SC---0025MN'])).toBeNull(); // sin pista: por hacer
+    expect(inferirPelicula('BOPP-ML 15 MICRAS METALIZADO', catalogo)).toBeNull(); // dos metalizados (MN y MS): no hay certeza
+  });
+
+  it('si no existe esa película en el catálogo, no inventa', () => {
+    expect(inferirPelicula('BOPP-SC 99 MICRAS', catalogo)).toBeNull();
   });
 });

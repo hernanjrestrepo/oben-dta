@@ -592,7 +592,16 @@ export function inferirPelicula(texto: string, peliculas: string[]): string | nu
       if (k && k[1] === letras && Number(k[2]) === espesor) encontrados.add(p.toUpperCase());
     }
   }
-  return encontrados.size === 1 ? [...encontrados][0] : null;
+  if (encontrados.size === 1) return [...encontrados][0];
+  // Varias del mismo espesor ("ML---0015MN" y "ML---0015MS"): el texto desempata si dice transparente o metalizado.
+  if (encontrados.size > 1) {
+    const inicial = /transp/i.test(texto) ? 'T' : /metaliz/i.test(texto) ? 'M' : null;
+    if (inicial) {
+      const filtradas = [...encontrados].filter((p) => p.replace(/-/g, '').match(/^[A-Z]+\d{4}([A-Z])[A-Z]$/)?.[1] === inicial);
+      if (filtradas.length === 1) return filtradas[0];
+    }
+  }
+  return null;
 }
 
 function normalizarFecha(raw: string): string | null {

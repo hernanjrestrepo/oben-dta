@@ -293,12 +293,22 @@ export class ComercialIntakeService {
 
   /** Las películas de Oben que ya aparecen en las equivalencias de cualquier cliente ("SC---0025TN"): sirven para inferir "SC 25". */
   private async peliculasConocidas(): Promise<string[]> {
+    const lista = new Set<string>();
     try {
-      const todas = await this.equivalences.findAll();
-      return [...new Set(todas.map((e) => e.obenCode.trim().toUpperCase()).filter((c) => /^[A-Z]+-*\d{4}[A-Z]{2}$/.test(c)))];
+      for (const e of await this.equivalences.findAll()) {
+        const c = e.obenCode.trim().toUpperCase();
+        if (/^[A-Z]+-*\d{4}[A-Z]{2}$/.test(c)) lista.add(c);
+      }
     } catch {
-      return [];
+      /* sin equivalencias previas */
     }
+    // Todas las películas del maestro de referencias de Oben: con "SC 17" o "ML 15" basta para saber cuál es si hay una sola.
+    try {
+      if (this.maestros) for (const p of await this.maestros.peliculas()) lista.add(p);
+    } catch {
+      /* el maestro no respondió: queda lo de las equivalencias */
+    }
+    return [...lista];
   }
 
   /**

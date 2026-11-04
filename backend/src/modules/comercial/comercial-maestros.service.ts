@@ -103,6 +103,12 @@ export class ComercialMaestrosService {
     return { datos: fila && typeof fila === 'object' ? fila : null, simulado: r.mode === 'mock' };
   }
 
+  /** Las películas distintas del maestro de referencias de Oben ("SC---0025TN"): sirven para deducir "SC 25" sin pedir equivalencia. */
+  async peliculas(): Promise<string[]> {
+    const datos = await this.filas('productos', false);
+    return [...new Set(datos.filas.map((f) => String(f.Pelicula ?? '').trim().toUpperCase()).filter((p) => /^[A-Z]+-*\d{4}[A-Z]{2}$/.test(p)))];
+  }
+
   private async filas(nombre: MaestroComercial, refrescar: boolean) {
     const clave = `${this.ctx.tenantId}:${nombre}`;
     const c = this.cache.get(clave);
