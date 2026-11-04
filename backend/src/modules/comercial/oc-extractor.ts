@@ -450,7 +450,9 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
   const eq: EquivalenciaRef | null = eqTabla ?? (inferida ? { id: '', clientCode: c.codigoCliente ?? c.textoCliente.slice(0, 60), obenCode: inferida } : null);
 
   let kilos: number | null = null;
-  const up = c.unidad ? unidadPeso(c.unidad) : null;
+  // Las películas de Oben se piden por peso: si la línea ya quedó con una referencia de película y la unidad falta o el OCR la dañó
+  // ("Kão(s)", "K1lo(s)"), la unidad es kg. Una unidad que no empieza por K (m, und, lb…) no se toca.
+  const up = (c.unidad ? unidadPeso(c.unidad) : null) ?? (eq && (!c.unidad || /^k/i.test(c.unidad.trim())) ? 'kg' : null);
   if (c.cantidad && up) {
     const r = aKilos(c.cantidad, up);
     kilos = r.kilos;

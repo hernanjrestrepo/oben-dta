@@ -348,3 +348,20 @@ describe('extraerConIa — unidad dañada por el OCR (INTALPEL, 4-nov)', () => {
     expect(r.lineas[0].faltantes).toEqual([]);
   });
 });
+
+describe('construirLinea — la referencia de película decide la unidad', () => {
+  const eqs = [{ id: 'e1', clientCode: 'BOPP-SC 17 MICRAS', obenCode: 'SC---0017TN' }];
+  const base = { textoCliente: 'BOPP-SC 17 MICRAS TRANSP.', codigoCliente: 'BOPP-SC 17 MICRAS', cantidad: 1000, ancho: 92.5, unidadAncho: 'cm', espesor: null, unidadEspesor: null, precioUnitario: 2.6, moneda: 'USD' };
+
+  it('unidad dañada por el OCR ("Kão(s)") con la película resuelta → kg', () => {
+    const l = construirLinea(1, { ...base, unidad: 'Kão(s)' }, eqs);
+    expect(l.kilos).toBe(1000);
+    expect(l.faltantes).toEqual([]);
+  });
+
+  it('sin unidad y con película → kg; sin película sigue faltando; una unidad distinta (m) no se toca', () => {
+    expect(construirLinea(1, { ...base, unidad: null }, eqs).kilos).toBe(1000);
+    expect(construirLinea(1, { ...base, codigoCliente: 'DESCONOCIDO', textoCliente: 'DESCONOCIDO', unidad: null }, []).faltantes.join(' ')).toMatch(/cantidad en kg o lb/);
+    expect(construirLinea(1, { ...base, unidad: 'm' }, eqs).kilos).toBeNull();
+  });
+});
