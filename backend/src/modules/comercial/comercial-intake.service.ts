@@ -120,7 +120,8 @@ export class ComercialIntakeService {
     let extraccion = await this.extraer(texto, input.subject, equivalencias, config, client);
     // El PDF tiene texto pero con las columnas desordenadas (precio, cantidad y producto sueltos: la OC 93252 de INTALPEL, 4-nov):
     // sin líneas, se relee el PDF con visión/OCR, que respeta la tabla, y se vuelve a extraer.
-    if (extraccion.lineas.length === 0 && this.ia) {
+    const completas = (e: OcExtraccion) => e.lineas.filter((l) => l.kilos != null && l.anchoMm != null).length;
+    if ((extraccion.lineas.length === 0 || extraccion.lineas.some((l) => l.anchoMm == null)) && this.ia) {
       const visuales: string[] = [];
       const pdfs = (input.attachments ?? []).filter((x) => x.content && x.content.length > 0 && (/\.pdf$/i.test(x.filename || '') || /pdf/i.test(x.contentType ?? '')));
       for (const a of pdfs.slice(0, 2)) {
@@ -134,7 +135,7 @@ export class ComercialIntakeService {
       if (visuales.length > 0) {
         const texto2 = [input.body, ...visuales].filter(Boolean).join('\n');
         const r2 = await this.extraer(texto2, input.subject, equivalencias, config, client);
-        if (r2.lineas.length > 0) {
+        if (r2.lineas.length > 0 && completas(r2) > completas(extraccion)) {
           extraccion = { ...r2, numero: r2.numero ?? extraccion.numero, fechaRequerida: r2.fechaRequerida ?? extraccion.fechaRequerida };
           texto = texto2;
         }
