@@ -17,6 +17,7 @@ const ESCRITURA = { maxAttempts: 1, timeoutMs: 90_000 };
 const round2 = (n: number) => Math.round(n * 100) / 100;
 type Fila = Record<string, unknown>;
 const num = (v: unknown): number | null => {
+  if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) return null;
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : null;
 };
@@ -48,6 +49,8 @@ export interface ProformaEntrada {
   ordenCompra: string;
   fechaEntrega: string;
   fechaDespacho: string;
+  /** Moneda de las líneas de la orden (USD / COP): ayuda a completar la parametrización cuando Oben no la tiene. */
+  moneda?: string;
   /** true = respetar `fechaDespacho` tal cual; si no, se calcula con el tiempo de tránsito (días hábiles). */
   despachoManual?: boolean;
   /** Mes de facturación (AAAA-MM-DD); por defecto la fecha de despacho. */
@@ -144,7 +147,14 @@ export class ProformasObenService {
         par = r.datos;
         simulado = r.simulado;
       } catch (err) {
-        bloqueos.push((err as Error).message);
+        // Oben no tiene la parametrización de este destino: se toma la de la última proforma del cliente o, si es nacional, los valores estándar.
+        const respaldo = await this.parametrizacionDeRespaldo(e, filaCliente, destino);
+        if (respaldo) {
+          par = respaldo.par;
+          avisos.push(respaldo.aviso);
+        } else {
+          bloqueos.push((err as Error).message);
+        }
       }
       if (!par) bloqueos.push(`Oben no devolvió la parametrización comercial de ${destino} (condición de pago, Incoterm, moneda, puerto).`);
     }
@@ -282,7 +292,8 @@ export class ProformasObenService {
     for (const [k, v] of Object.entries(encabezado)) {
       if (opcionales.has(k)) continue;
       if (v === null || v === undefined || v === '') {
-        if (par) bloqueos.push(`La parametrización de Oben no trae ${k} para este destino.`);
+        if (par && LEGIBLE[k]) bloqueos.push(`Falta ${LEGIBLE[k]} de ${destino}: Oben no tiene parametrizado este destino y no hay una proforma anterior del cliente de donde tomarla. Comercial debe parametrizarlo en OBEN MAS (o crear la primera proforma a mano).`);
+        else if (par) bloqueos.push(`La parametrización de Oben no trae ${k} para este destino.`);
       }
     }
     if (fechaEntrega && fechaDespacho && fechaDespacho > fechaEntrega) avisos.push('La fecha de despacho es posterior a la de entrega.');
@@ -298,6 +309,114 @@ export class ProformasObenService {
       avisos,
       bloqueos: [...new Set(bloqueos)],
     };
+  }
+
+  /**
+   * Cuando Oben no tiene parametrización del destino (APICustomerParameterizationParadixe da 400) y no hay otra API
+   * que la dé (los reportes de Oben solo traen Incoterm, mercado y país), se arma con:
+   *  1. la última proforma que este cliente ya tiene creada en Oben Xmart (condición de pago, moneda, Incoterm, puerto, etiquetas); o
+   *  2. si es un cliente nacional: los valores estándar de Colombia (DDP, planta Galapa, etiquetas estándar, ciudad del destino)
+   *     y la moneda de la orden si es USD. La condición de pago no se inventa: si falta, la proforma queda bloqueada diciendo cuál.
+   * Nunca sustituye a la parametrización de Oben: en cuanto Comercial la cree allá, manda esa.
+   */
+  private async parametrizacionDeRespaldo(e: ProformaEntrada, fila: Fila, destino: string): Promise<{ par: Fila; aviso: string } | null> {
+    const pais = txt(fila.Pais_Cliente);
+    const ciudad = ciudadDeDestino(fila);
+    // 0. Lo que Comercial dejó fijado en Oben Xmart para este cliente (tabla client_param_defaults): manda sobre todo lo demás.
+    const fijo = await this.parametrizacionFijada(Number(e.cliente));
+    if (fijo) {
+      const estandar = /colombia/i.test(pais) ? await this.estandarNacional(e, ciudad) : {};
+      return {
+        par: { ...estandar, ...fijo.par, CiudadPuertoDestino: ciudad, Pais: pais, PaisPuertoDestino: pais },
+        aviso: `Oben no tiene parametrizado ${destino}: se usó la parametrización fijada en Oben Xmart para este cliente (${fijo.resumen}).`,
+      };
+    }
+    const previas = await this.repo.find({ where: { tenantId: this.ctx.tenantId }, order: { createdAt: 'DESC' }, take: 300 });
+    const previa = previas.find((p) => ['creada', 'ov_creada', 'activa'].includes(p.estado) && Number(p.encabezado?.CodSecEntity) === Number(e.cliente));
+    if (previa) {
+      const h = previa.encabezado;
+      const inc = num(h.CodSecIncoterm);
+      return {
+        par: {
+          CodSec_CommercialCondition: h.CodSecComercialCondition,
+          CodSec_Currency: h.CodSecCurrency,
+          CodSec_Incoterms: h.CodSecIncoterm,
+          Incoterms: inc !== null ? (INCOTERM_POR_ID[inc] ?? '') : '',
+          CodSec_City: h.CodSecCity,
+          CodSec_CityPort: h.CodSecCityDestinationPort,
+          CiudadPuertoDestino: ciudad,
+          CodSec_EtiquetaPallet: h.CodSecEtiquetaPallet,
+          CodSec_EtiquetaBobina: h.CodSecEtiquetaBobina,
+          Desde: h.From,
+          Hasta: h.To,
+          Pais: pais,
+          PaisPuertoDestino: pais,
+        },
+        aviso: `Oben no tiene parametrizado ${destino}: se tomaron la condición de pago, moneda, Incoterm, puerto y etiquetas de la última proforma de este cliente (${this.nombrePF(previa)}).`,
+      };
+    }
+    if (!/colombia/i.test(pais)) return null;
+    // Cliente nacional sin proforma anterior: valores estándar de Colombia + ciudad del destino.
+    return {
+      par: await this.estandarNacional(e, ciudad),
+      aviso: `Oben no tiene parametrizado ${destino}: se usaron los valores estándar de un cliente nacional (Incoterm DDP, planta Galapa, etiquetas estándar, ciudad ${ciudad || 'del destino'}). Comercial debe confirmar la condición de pago y la moneda en OBEN MAS.`,
+    };
+  }
+
+  /** Valores estándar de un cliente nacional (como DORFAN en Oben): DDP, planta Galapa, etiquetas estándar, puerto = ciudad del destino. */
+  private async estandarNacional(e: ProformaEntrada, ciudad: string): Promise<Fila> {
+    let codCiudad: number | null = null;
+    if (ciudad) {
+      try {
+        const q = sinTildes(ciudad);
+        const items = (await this.maestros.maestro('ciudades', { buscar: ciudad, limite: 1000 })).items;
+        const hit = items.filter((c) => sinTildes(txt(c.Ciudad)) === q && /colombia/i.test(`${txt(c.Pais)} ${txt(c.Estado)}`));
+        if (hit.length >= 1) codCiudad = Number(hit[0].CodSec_City);
+      } catch {
+        /* sin ciudad: queda como faltante */
+      }
+    }
+    return {
+      CodSec_CommercialCondition: null,
+      CodSec_Currency: /^usd$/i.test(txt(e.moneda)) ? 1 : null,
+      CodSec_Incoterms: 7,
+      Incoterms: 'DDP',
+      CodSec_City: codCiudad,
+      CodSec_CityPort: codCiudad,
+      CiudadPuertoDestino: ciudad,
+      CodSec_EtiquetaPallet: 1,
+      CodSec_EtiquetaBobina: 5,
+      Desde: 'GALAPA - COLOMBIA',
+      Hasta: ciudad ? `${sinTildes(ciudad.replace(/,?\s*D\.?\s*C\.?$/i, ''))} - COLOMBIA` : '',
+      Pais: 'COLOMBIA',
+      PaisPuertoDestino: 'COLOMBIA',
+    };
+  }
+
+  /** Parametrización fijada por Comercial en Oben Xmart para un cliente (solo los campos que tiene). */
+  private async parametrizacionFijada(cliente: number): Promise<{ par: Fila; resumen: string } | null> {
+    let r: Array<Record<string, unknown>> = [];
+    try {
+      r = (await this.repo.query('SELECT * FROM client_param_defaults WHERE tenant_id = $1 AND cod_sec_entity = $2', [this.ctx.tenantId, cliente])) as Array<Record<string, unknown>>;
+    } catch {
+      return null;
+    }
+    const f = r[0];
+    if (!f) return null;
+    const par: Fila = {};
+    const poner = (k: string, v: unknown) => {
+      if (v !== null && v !== undefined && v !== '') par[k] = v;
+    };
+    poner('CodSec_CommercialCondition', f.condicion_id);
+    poner('Condicion_Comercial', f.condicion);
+    poner('CodSec_Currency', f.moneda_id);
+    poner('CodSec_Incoterms', f.incoterm_id);
+    poner('Incoterms', f.incoterm);
+    poner('CodSec_EtiquetaBobina', f.etiqueta_bobina_id);
+    poner('CodSec_EtiquetaPallet', f.etiqueta_pallet_id);
+    poner('Desde', f.desde);
+    const resumen = [f.condicion ? `pago: ${String(f.condicion)}` : null, f.moneda_id ? `moneda ${Number(f.moneda_id) === 1 ? 'USD' : f.moneda_id}` : null, f.incoterm ? `Incoterm ${String(f.incoterm)}` : null].filter(Boolean).join(', ');
+    return { par, resumen };
   }
 
   /** La proforma que creó un caso comercial (o null). */
@@ -600,4 +719,37 @@ export function explicarRechazo(paso: EscrituraComercial, mensaje: string, sinRe
     return `Oben no pudo leer uno de los valores de ${que} (${mensaje}). Es un problema de formato en el envío: avisar a Paradixe.`;
   }
   return `Oben rechazó ${que}: ${mensaje}`;
+}
+
+const LEGIBLE: Record<string, string> = {
+  CodSecComercialCondition: 'la condición de pago',
+  CodSecCurrency: 'la moneda',
+  CodSecCity: 'la ciudad de destino',
+  DestinationPort: 'el puerto de destino',
+  CodSecCityDestinationPort: 'el puerto de destino',
+  CodSecIncoterm: 'el Incoterm',
+  From: 'el origen (planta)',
+  To: 'el destino',
+};
+
+/** Id de Incoterm de Oben → sigla (los que ya aparecen en las parametrizaciones reales). */
+const INCOTERM_POR_ID: Record<number, string> = { 1: 'FOB', 3: 'DAP', 4: 'CIF', 6: 'CFR', 7: 'DDP' };
+
+const sinTildes = (t: string) =>
+  t
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/** La ciudad del destino sale de la dirección del maestro de clientes ("CRA 103B…\nBOGOTÁ, D.C.\nBOGOTÁ DC\nCOLOMBIA"): la línea anterior al estado. */
+function ciudadDeDestino(fila: Fila): string {
+  const lineas = txt(fila.Direccion_Destino)
+    .split(/[\r\n]+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lineas.length >= 3) return lineas[lineas.length - 3];
+  return lineas.length >= 2 ? lineas[lineas.length - 2] : '';
 }

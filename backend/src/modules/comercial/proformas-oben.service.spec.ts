@@ -29,7 +29,7 @@ const ENTRADA = {
 
 type Resp = { ok: boolean; data?: unknown; error?: string; mode?: string };
 
-function armar(opts: { escribir?: (paso: string, valores: Record<string, unknown>) => Resp; empaque?: (prod: number) => boolean } = {}) {
+function armar(opts: { escribir?: (paso: string, valores: Record<string, unknown>) => Resp; empaque?: (prod: number) => boolean; sinPar?: boolean; cliente?: Record<string, unknown>; fijo?: Record<string, unknown> } = {}) {
   const filas: Array<Record<string, unknown>> = [];
   const repo = {
     create: (x: Record<string, unknown>) => ({ ...x }),
@@ -40,15 +40,19 @@ function armar(opts: { escribir?: (paso: string, valores: Record<string, unknown
     }),
     findOne: jest.fn(async ({ where }: { where: Record<string, unknown> }) => filas.find((f) => (where.id ? f.id === where.id : f.ordenCompra === where.ordenCompra && f.servidor === where.servidor)) ?? null),
     find: jest.fn(async () => filas),
+    query: jest.fn(async () => (opts.fijo ? [opts.fijo] : [])),
   };
   const maestros = {
     maestro: jest.fn(async (nombre: string, o: { buscar?: string } = {}) => {
-      const base = nombre === 'clientes' ? [CLIENTE] : nombre === 'productos' ? PRODUCTOS : PARTIDAS;
+      const base = nombre === 'clientes' ? [opts.cliente ?? CLIENTE] : nombre === 'productos' ? PRODUCTOS : nombre === 'ciudades' ? [{ CodSec_City: 1381, Ciudad: 'BOGOTÁ, D.C.', Estado: 'COLOMBIA', Pais: 'COLOMBIA' }] : PARTIDAS;
       const q = String(o.buscar ?? '').toUpperCase();
       const items = q ? base.filter((f) => Object.values(f).some((v) => String(v).toUpperCase().includes(q))) : base;
       return { items, total: items.length, simulado: false };
     }),
-    parametrizacion: jest.fn(async () => ({ datos: PAR, simulado: false })),
+    parametrizacion: jest.fn(async () => {
+      if (opts.sinPar) throw new BadRequestException('Oben no tiene parametrización comercial cargada para "PRINCIPAL"');
+      return { datos: PAR, simulado: false };
+    }),
     validarEmpaque: jest.fn(async (p: { codSecProduct: number }) => {
       const ok = opts.empaque ? opts.empaque(p.codSecProduct) : true;
       return { valido: ok, mensaje: ok ? 'OK' : 'No se encontró Maestro de Empaque para el producto seleccionado y su destino.', simulado: false };
@@ -210,5 +214,42 @@ describe('respuestas de las escrituras de Oben (200 aunque rechacen)', () => {
   it('explicaciones claras de cada rechazo', () => {
     expect(explicarRechazo('encabezado', 'x', true)).toMatch(/no respondió a tiempo/);
     expect(explicarRechazo('detalle', 'No se encontró Maestro de Empaque', false, 2)).toMatch(/línea 2 .*Maestro de Empaque/);
+  });
+});
+
+describe('Parametrización de respaldo cuando Oben no tiene el cliente (4-nov)', () => {
+  const BANDAS = {
+    CodSec_Entity: 10431, Nombre_Cliente: 'BANDAS DE COLOMBIA S.A.S.', Pais_Cliente: 'COLOMBIA', CodSed_CustomerAddress: 1836, Target_Customer: 'PRINCIPAL',
+    Direccion_Destino: ['CL 13 A 27 A 158 BL 1 BG 6', 'BOGOTÁ, D.C.', 'BOGOTÁ DC', 'COLOMBIA'].join('\n'),
+  };
+  const ENT = { ...ENTRADA, cliente: 10431, direccion: 1836, moneda: 'USD' };
+  const FIJO = { condicion_id: 6, condicion: 'CREDITO 60 DIAS', moneda_id: 1, incoterm_id: 7, incoterm: 'DDP', etiqueta_bobina_id: 5, etiqueta_pallet_id: 1 };
+
+  it('usa lo fijado para el cliente: crédito 60 días, USD, DDP, etiquetas estándar y puerto = ciudad del destino', async () => {
+    const { svc } = armar({ sinPar: true, cliente: BANDAS, fijo: FIJO });
+    const v = await svc.previsualizar(ENT);
+    expect(v.bloqueos).toEqual([]);
+    expect(v.encabezado).toMatchObject({ CodSecComercialCondition: 6, CodSecCurrency: 1, CodSecIncoterm: 7, CodSecCity: 1381, DestinationPort: 1381, CodSecEtiquetaBobina: 5, CodSecEtiquetaPallet: 1, From: 'GALAPA - COLOMBIA', To: 'BOGOTA - COLOMBIA', Export: 'false' });
+    expect(v.avisos.join(' ')).toMatch(/parametrización fijada en Oben Xmart.*CREDITO 60 DIAS/);
+  });
+
+  it('sin condición de pago no inventa: bloquea diciendo cuál falta', async () => {
+    const { svc } = armar({ sinPar: true, cliente: BANDAS, fijo: { ...FIJO, condicion_id: null, condicion: 'CONTADO' } });
+    const v = await svc.previsualizar(ENT);
+    expect(v.bloqueos.join(' ')).toMatch(/Falta la condición de pago de PRINCIPAL/);
+  });
+
+  it('sin nada fijado, un cliente nacional recibe los valores estándar y queda bloqueado solo por la condición de pago', async () => {
+    const { svc } = armar({ sinPar: true, cliente: BANDAS });
+    const v = await svc.previsualizar(ENT);
+    expect(v.encabezado).toMatchObject({ CodSecIncoterm: 7, CodSecCity: 1381, CodSecEtiquetaBobina: 5, CodSecCurrency: 1 });
+    expect(v.bloqueos).toHaveLength(1);
+    expect(v.bloqueos[0]).toMatch(/condición de pago/);
+  });
+
+  it('un cliente de exportación sin parametrización sigue bloqueado (no se adivina)', async () => {
+    const { svc } = armar({ sinPar: true });
+    const v = await svc.previsualizar(ENTRADA);
+    expect(v.bloqueos.join(' ')).toMatch(/Oben no tiene parametrización/);
   });
 });

@@ -590,6 +590,7 @@ export class ComercialFlujoService {
       ordenCompra: caso.ocNumero ?? `OXM-${caso.id.slice(0, 8)}`,
       fechaEntrega: entrega,
       fechaDespacho: despacho,
+      moneda: caso.lineas.find((l) => l.moneda)?.moneda ?? undefined,
       notas: `Oben Xmart · orden de compra ${caso.ocNumero ?? '(sin número)'}${caso.clienteFinal ? ` · cliente final ${caso.clienteFinal}` : ''}`,
       lineas: caso.lineas.map((l) => ({
         ...(esReferencia(l.codigoOben!) ? { referencia: l.codigoOben!.toUpperCase() } : { pelicula: l.codigoOben!.toUpperCase(), anchoMm: l.anchoMm ?? undefined }),
