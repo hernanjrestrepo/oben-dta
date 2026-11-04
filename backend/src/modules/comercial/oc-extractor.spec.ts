@@ -374,3 +374,10 @@ describe('inferirPelicula — código compacto ET12TA (Mega Goglio, 4-nov)', () 
     expect(inferirPelicula('PET ET12TA', ['ET---0012RT'])).toBeNull();
   });
 });
+
+describe('extraerConReglas — el contenedor no es un ancho (Mega Goglio, 4-nov)', () => {
+  it('"1 FCL 40\\" com aprox. 23,5 tons" no genera un ancho de 1016 mm', () => {
+    const r = extraerConReglas('Quantidade mínima de 1 FCL 40" com aprox. 23,5 tons.', 'PEDIDO', []);
+    expect(r.lineas[0]?.anchoMm ?? null).toBeNull();
+  });
+});

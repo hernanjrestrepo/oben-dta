@@ -144,3 +144,24 @@ describe('identificarPorContenido (4-nov: el remitente no está registrado)', ()
     await expect(service.identificarPorContenido('Orden de INTALPEL')).resolves.toBeNull();
   });
 });
+
+describe('findByNameInText — las palabras raras pesan más que las comunes (4-nov, Mega Goglio)', () => {
+  const clientes = [
+    { id: 'c1', name: 'MEGA GOGLIO LATAM S/A' },
+    { id: 'c2', name: 'OPP FILM COLOMBIA S.A.S' },
+    { id: 'c3', name: 'ALPHA FILM COLOMBIA SAS' },
+    { id: 'c4', name: 'BETA FILM COLOMBIA LTDA' },
+  ];
+
+  it('el hilo nombra a Oben ("OPP FILM COLOMBIA") y al cliente ("Mega Goglio"): gana el cliente', async () => {
+    const { service, repo } = make();
+    repo.find.mockResolvedValue(clientes);
+    await expect(service.findByNameInText('cerramos la venta para Mega Goglio. OPP FILM COLOMBIA')).resolves.toMatchObject({ id: 'c1' });
+  });
+
+  it('si solo aparecen palabras comunes de varios clientes, no adivina', async () => {
+    const { service, repo } = make();
+    repo.find.mockResolvedValue(clientes);
+    await expect(service.findByNameInText('FILM COLOMBIA')).resolves.toBeNull();
+  });
+});

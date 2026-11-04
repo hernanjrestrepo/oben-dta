@@ -231,7 +231,8 @@ const NUM = String.raw`(\d[\d.,]*)`;
 const SEP = String.raw`\s*(?:\|\s*)?`;
 const RE_PESO = new RegExp(`${NUM}${SEP}(kgs?|kilos?|kilogramos?|lbs?|libras?|pounds?|toneladas?|tons?)\\b`, 'i');
 const RE_ANCHO_ETIQUETA = new RegExp(`(?:ancho|width|anch\\.?)\\s*[:=]?\\s*${NUM}${SEP}(mm|cm|m|in|inch(?:es)?|pulg(?:adas)?|"|'')?`, 'i');
-const RE_ANCHO_SUELTO = new RegExp(`${NUM}${SEP}(mm|cms|cm|pulgadas|pulg|in|inch(?:es)?|")(?![a-z])`, 'i');
+// "FCL 40\"" / "container 40'" es el tamaño del CONTENEDOR (pies), no un ancho de bobina (4-nov: se leía como 1016 mm).
+const RE_ANCHO_SUELTO = new RegExp(`(?<!\\bfcl\\s)(?<!\\bcontainer\\s)(?<!\\bcontenedor\\s)(?<!\\bcont\\.\\s)${NUM}${SEP}(mm|cms|cm|pulgadas|pulg|in|inch(?:es)?|")(?![a-z])`, 'i');
 // "2 mil kg" es "dos mil kilos", no 2 mils de espesor.
 const RE_ESPESOR = new RegExp(`${NUM}${SEP}(µm|μm|um|micras?|micrones|mic|mils?|g/m2|g/m²|gsm|grs?|g)(?![a-z])(?!\\s*(?:kg|kilos?|lbs?|libras?)\\b)`, 'i');
 const RE_PRECIO = new RegExp(`(?:precio(?:\\s+unitario)?|price|unit\\s+price|valor\\s+unitario|p\\.?\\s*unit\\.?)\\s*[:=]?\\s*(usd|us\\$|cop|\\$)?\\s*${NUM}\\s*(usd|cop)?`, 'i');
@@ -368,6 +369,7 @@ export async function extraerConIa(
     '   "precioUnitario": number|null, "moneda": "USD"|"COP"|null}]}',
     'Reglas: no inventes datos — si algo no está en la orden, usa null. "codigoCliente" es el nombre o código con que el cliente pide el material, copiado tal cual.',
     'Si la tabla trae un código interno del ítem (p. ej. "02720") Y una descripción del material (p. ej. "BOPP-SC 17 MICRAS TRANSP."), "codigoCliente" es la DESCRIPCIÓN del material, nunca el código del ítem.',
+    '"FCL 40\"", "40 HC" o "contenedor de 20\'" es el tamaño del CONTENEDOR, nunca un ancho. Si el correo es un hilo reenviado, la orden vigente es la tabla o el pedido más reciente con cantidades por renglón (por ejemplo materiales, anchos en mm, kg); ignora los mensajes antiguos citados más abajo.',
     'Si la columna de ancho no trae unidad: los valores menores a 200 son centímetros ("unidadAncho":"cm") y los de 200 o más son milímetros ("mm"). Nunca dejes un ancho sin unidad.',
     input.clienteFinalEnAsunto ? 'Este cliente es intermediario: el cliente final viene en el asunto.' : '',
     input.equivalencias.length

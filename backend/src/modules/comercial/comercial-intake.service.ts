@@ -328,11 +328,13 @@ export class ComercialIntakeService {
     peliculasConocidas: string[] = [],
   ): Promise<OcExtraccion> {
     // Las reglas dejan líneas sin producto ni ancho cuando el correo está en prosa ("SC 25 - 640" arriba, "7.500 KILOS" abajo).
-    const reglasSirven = reglas.lineas.length > 0 && reglas.lineas.some((l) => l.codigoOben || l.anchoMm != null);
-    if (reglasSirven || !this.ia || texto.trim().length < 40) return reglas;
+    // Una línea de las reglas "sirve" solo si quedó COMPLETA (producto, kilos, ancho y precio): un renglón suelto de un hilo viejo
+    // ("mínimo 1 FCL 40", 23,5 tons") no es el pedido (4-nov, Mega Goglio): entonces se prueba la IA y gana la lectura más completa.
+    const completas = (e: OcExtraccion) => e.lineas.filter((l) => l.faltantes.length === 0).length;
+    if (completas(reglas) > 0 || !this.ia || texto.trim().length < 40) return reglas;
     try {
       const r = await extraerConIa({ host: '', model: 'openrouter' }, { texto, asunto, equivalencias, ejemplos: config.ejemplosOc, clienteFinalEnAsunto, peliculasConocidas, llm: (p) => this.ia!.completarJson(p) });
-      if (r.lineas.length === 0) return reglas;
+      if (r.lineas.length === 0 || completas(r) < completas(reglas)) return reglas;
       return {
         ...r,
         numero: r.numero ?? reglas.numero,

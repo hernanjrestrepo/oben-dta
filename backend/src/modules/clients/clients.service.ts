@@ -204,11 +204,19 @@ export class ClientsService {
     const palabras = new Set(norm(texto ?? '').split(' ').filter((p) => p.length >= 4));
     if (palabras.size === 0) return null;
     const todos = await this.clientRepository.find({ where: { tenantId: this.ctx.tenantId, isActive: true } });
+    // Las palabras raras pesan más que las comunes: "Mega Goglio" (1-4 clientes) vale mucho más que "Film Colombia" (cientos), que
+    // aparecen en cualquier hilo de Oben y antes empataban (4-nov: el pedido de Mega Goglio quedó "sin cliente").
+    const df = new Map<string, number>();
+    for (const c of todos) for (const w of new Set(norm(c.name).split(' ').filter((p) => p.length >= 4))) df.set(w, (df.get(w) ?? 0) + 1);
     const puntajes = todos
-      .map((c) => ({ c, n: new Set(norm(c.name).split(' ').filter((p) => p.length >= 4 && palabras.has(p))).size }))
+      .map((c) => {
+        const aciertos = [...new Set(norm(c.name).split(' ').filter((p) => p.length >= 4 && palabras.has(p)))];
+        return { c, n: aciertos.length, s: aciertos.reduce((a, w) => a + 1 / (df.get(w) ?? 1), 0) };
+      })
       .filter((x) => x.n >= 2)
-      .sort((a, b) => b.n - a.n);
-    if (puntajes.length === 0 || (puntajes[1] && puntajes[1].n === puntajes[0].n)) return null;
+      .sort((a, b) => b.s - a.s);
+    // Gana el de mayor puntaje solo si saca clara ventaja; un empate (o casi) no se adivina.
+    if (puntajes.length === 0 || (puntajes[1] && puntajes[1].s > puntajes[0].s * 0.67)) return null;
     return puntajes[0].c;
   }
 
