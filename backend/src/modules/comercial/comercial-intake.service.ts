@@ -122,7 +122,7 @@ export class ComercialIntakeService {
     // sin líneas, se relee el PDF con visión/OCR, que respeta la tabla, y se vuelve a extraer.
     const completas = (e: OcExtraccion) => e.lineas.filter((l) => l.kilos != null && l.anchoMm != null).length;
     // La IA sobre el texto desordenado de un PDF lee mal (kilos = total, ancho inventado): ahí siempre se relee con visión.
-    const primeraPorIa = extraccion.extraidoPor === 'ia' && (input.attachments ?? []).some((x) => /pdf/i.test(`${x.filename} ${x.contentType}`));
+    const primeraPorIa = extraccion.extraidoPor === 'ia' && !texto.includes('(leído con IA)') && (input.attachments ?? []).some((x) => /pdf/i.test(`${x.filename} ${x.contentType}`));
     if ((extraccion.lineas.length === 0 || extraccion.lineas.some((l) => l.anchoMm == null) || primeraPorIa) && this.ia) {
       const visuales: string[] = [];
       const pdfs = (input.attachments ?? []).filter((x) => x.content && x.content.length > 0 && (/\.pdf$/i.test(x.filename || '') || /pdf/i.test(x.contentType ?? '')));
