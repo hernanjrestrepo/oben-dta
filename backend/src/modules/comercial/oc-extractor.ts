@@ -415,7 +415,8 @@ export async function extraerConIa(
       textoCliente: txt(o.textoCliente) ?? txt(o.codigoCliente) ?? '(línea sin texto)',
       codigoCliente: txt(o.codigoCliente),
       cantidad: numOrNull(o.cantidad),
-      unidad: txt(o.unidad),
+      // Unidad dañada por el OCR ("Kão(s)"): si el documento habla de kilos, es kg.
+      unidad: txt(o.unidad) ?? (/\bkilos?\b|\bkgs?\b|\bk.{1,2}\(s\)/i.test(input.texto) ? 'kg' : null),
       ancho: numOrNull(o.ancho),
       unidadAncho: txt(o.unidadAncho),
       espesor: numOrNull(o.espesor),

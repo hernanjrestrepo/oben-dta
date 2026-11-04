@@ -138,7 +138,9 @@ export class ComercialIntakeService {
         const texto2 = [input.body, ...visuales].filter(Boolean).join('\n');
         const r2 = await this.extraer(texto2, input.subject, equivalencias, config, client);
         if (r2.lineas.length > 0 && (primeraPorIa || completas(r2) > completas(extraccion))) {
-          extraccion = { ...r2, numero: r2.numero ?? extraccion.numero, fechaRequerida: r2.fechaRequerida ?? extraccion.fechaRequerida };
+          // La fecha la dicen las reglas ("DESPACHO: 2026/11/18") antes que la IA, que a veces toma otra.
+          const fechaReglas = extraerConReglas(texto2, input.subject, []).fechaRequerida;
+          extraccion = { ...r2, numero: r2.numero ?? extraccion.numero, fechaRequerida: fechaReglas ?? r2.fechaRequerida ?? extraccion.fechaRequerida };
           texto = texto2;
         }
       }

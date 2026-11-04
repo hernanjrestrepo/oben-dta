@@ -336,3 +336,15 @@ describe('inferirPelicula — SKU sin equivalencia cuando hay una sola opción',
     expect(inferirPelicula('BOPP-SC 99 MICRAS', catalogo)).toBeNull();
   });
 });
+
+describe('extraerConIa — unidad dañada por el OCR (INTALPEL, 4-nov)', () => {
+  it('"Kão(s)" sin unidad en la respuesta de la IA: si el documento habla de kilos, son kg', async () => {
+    const json = JSON.stringify({
+      numero: '93252', fechaRequerida: '2026-11-18', direccionEntrega: null, clienteFinal: null,
+      lineas: [{ textoCliente: 'BOPP-SC 17 MICRAS TRANSP.', codigoCliente: 'BOPP-SC 17 MICRAS', cantidad: 1000, unidad: null, ancho: 92.5, unidadAncho: 'cm', espesor: null, unidadEspesor: null, precioUnitario: 2.6, moneda: 'USD' }],
+    });
+    const r = await extraerConIa({ host: '', model: 'x' }, { texto: '| 02720 | BOPP-SC 17 MICRAS | 92.50 | 1000.00 | Kão(s) | US$ | 2.60 |', asunto: '', equivalencias: [], ejemplos: [], peliculasConocidas: ['SC---0017TN'], llm: async () => json });
+    expect(r.lineas[0]).toMatchObject({ kilos: 1000, anchoMm: 925, precioUnitario: 2.6, codigoOben: 'SC---0017TN' });
+    expect(r.lineas[0].faltantes).toEqual([]);
+  });
+});
