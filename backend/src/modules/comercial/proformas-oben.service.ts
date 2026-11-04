@@ -183,8 +183,8 @@ export class ProformasObenService {
         precio: precio ?? 0,
         codSecTariff: Number(elegida?.CodSec_TariffDeparture ?? 0),
         partida: elegida ? txt(elegida.Valor) : null,
-        etiqueta: txt(l.etiqueta) || txt(par?.Nota_Etiqueta) || 'N/A',
-        numeroParte: txt(l.numeroParte) || 'N/A',
+        etiqueta: txt(l.etiqueta) || txt(par?.Nota_Etiqueta) || '',
+        numeroParte: txt(l.numeroParte) || '',
         creada: false,
       });
     }
@@ -241,8 +241,8 @@ export class ProformasObenService {
       CodSecIncoterm: num(par?.CodSec_Incoterms),
       Export: exporta ? 'true' : 'false',
       CodSecCity: num(par?.CodSec_City),
-      NoteSalesOrderPF: txt(e.notaProforma) || txt(par?.Nota_Etiqueta) || 'N/A',
-      NoteConsigned: txt(e.notaConsignado) || txt(par?.Consignado) || 'N/A',
+      NoteSalesOrderPF: txt(e.notaProforma) || txt(par?.Nota_Etiqueta) || '',
+      NoteConsigned: txt(e.notaConsignado) || txt(par?.Consignado) || '',
       CodSecCurrency: num(par?.CodSec_Currency),
       // La API convierte el puerto a número: va el código de la ciudad del puerto (probado el 22-oct; el texto falla).
       DestinationPort: num(par?.CodSec_CityPort),
@@ -254,14 +254,17 @@ export class ProformasObenService {
       InvoiceMonth: conHora(this.fecha(e.mesFactura ?? e.fechaDespacho, 'mes de facturación', bloqueos)),
       Sample: e.muestra ? 'true' : 'false',
       CodSecCityDestinationPort: num(par?.CodSec_CityPort),
-      OperationNotes: txt(e.notaOperativa) || txt(par?.Nota_Operativa) || 'N/A',
+      OperationNotes: txt(e.notaOperativa) || txt(par?.Nota_Operativa) || '',
       CodSecShippingTypeSample: num(e.tipoEnvioMuestra) ?? 0,
-      SpecialNotes: txt(e.notaEspecial) || txt(par?.Nota_Especial) || 'N/A',
-      NoteNotified: txt(e.notaNotificado) || txt(par?.Notificado) || 'N/A',
+      SpecialNotes: txt(e.notaEspecial) || txt(par?.Nota_Especial) || '',
+      NoteNotified: txt(e.notaNotificado) || txt(par?.Notificado) || '',
       RequestDateCustomer: conHora(this.fecha(e.fechaSolicitudCliente ?? e.fechaEntrega, 'fecha solicitada por el cliente', bloqueos)),
       Stock: e.stock ? 'true' : 'false',
     };
+    // Las notas pueden ir en blanco (Hernán, 4-nov: "los N/A en blanco"); lo demás es obligatorio.
+    const opcionales = new Set(['NoteSalesOrderPF', 'NoteConsigned', 'OperationNotes', 'SpecialNotes', 'NoteNotified']);
     for (const [k, v] of Object.entries(encabezado)) {
+      if (opcionales.has(k)) continue;
       if (v === null || v === undefined || v === '') {
         if (par) bloqueos.push(`La parametrización de Oben no trae ${k} para este destino.`);
       }

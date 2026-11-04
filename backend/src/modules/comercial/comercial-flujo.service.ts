@@ -572,7 +572,8 @@ export class ComercialFlujoService {
     const hoy = new Date();
     const dia = (d: Date) => d.toISOString().slice(0, 10);
     const entrega = caso.fechaRequerida && /^\d{4}-\d{2}-\d{2}$/.test(caso.fechaRequerida) ? caso.fechaRequerida : dia(new Date(hoy.getTime() + 45 * 24 * HOUR_MS));
-    const despacho = dia(new Date(Math.max(hoy.getTime() + 5 * 24 * HOUR_MS, Date.parse(entrega) - 15 * 24 * HOUR_MS)));
+    // Sin otra fuente, el despacho es la fecha que pidió el cliente (antes se inventaba "entrega − 15 días": Hernán, 4-nov).
+    const despacho = entrega;
     const esReferencia = (c: string) => /^[A-Z]{2,4}-*\d{2,4}[A-Z]{2}\d{4}[A-Z]\d{4}$/i.test(c);
     return {
       cliente,

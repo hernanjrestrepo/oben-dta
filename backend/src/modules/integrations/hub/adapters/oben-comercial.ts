@@ -65,7 +65,9 @@ export function esEscrituraComercial(v: unknown): v is EscrituraComercial {
 
 /** Valor de encabezado HTTP: sin saltos de línea ni caracteres fuera de latin-1 (las notas de Oben traen saltos de línea). */
 export function valorEncabezado(v: unknown): string {
-  return Array.from(String(v ?? ''))
+  // Oben lee los números con formato regional (coma decimal): "2.5" llegaba como 25 (precio de DORFAN, 4-nov).
+  const texto = typeof v === 'number' && Number.isFinite(v) ? String(v).replace('.', ',') : String(v ?? '');
+  return Array.from(texto)
     .map((ch) => (ch.charCodeAt(0) < 32 || ch.charCodeAt(0) > 255 ? ' ' : ch))
     .join('');
 }
