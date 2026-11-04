@@ -217,7 +217,8 @@ export class ProformasObenService {
     const pesoMax = num(par?.Peso_Bruto_Maximo);
     if (pesoMax && pesoBruto > pesoMax) avisos.push(`El peso bruto (${pesoBruto} kg) supera el máximo parametrizado para este destino (${pesoMax} kg).`);
     if (!e.pesoBruto) avisos.push(`Peso bruto estimado: kilos netos + 7 % (${pesoBruto} kg). Cámbialo si tienes el real.`);
-    const conHora = (f: string | null) => (f ? `${f} ${this.horaBogota()}` : '');
+    // ISO con T: producción rechaza (400) la forma con espacio que pruebas sí acepta (confirmado el 4-nov con la PF 11845).
+    const conHora = (f: string | null) => (f ? `${f}T${this.horaBogota()}` : '');
     const servidor = await this.servidor();
     // En el servidor de pruebas de Oben la numeración se cruza con producción: que nadie la tome por un pedido real.
     const marcaPrueba = servidor === 'pruebas' ? 'PRUEBA OBEN XMART - NO PROCESAR. ' : '';
