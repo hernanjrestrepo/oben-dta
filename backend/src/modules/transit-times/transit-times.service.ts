@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { TransitTime } from '../../entities/transit-time.entity';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { normalizeHeader, type TabularImportDto, type TabularImportResult } from '../../common/import/tabular-import';
-import { esHabil, festivosDe, restarDiasHabiles } from '../../common/calendario-colombia';
+import { esHabil, festivosDe, habilAnteriorOIgual, restarDiasCalendario, restarDiasHabiles } from '../../common/calendario-colombia';
 import { CreateTransitTimeDto, UpdateTransitTimeDto } from './dto/transit-time.dto';
 
 const DUPLICATE_KEY_CODE = '23505';
@@ -142,12 +142,35 @@ export class TransitTimesService {
     if (!tiempo) {
       return { fecha: null, tiempo: null, mensaje: `No hay tiempo de tránsito cargado para ${p.puerto ?? '(puerto)'} con ${p.incoterm ?? '(incoterm)'}.` };
     }
-    const fecha = restarDiasHabiles(entrega, tiempo.totalDays);
+    // Del destino hacia atrás: primero el tramo terrestre (INLAND, días HÁBILES: los camiones no salen en fin de semana ni festivo) y
+    // luego el marítimo (OCEAN, días CALENDARIO: el barco no para). El embarque siempre cae en día hábil de Colombia.
+    // (4-nov, Alejandra: Salvador de Bahía son ~25 días de mar: el embarque es 25 días antes, no 25 días hábiles antes.)
+    let fecha = entrega;
+    if (tiempo.inlandDays > 0) fecha = restarDiasHabiles(fecha, tiempo.inlandDays);
+    if (tiempo.oceanDays > 0) fecha = restarDiasCalendario(fecha, tiempo.oceanDays);
+    fecha = habilAnteriorOIgual(fecha);
+    const partes = [tiempo.oceanDays > 0 ? `${tiempo.oceanDays} día(s) de mar (calendario)` : '', tiempo.inlandDays > 0 ? `${tiempo.inlandDays} día(s) hábil(es) por tierra` : ''].filter(Boolean).join(' + ');
     return {
       fecha,
       tiempo,
-      mensaje: `Despacho ${fecha}: entrega ${entrega} menos ${tiempo.totalDays} día(s) hábil(es) de tránsito a ${tiempo.puerto} (${tiempo.incoterm}); sin sábados, domingos ni festivos de Colombia.`,
+      mensaje: `Embarque/despacho ${fecha}: entrega ${entrega} menos ${partes || '0 días'} de tránsito a ${tiempo.puerto} (${tiempo.incoterm}); ajustado al día hábil anterior (sin sábados, domingos ni festivos de Colombia).`,
     };
+  }
+
+  /**
+   * Incoterm y puerto que el correo del pedido ya dice ("CFR Puerto do Rio Grande", "PORTO: RIO GRANDE"): el puerto es el único de la
+   * lista de tránsitos cuyo nombre aparece en el texto. Si hay duda (varios o ninguno) no adivina.
+   */
+  async detectarEnTexto(texto: string): Promise<{ incoterm: string | null; puerto: { pais: string; puerto: string } | null }> {
+    const limpio = ` ${String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `;
+    const incs = [...new Set([...String(texto ?? '').matchAll(/\b(EXW|EX[\s-]?WORKS|FCA|FAS|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b/gi)].map((m) => incotermSigla(m[1].replace(/[\s-]/g, ' '))))];
+    const todos = await this.repo.find({ where: { tenantId: this.ctx.tenantId } });
+    const puertos = new Map<string, { pais: string; puerto: string }>();
+    for (const t of todos) {
+      const nombre = ` ${t.puerto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+      if (nombre.trim().length >= 4 && limpio.includes(nombre)) puertos.set(`${t.paisClave}|${t.puertoClave}`, { pais: t.pais, puerto: t.puerto });
+    }
+    return { incoterm: incs.length === 1 ? incs[0] : null, puerto: puertos.size === 1 ? [...puertos.values()][0] : null };
   }
 
   festivos(anio: number) {

@@ -563,6 +563,18 @@ export class ComercialFlujoService {
     return caso;
   }
 
+  /** Fecha de embarque calculada del caso (entrega − tránsito al puerto con el incoterm del pedido). */
+  async embarqueDeCaso(id: string) {
+    const caso = await this.obtener(id);
+    if (!this.proformas) return { fecha: null, mensaje: 'Proformas reales no disponibles.', puerto: '', incoterm: '', tiempo: null };
+    return this.proformas.embarque({
+      cliente: /^\d+$/.test(caso.codigoClienteOben ?? '') ? Number(caso.codigoClienteOben) : null,
+      direccion: Number.isInteger(Number(caso.destino?.direccionId)) ? Number(caso.destino?.direccionId) : null,
+      fechaEntrega: caso.fechaRequerida ?? null,
+      texto: caso.ocTexto ?? null,
+    });
+  }
+
   /** La Proforma real en OBEN MAS de este caso (APIs comerciales), si la hay. */
   async proformaReal(caso: Pick<ComercialCase, 'id'>): Promise<ProformaOben | null> {
     return this.proformas ? this.proformas.porCaso(caso.id) : null;
@@ -590,6 +602,7 @@ export class ComercialFlujoService {
       ordenCompra: caso.ocNumero ?? '-', // sin número en la orden: un guion, nunca uno inventado (Hernán, 4-nov)
       fechaEntrega: entrega,
       fechaDespacho: despacho,
+      texto: (caso.ocTexto ?? '').slice(0, 20_000),
       moneda: caso.lineas.find((l) => l.moneda)?.moneda ?? undefined,
       notas: `Oben Xmart · orden de compra ${caso.ocNumero ?? '(sin número)'}${caso.clienteFinal ? ` · cliente final ${caso.clienteFinal}` : ''}`,
       lineas: caso.lineas.map((l) => ({

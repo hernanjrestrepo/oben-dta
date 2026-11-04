@@ -103,3 +103,8 @@ export function restarDiasHabiles(fecha: string, dias: number): string {
   }
   return aFecha(d);
 }
+
+/** Resta `dias` días CALENDARIO (el mar no para en fines de semana ni festivos). */
+export function restarDiasCalendario(fecha: string, dias: number): string {
+  return aFecha(sumar(deTexto(fecha), -Math.max(0, Math.floor(dias))));
+}

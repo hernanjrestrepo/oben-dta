@@ -618,6 +618,15 @@ export interface TransitTime {
   totalDays: number;
 }
 
+/** Embarque calculado de un caso comercial: entrega − tránsito al puerto (mar en días corridos, tierra en días hábiles). */
+export interface EmbarqueCaso {
+  fecha: string | null;
+  mensaje: string;
+  puerto: string;
+  incoterm: string;
+  tiempo: { oceanDays: number; inlandDays: number; totalDays: number; puerto: string; incoterm: string } | null;
+}
+
 export interface DespachoCalculado {
   fecha: string | null;
   tiempo: TransitTime | null;

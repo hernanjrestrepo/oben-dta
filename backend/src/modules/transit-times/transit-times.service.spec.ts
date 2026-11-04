@@ -81,3 +81,37 @@ describe('TransitTimesService.importTransitos', () => {
     expect(guardados).toHaveLength(0);
   });
 });
+
+describe('TransitTimesService — mar en días calendario, tierra en días hábiles (Alejandra, 4-nov)', () => {
+  it('Salvador de Bahía CFR: 24 días de mar son 24 días CORRIDOS antes, ajustados al día hábil anterior', async () => {
+    const { svc } = armar([fila('BRASIL', 'SALVADOR BAHIA', 'CFR', 24, 0)]);
+    const d = await svc.despacho('2026-12-28', { pais: 'BRASIL', puerto: 'Salvador Bahia', incoterm: 'CFR' });
+    // 28-dic − 24 días corridos = 4-dic-2026 (viernes, hábil).
+    expect(d.fecha).toBe('2026-12-04');
+    expect(d.mensaje).toMatch(/24 día\(s\) de mar \(calendario\)/);
+  });
+
+  it('si al restar cae en fin de semana, baja al viernes hábil', async () => {
+    const { svc } = armar([fila('BRASIL', 'SALVADOR BAHIA', 'CFR', 25, 0)]);
+    // 13-ene-2027 − 25 = 19-dic-2026 (sábado) → viernes 18-dic.
+    expect((await svc.despacho('2027-01-13', { puerto: 'SALVADOR BAHIA', incoterm: 'CFR' })).fecha).toBe('2026-12-18');
+  });
+
+  it('puerto con mar y tierra: primero hábiles de tierra y luego corridos de mar', async () => {
+    const { svc } = armar([fila('USA', 'HOUSTON', 'DDP', 10, 4)]);
+    // 18-dic-2026 (vie) − 4 hábiles = 14-dic (lun) − 10 corridos = 4-dic (vie).
+    expect((await svc.despacho('2026-12-18', { puerto: 'HOUSTON', incoterm: 'DDP' })).fecha).toBe('2026-12-04');
+  });
+
+  it('el incoterm y el puerto que dice el pedido se detectan solos', async () => {
+    const { svc } = armar([fila('BRASIL', 'RIO GRANDE', 'CFR', 25, 0), fila('BRASIL', 'SANTOS', 'CFR', 12, 0)]);
+    const r = await svc.detectarEnTexto('cerramos la venta al precio de USD 2,60 CFR Puerto do Rio Grande y pago a 90 días. PORTO: RIO GRANDE - RIO GRANDE DO SUL');
+    expect(r.incoterm).toBe('CFR');
+    expect(r.puerto).toEqual({ pais: 'BRASIL', puerto: 'RIO GRANDE' });
+  });
+
+  it('con dos puertos distintos en el texto no adivina', async () => {
+    const { svc } = armar([fila('BRASIL', 'RIO GRANDE', 'CFR', 25, 0), fila('BRASIL', 'SANTOS', 'CFR', 12, 0)]);
+    expect((await svc.detectarEnTexto('desde Santos hasta Rio Grande')).puerto).toBeNull();
+  });
+});

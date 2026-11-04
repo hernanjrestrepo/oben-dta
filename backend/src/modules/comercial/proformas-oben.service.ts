@@ -49,6 +49,8 @@ export interface ProformaEntrada {
   ordenCompra: string;
   fechaEntrega: string;
   fechaDespacho: string;
+  /** Texto de la orden de compra: de ahí salen el incoterm y el puerto si Oben no los tiene parametrizados. */
+  texto?: string;
   /** Moneda de las líneas de la orden (USD / COP): ayuda a completar la parametrización cuando Oben no la tiene. */
   moneda?: string;
   /** true = respetar `fechaDespacho` tal cual; si no, se calcula con el tiempo de tránsito (días hábiles). */
@@ -160,12 +162,12 @@ export class ProformasObenService {
     }
 
     // Despacho = entrega − días HÁBILES de tránsito al puerto (lista de tránsitos de Oben; sin sábados, domingos ni festivos de Colombia).
-    if (!e.despachoManual && this.transitos && fechaEntrega && par) {
-      const d = await this.transitos.despacho(fechaEntrega, { pais: txt(par.PaisPuertoDestino ?? par.Pais), puerto: txt(par.CiudadPuertoDestino), incoterm: txt(par.Incoterms) });
-      if (d.fecha) {
+    if (!e.despachoManual && this.transitos && fechaEntrega && (par || e.texto)) {
+      const d = await this.calcularEmbarque(fechaEntrega, par, e.texto);
+      if (d?.fecha) {
         fechaDespacho = d.fecha;
         avisos.push(d.mensaje);
-      } else {
+      } else if (d) {
         avisos.push(`${d.mensaje} Se usó la fecha de despacho enviada (${fechaDespacho ?? 'sin fecha'}); cárgalo en Tiempos de tránsito.`);
       }
     }
@@ -421,6 +423,41 @@ export class ProformasObenService {
     poner('Hasta', f.hasta);
     const resumen = [f.condicion ? `pago: ${String(f.condicion)}` : null, f.moneda_id ? `moneda ${Number(f.moneda_id) === 1 ? 'USD' : f.moneda_id}` : null, f.incoterm ? `Incoterm ${String(f.incoterm)}` : null].filter(Boolean).join(', ');
     return { par, resumen };
+  }
+
+  /**
+   * Fecha de embarque/despacho = entrega menos el tránsito (lista de tránsitos). El incoterm y el puerto salen del PEDIDO si el correo los
+   * dice ("CFR Puerto do Rio Grande") y, si no, de la parametrización de Oben; sin alguno de los dos no se inventa la fecha.
+   */
+  private async calcularEmbarque(fechaEntrega: string, par: Fila | null, texto?: string): Promise<{ fecha: string | null; mensaje: string; puerto: string; incoterm: string; tiempo: unknown } | null> {
+    if (!this.transitos) return null;
+    const det = texto ? await this.transitos.detectarEnTexto(texto) : { incoterm: null, puerto: null };
+    const incoterm = det.incoterm ?? txt(par?.Incoterms);
+    const puerto = txt(par?.CiudadPuertoDestino) || det.puerto?.puerto || '';
+    const pais = txt(par?.PaisPuertoDestino ?? par?.Pais) || det.puerto?.pais || '';
+    if (!puerto || !incoterm) {
+      return { fecha: null, mensaje: `No se puede calcular el embarque: falta ${!puerto ? 'el puerto de destino' : 'el incoterm'}.`, puerto, incoterm, tiempo: null };
+    }
+    const d = await this.transitos.despacho(fechaEntrega, { pais, puerto, incoterm });
+    return { fecha: d.fecha, mensaje: d.mensaje, puerto, incoterm, tiempo: d.tiempo };
+  }
+
+  /** Embarque calculado para un caso (lo muestra el CRM): usa la parametrización de Oben si existe y, si no, lo que dice el pedido. */
+  async embarque(e: { cliente: number | null; direccion: number | null; fechaEntrega: string | null; texto: string | null }) {
+    if (!e.fechaEntrega) return { fecha: null, mensaje: 'El pedido no trae fecha de entrega: no se puede calcular el embarque.', puerto: '', incoterm: '', tiempo: null };
+    let par: Fila | null = null;
+    if (e.cliente && e.direccion) {
+      try {
+        const clientes = (await this.maestros.maestro('clientes', { limite: 1000, buscar: String(e.cliente) })).items;
+        const fila = clientes.find((c) => Number(c.CodSec_Entity) === Number(e.cliente) && Number(c.CodSed_CustomerAddress) === Number(e.direccion));
+        const destino = txt(fila?.Target_Customer ?? fila?.Cliente_Destino);
+        if (fila && destino) par = (await this.maestros.parametrizacion({ codSecEntity: Number(e.cliente), targetCustomer: destino })).datos;
+      } catch {
+        /* sin parametrización en Oben: se usa lo que dice el pedido */
+      }
+    }
+    const r = await this.calcularEmbarque(e.fechaEntrega, par, e.texto ?? undefined);
+    return r ?? { fecha: null, mensaje: 'Tiempos de tránsito no disponibles.', puerto: '', incoterm: '', tiempo: null };
   }
 
   /** La proforma que creó un caso comercial (o null). */

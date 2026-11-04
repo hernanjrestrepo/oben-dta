@@ -4,7 +4,7 @@ import { useT } from '@/i18n/idioma';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
-import type { CasoEstado, CasoLinea, ComercialCaso, ProformaOben } from '@/types';
+import type { CasoEstado, CasoLinea, ComercialCaso, EmbarqueCaso, ProformaOben } from '@/types';
 import { AlertCircle, AlertTriangle, Building2, Check, CheckCircle2, Download, FlaskConical, Loader2, Send, ShieldAlert, X } from 'lucide-react';
 import { ACCION_LABEL, EstadoBadge, SimuladoBadge, btnPrimary, btnSecondary, fecha, inputCls } from './comun';
 
@@ -49,6 +49,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
   const t = useT();
   const [caso, setCaso] = useState<ComercialCaso | null>(null);
   const [oben, setOben] = useState<ProformaOben | null>(null);
+  const [embarque, setEmbarque] = useState<EmbarqueCaso | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [edits, setEdits] = useState<Record<number, EdicionLinea>>({});
@@ -78,9 +79,10 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
   async function cargar(silencioso = false) {
     try {
       if (!silencioso) setError('');
-      const [c, o] = await Promise.all([api.getComercialCaso(id), api.getComercialCasoOben(id).catch(() => null)]);
+      const [c, o, emb] = await Promise.all([api.getComercialCaso(id), api.getComercialCasoOben(id).catch(() => null), api.getEmbarqueCaso(id).catch(() => null)]);
       setCaso(c);
       setOben(o);
+      setEmbarque(emb);
       if (!silencioso) setEdits({});
     } catch (err) {
       if (!silencioso) setError(extractMessage(err, 'No se pudo cargar el caso.'));
@@ -304,6 +306,14 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
             <p className="text-gray-700">{caso.destino ? `${caso.destino.direccion}${caso.destino.ciudad ? `, ${caso.destino.ciudad}` : ''} (${caso.destino.pais})` : '—'}</p>
             <p className="text-xs text-gray-400">{caso.destino ? `Fuente: ${caso.destino.fuente}` : ''}</p>
             <p className="text-gray-700 mt-2">{t('Fecha requerida:')}{' '}{caso.fechaRequerida ?? '—'}</p>
+            {embarque && (
+              <p className="text-gray-700">
+                {t('Fecha de embarque:')}{' '}
+                {embarque.fecha ? <span className="font-semibold">{embarque.fecha}</span> : '—'}
+                {embarque.puerto && embarque.incoterm ? <span className="text-xs text-gray-500">{` · ${embarque.puerto} (${embarque.incoterm})`}</span> : null}
+                <span className={`block text-xs ${embarque.fecha ? 'text-gray-500' : 'text-amber-700'}`}>{embarque.mensaje}</span>
+              </p>
+            )}
             {caso.clienteFinal && <p className="text-gray-700">{t('Cliente final:')}{' '}{caso.clienteFinal}</p>}
             {caso.entregaComprometida && <p className="text-gray-700">{t('Entrega comprometida:')}{' '}{caso.entregaComprometida}</p>}
             {caso.entregaHistorial.length > 1 && (

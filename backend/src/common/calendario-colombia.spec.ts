@@ -38,3 +38,12 @@ describe('calendario de festivos de Colombia', () => {
     expect(habilAnteriorOIgual('2027-03-28')).toBe('2027-03-24'); // domingo de Pascua → miércoles previo al Jueves Santo
   });
 });
+
+import { restarDiasCalendario } from './calendario-colombia';
+
+describe('restarDiasCalendario', () => {
+  it('resta días corridos, sin saltar fines de semana', () => {
+    expect(restarDiasCalendario('2027-01-13', 25)).toBe('2026-12-19');
+    expect(restarDiasCalendario('2026-12-18', 0)).toBe('2026-12-18');
+  });
+});

@@ -9,7 +9,7 @@ import {
   UpdateTenantUserDto, User, WorkflowEvent,
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
-  Equivalence, TransitTime, DespachoCalculado, FestivoColombia, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
+  Equivalence, TransitTime, DespachoCalculado, EmbarqueCaso, FestivoColombia, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
   ConexionMicrosoft, CuadroDelDia, DiagnosticoSharepoint, MaestroComercialResultado, ProformaOben,
   FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, CambioRuta, OrdenReciente, ProformaOrdenes, ProformaPendienteComex,
   MiaContexto, MiaRespuesta, MiaTurno,
@@ -650,6 +650,11 @@ class ApiClient {
   }
 
   /** La Proforma REAL en OBEN MAS de un caso comercial (o null si el caso va por el simulador). */
+  async getEmbarqueCaso(id: string): Promise<EmbarqueCaso> {
+    const { data } = await this.client.get<EmbarqueCaso>(`/comercial/casos/${id}/embarque`);
+    return data;
+  }
+
   async getComercialCasoOben(id: string): Promise<ProformaOben | null> {
     const { data } = await this.client.get<ProformaOben | null>(`/comercial/casos/${id}/oben`);
     return data || null;

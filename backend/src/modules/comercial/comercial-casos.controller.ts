@@ -266,6 +266,13 @@ export class ComercialCasosController {
     return this.flujo.proformaReal({ id });
   }
 
+  /** Fecha de embarque calculada del caso: entrega menos el tránsito al puerto (calendario en el mar, hábiles en tierra). */
+  @Get('casos/:id/embarque')
+  @RequirePermission('orders.read')
+  embarque(@Param('id', ParseUUIDPipe) id: string) {
+    return this.flujo.embarqueDeCaso(id);
+  }
+
   /** La Proforma aprobada/firmada que devolvió el cliente. */
   @Get('casos/:id/proforma-firmada')
   @RequirePermission('orders.read')
