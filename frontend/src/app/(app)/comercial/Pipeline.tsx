@@ -16,6 +16,17 @@ export const ETAPAS: Array<{ estado: CasoEstado; titulo: string; quien: string; 
   { estado: 'activa', titulo: 'OV activa', quien: 'Producción', desde: (c) => c.fechas.activa },
 ];
 
+/** Color de FONDO del encabezado de cada etapa (las letras se quedan oscuras). */
+const ENCABEZADO: Record<string, { fondo: string; titulo: string; cuenta: string }> = {
+  oc_recibida: { fondo: 'bg-orange-200', titulo: 'text-gray-900', cuenta: 'border-orange-300 text-gray-800' },
+  sin_cubicar: { fondo: 'bg-sky-200', titulo: 'text-gray-900', cuenta: 'border-sky-300 text-gray-800' },
+  cubicada: { fondo: 'bg-violet-200', titulo: 'text-gray-900', cuenta: 'border-violet-300 text-gray-800' },
+  enviada_cliente: { fondo: 'bg-amber-200', titulo: 'text-gray-900', cuenta: 'border-amber-300 text-gray-800' },
+  retenida: { fondo: 'bg-red-200', titulo: 'text-gray-900', cuenta: 'border-red-300 text-gray-800' },
+  activa: { fondo: 'bg-emerald-200', titulo: 'text-gray-900', cuenta: 'border-emerald-300 text-gray-800' },
+};
+const ENCABEZADO_BASE = { fondo: 'bg-gray-100', titulo: 'text-gray-900', cuenta: 'border-gray-300 text-gray-700' };
+
 /** Días de alerta por etapa: más de esto en la misma etapa = demorada. */
 const ALERTA_DIAS: Partial<Record<CasoEstado, number>> = { oc_recibida: 1, sin_cubicar: 2, cubicada: 1, enviada_cliente: 3, retenida: 2 };
 
@@ -170,12 +181,12 @@ export function Pipeline({ casos, tablero, onAbrir }: { casos: ComercialCaso[]; 
               const kg = items.reduce((a, x) => a + kilos(x.c), 0);
               return (
                 <div key={e.estado} className="bg-gray-50 rounded-xl border border-gray-200 flex flex-col min-h-[240px]">
-                  <div className="px-2 py-2 border-b border-gray-200">
+                  <div className={`px-2 py-2 border-b border-gray-200 rounded-t-xl ${(ENCABEZADO[e.estado] ?? ENCABEZADO_BASE).fondo}`}>
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-semibold text-gray-900 leading-tight">{e.titulo}</h3>
-                      <span className="text-[10px] font-semibold bg-white border border-gray-200 rounded-full px-1.5 tabular-nums">{items.length}</span>
+                      <h3 className={`text-xs font-semibold leading-tight ${(ENCABEZADO[e.estado] ?? ENCABEZADO_BASE).titulo}`}>{e.titulo}</h3>
+                      <span className={`text-[10px] font-semibold bg-white border rounded-full px-1.5 tabular-nums ${(ENCABEZADO[e.estado] ?? ENCABEZADO_BASE).cuenta}`}>{items.length}</span>
                     </div>
-                    <p className="text-[10px] text-gray-500 leading-tight">
+                    <p className="text-[10px] text-gray-700 leading-tight">
                       {e.quien}
                       {kg > 0 ? ` · ${fmtKg(kg)}` : ''}
                       {e.estado === 'activa' ? ' · últimos 30 días' : ''}
