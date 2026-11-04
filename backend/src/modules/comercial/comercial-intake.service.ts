@@ -95,7 +95,7 @@ export class ComercialIntakeService {
     );
     const unico = sinLineasRepetidas(input.body, adj.texto);
     if (unico.quitadas > 0) adj.notas.push(`El correo y el adjunto traen las mismas líneas: se contaron una sola vez (${unico.quitadas} repetida(s) del adjunto).`);
-    const texto = [input.body, unico.texto].filter(Boolean).join('\n');
+    let texto = [input.body, unico.texto].filter(Boolean).join('\n');
     if (!client && !ambiguous) {
       client = await this.clients.identificarPorContenido(`${input.subject}\n${texto}`, DOMINIOS_INTERNOS_OBEN);
     }
@@ -117,7 +117,29 @@ export class ComercialIntakeService {
       ? (await this.equivalences.findAll(client.id)).map((e) => ({ id: e.id, clientCode: e.clientCode, obenCode: e.obenCode }))
       : [];
 
-    const extraccion = await this.extraer(texto, input.subject, equivalencias, config, client);
+    let extraccion = await this.extraer(texto, input.subject, equivalencias, config, client);
+    // El PDF tiene texto pero con las columnas desordenadas (precio, cantidad y producto sueltos: la OC 93252 de INTALPEL, 4-nov):
+    // sin líneas, se relee el PDF con visión/OCR, que respeta la tabla, y se vuelve a extraer.
+    if (extraccion.lineas.length === 0 && this.ia) {
+      const visuales: string[] = [];
+      const pdfs = (input.attachments ?? []).filter((x) => x.content && x.content.length > 0 && (/\.pdf$/i.test(x.filename || '') || /pdf/i.test(x.contentType ?? '')));
+      for (const a of pdfs.slice(0, 2)) {
+        try {
+          const v = (await this.ia.leerDocumento({ filename: a.filename || 'adjunto.pdf', contentType: a.contentType ?? null, content: a.content! }))?.texto;
+          if (v && v.trim()) visuales.push(`--- ${a.filename} (leído con IA) ---\n${v}`);
+        } catch (err) {
+          this.logger.warn(`Relectura visual de "${a.filename}" falló: ${(err as Error).message}`);
+        }
+      }
+      if (visuales.length > 0) {
+        const texto2 = [input.body, ...visuales].filter(Boolean).join('\n');
+        const r2 = await this.extraer(texto2, input.subject, equivalencias, config, client);
+        if (r2.lineas.length > 0) {
+          extraccion = { ...r2, numero: r2.numero ?? extraccion.numero, fechaRequerida: r2.fechaRequerida ?? extraccion.fechaRequerida };
+          texto = texto2;
+        }
+      }
+    }
     const maestro = client?.obenCode ? await this.maestro(client.obenCode) : null;
     const destino = maestro && 'error' in maestro ? null : this.resolverDestino(maestro, extraccion.direccionEntrega);
 

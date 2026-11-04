@@ -290,3 +290,29 @@ describe('extraerConReglas — correo de Castañeda (4-nov): tabla en celdas, pr
     expect(r.lineas[0]).toMatchObject({ codigoOben: 'SC---0025TN', equivalenciaId: 'e1' });
   });
 });
+
+describe('extraerConReglas — PDF de INTALPEL (4-nov): número y despacho', () => {
+  const nl = String.fromCharCode(10);
+  const texto = [
+    'Adjunto envío orden de compra Nro. 93252 para su respectivo trámite',
+    '--- OC93252-OBEN COLOMBIA S.A.S.pdf ---',
+    '2026/10/09',
+    'ORDEN DE COMPRA',
+    '93252',
+    'DESPACHO:',
+    '2026/11/18',
+  ].join(nl);
+
+  it('el número sale de "Nro. 93252" y no del nombre del archivo adjunto', () => {
+    expect(extraerConReglas(texto, 'Orden de compra Nro. 93252', []).numero).toBe('93252');
+  });
+
+  it('sin el "Nro." toma el número de la línea siguiente a ORDEN DE COMPRA', () => {
+    const sin = texto.replace('orden de compra Nro. 93252', 'compra');
+    expect(extraerConReglas(sin, '', []).numero).toBe('93252');
+  });
+
+  it('DESPACHO: 2026/11/18 es la fecha requerida', () => {
+    expect(extraerConReglas(texto, '', []).fechaRequerida).toBe('2026-11-18');
+  });
+});

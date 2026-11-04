@@ -249,7 +249,11 @@ const RE_FECHA = /(?:fecha\s+(?:de\s+)?(?:entrega|despacho|requerida|requerimien
 const RE_FECHA_LETRAS = /fecha\s+(?:de\s+)?(?:entrega|despacho|requerida|requerimiento)\s*[:=-]?\s*(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})/i;
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 // El encabezado explícito del documento manda sobre un "OC 4990" suelto del asunto o del cuerpo reenviado.
-const RE_OC_ENCABEZADO = /orden\s+de\s+compra\s+(?:n[°º.o]*|no\.?|#)\s*[:#-]?\s*(\d[A-Z0-9-]{2,})/i;
+const RE_OC_ENCABEZADO = /orden\s+de\s+compra\s+(?:n[°º.o]*|nro?\.?|no\.?|num(?:ero)?\.?|#)\s*[:#-]?\s*(\d[A-Z0-9-]{2,})/i;
+// "ORDEN DE COMPRA" y el número en la línea siguiente (PDF de compras).
+const RE_OC_LINEA_SIGUIENTE = /orden\s+de\s+compra\s*\r?\n\s*(\d{3,}[A-Z0-9-]*)\s*(?:\r?\n|$)/i;
+// DESPACHO / ENTREGA y una fecha ISO con barras en la misma línea o en la siguiente.
+const RE_DESPACHO_ISO = /\b(?:despacho|entrega)\s*:?\s*\r?\n?\s*(\d{4})[/-](\d{2})[/-](\d{2})\b/i;
 const RE_DIRECCION = /(?:direcci[oó]n\s+de\s+(?:entrega|despacho)|ship\s+to|deliver\s+to|entregar\s+en|lugar\s+de\s+entrega)\s*[:=-]\s*(.+)/i;
 const RE_CLIENTE_FINAL = /(?:cliente\s+final|end\s+customer|final\s+customer|customer)\s*[:\-]\s*([^|/\n]+)/i;
 
@@ -306,11 +310,14 @@ export function extraerConReglas(
   if (campos.length === 0) notas.push('No se encontró ninguna línea con cantidad en kg/lb en el correo ni en los adjuntos legibles.');
 
   const fecha = todo.match(RE_FECHA);
-  const fechaLetras = fecha ? null : (todo.match(RE_FECHA_LETRAS) ?? todo.match(RE_FECHA_CORTA));
+  const despachoIso = fecha ? null : todo.match(RE_DESPACHO_ISO);
+  const fechaLetras = fecha || despachoIso ? null : (todo.match(RE_FECHA_LETRAS) ?? todo.match(RE_FECHA_CORTA));
   const mesLetras = fechaLetras ? MESES.indexOf(fechaLetras[2].toLowerCase()) + 1 : 0;
   const fechaNorm = fecha
     ? normalizarFecha(fecha[1])
-    : fechaLetras && mesLetras
+    : despachoIso
+      ? `${despachoIso[1]}-${despachoIso[2]}-${despachoIso[3]}`
+      : fechaLetras && mesLetras
       ? `${fechaLetras[3] ?? anioProbable(Number(fechaLetras[1]), mesLetras, opts.hoy ?? new Date())}-${String(mesLetras).padStart(2, '0')}-${fechaLetras[1].padStart(2, '0')}`
       : null;
   if (fecha && !fechaNorm) notas.push(`Fecha requerida "${fecha[1]}": formato día/mes ambiguo — confírmala.`);
@@ -318,7 +325,11 @@ export function extraerConReglas(
 
   return {
     // Primero el cuerpo ("Purchase Order #PO-7788"), luego el asunto.
-    numero: texto.match(RE_OC_ENCABEZADO)?.[1] ?? texto.match(RE_OC)?.[1] ?? asunto.match(RE_OC)?.[1] ?? null,
+    // Sin los rótulos "--- archivo.pdf ---": el nombre del adjunto ("OC93252-OBEN COLOMBIA") no es el número de la orden.
+    numero: (() => {
+      const limpio = texto.replace(/^---.*---\s*$/gm, '');
+      return limpio.match(RE_OC_ENCABEZADO)?.[1] ?? limpio.match(RE_OC_LINEA_SIGUIENTE)?.[1] ?? limpio.match(RE_OC)?.[1] ?? asunto.match(RE_OC)?.[1] ?? null;
+    })(),
     fechaRequerida: fechaNorm,
     direccionEntrega: texto.match(RE_DIRECCION)?.[1]?.trim().slice(0, 300) ?? null,
     clienteFinal,
