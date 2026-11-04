@@ -294,14 +294,30 @@ export class IaModelosService {
 
   /** Respuesta JSON de un modelo barato (lectura de órdenes cuando las reglas no encuentran líneas). */
   async completarJson(prompt: string): Promise<string> {
-    const r = await this.json<{ choices?: Array<{ message?: { content?: string | null } }>; error?: { message?: string } }>(`${BASE}/chat/completions`, {
-      method: 'POST',
-      timeoutMs: 90_000,
-      body: JSON.stringify({ model: MODELOS_LECTURA[0], max_tokens: 4000, temperature: 0, response_format: { type: 'json_object' }, messages: [{ role: 'user', content: prompt }] }),
-    });
-    const texto = (r.data?.choices?.[0]?.message?.content ?? '').trim();
-    if (r.status !== 200 || !texto) throw new Error(r.data?.error?.message ?? `respuesta vacía (HTTP ${r.status})`);
-    return texto;
+    // El modelo barato a veces contesta vacío (HTTP 200) con el modo JSON o cuando la orden es larga (4-nov, OC 93252 de INTALPEL):
+    // se reintenta sin el modo JSON y con los demás modelos antes de rendirse.
+    const intentos: Array<{ modelo: string; json: boolean }> = [
+      { modelo: MODELOS_LECTURA[0], json: true },
+      { modelo: MODELOS_LECTURA[0], json: false },
+      ...MODELOS_LECTURA.slice(1).map((modelo) => ({ modelo, json: false })),
+    ];
+    let ultimo = 'respuesta vacía';
+    for (const { modelo, json } of intentos) {
+      try {
+        const r = await this.json<{ choices?: Array<{ message?: { content?: string | null } }>; error?: { message?: string } }>(`${BASE}/chat/completions`, {
+          method: 'POST',
+          timeoutMs: 90_000,
+          body: JSON.stringify({ model: modelo, max_tokens: 8000, temperature: 0, ...(json ? { response_format: { type: 'json_object' } } : {}), messages: [{ role: 'user', content: prompt }] }),
+        });
+        const texto = (r.data?.choices?.[0]?.message?.content ?? '').trim();
+        if (r.status === 200 && texto) return texto;
+        ultimo = r.data?.error?.message ?? `respuesta vacía (HTTP ${r.status})`;
+      } catch (err) {
+        ultimo = (err as Error).message;
+      }
+      this.logger.warn(`completarJson con ${modelo}${json ? ' (JSON)' : ''} sin respuesta útil: ${ultimo}`);
+    }
+    throw new Error(ultimo);
   }
 
   private async registrar(tipo: TipoIa, modelo: string, nivel: string, estimadoUsd: number, prompt: string, detalle: Record<string, unknown>): Promise<IaUso> {
