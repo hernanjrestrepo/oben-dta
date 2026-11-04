@@ -87,6 +87,18 @@ export class ComercialIntakeService {
       client = await this.clients.findByNameInText(input.subject);
       if (client) atencion.push(`Cliente tomado del asunto del correo: ${client.name}.`);
     }
+    // Se lee la orden (cuerpo + adjuntos) ANTES de decidir de quién es: un dominio no registrado (Gmail, un dominio nuevo) ya no
+    // frena la orden (Hernán, 4-nov: "que tome de cualquier dominio y lo genere"); el cliente se identifica por lo que dice la orden.
+    const adj = await textoDeAdjuntos(
+      input.attachments ?? [],
+      this.ia ? async (a) => (await this.ia!.leerDocumento(a))?.texto ?? null : undefined,
+    );
+    const unico = sinLineasRepetidas(input.body, adj.texto);
+    if (unico.quitadas > 0) adj.notas.push(`El correo y el adjunto traen las mismas líneas: se contaron una sola vez (${unico.quitadas} repetida(s) del adjunto).`);
+    const texto = [input.body, unico.texto].filter(Boolean).join('\n');
+    if (!client && !ambiguous) {
+      client = await this.clients.identificarPorContenido(`${input.subject}\n${texto}`, DOMINIOS_INTERNOS_OBEN);
+    }
     if (internoOben && original) {
       if (!client) {
         atencion.push(`El cliente del correo original (dominio "${dominio}") no está registrado en Clientes: créalo con ese dominio autorizado y vuelve a procesar la orden, o asigna el cliente a mano.`);
@@ -97,17 +109,10 @@ export class ComercialIntakeService {
       atencion.push(
         ambiguous
           ? `El dominio "${dominio}" está autorizado para más de un cliente: no se puede saber de quién es la orden — asígnala a mano.`
-          : `Remitente NO autorizado: el dominio "${dominio}" no pertenece a ningún cliente registrado (posible suplantación). No se procesa sin revisión.`,
+          : `El dominio "${dominio}" no está registrado y no se pudo identificar el cliente por el nombre ni por los correos de la orden — elige el cliente a mano.`,
       );
     }
 
-    const adj = await textoDeAdjuntos(
-      input.attachments ?? [],
-      this.ia ? async (a) => (await this.ia!.leerDocumento(a))?.texto ?? null : undefined,
-    );
-    const unico = sinLineasRepetidas(input.body, adj.texto);
-    if (unico.quitadas > 0) adj.notas.push(`El correo y el adjunto traen las mismas líneas: se contaron una sola vez (${unico.quitadas} repetida(s) del adjunto).`);
-    const texto = [input.body, unico.texto].filter(Boolean).join('\n');
     const equivalencias: EquivalenciaRef[] = client
       ? (await this.equivalences.findAll(client.id)).map((e) => ({ id: e.id, clientCode: e.clientCode, obenCode: e.obenCode }))
       : [];

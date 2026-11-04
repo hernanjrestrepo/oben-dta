@@ -119,3 +119,28 @@ describe('ClientsService — maestro de clientes para el flujo Comercial', () =>
     });
   });
 });
+
+describe('identificarPorContenido (4-nov: el remitente no está registrado)', () => {
+  const texto = ['De: Compras INTALPEL S.A.S. <datapel.intalpel@gmail.com>', 'Cc: compras@intalpel.com; juan@intalpel.com; alejandramolinares@obengroup.com', 'Orden de compra Nro. 93252'].join(String.fromCharCode(10));
+
+  it('por los dominios de los correos del texto (copias): ignora Gmail y los de Oben', async () => {
+    const { service } = make();
+    const espia = jest.spyOn(service, 'findByEmailDomain').mockImplementation(async (d: string) => ({ client: d === 'intalpel.com' ? ({ id: 'c1', name: 'INTALPEL S.A.S' } as never) : null, ambiguous: false }));
+    await expect(service.identificarPorContenido(texto, ['obengroup.com'])).resolves.toMatchObject({ id: 'c1' });
+    expect(espia.mock.calls.map((c) => c[0])).toEqual(['intalpel.com']);
+  });
+
+  it('por el nombre: la primera palabra del cliente (7+ letras) aparece y es única', async () => {
+    const { service, repo } = make();
+    repo.find.mockResolvedValue([{ id: 'c1', name: 'INTALPEL S.A.S' }, { id: 'c2', name: 'DORFAN S.A.S' }]);
+    await expect(service.identificarPorContenido(['Srs. OBEN COLOMBIA', 'Proveedor: INTALPEL S.A.S.', 'OC 93252'].join(' '))).resolves.toMatchObject({ id: 'c1' });
+  });
+
+  it('si dos clientes empiezan igual o no aparece ninguno, no adivina', async () => {
+    const { service, repo } = make();
+    repo.find.mockResolvedValue([{ id: 'c1', name: 'INTALPEL S.A.S' }, { id: 'c2', name: 'INTALPEL COLOMBIA SAS' }]);
+    await expect(service.identificarPorContenido('INTALPEL')).resolves.toBeNull();
+    repo.find.mockResolvedValue([{ id: 'c1', name: 'DORFAN S.A.S' }]);
+    await expect(service.identificarPorContenido('Orden de INTALPEL')).resolves.toBeNull();
+  });
+});

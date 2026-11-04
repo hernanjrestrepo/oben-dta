@@ -123,6 +123,7 @@ function world(opts: WorldOpts = {}) {
       return { client: hits.length === 1 ? hits[0] : null, ambiguous: hits.length > 1 };
     }),
     findOne: jest.fn(async (id: string) => clientesDb.find((c) => c.id === id)),
+    identificarPorContenido: jest.fn(async () => null),
   };
   const eqDb = EQUIVALENCIAS_DEMO.map(([clientCode, obenCode], i) => ({ id: `eq-${i}`, clientId: 'cli-1', clientCode, obenCode }));
   const equivalences = {
@@ -237,9 +238,9 @@ describe('ComercialFlujoService — flujo Comercial de punta a punta (reunión 2
       const w = world();
       const caso = await w.flujo.recibirOc({ ...(await ocDemo()), from: 'compras@drumonltda.com', messageId: '<f@x>' }, 'correo');
       expect(caso.clientId).toBeNull();
-      expect(caso.atencion[0]).toMatch(/Remitente NO autorizado.*drumonltda\.com/);
+      expect(caso.atencion[0]).toMatch(/dominio "drumonltda\.com" no está registrado.*elige el cliente a mano/);
       expect(caso.accionPendiente).toBeNull();
-      expect(w.emails[0].subject).toMatch(/remitente no autorizado/);
+      expect(w.emails[0].subject).toMatch(/sin cliente identificado/);
     });
 
     it('una línea sin equivalencia queda en "missing"; al corregirla (y guardarla en la tabla) el caso avanza', async () => {

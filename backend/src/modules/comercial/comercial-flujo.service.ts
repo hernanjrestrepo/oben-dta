@@ -205,7 +205,7 @@ export class ComercialFlujoService {
       outputData: { cliente: caso.cliente, ocNumero: caso.ocNumero, lineas: caso.lineas.length, missing: caso.missing, simulated: caso.simulated, origen },
     });
     if (!caso.clientId) {
-      await this.avisarCS(caso, `Orden de compra de un remitente no autorizado (${caso.contactoEmail})`, caso.atencion.join(' '));
+      await this.avisarCS(caso, `Orden de compra sin cliente identificado (${caso.contactoEmail})`, caso.atencion.join(' '));
       return caso;
     }
     return this.avanzarOc(caso);

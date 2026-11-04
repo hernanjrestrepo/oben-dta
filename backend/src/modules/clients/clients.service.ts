@@ -167,6 +167,34 @@ export class ClientsService {
     return unique.length === 1 ? { client: unique[0], ambiguous: false } : { client: null, ambiguous: unique.length > 1 };
   }
 
+  /**
+   * Cliente de una orden cuyo remitente no está registrado (Gmail, dominio nuevo): se identifica por lo que dice la orden.
+   *  1. Los dominios de los correos que aparecen en el texto (copias, firma): si los que reconocemos son de un mismo cliente.
+   *  2. El nombre del cliente: su primera palabra (7+ letras, no "oben") aparece en el texto y ningún otro cliente empieza igual.
+   * Si hay duda no adivina (devuelve null).
+   */
+  async identificarPorContenido(texto: string, dominiosInternos: string[] = []): Promise<Client | null> {
+    const doms = [...new Set([...(texto ?? '').matchAll(/[\w.+-]+@([\w-]+(?:\.[\w-]+)+)/g)].map((m) => m[1].toLowerCase()))].filter(
+      (d) => !dominiosInternos.some((i) => d === i || d.endsWith(`.${i}`)) && !DOMINIOS_GRATUITOS.includes(d.split('.')[0]),
+    );
+    const porDominio = new Map<string, Client>();
+    for (const d of doms) {
+      const r = await this.findByEmailDomain(d);
+      if (r.client) porDominio.set(r.client.id, r.client);
+    }
+    if (porDominio.size === 1) return [...porDominio.values()][0];
+    if (porDominio.size > 1) return null;
+    const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const palabras = new Set(norm(texto ?? '').split(' ').filter(Boolean));
+    const todos = await this.clientRepository.find({ where: { tenantId: this.ctx.tenantId, isActive: true } });
+    const primera = (c: Client) => norm(c.name).split(' ')[0] ?? '';
+    const candidatos = todos.filter((c) => primera(c).length >= 7 && primera(c) !== 'oben' && palabras.has(primera(c)));
+    const unicos = [...new Set(candidatos.map(primera))];
+    if (unicos.length !== 1) return null;
+    const mismos = todos.filter((c) => primera(c) === unicos[0]);
+    return mismos.length === 1 ? mismos[0] : null;
+  }
+
   /** Cliente que el texto nombra (≥2 palabras de su nombre, de 4+ letras) si es el único con esa coincidencia. */
   async findByNameInText(texto: string): Promise<Client | null> {
     const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();

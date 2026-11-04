@@ -415,11 +415,15 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     const range = `${watermark + 1}:${uidNext - 1}`;
     this.logger.debug(`[tenant ${tenantId}] processUnseen: fetch range=${range}...`);
     const inFlight = this.getUidsInFlight(tenantId);
-    for await (const msg of client.fetch(
-      range,
-      { source: true, uid: true },
-      { uid: true },
-    )) {
+    // Encontrado en vivo el 4-nov-2026: ejecutar comandos IMAP (marcar \Seen, mover a "Procesados") DENTRO del `for await` del fetch
+    // bloquea la conexión hasta que el watchdog la corta a los 300 s ("Connection not available"): cada correo tardaba 5 minutos y los
+    // demás esperaban detrás. Se lee primero TODO el lote y solo después se procesa, sin ningún fetch abierto.
+    const lote: Array<Awaited<ReturnType<ImapFlow['fetchOne']>>> = [];
+    for await (const msg of client.fetch(range, { source: true, uid: true }, { uid: true })) {
+      lote.push(msg);
+    }
+    for (const msg of lote) {
+      if (!msg) continue;
       if (inFlight.has(msg.uid)) {
         this.logger.warn(
           `[tenant ${tenantId}] uid=${msg.uid} ya se está procesando en otro ciclo (probable reconexión por watchdog) — se omite para no duplicar el envío.`,
