@@ -53,6 +53,22 @@ export default function ComercialPage() {
     aplicar(traer());
   }, [aplicar, traer]);
 
+  // El CRM se actualiza solo: cada 20 s y al volver a la pestaña o a la ventana (ya no hay que darle refresh).
+  useEffect(() => {
+    if (tab !== 'pipeline') return;
+    const refrescar = () => {
+      if (document.visibilityState === 'visible') aplicar(traer());
+    };
+    const timer = setInterval(refrescar, 20_000);
+    document.addEventListener('visibilitychange', refrescar);
+    window.addEventListener('focus', refrescar);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refrescar);
+      window.removeEventListener('focus', refrescar);
+    };
+  }, [tab, aplicar, traer]);
+
   const tabs: Array<[Tab, string]> = [
     ['pipeline', `CRM${casos.length ? ` (${casos.length})` : ''}`],
     ['nueva', 'Nueva orden de compra'],

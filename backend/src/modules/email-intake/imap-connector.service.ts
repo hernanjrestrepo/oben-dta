@@ -390,7 +390,22 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
     this.logger.debug(`[tenant ${tenantId}] processUnseen: pidiendo status()...`);
     const status = await client.status(folder, { uidNext: true });
     this.logger.debug(`[tenant ${tenantId}] processUnseen: status() OK, uidNext=${status.uidNext}`);
-    const uidNext = status.uidNext;
+    let uidNext = status.uidNext;
+    // Encontrado en vivo el 4-nov-2026: Exchange Online deja el STATUS (y la sesión) con un UIDNEXT VIEJO a los pocos minutos —
+    // el correo ya estaba en el buzón (uidNext real 2367, el conector veía 2360) y no se subía al CRM hasta reconectar. Se vuelve a
+    // SELECCIONAR la carpeta en cada ciclo: el SELECT siempre trae el UIDNEXT vigente. Se toma el mayor de los dos.
+    if (typeof client.mailboxClose === 'function' && typeof client.mailboxOpen === 'function') {
+      try {
+        await client.mailboxClose();
+        const box = await client.mailboxOpen(folder);
+        if (box?.uidNext && (!uidNext || box.uidNext > uidNext)) {
+          this.logger.debug(`[tenant ${tenantId}] processUnseen: SELECT uidNext=${box.uidNext} (el STATUS decía ${uidNext})`);
+          uidNext = box.uidNext;
+        }
+      } catch (err) {
+        this.logger.warn(`[tenant ${tenantId}] no se pudo re-seleccionar ${folder}: ${(err as Error).message}`);
+      }
+    }
     if (!uidNext) return;
 
     const watermark = await this.getWatermarkUid(tenantId, folder);

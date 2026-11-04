@@ -59,15 +59,31 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function cargar() {
+  // El detalle se actualiza solo (cada 15 s y al volver a la ventana), sin pisar lo que se esté escribiendo ni una acción en curso.
+  useEffect(() => {
+    const refrescar = () => {
+      if (document.visibilityState === 'visible' && !busy && Object.keys(edits).length === 0) void cargar(true);
+    };
+    const timer = setInterval(refrescar, 15_000);
+    document.addEventListener('visibilitychange', refrescar);
+    window.addEventListener('focus', refrescar);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refrescar);
+      window.removeEventListener('focus', refrescar);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, busy, edits]);
+
+  async function cargar(silencioso = false) {
     try {
-      setError('');
+      if (!silencioso) setError('');
       const [c, o] = await Promise.all([api.getComercialCaso(id), api.getComercialCasoOben(id).catch(() => null)]);
       setCaso(c);
       setOben(o);
-      setEdits({});
+      if (!silencioso) setEdits({});
     } catch (err) {
-      setError(extractMessage(err, 'No se pudo cargar el caso.'));
+      if (!silencioso) setError(extractMessage(err, 'No se pudo cargar el caso.'));
     }
   }
 
