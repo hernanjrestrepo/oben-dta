@@ -327,7 +327,7 @@ export class ProformasObenService {
     if (fijo) {
       const estandar = /colombia/i.test(pais) ? await this.estandarNacional(e, ciudad) : {};
       return {
-        par: { ...estandar, ...fijo.par, CiudadPuertoDestino: ciudad, Pais: pais, PaisPuertoDestino: pais },
+        par: { ...estandar, CiudadPuertoDestino: ciudad, Pais: pais, PaisPuertoDestino: pais, ...fijo.par },
         aviso: `Oben no tiene parametrizado ${destino}: se usó la parametrización fijada en Oben Xmart para este cliente (${fijo.resumen}).`,
       };
     }
@@ -415,6 +415,10 @@ export class ProformasObenService {
     poner('CodSec_EtiquetaBobina', f.etiqueta_bobina_id);
     poner('CodSec_EtiquetaPallet', f.etiqueta_pallet_id);
     poner('Desde', f.desde);
+    poner('CodSec_City', f.ciudad_id);
+    poner('CodSec_CityPort', f.ciudad_id);
+    poner('CiudadPuertoDestino', f.ciudad);
+    poner('Hasta', f.hasta);
     const resumen = [f.condicion ? `pago: ${String(f.condicion)}` : null, f.moneda_id ? `moneda ${Number(f.moneda_id) === 1 ? 'USD' : f.moneda_id}` : null, f.incoterm ? `Incoterm ${String(f.incoterm)}` : null].filter(Boolean).join(', ');
     return { par, resumen };
   }
