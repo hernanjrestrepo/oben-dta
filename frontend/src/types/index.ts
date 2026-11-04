@@ -608,6 +608,28 @@ export interface Equivalence {
   description: string | null;
 }
 
+export interface TransitTime {
+  id: string;
+  pais: string;
+  puerto: string;
+  incoterm: string;
+  oceanDays: number;
+  inlandDays: number;
+  totalDays: number;
+}
+
+export interface DespachoCalculado {
+  fecha: string | null;
+  tiempo: TransitTime | null;
+  mensaje: string;
+}
+
+export interface FestivoColombia {
+  fecha: string;
+  nombre: string;
+  habil: boolean;
+}
+
 export interface TabularImportResult<T = Record<string, unknown>> {
   dryRun: boolean;
   total: number;

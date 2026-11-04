@@ -22,6 +22,7 @@ class ProformaDto {
   @IsString() @MaxLength(100) ordenCompra: string;
   @IsString() fechaEntrega: string;
   @IsString() fechaDespacho: string;
+  @IsOptional() @IsBoolean() despachoManual?: boolean;
   @IsOptional() @IsString() mesFactura?: string;
   @IsOptional() @IsString() fechaSolicitudCliente?: string;
   @IsOptional() @IsString() @MaxLength(100) contenedor?: string;

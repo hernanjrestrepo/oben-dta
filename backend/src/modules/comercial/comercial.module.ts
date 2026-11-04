@@ -1,4 +1,5 @@
 import { IaModule } from '../ia/ia.module';
+import { TransitTimesModule } from '../transit-times/transit-times.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { IntegrationHubModule } from '../integrations/hub/integration-hub.module';
@@ -33,6 +34,7 @@ import { ProformasObenController } from './proformas-oben.controller';
     DistributionListsModule,
     IdempotencyModule,
     IaModule,
+    TransitTimesModule,
   ],
   controllers: [ComercialController, ComercialCasosController, ComercialMaestrosController, ProformasObenController],
   providers: [ComercialService, ComercialIntakeService, ComercialFlujoService, ComercialProcessorService, ComercialSimuladorService, ComercialMaestrosService, ProformasObenService],

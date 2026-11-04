@@ -235,7 +235,13 @@ const RE_ANCHO_SUELTO = new RegExp(`${NUM}${SEP}(mm|cms|cm|pulgadas|pulg|in|inch
 // "2 mil kg" es "dos mil kilos", no 2 mils de espesor.
 const RE_ESPESOR = new RegExp(`${NUM}${SEP}(µm|μm|um|micras?|micrones|mic|mils?|g/m2|g/m²|gsm|grs?|g)(?![a-z])(?!\\s*(?:kg|kilos?|lbs?|libras?)\\b)`, 'i');
 const RE_PRECIO = new RegExp(`(?:precio(?:\\s+unitario)?|price|unit\\s+price|valor\\s+unitario|p\\.?\\s*unit\\.?)\\s*[:=]?\\s*(usd|us\\$|cop|\\$)?\\s*${NUM}\\s*(usd|cop)?`, 'i');
-const RE_PRECIO_SIMBOLO = new RegExp(`(us\\$|\\$)\\s*${NUM}`, 'i');
+const RE_PRECIO_SIMBOLO = new RegExp(`(u\\$d|u\\$s|us\\$|\\$)\\s*${NUM}`, 'i');
+// "USD 2,50" / "2,50 USD" sin etiqueta de precio. 1 = moneda antes, 2 = valor, 3 = valor antes, 4 = moneda después.
+const RE_PRECIO_MONEDA = new RegExp(`(?:\\b(usd|cop)\\s*${NUM}|${NUM}\\s*(usd|cop)\\b)`, 'i');
+// "SC 25 - 640": película (letras + espesor) y ancho en mm separados por guion; el ancho de las referencias de Oben es de 4 dígitos.
+const RE_CODIGO_ANCHO = new RegExp(`\\b([A-Za-z]{1,4}\\s*\\d{1,3})\\s*[-–]\\s*(\\d{3,4})\\b(?!\\s*(?:kgs?|kilos?|lbs?|libras?)\\b)`, 'i');
+// "Entrega 23 de noviembre" (sin la palabra "fecha" y, a veces, sin año).
+const RE_FECHA_CORTA = /\bentrega\s+(?:el\s+|para\s+el\s+)?(\d{1,2})\s+de\s+([a-záéíóú]+)(?:\s+de\s+(\d{4}))?/i;
 // El número debe tener al menos un dígito: en "Orden de compra urgente" no hay número (no se inventa).
 const RE_OC = /(?:orden\s+de\s+compra|purchase\s+order|\bO\.?C\.?|\bP\.?O\.?)\s*(?:n[°º.o]*|no\.?|#|number|num\.?)?\s*[:#-]?\s*((?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{2,})/i;
 const RE_FECHA = /(?:fecha\s+(?:de\s+)?(?:entrega|despacho|requerida|requerimiento)|delivery\s+date|required\s+date|need\s+by)\s*[:=-]?\s*(\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i;
@@ -251,12 +257,13 @@ export function extraerConReglas(
   texto: string,
   asunto: string,
   equivalencias: EquivalenciaRef[],
-  opts: { clienteFinalEnAsunto?: boolean } = {},
+  opts: { clienteFinalEnAsunto?: boolean; peliculasConocidas?: string[]; hoy?: Date } = {},
 ): OcExtraccion {
   const notas: string[] = [];
   const todo = `${asunto}\n${texto}`;
   const campos: LineaCampos[] = [];
-  for (const raw of texto.split(/\r?\n/)) {
+  const global = precioDeEncabezado(texto);
+  for (const raw of unirCeldas(texto)) {
     // "2 mil kg" / "1,5 mil libras" → "2000 kg" / "1500 libras".
     const linea = raw
       .trim()
@@ -267,35 +274,44 @@ export function extraerConReglas(
     const eq = buscarEquivalencia(linea, equivalencias);
     const antes = linea.slice(0, peso.index).replace(/^[\s\-*•\d.)|]+/, '').replace(/[|:,;\s-]+$/, '').trim();
     const ancho = linea.match(RE_ANCHO_ETIQUETA) ?? linea.match(RE_ANCHO_SUELTO);
+    // Sin ancho con unidad: "SC 25 - 640" = película SC de 25 micras, ancho 640 mm.
+    const codigoAncho = ancho ? null : linea.replace(peso[0], ' ').match(RE_CODIGO_ANCHO);
     const espesor = linea.match(RE_ESPESOR);
     // RE_PRECIO: 1 = moneda antes, 2 = valor, 3 = moneda después. RE_PRECIO_SIMBOLO: 1 = símbolo, 2 = valor.
     const precioEtiqueta = linea.match(RE_PRECIO);
     const precioSimbolo = precioEtiqueta ? null : linea.match(RE_PRECIO_SIMBOLO);
-    const precioValor = precioEtiqueta?.[2] ?? precioSimbolo?.[2] ?? null;
+    const precioMoneda = precioEtiqueta || precioSimbolo ? null : linea.replace(peso[0], ' ').match(RE_PRECIO_MONEDA);
+    const precioValor = precioEtiqueta?.[2] ?? precioSimbolo?.[2] ?? precioMoneda?.[2] ?? precioMoneda?.[3] ?? global.valor;
     // "$" solo es ambiguo (pesos o dólares): la moneda queda sin definir.
-    const monedaRaw = precioEtiqueta ? (precioEtiqueta[1] ?? precioEtiqueta[3] ?? '') : (precioSimbolo?.[1] ?? '');
+    const monedaRaw = precioEtiqueta
+      ? (precioEtiqueta[1] ?? precioEtiqueta[3] ?? '')
+      : precioSimbolo
+        ? precioSimbolo[1]
+        : precioMoneda
+          ? (precioMoneda[1] ?? precioMoneda[4] ?? '')
+          : (global.moneda ?? '');
     campos.push({
       textoCliente: linea,
-      codigoCliente: eq?.clientCode ?? (antes ? antes.slice(0, 80) : null),
+      codigoCliente: eq?.clientCode ?? (codigoAncho ? codigoAncho[1].replace(/\s+/g, ' ').trim() : antes ? antes.slice(0, 80) : null),
       cantidad: parseNumero(peso[1]),
       unidad: peso[2],
-      ancho: ancho ? parseNumero(ancho[1]) : null,
-      unidadAncho: ancho ? (ancho[2] ?? null) : null,
+      ancho: ancho ? parseNumero(ancho[1]) : codigoAncho ? parseNumero(codigoAncho[2]) : null,
+      unidadAncho: ancho ? (ancho[2] ?? null) : codigoAncho ? 'mm' : null,
       espesor: espesor ? parseNumero(espesor[1]) : null,
       unidadEspesor: espesor ? espesor[2] : null,
       precioUnitario: precioValor ? parseNumero(precioValor) : null,
-      moneda: /usd|us\$/i.test(monedaRaw) ? 'USD' : /cop/i.test(monedaRaw) ? 'COP' : null,
+      moneda: /usd|us\$|u\$d|u\$s/i.test(monedaRaw) ? 'USD' : /cop/i.test(monedaRaw) ? 'COP' : null,
     });
   }
   if (campos.length === 0) notas.push('No se encontró ninguna línea con cantidad en kg/lb en el correo ni en los adjuntos legibles.');
 
   const fecha = todo.match(RE_FECHA);
-  const fechaLetras = fecha ? null : todo.match(RE_FECHA_LETRAS);
+  const fechaLetras = fecha ? null : (todo.match(RE_FECHA_LETRAS) ?? todo.match(RE_FECHA_CORTA));
   const mesLetras = fechaLetras ? MESES.indexOf(fechaLetras[2].toLowerCase()) + 1 : 0;
   const fechaNorm = fecha
     ? normalizarFecha(fecha[1])
     : fechaLetras && mesLetras
-      ? `${fechaLetras[3]}-${String(mesLetras).padStart(2, '0')}-${fechaLetras[1].padStart(2, '0')}`
+      ? `${fechaLetras[3] ?? anioProbable(Number(fechaLetras[1]), mesLetras, opts.hoy ?? new Date())}-${String(mesLetras).padStart(2, '0')}-${fechaLetras[1].padStart(2, '0')}`
       : null;
   if (fecha && !fechaNorm) notas.push(`Fecha requerida "${fecha[1]}": formato día/mes ambiguo — confírmala.`);
   const clienteFinal = opts.clienteFinalEnAsunto ? (asunto.match(RE_CLIENTE_FINAL)?.[1]?.trim() ?? null) : null;
@@ -306,7 +322,7 @@ export function extraerConReglas(
     fechaRequerida: fechaNorm,
     direccionEntrega: texto.match(RE_DIRECCION)?.[1]?.trim().slice(0, 300) ?? null,
     clienteFinal,
-    lineas: campos.map((c, i) => construirLinea(i + 1, c, equivalencias)),
+    lineas: campos.map((c, i) => construirLinea(i + 1, c, equivalencias, opts.peliculasConocidas)),
     extraidoPor: 'reglas',
     notas,
   };
@@ -327,6 +343,7 @@ export async function extraerConIa(
     equivalencias: EquivalenciaRef[];
     ejemplos: EjemploOc[];
     clienteFinalEnAsunto?: boolean;
+    peliculasConocidas?: string[];
     /** Modelo alterno (OpenRouter) en vez del Ollama de `cfg`: recibe el prompt y devuelve el JSON como texto. */
     llm?: (prompt: string) => Promise<string>;
   },
@@ -400,7 +417,7 @@ export async function extraerConIa(
     fechaRequerida: fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? fecha : null,
     direccionEntrega: txt(parsed.direccionEntrega),
     clienteFinal: txt(parsed.clienteFinal),
-    lineas: campos.map((c, i) => construirLinea(i + 1, c, input.equivalencias)),
+    lineas: campos.map((c, i) => construirLinea(i + 1, c, input.equivalencias, input.peliculasConocidas)),
     extraidoPor: 'ia',
     notas: campos.length === 0 ? ['La IA no encontró líneas de producto en la orden de compra.'] : [],
   };
@@ -408,12 +425,15 @@ export async function extraerConIa(
 
 // ─── Traducción de una línea (común a reglas e IA) ─────────────────────────
 
-export function construirLinea(n: number, c: LineaCampos, equivalencias: EquivalenciaRef[]): CasoLinea {
+export function construirLinea(n: number, c: LineaCampos, equivalencias: EquivalenciaRef[], peliculasConocidas: string[] = []): CasoLinea {
   const conversiones: string[] = [];
   const faltantes: string[] = [];
-  const eq =
+  const eqTabla =
     (c.codigoCliente ? buscarEquivalencia(c.codigoCliente, equivalencias, true) : null) ??
     buscarEquivalencia(c.textoCliente, equivalencias);
+  // Sin equivalencia: la película se infiere de "SC 25" (letras + espesor) si en Oben existe una sola así.
+  const inferida = eqTabla ? null : (inferirPelicula(c.codigoCliente ?? '', peliculasConocidas) ?? inferirPelicula(c.textoCliente, peliculasConocidas));
+  const eq: EquivalenciaRef | null = eqTabla ?? (inferida ? { id: '', clientCode: c.codigoCliente ?? c.textoCliente.slice(0, 60), obenCode: inferida } : null);
 
   let kilos: number | null = null;
   const up = c.unidad ? unidadPeso(c.unidad) : null;
@@ -454,7 +474,7 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
     textoCliente: c.textoCliente,
     codigoCliente: eq?.clientCode ?? c.codigoCliente ?? null,
     codigoOben: eq?.obenCode ?? null,
-    equivalenciaId: eq?.id ?? null,
+    equivalenciaId: eq?.id || null,
     cantidad: c.cantidad ?? null,
     unidad: c.unidad ?? null,
     kilos,
@@ -496,6 +516,68 @@ export function buscarEquivalencia(texto: string, equivalencias: EquivalenciaRef
     }
   }
   return best;
+}
+
+/**
+ * Las tablas de correo llegan con cada celda en su propia línea ("SC 25 - 640" y luego "7.500 KILOS"): si una línea no trae
+ * cantidad y la siguiente es solo una cantidad, van juntas como una sola línea de producto.
+ */
+export function unirCeldas(texto: string): string[] {
+  const lineas = texto
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\t+/g, ' | ').trim())
+    .filter(Boolean);
+  const soloPeso = new RegExp(`^${NUM}${SEP}(kgs?|kilos?|kilogramos?|lbs?|libras?|toneladas?|tons?)\\s*$`, 'i');
+  const out: string[] = [];
+  for (let i = 0; i < lineas.length; i++) {
+    if (!RE_PESO.test(lineas[i]) && i + 1 < lineas.length && soloPeso.test(lineas[i + 1])) {
+      out.push(`${lineas[i]} | ${lineas[i + 1]}`);
+      i++;
+    } else out.push(lineas[i]);
+  }
+  return out;
+}
+
+/** El precio que va en una línea suelta del encabezado ("U$D 2,50"): vale para todas las líneas si es uno solo. */
+export function precioDeEncabezado(texto: string): { valor: string | null; moneda: string | null } {
+  const vistos = new Map<string, string>();
+  for (const l of texto.split(/\r?\n/)) {
+    if (!l.trim() || RE_PESO.test(l)) continue;
+    const m = l.match(RE_PRECIO) ?? l.match(RE_PRECIO_SIMBOLO) ?? l.match(RE_PRECIO_MONEDA);
+    if (!m) continue;
+    const grupos = m.slice(1).filter(Boolean) as string[];
+    const valor = grupos.find((g) => /^\d/.test(g));
+    const moneda = grupos.find((g) => /^(usd|cop|u\$d|u\$s|us\$|\$)$/i.test(g)) ?? '';
+    if (valor && parseNumero(valor)) vistos.set(String(parseNumero(valor)), `${valor}|${moneda}`);
+  }
+  if (vistos.size !== 1) return { valor: null, moneda: null };
+  const [valor, moneda] = [...vistos.values()][0].split('|');
+  return { valor, moneda: moneda || null };
+}
+
+/** Año de una fecha sin año ("23 de noviembre"): el de hoy, o el siguiente si ya pasó hace más de un mes. */
+function anioProbable(dia: number, mes: number, hoy: Date): number {
+  const anio = hoy.getUTCFullYear();
+  const f = Date.UTC(anio, mes - 1, dia);
+  return f < hoy.getTime() - 31 * 24 * 3600 * 1000 ? anio + 1 : anio;
+}
+
+/**
+ * "SC 25" → "SC---0025TN" si entre las referencias que Oben ya maneja hay UNA sola película con esas letras y ese
+ * espesor. Si hay varias o ninguna no se adivina (queda como faltante).
+ */
+export function inferirPelicula(texto: string, peliculas: string[]): string | null {
+  if (!texto || peliculas.length === 0) return null;
+  const encontrados = new Set<string>();
+  for (const m of texto.matchAll(/\b([A-Za-z]{1,4})\s*[-.]?\s*(\d{2,3})\b/g)) {
+    const letras = m[1].toUpperCase();
+    const espesor = Number(m[2]);
+    for (const p of peliculas) {
+      const k = p.toUpperCase().replace(/-/g, '').match(/^([A-Z]+)(\d{4})([A-Z]{2})$/);
+      if (k && k[1] === letras && Number(k[2]) === espesor) encontrados.add(p.toUpperCase());
+    }
+  }
+  return encontrados.size === 1 ? [...encontrados][0] : null;
 }
 
 function normalizarFecha(raw: string): string | null {

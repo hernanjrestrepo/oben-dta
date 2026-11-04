@@ -86,7 +86,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
   }
 
   function edit(l: CasoLinea): EdicionLinea {
-    return edits[l.n] ?? { codigoOben: l.codigoOben ?? '', kilos: l.kilos?.toString() ?? '', anchoMm: l.anchoMm?.toString() ?? '', precio: l.precioUnitario?.toString() ?? '', guardarEquivalencia: !l.codigoOben };
+    return edits[l.n] ?? { codigoOben: l.codigoOben ?? '', kilos: l.kilos?.toString() ?? '', anchoMm: l.anchoMm?.toString() ?? '', precio: l.precioUnitario?.toString() ?? '', guardarEquivalencia: true };
   }
 
   async function guardarLineas() {

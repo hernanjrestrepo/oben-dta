@@ -15,6 +15,7 @@ export const MIA_PANTALLAS: Record<string, string> = {
   '/reportes': 'Reportes Oben',
   '/clients': 'Clientes',
   '/equivalencias': 'Equivalencias',
+  '/tiempos-transito': 'Tiempos de tránsito (días hábiles al puerto y fecha de despacho)',
   '/distribucion': 'Listas de Distribución',
   '/admin/roles': 'Perfiles (acceso por opción del menú)',
   '/academy': 'Xmart Academy (entrenamiento por perfil)',

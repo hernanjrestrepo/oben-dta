@@ -9,7 +9,7 @@ import {
   UpdateTenantUserDto, User, WorkflowEvent,
   FreightInlandRate, FreightTransloadRate, FreightDestinationSurcharge,
   DistributionList, DistributionListInput, EnvioCatalogo, EnvioManualResultado, FormatoEnvio, FacturaParcial,
-  Equivalence, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
+  Equivalence, TransitTime, DespachoCalculado, FestivoColombia, TabularImportInput, TabularImportResult, ComercialCaso, ComercialTablero, ComercialConfig, CarteraHold,
   ConexionMicrosoft, CuadroDelDia, DiagnosticoSharepoint, MaestroComercialResultado, ProformaOben,
   FacturacionDraft, FacturacionHistorial, FacturacionInput, FacturacionSendResult, CambioRuta, OrdenReciente, ProformaOrdenes, ProformaPendienteComex,
   MiaContexto, MiaRespuesta, MiaTurno,
@@ -518,6 +518,41 @@ class ApiClient {
 
   async cancelCarteraHold(numberOrderSales: number, motivo: string): Promise<void> {
     await this.client.post(`/packing-list/${numberOrderSales}/cartera/cancelar`, { motivo });
+  }
+
+  // Tiempos de tránsito y festivos de Colombia (lead time y fecha de despacho)
+  async getTransitTimes(): Promise<TransitTime[]> {
+    const { data } = await this.client.get<TransitTime[]>('/transit-times');
+    return data;
+  }
+
+  async createTransitTime(dto: { pais: string; puerto: string; incoterm: string; oceanDays: number; inlandDays: number }): Promise<TransitTime> {
+    const { data } = await this.client.post<TransitTime>('/transit-times', dto);
+    return data;
+  }
+
+  async updateTransitTime(id: string, dto: Partial<{ pais: string; puerto: string; incoterm: string; oceanDays: number; inlandDays: number }>): Promise<TransitTime> {
+    const { data } = await this.client.patch<TransitTime>(`/transit-times/${id}`, dto);
+    return data;
+  }
+
+  async deleteTransitTime(id: string): Promise<void> {
+    await this.client.delete(`/transit-times/${id}`);
+  }
+
+  async importTransitTimes(dto: TabularImportInput): Promise<TabularImportResult> {
+    const { data } = await this.client.post<TabularImportResult>('/transit-times/import', dto, { timeout: 120000 });
+    return data;
+  }
+
+  async getFestivos(anio: number): Promise<FestivoColombia[]> {
+    const { data } = await this.client.get<FestivoColombia[]>('/transit-times/festivos', { params: { anio } });
+    return data;
+  }
+
+  async calcularDespacho(p: { entrega: string; pais?: string; puerto?: string; incoterm?: string }): Promise<DespachoCalculado> {
+    const { data } = await this.client.get<DespachoCalculado>('/transit-times/despacho', { params: p });
+    return data;
   }
 
   // Equivalencias cliente↔producto

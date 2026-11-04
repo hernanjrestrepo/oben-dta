@@ -249,12 +249,21 @@ export class ComercialFlujoService {
       if (e.codigoOben !== undefined) {
         l.codigoOben = e.codigoOben?.trim() || null;
         l.equivalenciaId = null;
-        if (e.guardarEquivalencia && l.codigoOben && l.codigoCliente && caso.clientId) {
-          // El sistema aprende: la corrección queda en la tabla para la próxima orden.
+        // Siempre (salvo que se pida lo contrario): lo que escribe el comercial queda como equivalencia para la próxima orden (Hernán, 4-nov).
+        if (e.guardarEquivalencia !== false && l.codigoOben && l.codigoCliente && caso.clientId) {
           try {
-            const eq = await this.equivalences.create({ clientId: caso.clientId, clientCode: l.codigoCliente, obenCode: l.codigoOben, description: 'Agregada al corregir una orden de compra' });
+            let eq;
+            try {
+              eq = await this.equivalences.create({ clientId: caso.clientId, clientCode: l.codigoCliente, obenCode: l.codigoOben, description: 'Agregada al corregir una orden de compra' });
+              cambios.push(`nueva equivalencia "${l.codigoCliente}" → ${l.codigoOben}`);
+            } catch (dup) {
+              // Ya existía ese código del cliente: se actualiza a lo que acaba de escribir el comercial.
+              const previa = (await this.equivalences.findAll(caso.clientId)).find((x) => x.clientCode.trim().toLowerCase() === l.codigoCliente!.trim().toLowerCase());
+              if (!previa) throw dup;
+              eq = await this.equivalences.update(previa.id, { obenCode: l.codigoOben });
+              cambios.push(`equivalencia "${l.codigoCliente}" actualizada → ${l.codigoOben}`);
+            }
             l.equivalenciaId = eq.id;
-            cambios.push(`nueva equivalencia "${l.codigoCliente}" → ${l.codigoOben}`);
           } catch (err) {
             cambios.push(`no se guardó la equivalencia de la línea ${e.n}: ${(err as Error).message}`);
           }

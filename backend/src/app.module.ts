@@ -33,6 +33,7 @@ import { DistributionListsModule } from './modules/distribution-lists/distributi
 import { EnvioManualModule } from './modules/envio-manual/envio-manual.module';
 import { FormatosModule } from './modules/formatos/formatos.module';
 import { EquivalencesModule } from './modules/equivalences/equivalences.module';
+import { TransitTimesModule } from './modules/transit-times/transit-times.module';
 import { FacturacionModule } from './modules/facturacion/facturacion.module';
 import { ComercialModule } from './modules/comercial/comercial.module';
 import { ConexionesModule } from './modules/conexiones/conexiones.module';
@@ -99,6 +100,7 @@ import { WorkflowEvent } from './entities/workflow-event.entity';
 import { EmailIntakeMessage } from './entities/email-intake-message.entity';
 import { FreightInlandRate } from './entities/freight-inland-rate.entity';
 import { FreightOceanRate } from './entities/freight-ocean-rate.entity';
+import { TransitTime } from './entities/transit-time.entity';
 import { FreightTransloadRate } from './entities/freight-transload-rate.entity';
 import { FreightDestinationSurcharge } from './entities/freight-destination-surcharge.entity';
 import { DistributionList } from './entities/distribution-list.entity';
@@ -174,6 +176,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
           EmailIntakeMessage,
           FreightInlandRate,
           FreightOceanRate,
+          TransitTime,
           FreightTransloadRate,
           FreightDestinationSurcharge,
           DistributionList,
@@ -231,6 +234,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
     LiquidacionModule,
     CuadroIntegracionModule,
     EquivalencesModule,
+    TransitTimesModule,
     FacturacionModule,
     ComercialModule,
     ConexionesModule,

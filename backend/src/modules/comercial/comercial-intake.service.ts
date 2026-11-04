@@ -248,16 +248,27 @@ export class ComercialIntakeService {
     client: Client | null,
   ): Promise<OcExtraccion> {
     const clienteFinalEnAsunto = client?.finalCustomerInSubject ?? false;
+    const peliculasConocidas = await this.peliculasConocidas();
     if (config.extractor.provider === 'ollama') {
       try {
-        return await extraerConIa(config.extractor, { texto, asunto, equivalencias, ejemplos: config.ejemplosOc, clienteFinalEnAsunto });
+        return await extraerConIa(config.extractor, { texto, asunto, equivalencias, ejemplos: config.ejemplosOc, clienteFinalEnAsunto, peliculasConocidas });
       } catch (err) {
         this.logger.warn(`Lectura de OC con IA falló (${(err as Error).message}); se usa la lectura por reglas.`);
-        const r = await this.conRespaldoIa(extraerConReglas(texto, asunto, equivalencias, { clienteFinalEnAsunto }), texto, asunto, equivalencias, config, clienteFinalEnAsunto);
+        const r = await this.conRespaldoIa(extraerConReglas(texto, asunto, equivalencias, { clienteFinalEnAsunto, peliculasConocidas }), texto, asunto, equivalencias, config, clienteFinalEnAsunto, peliculasConocidas);
         return { ...r, notas: [`La IA no respondió (${(err as Error).message}): se leyó la orden por reglas.`, ...r.notas] };
       }
     }
-    return this.conRespaldoIa(extraerConReglas(texto, asunto, equivalencias, { clienteFinalEnAsunto }), texto, asunto, equivalencias, config, clienteFinalEnAsunto);
+    return this.conRespaldoIa(extraerConReglas(texto, asunto, equivalencias, { clienteFinalEnAsunto, peliculasConocidas }), texto, asunto, equivalencias, config, clienteFinalEnAsunto, peliculasConocidas);
+  }
+
+  /** Las películas de Oben que ya aparecen en las equivalencias de cualquier cliente ("SC---0025TN"): sirven para inferir "SC 25". */
+  private async peliculasConocidas(): Promise<string[]> {
+    try {
+      const todas = await this.equivalences.findAll();
+      return [...new Set(todas.map((e) => e.obenCode.trim().toUpperCase()).filter((c) => /^[A-Z]+-*\d{4}[A-Z]{2}$/.test(c)))];
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -272,12 +283,13 @@ export class ComercialIntakeService {
     equivalencias: EquivalenciaRef[],
     config: ComercialConfig,
     clienteFinalEnAsunto: boolean,
+    peliculasConocidas: string[] = [],
   ): Promise<OcExtraccion> {
     // Las reglas dejan líneas sin producto ni ancho cuando el correo está en prosa ("SC 25 - 640" arriba, "7.500 KILOS" abajo).
     const reglasSirven = reglas.lineas.length > 0 && reglas.lineas.some((l) => l.codigoOben || l.anchoMm != null);
     if (reglasSirven || !this.ia || texto.trim().length < 40) return reglas;
     try {
-      const r = await extraerConIa({ host: '', model: 'openrouter' }, { texto, asunto, equivalencias, ejemplos: config.ejemplosOc, clienteFinalEnAsunto, llm: (p) => this.ia!.completarJson(p) });
+      const r = await extraerConIa({ host: '', model: 'openrouter' }, { texto, asunto, equivalencias, ejemplos: config.ejemplosOc, clienteFinalEnAsunto, peliculasConocidas, llm: (p) => this.ia!.completarJson(p) });
       if (r.lineas.length === 0) return reglas;
       return {
         ...r,

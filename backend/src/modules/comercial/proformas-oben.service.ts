@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
@@ -10,6 +10,7 @@ import { ProformaOben, type LineaProformaOben, type PasoProformaOben } from '../
 import { COMERCIAL_URL_PRUEBAS, type EscrituraComercial, type OrdenVentaCreada } from '../integrations/hub/adapters/oben-comercial';
 import { SP_PROFORMAS_COMEX, parsearProformasComex } from '../liquidacion/incoterm-de-oben';
 import { ComercialMaestrosService } from './comercial-maestros.service';
+import { TransitTimesService } from '../transit-times/transit-times.service';
 
 const WORKFLOW = 'comercial';
 const ESCRITURA = { maxAttempts: 1, timeoutMs: 90_000 };
@@ -47,6 +48,8 @@ export interface ProformaEntrada {
   ordenCompra: string;
   fechaEntrega: string;
   fechaDespacho: string;
+  /** true = respetar `fechaDespacho` tal cual; si no, se calcula con el tiempo de tránsito (días hábiles). */
+  despachoManual?: boolean;
   /** Mes de facturación (AAAA-MM-DD); por defecto la fecha de despacho. */
   mesFactura?: string;
   fechaSolicitudCliente?: string;
@@ -104,6 +107,7 @@ export class ProformasObenService {
     private readonly maestros: ComercialMaestrosService,
     @InjectRepository(ProformaOben) private readonly repo: Repository<ProformaOben>,
     @InjectRepository(Tenant) private readonly tenants: Repository<Tenant>,
+    @Optional() private readonly transitos?: TransitTimesService,
   ) {}
 
   async listar(): Promise<ProformaOben[]> {
@@ -123,7 +127,7 @@ export class ProformasObenService {
     if (!txt(e.ordenCompra)) bloqueos.push('Falta la orden de compra del cliente.');
     if (!Array.isArray(e.lineas) || e.lineas.length === 0) bloqueos.push('Agrega al menos una línea (referencia, kilos y precio).');
     const fechaEntrega = this.fecha(e.fechaEntrega, 'fecha de entrega', bloqueos);
-    const fechaDespacho = this.fecha(e.fechaDespacho, 'fecha de despacho', bloqueos);
+    let fechaDespacho = this.fecha(e.fechaDespacho, 'fecha de despacho', bloqueos);
 
     // Cliente y destino: la fila exacta del maestro de clientes.
     const clientes = (await this.maestros.maestro('clientes', { limite: 1000, buscar: String(e.cliente) })).items;
@@ -143,6 +147,17 @@ export class ProformasObenService {
         bloqueos.push((err as Error).message);
       }
       if (!par) bloqueos.push(`Oben no devolvió la parametrización comercial de ${destino} (condición de pago, Incoterm, moneda, puerto).`);
+    }
+
+    // Despacho = entrega − días HÁBILES de tránsito al puerto (lista de tránsitos de Oben; sin sábados, domingos ni festivos de Colombia).
+    if (!e.despachoManual && this.transitos && fechaEntrega && par) {
+      const d = await this.transitos.despacho(fechaEntrega, { pais: txt(par.PaisPuertoDestino ?? par.Pais), puerto: txt(par.CiudadPuertoDestino), incoterm: txt(par.Incoterms) });
+      if (d.fecha) {
+        fechaDespacho = d.fecha;
+        avisos.push(d.mensaje);
+      } else {
+        avisos.push(`${d.mensaje} Se usó la fecha de despacho enviada (${fechaDespacho ?? 'sin fecha'}); cárgalo en Tiempos de tránsito.`);
+      }
     }
 
     // Líneas: referencia del maestro y partida de su línea de película.
@@ -227,7 +242,8 @@ export class ProformasObenService {
       CodSecEntity: Number(e.cliente),
       CodSecComercialCondition: num(par?.CodSec_CommercialCondition),
       PurchaseOrder: txt(e.ordenCompra),
-      Notes: `${marcaPrueba}${txt(e.notas) || txt(e.ordenCompra)}`,
+      // Notes va siempre vacío (Hernán, 4-nov); en el servidor de pruebas solo lleva la marca de prueba.
+      Notes: marcaPrueba.trim(),
       DeliveryDate: conHora(fechaEntrega),
       ShipmentDate: conHora(fechaDespacho),
       From: txt(par?.Desde),
@@ -251,7 +267,7 @@ export class ProformasObenService {
       CodSecEtiquetaBobina: num(par?.CodSec_EtiquetaBobina),
       Paperwork: num(e.documentos) ?? 0,
       CodSedCustomerAddress: Number(e.direccion),
-      InvoiceMonth: conHora(this.fecha(e.mesFactura ?? e.fechaDespacho, 'mes de facturación', bloqueos)),
+      InvoiceMonth: conHora(this.fecha(e.mesFactura ?? fechaDespacho ?? e.fechaDespacho, 'mes de facturación', bloqueos)),
       Sample: e.muestra ? 'true' : 'false',
       CodSecCityDestinationPort: num(par?.CodSec_CityPort),
       OperationNotes: txt(e.notaOperativa) || txt(par?.Nota_Operativa) || '',
@@ -262,7 +278,7 @@ export class ProformasObenService {
       Stock: e.stock ? 'true' : 'false',
     };
     // Las notas pueden ir en blanco (Hernán, 4-nov: "los N/A en blanco"); lo demás es obligatorio.
-    const opcionales = new Set(['NoteSalesOrderPF', 'NoteConsigned', 'OperationNotes', 'SpecialNotes', 'NoteNotified']);
+    const opcionales = new Set(['Notes', 'NoteSalesOrderPF', 'NoteConsigned', 'OperationNotes', 'SpecialNotes', 'NoteNotified']);
     for (const [k, v] of Object.entries(encabezado)) {
       if (opcionales.has(k)) continue;
       if (v === null || v === undefined || v === '') {

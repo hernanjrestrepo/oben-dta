@@ -27,6 +27,7 @@ const MANUAL: Record<string, T> = {
   Órdenes: { en: 'Orders', pt: 'Pedidos', fr: 'Commandes' },
   Clientes: { en: 'Customers', pt: 'Clientes', fr: 'Clients' },
   Equivalencias: { en: 'Equivalences', pt: 'Equivalências', fr: 'Équivalences' },
+  'Tiempos de tránsito': { en: 'Transit times', pt: 'Tempos de trânsito', fr: 'Délais de transit' },
   'Lista de Empaque': { en: 'Packing List', pt: 'Romaneio', fr: 'Liste de colisage' },
   'Liquidación y Facturación': { en: 'Settlement & Billing', pt: 'Liquidação e Faturamento', fr: 'Liquidation et facturation' },
   'Cuadro de integración': { en: 'Integration table', pt: 'Quadro de integração', fr: "Tableau d'intégration" },

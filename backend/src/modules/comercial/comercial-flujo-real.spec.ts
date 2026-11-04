@@ -221,7 +221,7 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(w.escrituras.map((e) => e.paso)).toEqual(['encabezado', 'detalle', 'detalle', 'detalle']);
     expect(w.escrituras.slice(1).map((e) => e.valores.CodSecProduct)).toEqual([1024, 5622, 261]); // 609,6 mm → referencia de 610 mm
     expect(w.escrituras[0].valores).toMatchObject({ CodSecEntity: 9995, CodSedCustomerAddress: 1828, PurchaseOrder: 'OC-PARADIXE-0002', DestinationPort: 1186, Export: 'true' });
-    expect(w.escrituras[0].valores.Notes).toMatch(/^PRUEBA OBEN XMART - NO PROCESAR\. Oben Xmart · orden de compra OC-PARADIXE-0002/); // servidor de pruebas
+    expect(w.escrituras[0].valores.Notes).toBe('PRUEBA OBEN XMART - NO PROCESAR.'); // servidor de pruebas
     expect(caso.eventos.at(-1)!.detalle).toMatch(/Proforma 11547 creada en OBEN MAS \(servidor de PRUEBAS de Oben, código interno 13400\)/);
     expect(await w.store.get('t1', '11547')).toMatchObject({ estado: 'sin_cubicar' });
 

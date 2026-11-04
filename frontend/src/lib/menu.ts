@@ -5,6 +5,7 @@ import {
   FileSpreadsheet,
   FileText,
   GraduationCap,
+  Clock,
   History,
   LayoutDashboard,
   Mail,
@@ -63,6 +64,7 @@ export const MENU: GrupoMenu[] = [
       { href: '/orders', label: 'Órdenes', icon: ShoppingCart, ...ORDENES },
       { href: '/clients', label: 'Clientes', icon: Users, ver: ['clients.read'], operar: ['clients.create', 'clients.update', 'clients.delete'] },
       { href: '/equivalencias', label: 'Equivalencias', icon: ArrowRightLeft, ver: ['products.read'], operar: ['products.create', 'products.update', 'products.delete'] },
+      { href: '/tiempos-transito', label: 'Tiempos de tránsito', icon: Clock, ver: ['products.read'], operar: ['products.create', 'products.update', 'products.delete'] },
     ],
   },
   {

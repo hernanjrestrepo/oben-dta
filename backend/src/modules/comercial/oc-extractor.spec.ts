@@ -253,3 +253,40 @@ describe('extraerConReglas — OC en PDF (DORFAN, 3-nov)', () => {
     expect(r.lineas[0].kilos).toBe(4700);
   });
 });
+
+describe('extraerConReglas — correo de Castañeda (4-nov): tabla en celdas, precio de encabezado, película inferida', () => {
+  const texto = [
+    'Hola Mercedes, favor montar el siguiente pedido a planta Barranquilla:',
+    'Ciudad: Bogotá',
+    'Bobina Jumbo',
+    'U$D 2,50',
+    'Contado contra factura',
+    '1 sku 25 micras Sc',
+    'Entrega 23 de noviembre',
+    'SC 25 - 640',
+    '7.500 KILOS',
+    'SC 25 - 1000',
+    '17.000 KILOS',
+  ].join('\n');
+  const hoy = new Date('2026-11-03T20:00:00Z');
+
+  it('toma ancho, kilos, precio y moneda, y deduce la película SC---0025TN', () => {
+    const r = extraerConReglas(texto, 'CASTAÑEDA HERNANDEZ VICTOR ALFONSO', [], { peliculasConocidas: ['SC---0020TN', 'SC---0025TN', 'ET---0012RT'], hoy });
+    expect(r.lineas).toHaveLength(2);
+    expect(r.lineas[0]).toMatchObject({ kilos: 7500, anchoMm: 640, precioUnitario: 2.5, moneda: 'USD', codigoOben: 'SC---0025TN', codigoCliente: 'SC 25' });
+    expect(r.lineas[1]).toMatchObject({ kilos: 17000, anchoMm: 1000, precioUnitario: 2.5, moneda: 'USD', codigoOben: 'SC---0025TN' });
+    expect(r.lineas[0].faltantes).toEqual([]);
+    expect(r.fechaRequerida).toBe('2026-11-23');
+  });
+
+  it('si el catálogo trae dos películas posibles no adivina', () => {
+    const r = extraerConReglas(texto, '', [], { peliculasConocidas: ['SC---0025TN', 'SC---0025TS'], hoy });
+    expect(r.lineas[0].codigoOben).toBeNull();
+    expect(r.lineas[0].faltantes.join(' ')).toMatch(/sin equivalencia/);
+  });
+
+  it('una equivalencia de la tabla manda sobre la inferencia', () => {
+    const r = extraerConReglas(texto, '', [{ id: 'e1', clientCode: 'SC 25', obenCode: 'SC---0025TN' }], { peliculasConocidas: ['SC---0025TS'], hoy });
+    expect(r.lineas[0]).toMatchObject({ codigoOben: 'SC---0025TN', equivalenciaId: 'e1' });
+  });
+});
