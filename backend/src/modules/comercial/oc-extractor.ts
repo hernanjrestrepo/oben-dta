@@ -370,6 +370,7 @@ export async function extraerConIa(
     'Reglas: no inventes datos — si algo no está en la orden, usa null. "codigoCliente" es el nombre o código con que el cliente pide el material, copiado tal cual.',
     'Si la tabla trae un código interno del ítem (p. ej. "02720") Y una descripción del material (p. ej. "BOPP-SC 17 MICRAS TRANSP."), "codigoCliente" es la DESCRIPCIÓN del material, nunca el código del ítem.',
     '"FCL 40\"", "40 HC" o "contenedor de 20\'" es el tamaño del CONTENEDOR, nunca un ancho. Si el correo es un hilo reenviado, la orden vigente es la tabla o el pedido más reciente con cantidades por renglón (por ejemplo materiales, anchos en mm, kg); ignora los mensajes antiguos citados más abajo.',
+    'Las cantidades con punto de miles ("2.580", "23.203") son miles: devuélvelas como entero (2580, 23203), nunca como decimal.',
     'Si la columna de ancho no trae unidad: los valores menores a 200 son centímetros ("unidadAncho":"cm") y los de 200 o más son milímetros ("mm"). Nunca dejes un ancho sin unidad.',
     input.clienteFinalEnAsunto ? 'Este cliente es intermediario: el cliente final viene en el asunto.' : '',
     input.equivalencias.length
@@ -416,7 +417,7 @@ export async function extraerConIa(
     return {
       textoCliente: txt(o.textoCliente) ?? txt(o.codigoCliente) ?? '(línea sin texto)',
       codigoCliente: txt(o.codigoCliente),
-      cantidad: numOrNull(o.cantidad),
+      cantidad: milesBrasilenos(numOrNull(o.cantidad), txt(o.unidad), input.texto),
       // Unidad dañada por el OCR ("Kão(s)"): si el documento habla de kilos, es kg.
       unidad: txt(o.unidad) ?? (/\bkilos?\b|\bkgs?\b|\bk.{1,2}\(s\)/i.test(input.texto) ? 'kg' : null),
       ancho: numOrNull(o.ancho),
@@ -616,6 +617,19 @@ export function inferirPelicula(texto: string, peliculas: string[]): string | nu
     }
   }
   return null;
+}
+
+/**
+ * "2.580" con punto de miles (formato brasileño/colombiano) llega de la IA como el decimal 2,58 (4-nov, Mega Goglio: 23.203 kg salían
+ * como 23). Si la cantidad es menor a 100, tiene decimales y el texto trae exactamente ese número escrito con 3 decimales ("2.580"),
+ * son miles: 2580. Solo para kg o sin unidad (en toneladas "2,5" sí es un decimal).
+ */
+export function milesBrasilenos(cantidad: number | null, unidad: string | null, texto: string): number | null {
+  if (cantidad === null || cantidad >= 100 || Number.isInteger(cantidad)) return cantidad;
+  if (unidad && !/^k/i.test(unidad.trim())) return cantidad;
+  const ficha = cantidad.toFixed(3);
+  const re = new RegExp(`(?<![\\d.,])${ficha.replace('.', '\\.')}(?![\\d])`);
+  return re.test(texto) ? Math.round(cantidad * 1000) : cantidad;
 }
 
 function normalizarFecha(raw: string): string | null {

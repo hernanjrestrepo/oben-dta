@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
 import { aKilos, aMicras, aMilimetros, parseNumero, unidadEspesor, unidadLongitud, unidadPeso } from './unidades';
-import { buscarEquivalencia, construirLinea, extraerConIa, extraerConReglas, inferirPelicula, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef } from './oc-extractor';
+import { buscarEquivalencia, construirLinea, extraerConIa, extraerConReglas, inferirPelicula, milesBrasilenos, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef } from './oc-extractor';
 
 const EQ: EquivalenciaRef[] = [
   { id: 'e1', clientCode: 'BOPP 3', obenCode: 'SC3' },
@@ -379,5 +379,18 @@ describe('extraerConReglas — el contenedor no es un ancho (Mega Goglio, 4-nov)
   it('"1 FCL 40\\" com aprox. 23,5 tons" no genera un ancho de 1016 mm', () => {
     const r = extraerConReglas('Quantidade mínima de 1 FCL 40" com aprox. 23,5 tons.', 'PEDIDO', []);
     expect(r.lineas[0]?.anchoMm ?? null).toBeNull();
+  });
+});
+
+describe('milesBrasilenos — "2.580" kg no es 2,58 (Mega Goglio, 4-nov)', () => {
+  const tabla = 'PET ET12TA | 12 | 480 | 10 | 32.000 | 2.580' + String.fromCharCode(10) + 'PET ET12TA | 12 | 510 | 8 | 32.000 | 2.193';
+  it('el decimal 2,58 que sale de "2.580" en la tabla son 2580 kg', () => {
+    expect(milesBrasilenos(2.58, 'kg', tabla)).toBe(2580);
+    expect(milesBrasilenos(2.193, null, tabla)).toBe(2193);
+  });
+  it('no toca enteros, cantidades grandes, toneladas ni decimales que el texto no trae con 3 decimales', () => {
+    expect(milesBrasilenos(2580, 'kg', tabla)).toBe(2580);
+    expect(milesBrasilenos(2.5, 'kg', 'cantidad 2,5 kg')).toBe(2.5);
+    expect(milesBrasilenos(2.58, 't', tabla)).toBe(2.58);
   });
 });
