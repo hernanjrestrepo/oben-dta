@@ -80,8 +80,8 @@ describe('Proformas en OBEN MAS (APIs comerciales, servidor de pruebas)', () => 
       DestinationPort: 1186, CodSecCityDestinationPort: 1186, CodSedCustomerAddress: 1828, CodSecEtiquetaPallet: 1, CodSecEtiquetaBobina: 5,
       From: 'CARTAGENA - COLOMBIA', To: 'NEWBURGH, NY 12550', Export: 'true', Sample: 'false', Stock: 'false', SubTotal: 2500, Total: 2500, PurchaseOrder: 'OC-PRUEBA-1',
     });
-    expect(String(v.encabezado.DeliveryDate)).toMatch(/^2026-12-06 \d{2}:\d{2}:\d{2}$/);
-    expect(String(v.encabezado.InvoiceMonth)).toMatch(/^2026-11-21 \d{2}:\d{2}:\d{2}$/);
+    expect(String(v.encabezado.DeliveryDate)).toMatch(/^2026-12-06T\d{2}:\d{2}:\d{2}$/);
+    expect(String(v.encabezado.InvoiceMonth)).toMatch(/^2026-11-21T\d{2}:\d{2}:\d{2}$/);
     expect(v.lineas[0]).toMatchObject({ codSecProduct: 5622, codSecTariff: 1, partida: '3920620090', kilos: 1000, precio: 2.5, etiqueta: 'ALADDIN PACKAGING LLC' });
     expect(v.empaque).toEqual([{ referencia: 'ET---0012RT0600S0760', valido: true, mensaje: 'OK' }]);
   });
