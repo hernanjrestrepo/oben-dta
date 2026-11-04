@@ -20,6 +20,7 @@ import {
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
 import { ClassifierRegistry } from '../classification/classifier.registry';
+import { esPedidoPorDefecto } from './buzon-pedidos';
 import { ClassificationAttachment } from '../classification/classification.types';
 import { QuotesService } from '../quotes/quotes.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
@@ -831,6 +832,12 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
       category = classification.category;
       confidence = classification.confidence;
       provider = classification.provider;
+      // Buzón de pedidos: lo que una persona manda y el clasificador no entiende es un pedido, no se descarta (ver buzon-pedidos.ts).
+      if (esPedidoPorDefecto(from, subject, category)) {
+        this.logger.log(`[tenant ${tenantId}] "${subject}" (${from}) clasificado como ${category}: se trata como pedido (buzón de Pedidos de Venta).`);
+        category = 'purchase_order';
+        confidence = Math.max(confidence, 0.6);
+      }
 
       switch (category) {
         case 'quote_request': {

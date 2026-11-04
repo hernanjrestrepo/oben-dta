@@ -257,8 +257,16 @@ describe('ImapConnectorService (WO-018 Sprint 6 — conector de correo real, ent
   });
 
   it.each(['carrier', 'comex', 'unknown'] as const)(
-    'categoría "%s" no tiene flujo automático — queda auditada como skipped, sin llamar a Quotes/PO',
+    'categoría "%s" de un correo del SISTEMA no tiene flujo automático — queda auditada como skipped, sin llamar a Quotes/PO',
     async (category) => {
+      // De una persona se trata como pedido (buzón de Pedidos de Venta, 4-nov); el descarte aplica a los avisos del sistema de Oben.
+      (simpleParser as unknown as jest.Mock).mockResolvedValue({
+        messageId: '<msg-1@corp.com>',
+        from: { value: [{ address: 'notif.app.co@obengroup.com' }] },
+        subject: 'Aviso del sistema',
+        text: 'cuerpo',
+        attachments: [],
+      });
       classifiers.resolve.mockResolvedValue({
         classify: jest.fn().mockResolvedValue({ category, confidence: 0.5, provider: 'rules' }),
       });
