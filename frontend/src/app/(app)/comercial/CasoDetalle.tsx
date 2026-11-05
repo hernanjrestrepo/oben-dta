@@ -246,7 +246,10 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
                   return (
                     <tr key={l.n} className={l.faltantes.length ? 'bg-red-50/40' : ''}>
                       <td className="px-2 py-1.5 text-gray-500">{l.n}</td>
-                      <td className="px-2 py-1.5 text-gray-800">{l.textoCliente}</td>
+                      <td className="px-2 py-1.5 text-gray-800">
+                        {l.textoCliente}
+                        {l.codigoItem && <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">{t('Ítem')} {l.codigoItem}</span>}
+                      </td>
                       <td className="px-2 py-1.5">
                         {editable ? (
                           <div className="space-y-1">

@@ -28,6 +28,8 @@ export interface CasoLinea {
   textoCliente: string;
   /** Cómo nombra el cliente el material (ej. "BOPP 1"). */
   codigoCliente: string | null;
+  /** Código o ID del ítem en la orden de compra (columna "Código ID" / "Item"); alimenta OBS. ETIQUETA de algunos clientes. */
+  codigoItem?: string | null;
   /** Referencia de Oben — SOLO desde la tabla de equivalencias o una corrección humana, nunca adivinada. */
   codigoOben: string | null;
   equivalenciaId: string | null;

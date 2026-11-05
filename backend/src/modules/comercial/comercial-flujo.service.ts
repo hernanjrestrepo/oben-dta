@@ -610,6 +610,7 @@ export class ComercialFlujoService {
         kilos: l.kilos ?? 0,
         precio: l.precioUnitario ?? 0,
         etiqueta: l.codigoCliente ?? undefined,
+        codigoItem: l.codigoItem ?? undefined,
       })),
     };
   }

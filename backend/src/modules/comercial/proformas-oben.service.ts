@@ -1,4 +1,4 @@
-import { avisosLimitesProforma } from './limites-proforma';
+import { revisarLimitesProforma } from './limites-proforma';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
@@ -37,6 +37,8 @@ export interface LineaEntrada {
   kilos: number;
   precio: number;
   etiqueta?: string;
+  /** Código o ID del ítem en la OC del cliente: va en OBS. ETIQUETA si el cliente así lo exige (tabla client_obs_etiqueta). */
+  codigoItem?: string;
   numeroParte?: string;
   /** Partida (CodSec_TariffDeparture); sin ella se toma la de la línea de película de la referencia. */
   codSecTariff?: number;
@@ -184,6 +186,7 @@ export class ProformasObenService {
       else bloqueos.push(`Línea ${i + 1}: ${r.motivo}`);
     }
     const partidas = (await this.maestros.maestro('partidas', { limite: 1000 })).items;
+    const origenEtiqueta = await this.origenObsEtiqueta(Number(e.cliente));
     const exporta = !/colombia/i.test(txt(par?.Pais ?? filaCliente?.Pais_Cliente));
     for (const [i, l] of (e.lineas ?? []).entries()) {
       const n = i + 1;
@@ -203,6 +206,11 @@ export class ProformasObenService {
       else if (!l.codSecTariff && opciones.length > 1) {
         avisos.push(`Línea ${n}: la línea ${txt(p.Linea)} tiene ${opciones.length} partidas en Oben; se usó ${txt(elegida.Valor)} (${txt(elegida.Descripcion)}). Cámbiala si no es la correcta.`);
       }
+      // OBS. ETIQUETA: algunos clientes piden el código del ítem de su OC en cada referencia (Microplast: "Código ID"; Agraf: "Item").
+      const etiquetaDeLinea = origenEtiqueta === 'codigo_item' ? txt(l.codigoItem) : txt(l.etiqueta) || txt(par?.Nota_Etiqueta) || '';
+      if (origenEtiqueta === 'codigo_item' && !etiquetaDeLinea) {
+        bloqueos.push(`Línea ${n}: ${txt(filaCliente?.Nombre_Cliente) || 'el cliente'} exige el código del ítem de su orden de compra en OBS. ETIQUETA y no se leyó. Escríbelo en la línea.`);
+      }
       lineas.push({
         codSecProduct: Number(p.CodSec_Prod),
         referencia: txt(p.Referencia),
@@ -211,7 +219,7 @@ export class ProformasObenService {
         precio: precio ?? 0,
         codSecTariff: Number(elegida?.CodSec_TariffDeparture ?? 0),
         partida: elegida ? txt(elegida.Valor) : null,
-        etiqueta: txt(l.etiqueta) || txt(par?.Nota_Etiqueta) || '',
+        etiqueta: etiquetaDeLinea,
         numeroParte: txt(l.numeroParte) || '',
         creada: false,
       });
@@ -243,14 +251,16 @@ export class ProformasObenService {
     const kilosTotales = lineas.reduce((a, l) => a + l.kilos, 0);
     const pesoBruto = round2(num(e.pesoBruto) ?? kilosTotales * 1.07);
     // Límites de Oben (5-nov): kilos netos ≤ bruto máximo del contenedor del país − 2.000 kg, y máximo 4 SKU por línea de película.
-    avisos.push(
-      ...avisosLimitesProforma({
+    {
+      const limites = revisarLimitesProforma({
         pais: txt(par?.Pais ?? filaCliente?.Pais_Cliente),
         brutoMaxParametrizado: num(par?.Peso_Bruto_Maximo),
         kilosNetos: kilosTotales,
         lineas,
-      }),
-    );
+      });
+      avisos.push(...limites.avisos);
+      bloqueos.push(...limites.bloqueos);
+    }
     if (!e.pesoBruto) avisos.push(`Peso bruto estimado: kilos netos + 7 % (${pesoBruto} kg). Cámbialo si tienes el real.`);
     // ISO con T: producción rechaza (400) la forma con espacio que pruebas sí acepta (confirmado el 4-nov con la PF 11845).
     const conHora = (f: string | null) => (f ? `${f}T${this.horaBogota()}` : '');
@@ -401,6 +411,16 @@ export class ProformasObenService {
       Pais: 'COLOMBIA',
       PaisPuertoDestino: 'COLOMBIA',
     };
+  }
+
+  /** Qué dato de la OC del cliente va en OBS. ETIQUETA ('codigo_item'); null = el comportamiento de siempre. */
+  private async origenObsEtiqueta(cliente: number): Promise<'codigo_item' | null> {
+    try {
+      const r = (await this.repo.query('SELECT origen FROM client_obs_etiqueta WHERE tenant_id = $1 AND cod_sec_entity = $2', [this.ctx.tenantId, cliente])) as Array<{ origen?: string }>;
+      return r[0]?.origen === 'codigo_item' ? 'codigo_item' : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Parametrización fijada por Comercial en Oben Xmart para un cliente (solo los campos que tiene). */

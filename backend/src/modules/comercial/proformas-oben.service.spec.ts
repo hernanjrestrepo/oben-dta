@@ -29,7 +29,7 @@ const ENTRADA = {
 
 type Resp = { ok: boolean; data?: unknown; error?: string; mode?: string };
 
-function armar(opts: { escribir?: (paso: string, valores: Record<string, unknown>) => Resp; empaque?: (prod: number) => boolean; sinPar?: boolean; cliente?: Record<string, unknown>; fijo?: Record<string, unknown> } = {}) {
+function armar(opts: { escribir?: (paso: string, valores: Record<string, unknown>) => Resp; empaque?: (prod: number) => boolean; sinPar?: boolean; cliente?: Record<string, unknown>; fijo?: Record<string, unknown>; obs?: 'codigo_item' } = {}) {
   const filas: Array<Record<string, unknown>> = [];
   const repo = {
     create: (x: Record<string, unknown>) => ({ ...x }),
@@ -40,7 +40,7 @@ function armar(opts: { escribir?: (paso: string, valores: Record<string, unknown
     }),
     findOne: jest.fn(async ({ where }: { where: Record<string, unknown> }) => filas.find((f) => (where.id ? f.id === where.id : f.ordenCompra === where.ordenCompra && f.servidor === where.servidor)) ?? null),
     find: jest.fn(async () => filas),
-    query: jest.fn(async () => (opts.fijo ? [opts.fijo] : [])),
+    query: jest.fn(async (sql: string) => (String(sql).includes('client_obs_etiqueta') ? (opts.obs ? [{ origen: opts.obs }] : []) : opts.fijo ? [opts.fijo] : [])),
   };
   const maestros = {
     maestro: jest.fn(async (nombre: string, o: { buscar?: string } = {}) => {
@@ -180,6 +180,33 @@ describe('Proformas en OBEN MAS (APIs comerciales, servidor de pruebas)', () => 
     expect(p.error).toMatch(/Puede haberse creado: búscalo en OBEN MAS/);
     await expect(svc.reintentar(String(p.id), 'Hernán')).rejects.toThrow(ConflictException);
     expect(llamadas).toHaveLength(1);
+  });
+});
+
+describe('OBS. ETIQUETA por cliente y límites de la proforma (5-nov)', () => {
+  it('un cliente que exige el código del ítem (Microplast, Agraf) lo lleva en cada referencia', async () => {
+    const { svc } = armar({ obs: 'codigo_item' });
+    const v = await svc.previsualizar({ ...ENTRADA, lineas: [{ referencia: 'ET---0012RT0600S0760', kilos: 1000, precio: 2.5, etiqueta: 'POLIESTER 12MC 980MM', codigoItem: '1007407' }] });
+    expect(v.bloqueos).toEqual([]);
+    expect(v.lineas[0].etiqueta).toBe('1007407');
+  });
+
+  it('si el código del ítem no se leyó, bloquea y pide escribirlo (no manda la descripción en su lugar)', async () => {
+    const { svc } = armar({ obs: 'codigo_item' });
+    const v = await svc.previsualizar({ ...ENTRADA, lineas: [{ referencia: 'ET---0012RT0600S0760', kilos: 1000, precio: 2.5, etiqueta: 'POLIESTER 12MC 980MM' }] });
+    expect(v.bloqueos.join(' ')).toMatch(/exige el código del ítem de su orden de compra en OBS\. ETIQUETA/);
+  });
+
+  it('los demás clientes siguen como siempre (la etiqueta no cambia)', async () => {
+    const { svc } = armar();
+    const v = await svc.previsualizar({ ...ENTRADA, lineas: [{ referencia: 'ET---0012RT0600S0760', kilos: 1000, precio: 2.5, etiqueta: 'X', codigoItem: '1007407' }] });
+    expect(v.lineas[0].etiqueta).toBe('X');
+  });
+
+  it('bloquea si los kilos netos pasan el tope del destino (bruto máximo de Oben menos 2.000 kg)', async () => {
+    const { svc } = armar();
+    const v = await svc.previsualizar({ ...ENTRADA, lineas: [{ referencia: 'ET---0012RT0600S0760', kilos: 23000, precio: 2.5 }] });
+    expect(v.bloqueos.join(' ')).toMatch(/superan el máximo por proforma/);
   });
 });
 

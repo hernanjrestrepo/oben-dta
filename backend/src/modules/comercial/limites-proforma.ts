@@ -58,19 +58,23 @@ export function topePesoNeto(pais: string, brutoMaxParametrizado?: number | null
 
 const kg = (n: number): string => n.toLocaleString('es-CO', { maximumFractionDigits: 2 });
 
-/** Avisos de peso y de cantidad de SKU. Vacío si la proforma cumple los dos límites. */
-export function avisosLimitesProforma(entrada: {
+/**
+ * Revisión de los dos límites. `bloqueos`: la proforma no se puede crear así (hay que dividir el pedido);
+ * `avisos`: no se pudo verificar (país sin tope en la tabla ni en OBEN MAS).
+ */
+export function revisarLimitesProforma(entrada: {
   pais: string;
   brutoMaxParametrizado?: number | null;
   kilosNetos: number;
   lineas: Array<{ linea: string | null; referencia: string }>;
-}): string[] {
+}): { avisos: string[]; bloqueos: string[] } {
   const avisos: string[] = [];
+  const bloqueos: string[] = [];
   const tope = topePesoNeto(entrada.pais, entrada.brutoMaxParametrizado);
   if (!tope) {
     avisos.push(`No hay peso bruto máximo por contenedor para ${entrada.pais || 'este destino'} (ni en la tabla ni en OBEN MAS): no se pudo verificar el peso máximo de la proforma.`);
   } else if (entrada.kilosNetos > tope.netoMaxKg) {
-    avisos.push(
+    bloqueos.push(
       `Los kilos netos (${kg(entrada.kilosNetos)} kg) superan el máximo por proforma para ${entrada.pais}: ${kg(tope.netoMaxKg)} kg ` +
         `(peso bruto máximo del contenedor ${kg(tope.brutoMaxKg)} kg menos ${kg(MARGEN_PESO_KG)} kg). Hay que dividir el pedido.`,
     );
@@ -82,8 +86,8 @@ export function avisosLimitesProforma(entrada: {
   }
   for (const [linea, skus] of porLinea) {
     if (skus.size > MAX_SKU_POR_LINEA) {
-      avisos.push(`La línea ${linea} trae ${skus.size} SKU (${[...skus].join(', ')}); el máximo por proforma es ${MAX_SKU_POR_LINEA}. Hay que dividir el pedido.`);
+      bloqueos.push(`La línea ${linea} trae ${skus.size} SKU (${[...skus].join(', ')}); el máximo por proforma es ${MAX_SKU_POR_LINEA}. Hay que dividir el pedido.`);
     }
   }
-  return avisos;
+  return { avisos, bloqueos };
 }

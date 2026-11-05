@@ -670,6 +670,8 @@ export interface CasoLinea {
   n: number;
   textoCliente: string;
   codigoCliente: string | null;
+  /** Código o ID del ítem en la orden de compra (va en OBS. ETIQUETA de algunos clientes). */
+  codigoItem?: string | null;
   codigoOben: string | null;
   equivalenciaId: string | null;
   cantidad: number | null;

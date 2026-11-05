@@ -30,6 +30,8 @@ export interface OcExtraccion {
 export interface LineaCampos {
   textoCliente: string;
   codigoCliente?: string | null;
+  /** Código o ID del ítem de la línea en la orden de compra ("Código ID" de Microplast, "Item" de Agraf). */
+  codigoItem?: string | null;
   cantidad?: number | null;
   unidad?: string | null;
   ancho?: number | null;
@@ -258,6 +260,15 @@ const RE_DESPACHO_ISO = /\b(?:despacho|entrega)\s*:?\s*\r?\n?\s*(\d{4})[/-](\d{2
 const RE_DIRECCION = /(?:direcci[oó]n\s+de\s+(?:entrega|despacho)|ship\s+to|deliver\s+to|entregar\s+en|lugar\s+de\s+entrega)\s*[:=-]\s*(.+)/i;
 const RE_CLIENTE_FINAL = /(?:cliente\s+final|end\s+customer|final\s+customer|customer)\s*[:\-]\s*([^|/\n]+)/i;
 
+/**
+ * Código del ítem al inicio de la línea de una tabla de OC: "10 1007407 POLIESTER 12MC…" (Código ID de Microplast, tras la
+ * posición) o "0006931 PET L BT ET Q2 12MIC…" (Item de Agraf). Solo cuenta un número de 5 a 10 dígitos seguido del texto del material.
+ */
+export function codigoItemDeLinea(linea: string): string | null {
+  const m = linea.trim().match(/^(?:\d{1,3}\s+)?(\d{5,10})\s+(?=[^\s\d]*[A-Za-zÁÉÍÓÚÑáéíóúñ])/);
+  return m ? m[1] : null;
+}
+
 export function extraerConReglas(
   texto: string,
   asunto: string,
@@ -297,6 +308,7 @@ export function extraerConReglas(
           : (global.moneda ?? '');
     campos.push({
       textoCliente: linea,
+      codigoItem: codigoItemDeLinea(linea),
       codigoCliente: eq?.clientCode ?? (codigoAncho ? codigoAncho[1].replace(/\s+/g, ' ').trim() : antes ? antes.slice(0, 80) : null),
       cantidad: parseNumero(peso[1]),
       unidad: peso[2],
@@ -364,10 +376,11 @@ export async function extraerConIa(
     'Eres un asistente de Customer Service de una fábrica de películas plásticas (BOPP, PET, etc.).',
     'Lee la orden de compra y devuelve SOLO un JSON con esta forma:',
     '{"numero": string|null, "fechaRequerida": "YYYY-MM-DD"|null, "direccionEntrega": string|null, "clienteFinal": string|null,',
-    ' "lineas": [{"textoCliente": string, "codigoCliente": string|null, "cantidad": number|null, "unidad": "kg"|"lb"|"t"|null,',
+    ' "lineas": [{"textoCliente": string, "codigoCliente": string|null, "codigoItem": string|null, "cantidad": number|null, "unidad": "kg"|"lb"|"t"|null,',
     '   "ancho": number|null, "unidadAncho": "mm"|"cm"|"m"|"in"|null, "espesor": number|null, "unidadEspesor": "um"|"mil"|"g"|null,',
     '   "precioUnitario": number|null, "moneda": "USD"|"COP"|null}]}',
     'Reglas: no inventes datos — si algo no está en la orden, usa null. "codigoCliente" es el nombre o código con que el cliente pide el material, copiado tal cual.',
+    '"codigoItem" es el código o ID del ítem de esa línea tal como aparece en la columna de código de la tabla ("Código ID", "Item", "Código"), copiado tal cual con sus ceros a la izquierda; null si la tabla no trae esa columna. No es la posición (10, 20) ni la referencia de Oben.',
     'Si la tabla trae un código interno del ítem (p. ej. "02720") Y una descripción del material (p. ej. "BOPP-SC 17 MICRAS TRANSP."), "codigoCliente" es la DESCRIPCIÓN del material, nunca el código del ítem.',
     '"FCL 40\"", "40 HC" o "contenedor de 20\'" es el tamaño del CONTENEDOR, nunca un ancho. Si el correo es un hilo reenviado, la orden vigente es la tabla o el pedido más reciente con cantidades por renglón (por ejemplo materiales, anchos en mm, kg); ignora los mensajes antiguos citados más abajo.',
     'Las cantidades con punto de miles ("2.580", "23.203") son miles: devuélvelas como entero (2580, 23203), nunca como decimal.',
@@ -417,6 +430,10 @@ export async function extraerConIa(
     return {
       textoCliente: txt(o.textoCliente) ?? txt(o.codigoCliente) ?? '(línea sin texto)',
       codigoCliente: txt(o.codigoCliente),
+      codigoItem: (() => {
+        const v = o.codigoItem;
+        return typeof v === 'number' && Number.isFinite(v) ? String(v) : txt(v);
+      })(),
       cantidad: milesBrasilenos(numOrNull(o.cantidad), txt(o.unidad), input.texto),
       // Unidad dañada por el OCR ("Kão(s)"): si el documento habla de kilos, es kg.
       unidad: txt(o.unidad) ?? (/\bkilos?\b|\bkgs?\b|\bk.{1,2}\(s\)/i.test(input.texto) ? 'kg' : null),
@@ -494,6 +511,7 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
     n,
     textoCliente: c.textoCliente,
     codigoCliente: eq?.clientCode ?? c.codigoCliente ?? null,
+    codigoItem: c.codigoItem ?? null,
     codigoOben: eq?.obenCode ?? null,
     equivalenciaId: eq?.id || null,
     cantidad: c.cantidad ?? null,

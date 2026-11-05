@@ -12,6 +12,7 @@ class LineaDto {
   @IsNumber() @IsPositive() kilos: number;
   @IsNumber() @IsPositive() precio: number;
   @IsOptional() @IsString() @MaxLength(200) etiqueta?: string;
+  @IsOptional() @IsString() @MaxLength(60) codigoItem?: string;
   @IsOptional() @IsString() @MaxLength(100) numeroParte?: string;
   @IsOptional() @IsInt() @IsPositive() codSecTariff?: number;
 }

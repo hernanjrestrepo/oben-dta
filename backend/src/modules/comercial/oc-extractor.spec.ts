@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
 import { aKilos, aMicras, aMilimetros, parseNumero, unidadEspesor, unidadLongitud, unidadPeso } from './unidades';
-import { buscarEquivalencia, construirLinea, extraerConIa, extraerConReglas, inferirPelicula, milesBrasilenos, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef } from './oc-extractor';
+import { buscarEquivalencia, codigoItemDeLinea, construirLinea, extraerConIa, extraerConReglas, inferirPelicula, milesBrasilenos, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef } from './oc-extractor';
 
 const EQ: EquivalenciaRef[] = [
   { id: 'e1', clientCode: 'BOPP 3', obenCode: 'SC3' },
@@ -392,5 +392,36 @@ describe('milesBrasilenos — "2.580" kg no es 2,58 (Mega Goglio, 4-nov)', () =>
     expect(milesBrasilenos(2580, 'kg', tabla)).toBe(2580);
     expect(milesBrasilenos(2.5, 'kg', 'cantidad 2,5 kg')).toBe(2.5);
     expect(milesBrasilenos(2.58, 't', tabla)).toBe(2.58);
+  });
+});
+
+describe('código del ítem de la OC (OBS. ETIQUETA de Microplast y Agraf)', () => {
+  it('Microplast: el "Código ID" va tras la posición', () => {
+    expect(codigoItemDeLinea('10 1007407 POLIESTER 12MC 980MM ET-RT OPP 26.OCT.2026 11.368 KG 2,15 24.441,20')).toBe('1007407');
+    expect(codigoItemDeLinea('20 1007406 POLIESTER 12MC 770MM ET-RT OPP 26.OCT.2026 616 KG 2,15 1.324,40')).toBe('1007406');
+  });
+
+  it('Agraf: el "Item" abre la línea y conserva los ceros', () => {
+    expect(codigoItemDeLinea('0006931 PET L BT ET Q2 12MIC 60CM FMP00 KG 650,000 $US2,25 $US19,00 $US0,00 $US1.740,38')).toBe('0006931');
+    expect(codigoItemDeLinea('0015004 PET L BT ET Q2 12MIC 74CM FMP00 KG 4.650,000')).toBe('0015004');
+  });
+
+  it('sin código al inicio no se inventa uno (cantidades, anchos y posiciones no cuentan)', () => {
+    expect(codigoItemDeLinea('BOPP SC 25 - 640 mm 2.500 kg')).toBeNull();
+    expect(codigoItemDeLinea('10 BOPP 25 MICRAS 1.000 KG')).toBeNull();
+    expect(codigoItemDeLinea('11368 KG POLIESTER')).toBe('11368'.length >= 5 ? '11368' : null);
+  });
+
+  it('las reglas lo guardan en la línea y la IA también', async () => {
+    const r = extraerConReglas('Orden de compra No 4500095300\n10 1007407 POLIESTER 12MC 980MM ET-RT OPP 11.368 KG 2,15', 'OC', []);
+    expect(r.lineas[0].codigoItem).toBe('1007407');
+    const ia = await extraerConIa({ host: 'x', model: 'm' }, {
+      texto: 'tabla',
+      asunto: 'OC',
+      equivalencias: [],
+      ejemplos: [],
+      llm: async () => JSON.stringify({ numero: 'OCI-1', lineas: [{ textoCliente: 'PET L BT ET Q2 12MIC 60CM', codigoCliente: 'PET L BT ET Q2 12MIC 60CM', codigoItem: '0006931', cantidad: 650, unidad: 'kg', ancho: 60, unidadAncho: 'cm', precioUnitario: 2.25, moneda: 'USD' }] }),
+    });
+    expect(ia.lineas[0].codigoItem).toBe('0006931');
   });
 });
