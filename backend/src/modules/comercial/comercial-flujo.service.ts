@@ -668,10 +668,13 @@ export class ComercialFlujoService {
 
     const filename = sim ? `Proforma_SIMULADA-PF${caso.numberPF}.pdf` : (typeof pdfRes.data?.filename === 'string' && pdfRes.data.filename) || `Proforma-PF${caso.numberPF}.pdf`;
     const reenvio = caso.estado === 'enviada_cliente';
-    const asunto = `${sim ? '[SIMULADO] ' : ''}Proforma ${caso.numberPF}${caso.ocNumero ? ` — su orden de compra ${caso.ocNumero}` : ''} [PF ${caso.numberPF}]`;
+    // Plantilla de Oben (documento de especificaciones, 5-nov); "[PF n]" se conserva en el asunto: con él se reconoce la respuesta del cliente.
+    const asunto = `${sim ? '[SIMULADO] ' : ''}Oben Colombia / Proforma ${caso.numberPF} por aprobar [PF ${caso.numberPF}]`;
     const cuerpo = [
-      '<p>Buen día,</p>',
-      `<p>Adjuntamos la Proforma N.° ${esc(caso.numberPF)}${caso.ocNumero ? ` correspondiente a su orden de compra ${esc(caso.ocNumero)}` : ''}. Por favor revísela y respóndanos en este mismo correo con su aprobación (Proforma firmada o confirmación por escrito), o indíquenos si requiere algún cambio.</p>`,
+      '<p>Estimado cliente, cordial saludo.</p>',
+      `<p>Adjuntamos la <strong>Proforma N.° ${esc(caso.numberPF)}</strong> para su revisión y firma.</p>`,
+      '<p>Agradecemos su colaboración con la validación y devolución del documento firmado a la mayor brevedad posible, con el fin de dar inicio oportuno al proceso de producción.</p>',
+      '<p><strong>Importante:</strong> El tiempo de producción (lead time) comenzará a contabilizarse únicamente cuando hayamos recibido la PF debidamente firmada y se cuente con la liberación por parte de nuestro departamento de Cartera.</p>',
       '<p>Cordialmente,<br>Customer Service — Oben</p>',
       sim ? `<p><strong>SIMULADO:</strong> ${esc(PROFORMA_PDF_SIMULADA_LABEL)}. Correo de prueba.</p>` : '',
     ].join('');

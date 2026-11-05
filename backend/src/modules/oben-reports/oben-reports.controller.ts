@@ -14,6 +14,7 @@ import { ObenReportsService, OBEN_QUERY_OPTIONS } from './oben-reports.service';
 import { OBEN_REPORTS, findObenReport } from './oben-report-registry';
 import { LiquidacionRatesService } from '../freight-rates/liquidacion-rates.service';
 import { origenDatosOben } from './origen-datos';
+import { avisosPesosHtml } from './pesos-empaque';
 import { FormatosService, renderEnvio } from '../formatos/formatos.service';
 
 class SendReportDto {
@@ -97,7 +98,7 @@ export class ObenReportsController {
     @Body() dto: SendReportDto,
   ) {
     const n = this.parseOrderNumber(numberOrderSales);
-    const { included, failed } = await this.reports.buildDocumentPackage(n);
+    const { included, failed, avisos, simulated } = await this.reports.buildDocumentPackage(n);
 
     if (included.length === 0) {
       throw new BadRequestException('Ningún reporte pudo consultarse para esta orden — no se envió nada.');
@@ -131,7 +132,7 @@ export class ObenReportsController {
         to,
         ...(cc.length ? { cc: cc.join(',') } : {}),
         subject: `${origen.prefijoAsunto}${correo.asunto}`,
-        body: `${correo.cuerpoHtml}<ul>${includedListHtml}</ul>${failedListHtml}`,
+        body: `${correo.cuerpoHtml}<ul>${includedListHtml}</ul>${failedListHtml}${avisosPesosHtml(avisos)}`,
         attachments: included.map((r) => ({
           filename: r.filename,
           content: r.buffer.toString('base64'),
@@ -156,9 +157,22 @@ export class ObenReportsController {
         included: included.map((r) => r.key),
         failed: failed.map((r) => ({ key: r.key, error: r.error })),
         messageId: sendResult.data?.id ?? null,
+        ...(avisos?.length ? { avisos } : {}),
       },
       reason: sendResult.ok ? null : sendResult.error,
     });
+
+    if (sendResult.ok) {
+      await this.reports.registrarEnvio({
+        numberOrderSales: n,
+        messageId: sendResult.data?.id ?? null,
+        asunto: `${origen.prefijoAsunto}${correo.asunto}`,
+        destinatarios: [to, ...cc],
+        included,
+        avisos,
+        simulated,
+      });
+    }
 
     if (!sendResult.ok) {
       throw new BadRequestException(sendResult.error ?? 'No se pudo enviar el correo');

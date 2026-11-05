@@ -300,7 +300,7 @@ describe('ComercialFlujoService — flujo Comercial de punta a punta (reunión 2
       const envio = w.emails.at(-1)!;
       expect(envio).toMatchObject({
         to: CLIENTE_DEMO.email,
-        subject: '[SIMULADO] Proforma SIM-95001 — su orden de compra OC-SIM-0001 [PF SIM-95001]',
+        subject: '[SIMULADO] Oben Colombia / Proforma SIM-95001 por aprobar [PF SIM-95001]',
         inReplyTo: '<oc-1@cliente-simulado.example>',
       });
       expect(String(envio.cc)).toContain(CLIENTE_DEMO.comercialEmail);
@@ -312,7 +312,7 @@ describe('ComercialFlujoService — flujo Comercial de punta a punta (reunión 2
       // El cliente aprueba en el mismo hilo, con la Proforma firmada.
       const r = await w.flujo.procesarCorreoRespuesta({
         from: 'gerente@cliente-simulado.example',
-        subject: 'Re: Proforma SIM-95001 [PF SIM-95001]',
+        subject: 'Re: Oben Colombia / Proforma SIM-95001 por aprobar [PF SIM-95001]',
         body: 'Buen día, aprobada. Adjunto la proforma firmada.\n\n> Adjuntamos la Proforma...',
         messageId: '<resp-1@cliente-simulado.example>',
         inReplyTo: String(caso.hiloMessageIds.at(-1)),

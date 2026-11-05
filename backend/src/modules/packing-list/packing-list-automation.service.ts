@@ -18,6 +18,7 @@ import { origenDatosOben } from '../oben-reports/origen-datos';
 import { FormatosService, renderEnvio } from '../formatos/formatos.service';
 import { FacturasParcialesService } from '../facturacion/facturas-parciales.service';
 import { LiquidacionAvisoService } from '../liquidacion/liquidacion-aviso.service';
+import { avisosPesosHtml } from '../oben-reports/pesos-empaque';
 
 /** Lista de distribución que recibe los avisos de órdenes retenidas por cartera (PND). */
 export const PACKING_LIST_CARTERA_DISTRIBUTION_KEY = 'packing_list_cartera';
@@ -244,7 +245,7 @@ export class PackingListAutomationService {
         to: primaryTo,
         ...(cc.length ? { cc: cc.join(',') } : {}),
         subject: `${origen.prefijoAsunto}${correo.asunto}`,
-        body: correo.cuerpoHtml,
+        body: `${correo.cuerpoHtml}${avisosPesosHtml(documentPackage.avisos)}`,
         attachments: documentPackage.included.map((r) => ({
           filename: r.filename,
           content: r.buffer.toString('base64'),
@@ -270,9 +271,22 @@ export class PackingListAutomationService {
         failed: [],
         ok: sendResult.ok,
         messageId: sendResult.data?.id ?? null,
+        ...(documentPackage.avisos?.length ? { avisos: documentPackage.avisos } : {}),
       },
       reason: sendResult.ok ? null : sendResult.error,
     });
+
+    if (sendResult.ok) {
+      await this.reports.registrarEnvio({
+        numberOrderSales,
+        messageId: sendResult.data?.id ?? null,
+        asunto: `${origen.prefijoAsunto}${correo.asunto}`,
+        destinatarios: [primaryTo, ...cc],
+        included: documentPackage.included,
+        avisos: documentPackage.avisos,
+        simulated: documentPackage.simulated,
+      });
+    }
 
     if (!sendResult.ok) {
       return {

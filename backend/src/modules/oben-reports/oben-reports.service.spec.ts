@@ -206,3 +206,26 @@ describe('ObenReportsService.confirmApproveComex', () => {
     expect(result.error).toBe('network down');
   });
 });
+
+describe('ObenReportsService.registrarEnvio', () => {
+  const adjunto = { key: 'empaque_unificada', label: 'Lista', filename: 'Lista-OV1.xlsx', contentType: 'x', buffer: Buffer.from('abc'), fuente: { Detalle: [] } };
+  const armar = (save: jest.Mock) => {
+    const repo = { create: jest.fn((x) => x), save } as any;
+    const hub = { call: jest.fn() } as any;
+    return new ObenReportsService(hub, new ObenReportExcelService(), { build: jest.fn() } as any, repo, { tenantId: 't1' } as any);
+  };
+
+  it('guarda cada archivo con su huella, la respuesta de Oben y los avisos', async () => {
+    const save = jest.fn().mockResolvedValue([]);
+    await armar(save).registrarEnvio({ numberOrderSales: 11314, messageId: '<m>', asunto: 'a', destinatarios: ['x@y.co', 'z@y.co'], included: [adjunto], avisos: ['aviso'] });
+    const [filas] = save.mock.calls[0];
+    expect(filas).toHaveLength(1);
+    expect(filas[0]).toMatchObject({ tenantId: 't1', numberOrderSales: 11314, messageId: '<m>', claveReporte: 'empaque_unificada', bytes: 3, avisos: ['aviso'], destinatarios: 'x@y.co, z@y.co', fuente: { Detalle: [] } });
+    expect(filas[0].sha256).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  });
+
+  it('si no puede guardar, no lanza (no debe tumbar el envío)', async () => {
+    const save = jest.fn().mockRejectedValue(new Error('bd caída'));
+    await expect(armar(save).registrarEnvio({ numberOrderSales: 1, destinatarios: [], included: [adjunto] })).resolves.toBeUndefined();
+  });
+});

@@ -1,5 +1,7 @@
 import { FormatosModule } from '../formatos/formatos.module';
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { DocumentoEnviado } from '../../entities/documento-enviado.entity';
 import { ObenReportsController } from './oben-reports.controller';
 import { ObenReportExcelService } from './oben-report-excel.service';
 import { SolefilmesPdfService } from './solefilmes-pdf.service';
@@ -10,7 +12,7 @@ import { DistributionListsModule } from '../distribution-lists/distribution-list
 import { FreightRatesModule } from '../freight-rates/freight-rates.module';
 
 @Module({
-  imports: [IntegrationHubModule, AuthModule, DistributionListsModule, FreightRatesModule, FormatosModule],
+  imports: [TypeOrmModule.forFeature([DocumentoEnviado]), IntegrationHubModule, AuthModule, DistributionListsModule, FreightRatesModule, FormatosModule],
   controllers: [ObenReportsController],
   providers: [ObenReportExcelService, SolefilmesPdfService, ObenReportsService],
   exports: [ObenReportExcelService, SolefilmesPdfService, ObenReportsService],

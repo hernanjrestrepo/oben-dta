@@ -1,4 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'crypto';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { TenantContext } from '../../common/tenant/tenant-context.service';
+import { DocumentoEnviado } from '../../entities/documento-enviado.entity';
+import { validarPesosEmpaque } from './pesos-empaque';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { ObenReportExcelService } from './oben-report-excel.service';
 import { SolefilmesPdfService } from './solefilmes-pdf.service';
@@ -10,6 +16,8 @@ export interface PackageAttachment {
   filename: string;
   contentType: string;
   buffer: Buffer;
+  /** Respuesta de Oben con la que se armó el archivo (se guarda junto a la copia del envío). */
+  fuente?: unknown;
 }
 
 export interface PackageFailure {
@@ -24,6 +32,8 @@ export interface DocumentPackageResult {
   failed: PackageFailure[];
   /** Algún dato vino del simulador de Oben (entorno de pruebas): el correo debe decirlo. */
   simulated?: boolean;
+  /** Incoherencias detectadas en los datos de Oben (p. ej. peso neto mayor que el bruto): viajan en el correo. */
+  avisos?: string[];
 }
 
 /**
@@ -98,11 +108,14 @@ export class ObenReportsService {
     private readonly hub: IntegrationHubService,
     private readonly excel: ObenReportExcelService,
     private readonly solefilmesPdf: SolefilmesPdfService,
+    @Optional() @InjectRepository(DocumentoEnviado) private readonly enviados?: Repository<DocumentoEnviado>,
+    @Optional() private readonly ctx?: TenantContext,
   ) {}
 
   async buildDocumentPackage(numberOrderSales: number): Promise<DocumentPackageResult> {
     const included: PackageAttachment[] = [];
     const failed: PackageFailure[] = [];
+    const avisos: string[] = [];
     let client = '';
     const modos = new Set<string>();
 
@@ -154,10 +167,12 @@ export class ObenReportsService {
             continue;
           }
           const buffer = await this.excel.build(def.label, numberOrderSales, data, def.format);
+          if (def.key === 'empaque_unificada') avisos.push(...validarPesosEmpaque(record));
           included.push({
             key: def.key,
             label: def.label,
             buffer,
+            fuente: data,
             filename: `${def.label.replace(/\s+/g, '_')}-OV${numberOrderSales}.xlsx`,
             contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           });
@@ -174,7 +189,46 @@ export class ObenReportsService {
       failed.push(hojaCostos.failure);
     }
 
-    return { client, included, failed, simulated: modos.has('mock') };
+    return { client, included, failed, simulated: modos.has('mock'), avisos };
+  }
+
+  /**
+   * Guarda una copia de cada archivo enviado y de la respuesta de Oben que lo originó (OV 11314, 5-nov-2026).
+   * Nunca lanza: una falla al guardar no puede tumbar ni repetir el envío.
+   */
+  async registrarEnvio(envio: {
+    numberOrderSales: number;
+    messageId?: string | null;
+    asunto?: string;
+    destinatarios: string[];
+    included: PackageAttachment[];
+    avisos?: string[];
+    simulated?: boolean;
+  }): Promise<void> {
+    if (!this.enviados || !this.ctx?.tenantId) return;
+    try {
+      const filas = envio.included.map((a) =>
+        this.enviados!.create({
+          tenantId: this.ctx!.tenantId,
+          numberOrderSales: envio.numberOrderSales,
+          messageId: envio.messageId ?? null,
+          asunto: envio.asunto ?? null,
+          destinatarios: envio.destinatarios.join(', '),
+          claveReporte: a.key,
+          archivo: a.filename,
+          contentType: a.contentType,
+          bytes: a.buffer.length,
+          sha256: createHash('sha256').update(a.buffer).digest('hex'),
+          contenido: a.buffer,
+          fuente: a.fuente ?? null,
+          avisos: envio.avisos ?? [],
+          simulado: envio.simulated === true,
+        }),
+      );
+      if (filas.length) await this.enviados.save(filas);
+    } catch (err) {
+      this.logger.error(`OV ${envio.numberOrderSales}: no se pudo guardar la copia de los documentos enviados: ${(err as Error).message}`);
+    }
   }
 
   /**

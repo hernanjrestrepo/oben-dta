@@ -1,3 +1,4 @@
+import { avisosLimitesProforma } from './limites-proforma';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
@@ -241,8 +242,15 @@ export class ProformasObenService {
     const reteIva = round2(num(e.reteIva) ?? 0);
     const kilosTotales = lineas.reduce((a, l) => a + l.kilos, 0);
     const pesoBruto = round2(num(e.pesoBruto) ?? kilosTotales * 1.07);
-    const pesoMax = num(par?.Peso_Bruto_Maximo);
-    if (pesoMax && pesoBruto > pesoMax) avisos.push(`El peso bruto (${pesoBruto} kg) supera el máximo parametrizado para este destino (${pesoMax} kg).`);
+    // Límites de Oben (5-nov): kilos netos ≤ bruto máximo del contenedor del país − 2.000 kg, y máximo 4 SKU por línea de película.
+    avisos.push(
+      ...avisosLimitesProforma({
+        pais: txt(par?.Pais ?? filaCliente?.Pais_Cliente),
+        brutoMaxParametrizado: num(par?.Peso_Bruto_Maximo),
+        kilosNetos: kilosTotales,
+        lineas,
+      }),
+    );
     if (!e.pesoBruto) avisos.push(`Peso bruto estimado: kilos netos + 7 % (${pesoBruto} kg). Cámbialo si tienes el real.`);
     // ISO con T: producción rechaza (400) la forma con espacio que pruebas sí acepta (confirmado el 4-nov con la PF 11845).
     const conHora = (f: string | null) => (f ? `${f}T${this.horaBogota()}` : '');

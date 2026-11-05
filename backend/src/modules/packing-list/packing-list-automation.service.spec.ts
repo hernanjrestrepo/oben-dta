@@ -40,7 +40,7 @@ function makeService(
   } as any;
   const reports = {
     buildDocumentPackage: buildDocumentPackage ?? jest.fn().mockResolvedValue(COMPLETE_PACKAGE),
-    confirmApproveComex: confirmApproveComex ?? jest.fn().mockResolvedValue({ ok: true }),
+    confirmApproveComex: confirmApproveComex ?? jest.fn().mockResolvedValue({ ok: true }), registrarEnvio: jest.fn().mockResolvedValue(undefined),
   } as any;
   const retries = {
     findOne: retriesOverrides?.findOne ?? jest.fn().mockResolvedValue(null),
@@ -521,7 +521,7 @@ describe('exportación: la Lista de Empaque sale apenas llega "Aprobada en corte
       listForEntity: jest.fn(async () => eventos),
     } as any;
     const listas = { resolveRecipients: jest.fn().mockResolvedValue({ to: ['ops@oben.com'], cc: [], bcc: [] }) } as any;
-    const reports = { buildDocumentPackage: jest.fn().mockResolvedValue(COMPLETE_PACKAGE), confirmApproveComex: jest.fn().mockResolvedValue({ ok: true }) } as any;
+    const reports = { buildDocumentPackage: jest.fn().mockResolvedValue(COMPLETE_PACKAGE), confirmApproveComex: jest.fn().mockResolvedValue({ ok: true }), registrarEnvio: jest.fn().mockResolvedValue(undefined), } as any;
     const retries = { findOne: jest.fn(), create: jest.fn((x: unknown) => x), save: jest.fn(), update: jest.fn() } as any;
     const cartera = { evaluar: jest.fn().mockResolvedValue({ action: 'continuar', verificada: true, simulated: false, motivo: 'ok' }) } as any;
     const aviso = {

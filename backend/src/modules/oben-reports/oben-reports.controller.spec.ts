@@ -20,7 +20,7 @@ function makeController(
   const excel = new ObenReportExcelService();
   const reports = {
     buildDocumentPackage: buildDocumentPackage ?? jest.fn().mockResolvedValue(EMPTY_PACKAGE),
-    confirmApproveComex: jest.fn().mockResolvedValue({ ok: true }),
+    confirmApproveComex: jest.fn().mockResolvedValue({ ok: true }), registrarEnvio: jest.fn().mockResolvedValue(undefined),
   } as any;
   const liquidacionRates = {
     resolveSurcharges: resolveSurcharges ?? jest.fn().mockResolvedValue({

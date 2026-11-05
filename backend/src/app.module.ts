@@ -49,6 +49,7 @@ import { FacturaParcial } from './entities/factura-parcial.entity';
 import { FacturaLlamada } from './entities/factura-llamada.entity';
 import { IaUso } from './entities/ia-uso.entity';
 import { ProformaCopia } from './entities/proforma-copia.entity';
+import { DocumentoEnviado } from './entities/documento-enviado.entity';
 import { AcademyEvento, AcademyIntento, AcademyProgreso } from './entities/academy.entities';
 import { FacturaProgramada } from './entities/factura-programada.entity';
 import { LiquidacionAprobacion } from './entities/liquidacion-aprobacion.entity';
@@ -191,6 +192,7 @@ import { ClientProductEquivalence } from './entities/client-product-equivalence.
           FacturaLlamada,
           IaUso,
           ProformaCopia,
+          DocumentoEnviado,
           AcademyProgreso,
           AcademyIntento,
           AcademyEvento,
