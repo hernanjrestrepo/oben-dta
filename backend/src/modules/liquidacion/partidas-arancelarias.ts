@@ -38,7 +38,8 @@ export const PARTIDAS: Record<TipoPelicula, PartidaArancelaria> = {
   bopp_metalizado: {
     tipo: 'bopp_metalizado',
     ncm: '3920.20.19',
-    naladi: null,
+    // La factura real de la PF 11077 (BOPP metalizado + cristal, 6-nov) lleva una sola PA NALADI 3920.20.10 para ambas.
+    naladi: '3920.20.10',
     descripcionEs: 'PELICULA DE POLIPROPILENO BIORIENTADO METALIZADO',
     descripcionEn: 'METALLIZED BIAXIALLY BIORIENTED POLYPROPYLENE FILM',
     descripcionPt: 'FILME DE POLIPROPILENO BIORIENTADO METALIZADO',
@@ -126,10 +127,20 @@ export function partidaComun(materiales: Array<string | MaterialOben>): { partid
   return { partida: resueltas[0].p, sinPartida: [], mezcla: false };
 }
 
+/** Las partidas distintas de una proforma, en el orden en que aparecen sus líneas (una PF puede mezclar películas). */
+export function partidasDistintas(materiales: Array<string | MaterialOben>): PartidaArancelaria[] {
+  const vistas = new Map<TipoPelicula, PartidaArancelaria>();
+  for (const m of materiales) {
+    const p = partidaDe(m);
+    if (p && !vistas.has(p.tipo)) vistas.set(p.tipo, p);
+  }
+  return [...vistas.values()];
+}
+
 export type IdiomaDestino = 'es' | 'en' | 'pt';
 
-const PAISES_ES = /(^|)(colombia|mexico|argentina|chile|peru|ecuador|venezuela|bolivia|uruguay|paraguay|costa rica|panama|guatemala|honduras|el salvador|nicaragua|cuba|republica dominicana|dominican republic|puerto rico|espana|spain)(|$)/;
-const PAISES_PT = /(^|)(brasil|brazil|portugal)(|$)/;
+const PAISES_ES = /(^|\b)(colombia|mexico|argentina|chile|peru|ecuador|venezuela|bolivia|uruguay|paraguay|costa rica|panama|guatemala|honduras|el salvador|nicaragua|cuba|republica dominicana|dominican republic|puerto rico|espana|spain)(\b|$)/;
+const PAISES_PT = /(^|\b)(brasil|brazil|portugal)(\b|$)/;
 
 /**
  * Idioma en que va la descripción del producto junto a la partida (Hernán, 6-nov): el del país de destino. Español para

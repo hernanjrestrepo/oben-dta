@@ -116,6 +116,17 @@ export function descripcionNcm(ncm: string | null, descripcionSku: string | null
 }
 
 /**
+ * Varias partidas en una misma PF (BOPP metalizado + cristal, factura real de la PF 11077): todas en la línea "PA NCM",
+ * separadas por "/", cada una "NCM ES // NCM <idioma del destino>". null si la PF tiene una sola partida.
+ */
+export function textoPartidas(partidas: PartidaArancelaria[] | null | undefined, idioma: IdiomaDestino = 'en'): string | null {
+  if (!partidas || partidas.length < 2) return null;
+  return partidas
+    .map((p) => (idioma === 'es' ? `${p.ncm} ${p.descripcionEs}` : `${p.ncm} ${p.descripcionEs} // ${p.ncm} ${idioma === 'pt' ? p.descripcionPt : p.descripcionEn}`))
+    .join('/');
+}
+
+/**
  * Descripción de la partida para las observaciones. Primero la de los
  * materiales (BOPP y BOPP metalizado comparten 3920.20.19 pero se describen
  * distinto); si no se sabe el tipo, solo cuando la partida identifica UN tipo.
@@ -249,7 +260,7 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
       `PESO BRUTO / GROSS WEIGHT: ${e?.pesoBrutoKg ?? ''} KG`,
       `PALETAS / PALLETS: ${e?.pallets ?? ''}`,
       `BOBINAS / ROLLS: ${e?.bobinas ?? ''}`,
-      `PA NCM: ${ncm ?? ''}${textoJuntoAPartida(liquidacion, descripcionNcm(ncm, liquidacion?.descripcionSku ?? null, desc, idiomaDeDestino(liquidacion?.pais)))}`,
+      lineaPartidaNcm(liquidacion, ncm, descripcionNcm(ncm, liquidacion?.descripcionSku ?? null, desc, idiomaDeDestino(liquidacion?.pais))),
       // La NALADI solo se imprime si aplica a este destino (6-nov: EE. UU. nunca la lleva).
       ...(naladi && liquidacion?.header.naladiAplica !== false ? [`PA NALADI: ${naladi} `] : []),
       `TOTAL FOB: US$ ${enUS(subtotal)}`,
@@ -330,6 +341,16 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
 /** "TOTAL VALOR CFR PUERTO ITAPOA INCOTERM 2020 US$ 61,120.00" — una sola línea, como la pide COMEX. */
 export function lineaTotalValor(incoterm: string | null, arribo: string | null, neto: number): string {
   return `TOTAL VALOR ${[incoterm, arribo].filter(Boolean).join(' ')} INCOTERM 2020 US$ ${enUS(neto)}`;
+}
+
+/**
+ * La línea "PA NCM" de las observaciones. Con varias partidas (y sin texto propio de COMEX) van todas, cada una con su NCM.
+ */
+export function lineaPartidaNcm(liquidacion: LiquidacionDraft | null | undefined, ncm: string | null, porDefecto: string): string {
+  const f = liquidacion?.factura;
+  const varias = textoPartidas(liquidacion?.partidasTipo, idiomaDeDestino(liquidacion?.pais));
+  if (varias && f?.ncmConDescripcion !== false && !texto(f?.ncmDescripcion)) return `PA NCM: ${varias}`;
+  return `PA NCM: ${ncm ?? ''}${textoJuntoAPartida(liquidacion, porDefecto)}`;
 }
 
 /**

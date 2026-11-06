@@ -10,7 +10,7 @@ const HTML_OUTLOOK = `<html><head><meta http-equiv="Content-Type" content="text/
 describe('lectura de correos (3-nov)', () => {
   it('el HTML se convierte a texto: sin estilos, sin imágenes base64 ni etiquetas, con saltos de línea y tildes', () => {
     const t = htmlATexto(HTML_OUTLOOK);
-    expect(t).not.toMatch(/<\s*\/?(html|head|style|img|table|td|tr|p|div|br|span|b)|font-family|base64|iVBOR|margin-top/i);
+    expect(t).not.toMatch(/<\s*\/?(html|head|style|img|table|td|tr|p|div|br|span|b)\b|font-family|base64|iVBOR|margin-top/i);
     expect(t).toContain('De: Victor Castañeda <victor@cliente-brasil.com.br>');
     expect(t).toContain('Asunto: Orden de compra P01856');
     expect(t).toContain('BOPP 20 1.000 kg');

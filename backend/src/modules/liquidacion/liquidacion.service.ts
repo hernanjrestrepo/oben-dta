@@ -7,7 +7,7 @@ import { LiquidacionRuta } from '../../entities/liquidacion-ruta.entity';
 import { LiquidacionRutaAdjunto } from '../../entities/liquidacion-ruta-adjunto.entity';
 import { LiquidacionPreferenciaCliente } from '../../entities/liquidacion-preferencia-cliente.entity';
 import { LiquidacionDescarte } from '../../entities/liquidacion-descarte.entity';
-import { descripcionNcm, descripcionPartida } from '../facturacion/factura-dian/representacion';
+import { descripcionNcm, descripcionPartida, textoPartidas } from '../facturacion/factura-dian/representacion';
 import { IntegrationHubService } from '../integrations/hub/integration-hub.service';
 import { TenantContext } from '../../common/tenant/tenant-context.service';
 import { WorkflowAuditService } from '../security/workflow-audit.service';
@@ -21,7 +21,7 @@ import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-se
 import { SP_PROFORMAS_COMEX, incotermDeCheck, incotermDeProforma, paisDeProforma, parsearProformasComex } from './incoterm-de-oben';
 import { unwrapCheckSettlement } from './check-settlement-respuesta';
 import { ProformaDocumentoService } from './proforma-documento.service';
-import { ARANCEL_USA_PCT, idiomaDeDestino, partidaComun } from './partidas-arancelarias';
+import { ARANCEL_USA_PCT, idiomaDeDestino, partidaComun, partidasDistintas } from './partidas-arancelarias';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
   CambioRuta,
@@ -468,9 +468,15 @@ export class LiquidacionService {
     }
     // Partida arancelaria por tipo de película (tabla de Oben, 2026-10-02); lo digitado manda.
     // El tipo sale de Linea/TipoMaterial que entrega Oben por SKU; la familia del código es respaldo.
-    const { partida, sinPartida, mezcla } = partidaComun(
-      check.Detalle.map((l) => ({ codigo: l.TipoPelicula, linea: l.Linea, tipoMaterial: l.TipoMaterial })),
-    );
+    const materiales = check.Detalle.map((l) => ({ codigo: l.TipoPelicula, linea: l.Linea, tipoMaterial: l.TipoMaterial }));
+    const { partida, sinPartida, mezcla } = partidaComun(materiales);
+    // Varias películas en la PF (6-nov): la factura lleva todas las partidas; si comparten la misma NALADI, esa va.
+    const partidasTipo = partidasDistintas(materiales);
+    const naladiComun = partidasTipo.length > 1 && partidasTipo.every((p) => p.naladi && p.naladi === partidasTipo[0].naladi) ? partidasTipo[0].naladi : null;
+    if (aplicaNaladi && naladiComun && this.isBlank(header.paNaladi)) {
+      header.paNaladi = naladiComun;
+      headerOrigen.paNaladi = 'maestro';
+    }
     // COMEX (María Escobar, 6-oct): en el encabezado va la partida arancelaria de COLOMBIA (la que Oben
     // entrega por SKU en `Parida`); el NCM/NALADI de destino depende del país y no va en Pa_Ncm.
     if (paridaComun) {
@@ -501,6 +507,9 @@ export class LiquidacionService {
       ajustes.push(
         'La PF mezcla películas de partidas distintas (Jorge confirmó que puede pasar): el encabezado lleva una sola partida, digítala (o separa la liquidación).',
       );
+    }
+    if (partidasTipo.length > 1) {
+      ajustes.push(`La PF mezcla ${partidasTipo.length} películas: la factura lleva todas las partidas (${partidasTipo.map((p) => `${p.ncm} ${p.descripcionEs}`).join(' / ')}).`);
     } else if (sinPartida.length && !paridaComun && !paridaMezcla) {
       ajustes.push(
         `Sin tipo de película para: ${[...new Set(sinPartida)].join(', ')} (Oben no entregó la Linea del SKU y su familia no está en la tabla).`,
@@ -671,9 +680,10 @@ export class LiquidacionService {
       simulated: this.calculator.simulated,
       sinConfirmar,
       partidaTipo: partida,
+      partidasTipo,
       descripcionSku,
       terminoPago: typeof check.TerminoPago === 'string' && check.TerminoPago.trim() ? check.TerminoPago.trim() : null,
-      factura: this.textoFactura(input, aprobada, preferencia, header.paNcm ?? null, descripcionSku, partida, check.Detalle.map((l) => l.TipoPelicula), pais),
+      factura: this.textoFactura(input, aprobada, preferencia, header.paNcm ?? null, descripcionSku, partida, check.Detalle.map((l) => l.TipoPelicula), pais, partidasTipo),
       desdeCopia: copiaDe,
       partidaOben,
       ruta: opcionesRuta
@@ -1458,12 +1468,13 @@ export class LiquidacionService {
     partida: import('./partidas-arancelarias').PartidaArancelaria | null,
     tipos: string[],
     pais: string | null,
+    partidasTipo: Array<import('./partidas-arancelarias').PartidaArancelaria> = [],
   ): NonNullable<LiquidacionDraft['factura']> {
     const primero = <T>(...c: Array<[T | null | undefined, OrigenValor]>) =>
       c.find(([v]) => v !== null && v !== undefined && !(typeof v === 'string' && !v.trim())) ?? null;
     const d = primero<string>([input.factura?.ncmDescripcion, 'usuario'], [aprobada?.factura?.ncmDescripcion, 'comex'], [preferencia?.ncmDescripcion, 'cliente']);
     const c = primero<boolean>([input.factura?.ncmConDescripcion, 'usuario'], [aprobada?.factura?.ncmConDescripcion, 'comex'], [preferencia?.ncmConDescripcion, 'cliente']);
-    const porDefecto = descripcionNcm(ncm, descripcionSku, partida ?? descripcionPartida(ncm, tipos), idiomaDeDestino(pais)).trim() || null;
+    const porDefecto = (textoPartidas(partidasTipo, idiomaDeDestino(pais)) ?? descripcionNcm(ncm, descripcionSku, partida ?? descripcionPartida(ncm, tipos), idiomaDeDestino(pais))).trim() || null;
     return {
       ncmDescripcion: d ? String(d[0]).trim() : null,
       ncmConDescripcion: c ? c[0] !== false : true,

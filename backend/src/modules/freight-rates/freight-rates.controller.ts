@@ -133,7 +133,7 @@ export class FreightRatesController {
         vigencia,
       );
     } else {
-      if (!/\d{5}/.test(dto.direccion ?? '')) throw new BadRequestException('La dirección de entrega debe traer el ZIP de 5 dígitos (así la encuentra la liquidación).');
+      if (!/\b\d{5}\b/.test(dto.direccion ?? '')) throw new BadRequestException('La dirección de entrega debe traer el ZIP de 5 dígitos (así la encuentra la liquidación).');
       await this.rates.agregarTarifaManual(
         this.ctx.tenantId,
         { tipo: 'inland', puerto: dto.destino.trim(), direccion: dto.direccion!.trim(), agente: dto.agente.trim(), valor: dto.valor, comisionAduanera: dto.comisionAduanera ?? null, dias: dto.dias ?? null },

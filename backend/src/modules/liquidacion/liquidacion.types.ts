@@ -177,6 +177,8 @@ export interface LiquidacionDraft {
    * descripción oficial para la factura; null si la PF mezcla tipos o no se sabe.
    */
   partidaTipo?: import('./partidas-arancelarias').PartidaArancelaria | null;
+  /** Todas las partidas de la PF cuando mezcla películas (6-nov: la factura las lleva todas, separadas por "/"). */
+  partidasTipo?: Array<import('./partidas-arancelarias').PartidaArancelaria>;
   /** Ruta y tarifas: opciones del tarifario, la sugerida (más barata vigente) y la escogida por COMEX. */
   ruta?: RutaLiquidacion | null;
   /** DescripcionSKU común a todas las líneas (va en la observación de la partida de la factura), o null. */

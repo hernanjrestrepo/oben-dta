@@ -94,3 +94,32 @@ describe('descripción junto a la partida en el idioma del país de destino (6-n
     expect(descripcionNcm('3920.20.19', sku, null, 'es')).toBe(' PELÍCULA DE POLIPROPILENO BIORIENTADA');
   });
 });
+
+describe('PF con varias películas (6-nov, factura real de la PF 11077: BOPP metalizado + cristal)', () => {
+  const { partidasDistintas } = jest.requireActual('./partidas-arancelarias') as typeof import('./partidas-arancelarias');
+  const { textoPartidas, lineaPartidaNcm } = jest.requireActual('../facturacion/factura-dian/representacion') as typeof import('../facturacion/factura-dian/representacion');
+  const materiales = [
+    { codigo: 'ML---0020MN', linea: 'BOPP', tipoMaterial: 'METALIZADO' },
+    { codigo: 'SC---0020TN', linea: 'BOPP', tipoMaterial: 'CRISTAL' },
+    { codigo: 'ML---0030MN', linea: 'BOPP', tipoMaterial: 'METALIZADO' },
+  ];
+
+  it('toma las partidas distintas en el orden de las líneas y comparten la NALADI 3920.20.10', () => {
+    const ps = partidasDistintas(materiales);
+    expect(ps.map((p) => p.tipo)).toEqual(['bopp_metalizado', 'bopp']);
+    expect(ps.every((p) => p.naladi === '3920.20.10')).toBe(true);
+  });
+
+  it('la línea PA NCM lleva todas, separadas por "/", cada una con su NCM y el idioma del destino', () => {
+    const ps = partidasDistintas(materiales);
+    expect(textoPartidas(ps, 'en')).toBe(
+      '3920.20.19 PELICULA DE POLIPROPILENO BIORIENTADO METALIZADO // 3920.20.19 METALLIZED BIAXIALLY BIORIENTED POLYPROPYLENE FILM/3920.20.19 PELICULA DE POLIPROPILENO BIORIENTADO // 3920.20.19 BIORIENTED POLYPROPYLENE FILM',
+    );
+    expect(textoPartidas([ps[0]], 'en')).toBeNull();
+    const liq = { partidasTipo: ps, pais: 'VENEZUELA', factura: null } as never;
+    expect(lineaPartidaNcm(liq, '39.20.10.90', ' x')).toBe('PA NCM: 3920.20.19 PELICULA DE POLIPROPILENO BIORIENTADO METALIZADO/3920.20.19 PELICULA DE POLIPROPILENO BIORIENTADO');
+    // Si COMEX escribió su propio texto, manda ese.
+    const propio = { partidasTipo: ps, pais: 'USA', factura: { ncmDescripcion: 'PELICULA BOPP', ncmConDescripcion: true } } as never;
+    expect(lineaPartidaNcm(propio, '3920.20.19', ' x')).toBe('PA NCM: 3920.20.19 PELICULA BOPP');
+  });
+});
