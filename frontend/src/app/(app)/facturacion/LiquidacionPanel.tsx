@@ -510,8 +510,13 @@ export function LiquidacionPanel({
             )}
           </div>
 
-          {liq && (
-            <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap items-center gap-2 bg-gray-50/50 rounded-b-xl">
+        </Card>
+
+        {liq && <VistaFacturaCard ov={factura.numberOrderSales} input={payload} version={`${tot.fob}-${tot.flete}-${tot.otros}-${liq.header.paNcm}-${liq.aprobacion?.vigente}`} />}
+        {/* La revisión termina en las observaciones de la factura: la aprobación va debajo (Hernán, 6-nov). */}
+        {liq && (
+          <Card>
+            <div className="px-4 py-3 flex flex-wrap items-center gap-2 bg-gray-50/50 rounded-xl">
               {liq.aprobacion?.vigente ? (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
                   <BadgeCheck className="w-4 h-4" />{' '}{t('Aprobada por COMEX')}{liq.aprobacion.por ? ` · ${liq.aprobacion.por}` : ''}
@@ -530,10 +535,8 @@ export function LiquidacionPanel({
                 <span className="text-[11px] text-gray-500">{t('Al aprobar sale el correo de revisión (proforma, lista de empaque y liquidación) y se pide la factura; Facturación recibe el aviso.')}</span>
               )}
             </div>
-          )}
-        </Card>
-
-        {liq && <VistaFacturaCard ov={factura.numberOrderSales} input={payload} version={`${tot.fob}-${tot.flete}-${tot.otros}-${liq.header.paNcm}-${liq.aprobacion?.vigente}`} />}
+          </Card>
+        )}
       </div>
     </div>
     {verProforma && <ProformaModal pf={pf} onClose={() => setVerProforma(false)} />}

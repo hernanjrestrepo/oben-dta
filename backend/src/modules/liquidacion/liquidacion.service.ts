@@ -359,6 +359,10 @@ export class LiquidacionService {
     }
 
     const ajustes: string[] = [...ajustesCliente];
+    const copiaDe = (check as unknown as { _copiaDe?: string })._copiaDe ?? null;
+    if (copiaDe) {
+      ajustes.push(`Oben ya liquidó esta proforma y no la vuelve a entregar: se muestran los datos de la copia guardada el ${copiaDe.slice(0, 10)}. Solo lectura: no se puede enviar de nuevo.`);
+    }
     const prov = this.opciones?.valoresProvisionales === true;
     const totalesOrigen: LiquidacionDraft['totalesOrigen'] = {};
     if (esMonto(digitados.flete)) totalesOrigen.flete = 'usuario';
@@ -670,6 +674,7 @@ export class LiquidacionService {
       descripcionSku,
       terminoPago: typeof check.TerminoPago === 'string' && check.TerminoPago.trim() ? check.TerminoPago.trim() : null,
       factura: this.textoFactura(input, aprobada, preferencia, header.paNcm ?? null, descripcionSku, partida, check.Detalle.map((l) => l.TipoPelicula), pais),
+      desdeCopia: copiaDe,
       partidaOben,
       ruta: opcionesRuta
         ? {
@@ -1254,6 +1259,11 @@ export class LiquidacionService {
 
   /** Las mismas condiciones para enviar a Oben y para aprobar: nada simulado, nada sin confirmar, nada faltante. */
   private validarEnviable(draft: LiquidacionDraft): void {
+    if (draft.desdeCopia) {
+      throw new BadRequestException({
+        message: `Oben ya liquidó esta proforma (datos de la copia del ${draft.desdeCopia.slice(0, 10)}): no se envía de nuevo.`,
+      });
+    }
     if (draft.simulated) {
       throw new BadRequestException({
         message:
@@ -1337,9 +1347,16 @@ export class LiquidacionService {
       { numberPF: pf },
       OBEN_QUERY_OPTIONS,
     );
-    if (!res.ok) throw new BadRequestException(res.error ?? 'No se pudo consultar la liquidación en Oben');
-    const d = unwrapCheckSettlement(res.data, pf) as Partial<CheckSettlementResponse> | null | undefined;
-    if (!d || typeof d !== 'object' || !Array.isArray(d.Detalle) || d.Detalle.length === 0 || !d.Proforma) {
+    const d = (res.ok ? unwrapCheckSettlement(res.data, pf) : null) as Partial<CheckSettlementResponse> | null | undefined;
+    if (!res.ok || !d || typeof d !== 'object' || !Array.isArray(d.Detalle) || d.Detalle.length === 0 || !d.Proforma) {
+      // Oben deja de entregar la proforma al liquidarse ("Ya se encuentra liquidada"): se usa la copia que se guardó la última
+      // vez que respondió (Hernán, 6-nov: la factura y la revisión de COMEX salían en blanco). Solo lectura: no se reenvía.
+      const copia = await this.proformaDoc?.copiaCheck(pf);
+      if (copia) {
+        this.logger.log(`PF ${pf}: Oben ya no entrega la liquidación; se usa la copia guardada el ${copia.capturadaAt.toISOString().slice(0, 10)}.`);
+        return Object.assign(copia.check, { _copiaDe: copia.capturadaAt.toISOString() }) as unknown as CheckSettlementResponse;
+      }
+      if (!res.ok) throw new BadRequestException(res.error ?? 'No se pudo consultar la liquidación en Oben');
       throw new BadRequestException(
         `Oben no devolvió datos de liquidación para la PF ${pf} (respuesta sin Proforma/Detalle).`,
       );

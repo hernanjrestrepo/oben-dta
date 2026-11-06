@@ -55,6 +55,16 @@ export class ProformaDocumentoService {
     }
   }
 
+  /**
+   * La proforma tal como la entregó Oben la última vez (spCheckSettlement), con la misma forma de la respuesta: Oben deja de
+   * entregarla al liquidarse ("Ya se encuentra liquidada"), pero la factura y la revisión de COMEX siguen necesitándola.
+   */
+  async copiaCheck(pf: string): Promise<{ check: Record<string, unknown> & { Detalle: Array<Record<string, unknown>> }; capturadaAt: Date } | null> {
+    const copia = await this.copias.findOne({ where: { tenantId: this.ctx.tenantId, numberPF: pf } });
+    if (!copia || !Array.isArray(copia.detalle) || copia.detalle.length === 0) return null;
+    return { check: { ...copia.campos, Detalle: copia.detalle }, capturadaAt: copia.capturadaAt };
+  }
+
   private async checkVivo(pf: string): Promise<(Record<string, unknown> & { Detalle: Array<Record<string, unknown>> }) | null> {
     try {
       const res = await this.hub.call<unknown>('obenCostOrder', 'liquidacion.consultar', { numberPF: pf }, OPCIONES);

@@ -153,6 +153,8 @@ export interface LiquidacionDraft {
   totalesOrigen: Partial<Record<'flete' | 'otrosGastos', OrigenValor>>;
   /** Ajustes automáticos que hizo la fórmula (p. ej. otros costos destino reemplazados por Destination Charges). */
   ajustes: string[];
+  /** Fecha de la copia guardada con la que se armó el borrador porque Oben ya liquidó la PF (no se puede enviar de nuevo). */
+  desdeCopia?: string | null;
   /** Todo lo que falta para poder enviar — nada se inventa. */
   missing: string[];
   readyToSubmit: boolean;

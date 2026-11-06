@@ -243,7 +243,8 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
     observaciones.push(
       `PF ${draft.proforma ?? ''}  OV  ${draft.numberOrderSales}`,
       `OBSERVACIONES/COMMENTS:${draft.observaciones ? ` ${draft.observaciones}` : ''}`,
-      `DIRECCIÓN/ADDRESS: ${draft.direccionEntrega ?? ''}`,
+      // La dirección de Oben (spCheckSettlement) manda sobre la del borrador, que puede ser la simulada.
+      `DIRECCIÓN/ADDRESS: ${texto(liquidacion?.header.direccion) ?? draft.direccionEntrega ?? ''}`,
       `PESO NETO / NET WEIGHT: ${e?.pesoNetoKg ?? ''} KG`,
       `PESO BRUTO / GROSS WEIGHT: ${e?.pesoBrutoKg ?? ''} KG`,
       `PALETAS / PALLETS: ${e?.pallets ?? ''}`,

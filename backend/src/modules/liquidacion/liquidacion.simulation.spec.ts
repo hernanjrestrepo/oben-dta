@@ -1545,3 +1545,27 @@ describe('Reunión de pruebas con COMEX (20-oct): lo corregido se conserva y se 
     expect((await built.service.proformasPendientesComex()).map((p) => p.numberPF)).toEqual(['11351', '11166']);
   });
 });
+
+describe('proforma que Oben ya liquidó (6-nov): la factura y la revisión de COMEX siguen viéndose con la copia guardada', () => {
+  it('"Ya se encuentra liquidada" → el borrador sale de la última copia que entregó Oben, solo lectura (no se puede enviar de nuevo)', async () => {
+    const { service, sim } = build({ calculator: new IncotermFormulaCalculator() });
+    const original = sim.call.bind(sim);
+    const viva = (await original('obenCostOrder', 'liquidacion.consultar', { numberPF: '10867' })).data;
+    (sim as unknown as { call: unknown }).call = async (s: string, op: string, args: Record<string, unknown>, o?: unknown) =>
+      op === 'liquidacion.consultar' ? { ok: true, mode: 'real', data: 'Ya se encuentra liquidada.' } : original(s, op, args, o);
+    (service as unknown as { proformaDoc: unknown }).proformaDoc = { copiaCheck: async () => ({ check: viva, capturadaAt: new Date('2026-11-05T12:00:00Z') }), guardarCopia: async () => undefined };
+    const d = await service.getDraft('10867');
+    expect(d.desdeCopia).toBe('2026-11-05T12:00:00.000Z');
+    expect(d.header.paNcm).toBeTruthy();
+    expect(d.ajustes.join(' ')).toMatch(/Oben ya liquidó esta proforma y no la vuelve a entregar.*2026-11-05/);
+    await expect(service.submit('10867', {}, { confirm: true })).rejects.toThrow(/Oben ya liquidó esta proforma/);
+  });
+
+  it('sin copia guardada sigue fallando con el mensaje de siempre', async () => {
+    const { service, sim } = build({ calculator: new IncotermFormulaCalculator() });
+    const original = sim.call.bind(sim);
+    (sim as unknown as { call: unknown }).call = async (s: string, op: string, args: Record<string, unknown>, o?: unknown) =>
+      op === 'liquidacion.consultar' ? { ok: true, mode: 'real', data: 'Ya se encuentra liquidada.' } : original(s, op, args, o);
+    await expect(service.getDraft('10867')).rejects.toThrow(/no devolvió datos de liquidación/);
+  });
+});
