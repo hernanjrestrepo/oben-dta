@@ -17,6 +17,7 @@ import { LiquidacionRatesService, ciudadDe, type OpcionInland, type OpcionMariti
 import { OBEN_QUERY_OPTIONS } from '../oben-reports/oben-reports.service';
 import { LIQUIDACION_VALUE_CALCULATOR, noQuedarPorDebajo, type LiquidacionValueCalculator } from './liquidacion-value-calculator';
 import { CONCEPTOS_POR_INCOTERM, conceptosDe, esFactorPoliza, esMonto, normalizarIncoterm } from './incoterm-rules';
+import { contenedoresDelEnvio, repartirPorPeso, type TotalesEnvio } from './consolidacion';
 import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-settlement-defaults';
 import { SP_PROFORMAS_COMEX, incotermDeCheck, incotermDeProforma, paisDeProforma, parsearProformasComex } from './incoterm-de-oben';
 import { unwrapCheckSettlement } from './check-settlement-respuesta';
@@ -144,6 +145,37 @@ const LINE_REQUIRED: Array<[keyof LiquidacionLineValues, string]> = [
 ];
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Cómo queda cada PF dentro de una liquidación consolidada. */
+export interface ParteConsolidada {
+  numberPF: string;
+  cliente: string;
+  incoterm: string | null;
+  kilos: number;
+  participacion: number;
+  flete: number | null;
+  inlandFreight: number | null;
+  entryFee: number | null;
+  importerSecurityFiling: number | null;
+  otrosGastos: number | null;
+  fob: number;
+  readyToSubmit: boolean;
+  missing: string[];
+  aprobadaVigente: boolean;
+  /** Lo que se aprueba para esta PF (sus montos repartidos). */
+  input: LiquidacionInput;
+}
+
+export interface LiquidacionConsolidada {
+  pfs: string[];
+  principal: string;
+  kilosTotales: number;
+  contenedores: number;
+  totales: TotalesEnvio;
+  partes: ParteConsolidada[];
+  avisos: string[];
+  listo: boolean;
+}
 const isUSA = (pais: string | null) =>
   !!pais && /^(usa|us|u\.s\.a?\.?|united states|estados unidos|eeuu)\b/i.test(pais.trim());
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -265,12 +297,12 @@ export class LiquidacionService {
     return draft;
   }
 
-  private async armarDraft(numberPF: string, input: LiquidacionInput = {}): Promise<LiquidacionDraft> {
+  private async armarDraft(numberPF: string, input: LiquidacionInput = {}, opts: { ignorarAprobada?: boolean } = {}): Promise<LiquidacionDraft> {
     const pf = this.parsePF(numberPF);
     const check = await this.fetchCheck(pf);
     // Lo que COMEX dejó al aprobar se vuelve a aplicar (20-oct: se perdía al recargar y en la factura); lo
-    // que se digita ahora manda sobre eso.
-    const aprobada = await this.entradaAprobada(pf);
+    // que se digita ahora manda sobre eso. La consolidación lo ignora para tomar la base limpia de cada PF.
+    const aprobada = opts.ignorarAprobada ? null : await this.entradaAprobada(pf);
     const lineasDigitadas = input.lines ?? aprobada?.lines;
     // País: Lista de Empaque (producción) → reporte de proformas de Oben → dirección de destino.
     const pais =
@@ -359,6 +391,13 @@ export class LiquidacionService {
     }
 
     const ajustes: string[] = [...ajustesCliente];
+    const consolidacion = input.consolidacion ?? aprobada?.consolidacion ?? null;
+    if (consolidacion) {
+      const otras = consolidacion.pfs.filter((x) => x !== pf);
+      ajustes.push(
+        `Liquidación consolidada con la${otras.length > 1 ? 's' : ''} PF ${otras.join(', ')}: a esta PF le toca el ${(consolidacion.participacion * 100).toLocaleString('es-CO', { maximumFractionDigits: 2 })} % del peso del envío; el flete y los gastos del envío se reparten por peso (ruta de la PF ${consolidacion.principal}).`,
+      );
+    }
     const copiaDe = (check as unknown as { _copiaDe?: string })._copiaDe ?? null;
     if (copiaDe) {
       ajustes.push(`Oben ya liquidó esta proforma y no la vuelve a entregar: se muestran los datos de la copia guardada el ${copiaDe.slice(0, 10)}. Solo lectura: no se puede enviar de nuevo.`);
@@ -1444,7 +1483,111 @@ export class LiquidacionService {
     const totales = { ...soloDigitado(anterior?.totales), ...soloDigitado(input.totales) };
     const factura = { ...soloDigitado(anterior?.factura), ...soloDigitado(input.factura) };
     const lines = input.lines ?? anterior?.lines;
-    return { header, totales, factura, ...(lines ? { lines } : {}) };
+    const consolidacion = input.consolidacion ?? anterior?.consolidacion ?? null;
+    return { header, totales, factura, ...(lines ? { lines } : {}), ...(consolidacion ? { consolidacion } : {}) };
+  }
+
+  /**
+   * Liquidación consolidada (Hernán, 6-nov): varias PF del mismo envío. La ruta es la de la primera PF (la principal), con
+   * los contenedores de los kilos de todo el envío; el flete y los gastos del envío se reparten por peso. Devuelve cómo
+   * queda cada PF; nada se aprueba ni se envía aquí.
+   */
+  async consolidado(numberPFs: string[], opciones: { otrosGastos?: number | null } = {}): Promise<LiquidacionConsolidada> {
+    const pfs = [...new Set(numberPFs.map((p) => this.parsePF(p)))];
+    if (pfs.length < 2) throw new BadRequestException('Escoge al menos dos proformas para consolidar.');
+    // Base de cada PF sin lo aprobado antes: si ya se había consolidado, sus montos repartidos no cuentan para el envío.
+    const bases: LiquidacionDraft[] = [];
+    for (const pf of pfs) bases.push(await this.armarDraft(pf, {}, { ignorarAprobada: true }));
+    const kilosDe = (d: LiquidacionDraft) => round2(d.lines.reduce((a, l) => a + (isNum(l.kilosTotal) ? l.kilosTotal : 0), 0));
+    const principal = bases[0];
+    const kilosTotales = round2(bases.reduce((a, b) => a + kilosDe(b), 0));
+    const contenedores = contenedoresDelEnvio(kilosTotales);
+    // Tarifa por contenedor de la ruta de la principal (la escogida por COMEX o la sugerida).
+    const r = principal.ruta;
+    const contPrincipal = r?.contenedores ?? contenedoresDelEnvio(kilosDe(principal));
+    const marCont =
+      (r?.actual.maritimaId ? r.opciones.maritimas.find((o) => o.id === r.actual.maritimaId)?.flete : undefined) ??
+      (isNum(principal.totales.flete) ? principal.totales.flete / contPrincipal : null);
+    const inlCont =
+      (r?.actual.inlandId ? r.opciones.inland.find((o) => o.id === r.actual.inlandId)?.valor : undefined) ??
+      (isNum(principal.header.inlandFreight) ? principal.header.inlandFreight / contPrincipal : null);
+    const totales: TotalesEnvio = {
+      flete: isNum(marCont) ? round2(marCont * contenedores) : null,
+      inlandFreight: principal.esUSA && isNum(inlCont) ? round2(inlCont * contenedores) : null,
+      entryFee: principal.esUSA && isNum(principal.header.entryFee) ? principal.header.entryFee : null,
+      importerSecurityFiling: principal.esUSA && isNum(principal.header.importerSecurityFiling) ? principal.header.importerSecurityFiling : null,
+      otrosGastos: isNum(opciones.otrosGastos) ? opciones.otrosGastos : null,
+    };
+    const avisos: string[] = [];
+    const puertos = new Set(bases.map((b) => String(b.header.puertoArribo ?? '').trim().toUpperCase()).filter(Boolean));
+    if (puertos.size > 1) avisos.push(`Las proformas no llegan al mismo puerto (${[...puertos].join(', ')}): confirma que de verdad viajan en el mismo envío.`);
+    const incoterms = new Set(bases.map((b) => b.incoterm ?? '(sin Incoterm)'));
+    if (incoterms.size > 1) avisos.push(`Las proformas tienen Incoterms distintos (${[...incoterms].join(', ')}): el flete solo se carga a las que lo incluyen.`);
+    if (!isNum(totales.flete) && bases.some((b) => conceptosDe(normalizarIncoterm(b.incoterm))?.includes('flete'))) {
+      avisos.push(`La PF principal ${principal.numberPF} no tiene flete marítimo en el tarifario: escoge su ruta antes de consolidar.`);
+    }
+    const reparto = repartirPorPeso(bases.map((b) => ({ numberPF: b.numberPF, kilos: kilosDe(b) })), totales);
+    const partes: ParteConsolidada[] = [];
+    for (const [i, rp] of reparto.entries()) {
+      const base = bases[i];
+      const conFlete = conceptosDe(normalizarIncoterm(base.incoterm))?.includes('flete') ?? false;
+      const input: LiquidacionInput = {
+        totales: { ...(conFlete && isNum(rp.flete) ? { flete: rp.flete } : {}), ...(isNum(rp.otrosGastos) ? { otrosGastos: rp.otrosGastos } : {}) },
+        header: {
+          ...(isNum(rp.inlandFreight) ? { inlandFreight: rp.inlandFreight } : {}),
+          ...(isNum(rp.entryFee) ? { entryFee: rp.entryFee } : {}),
+          ...(isNum(rp.importerSecurityFiling) ? { importerSecurityFiling: rp.importerSecurityFiling } : {}),
+        },
+        consolidacion: { pfs, principal: pfs[0], participacion: rp.participacion },
+      };
+      const draft = await this.armarDraft(rp.numberPF, input);
+      partes.push({
+        numberPF: rp.numberPF,
+        cliente: draft.cliente,
+        incoterm: draft.incoterm ?? null,
+        kilos: rp.kilos,
+        participacion: rp.participacion,
+        flete: conFlete ? rp.flete : null,
+        inlandFreight: rp.inlandFreight,
+        entryFee: rp.entryFee,
+        importerSecurityFiling: rp.importerSecurityFiling,
+        otrosGastos: rp.otrosGastos,
+        fob: round2(draft.lines.reduce((a, l) => a + (isNum(l.valueFOB) ? l.valueFOB : 0), 0)),
+        readyToSubmit: draft.readyToSubmit && !draft.desdeCopia,
+        missing: draft.desdeCopia ? [...draft.missing, 'Oben ya liquidó esta proforma: no se puede volver a enviar.'] : draft.missing,
+        aprobadaVigente: draft.aprobacion?.vigente === true,
+        input,
+      });
+    }
+    return { pfs, principal: pfs[0], kilosTotales, contenedores, totales, partes, avisos, listo: partes.every((p) => p.readyToSubmit) };
+  }
+
+  /** COMEX aprueba de una vez la liquidación consolidada: cada PF queda aprobada con su parte (se envía a Oben por separado). */
+  async aprobarConsolidado(
+    numberPFs: string[],
+    opciones: { otrosGastos?: number | null },
+    aprobador: { nombre: string | null },
+  ): Promise<{ consolidado: LiquidacionConsolidada; drafts: LiquidacionDraft[] }> {
+    const consolidado = await this.consolidado(numberPFs, opciones);
+    if (!consolidado.listo) {
+      throw new BadRequestException({
+        message: 'La liquidación consolidada todavía no se puede aprobar: hay proformas con datos faltantes.',
+        faltantes: consolidado.partes.filter((p) => !p.readyToSubmit).map((p) => ({ numberPF: p.numberPF, missing: p.missing })),
+      });
+    }
+    const drafts: LiquidacionDraft[] = [];
+    for (const p of consolidado.partes) drafts.push(await this.aprobar(p.numberPF, p.input, aprobador));
+    await this.audit.log({
+      workflowName: WORKFLOW_NAME,
+      eventType: WorkflowEventType.ACTION_EXECUTED,
+      action: 'liquidacion_consolidada_aprobada',
+      entityType: 'liquidacion',
+      entityId: consolidado.pfs.join('+'),
+      actorId: this.ctx.userId,
+      inputData: { aprobador: aprobador.nombre, pfs: consolidado.pfs },
+      outputData: { kilosTotales: consolidado.kilosTotales, contenedores: consolidado.contenedores, totales: consolidado.totales },
+    });
+    return { consolidado, drafts };
   }
 
   private async preferenciaDe(cliente: string | null | undefined, partidaOben: string): Promise<LiquidacionPreferenciaCliente | null> {

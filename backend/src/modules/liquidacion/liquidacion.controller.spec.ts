@@ -26,8 +26,13 @@ describe('LiquidacionController — control de acceso', () => {
     expect(LIQUIDACION_CONSULTA_PERMISSION).toBe('exportations.read');
   });
 
-  it('tiene exactamente las 16 rutas esperadas (incoterms, draft GET/POST, aprobar, ruta de COMEX y sus adjuntos, submit, correo de cierre, proforma y descartar/restaurar pendientes)', () => {
-    expect(routes.sort()).toEqual(['adjuntarRuta', 'adjuntoRuta', 'approve', 'cierreEnviar', 'cierrePreview', 'descartar', 'draft', 'draftWithInput', 'incoterms', 'proforma', 'proformaDocumento', 'proformaExcel', 'proformaPdfDoc', 'restaurar', 'ruta', 'submit']);
+  it('tiene exactamente las 18 rutas esperadas (incoterms, draft GET/POST, aprobar, consolidada (borrador y aprobar), ruta de COMEX y sus adjuntos, submit, correo de cierre, proforma y descartar/restaurar pendientes)', () => {
+    expect(routes.sort()).toEqual(['adjuntarRuta', 'adjuntoRuta', 'approve', 'aprobarConsolidada', 'cierreEnviar', 'cierrePreview', 'consolidada', 'descartar', 'draft', 'draftWithInput', 'incoterms', 'proforma', 'proformaDocumento', 'proformaExcel', 'proformaPdfDoc', 'restaurar', 'ruta', 'submit']);
+  });
+
+  it('la liquidación consolidada: verla exige exportations.read y aprobarla exportations.approve (COMEX)', () => {
+    expect(Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto['consolidada'] as object)).toEqual({ permissions: ['exportations.read'], mode: 'all' });
+    expect(Reflect.getMetadata(REQUIRE_PERMISSION_KEY, proto['aprobarConsolidada'] as object)).toEqual({ permissions: ['exportations.approve'], mode: 'all' });
   });
 
   it('aprobar exige exportations.approve (COMEX), distinto de liquidar', () => {

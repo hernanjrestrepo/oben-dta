@@ -15,7 +15,7 @@ import {
   MiaContexto, MiaRespuesta, MiaTurno,
   CuadroIntegracion,
   IncotermRegla, LiquidacionDraft, LiquidacionHeaderValues, LiquidacionSimulacion, LiquidacionTotalesInput,
-  LiquidacionFacturaInput, LiquidacionInputPantalla, VistaFactura, ProformaCompleta, ProformaDocumento, ResultadoCargaTarifario, CargaTarifario, TarifasManuales, TarifaManualInput,
+  LiquidacionFacturaInput, LiquidacionInputPantalla, LiquidacionConsolidada, VistaFactura, ProformaCompleta, ProformaDocumento, ResultadoCargaTarifario, CargaTarifario, TarifasManuales, TarifaManualInput,
   PlanAcademy, LeccionAcademy, ResultadoQuizAcademy, TerminoGlosario, FriccionesAcademy, AjustesAcademy,
 } from '@/types';
 
@@ -419,6 +419,17 @@ class ApiClient {
     input: { header?: LiquidacionHeaderValues; totales?: LiquidacionTotalesInput; factura?: LiquidacionFacturaInput },
   ): Promise<LiquidacionDraft> {
     const { data } = await this.client.post<LiquidacionDraft>(`/liquidacion/${numberPF}/approve`, input, this.OBEN_LIVE);
+    return data;
+  }
+
+  /** Liquidación consolidada: cómo queda cada PF con el flete y los gastos del envío repartidos por peso. */
+  async getLiquidacionConsolidada(pfs: string[], otrosGastos: number | null): Promise<LiquidacionConsolidada> {
+    const { data } = await this.client.post<LiquidacionConsolidada>('/liquidacion/consolidada/borrador', { pfs, otrosGastos }, this.OBEN_LIVE);
+    return data;
+  }
+
+  async approveLiquidacionConsolidada(pfs: string[], otrosGastos: number | null): Promise<LiquidacionConsolidada> {
+    const { data } = await this.client.post<LiquidacionConsolidada>('/liquidacion/consolidada/aprobar', { pfs, otrosGastos }, { timeout: 300_000 });
     return data;
   }
 

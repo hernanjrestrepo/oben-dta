@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, Logger, Optional, P
 import { ContextIdFactory, ModuleRef } from '@nestjs/core';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsNumber, IsObject, IsOptional, IsPositive, IsString, IsUUID, Min, MaxLength } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../security/permissions.guard';
 import { RequirePermission } from '../security/require-permission.decorator';
@@ -100,6 +100,21 @@ class LiquidacionInputDto {
   detailsDone?: number[];
 }
 
+/** Liquidación consolidada (6-nov): las PF del mismo envío; la primera es la principal (su ruta manda). */
+class ConsolidadaDto {
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  pfs!: string[];
+
+  /** Otros gastos de todo el envío (destinos sin Destination Charges): se reparten por peso. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  otrosGastos?: number | null;
+}
+
 class DescartarDto {
   @IsOptional()
   @IsString()
@@ -150,6 +165,26 @@ export class LiquidacionController {
   @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
   draftWithInput(@Param('numberPF') numberPF: string, @Body() dto: LiquidacionInputDto) {
     return this.liquidacion.getDraft(numberPF, { header: dto.header, totales: dto.totales, lines: dto.lines, factura: dto.factura });
+  }
+
+  /** Liquidación consolidada: cómo queda cada PF con el flete y los gastos del envío repartidos por peso. No aprueba nada. */
+  @Post('consolidada/borrador')
+  @RequirePermission(LIQUIDACION_CONSULTA_PERMISSION)
+  consolidada(@Body() dto: ConsolidadaDto) {
+    return this.liquidacion.consolidado(dto.pfs, { otrosGastos: dto.otrosGastos ?? null });
+  }
+
+  /** COMEX aprueba de una vez la liquidación consolidada: cada PF queda aprobada con su parte y sigue su curso. */
+  @Post('consolidada/aprobar')
+  @RequirePermission(LIQUIDACION_APROBAR_PERMISSION)
+  async aprobarConsolidada(@Body() dto: ConsolidadaDto, @Req() req: { user?: { email?: string; firstName?: string; lastName?: string } }) {
+    const u = req.user ?? {};
+    const nombre = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || null;
+    const r = await this.liquidacion.aprobarConsolidado(dto.pfs, { otrosGastos: dto.otrosGastos ?? null }, { nombre });
+    for (const draft of r.drafts) {
+      void trasAprobar(this.moduleRef, this.liquidacion, req, draft, nombre).catch((err: Error) => this.logger.error(`PF ${draft.numberPF}: lo que sigue a la aprobación falló: ${err.message}`));
+    }
+    return r.consolidado;
   }
 
   /**

@@ -1569,3 +1569,28 @@ describe('proforma que Oben ya liquidó (6-nov): la factura y la revisión de CO
     await expect(service.getDraft('10867')).rejects.toThrow(/no devolvió datos de liquidación/);
   });
 });
+
+describe('liquidación consolidada (6-nov): varias PF del mismo envío, flete y gastos repartidos por peso', () => {
+  it('reparte el flete del envío (ruta de la principal × contenedores del total) y cada PF lo muestra en su liquidación', async () => {
+    const { service, rates } = build({ calculator: new IncotermFormulaCalculator() });
+    rates.resolveOceanFreight.mockResolvedValue({ id: 'm1', flete: 1000, origen: 'Cartagena', destino: 'Destino', forwarder: 'Direct', naviera: 'Maersk', validUntil: null, vencida: false });
+    const c = await service.consolidado(['10867', '11357'], { otrosGastos: 300 });
+    expect(c.pfs).toEqual(['10867', '11357']);
+    expect(c.principal).toBe('10867');
+    expect(c.partes).toHaveLength(2);
+    const suma = (k: 'otrosGastos' | 'flete') => Math.round(c.partes.reduce((a, p) => a + (p[k] ?? 0), 0) * 100) / 100;
+    expect(suma('otrosGastos')).toBe(300);
+    if (c.totales.flete !== null) {
+      expect(c.totales.flete).toBe(1000 * c.contenedores);
+      expect(suma('flete')).toBe(c.totales.flete);
+    }
+    expect(c.partes[0].participacion + c.partes[1].participacion).toBeCloseTo(1, 10);
+    const d = await service.getDraft('11357', c.partes[1].input);
+    expect(d.ajustes.join(' ')).toMatch(/Liquidación consolidada con la PF 10867/);
+  });
+
+  it('pide al menos dos proformas distintas', async () => {
+    const { service } = build({ calculator: new IncotermFormulaCalculator() });
+    await expect(service.consolidado(['10867', '10867'])).rejects.toThrow(/al menos dos proformas/);
+  });
+});

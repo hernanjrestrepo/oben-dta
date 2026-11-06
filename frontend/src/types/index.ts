@@ -836,6 +836,35 @@ export interface OrdenReciente {
 }
 
 /** Proforma de exportación abierta en Oben que COMEX aún no aprobó. */
+/** Liquidación consolidada (6-nov): varias PF del mismo envío, flete y gastos repartidos por peso. */
+export interface ParteConsolidada {
+  numberPF: string;
+  cliente: string;
+  incoterm: string | null;
+  kilos: number;
+  participacion: number;
+  flete: number | null;
+  inlandFreight: number | null;
+  entryFee: number | null;
+  importerSecurityFiling: number | null;
+  otrosGastos: number | null;
+  fob: number;
+  readyToSubmit: boolean;
+  missing: string[];
+  aprobadaVigente: boolean;
+}
+
+export interface LiquidacionConsolidada {
+  pfs: string[];
+  principal: string;
+  kilosTotales: number;
+  contenedores: number;
+  totales: { flete: number | null; inlandFreight: number | null; entryFee: number | null; importerSecurityFiling: number | null; otrosGastos: number | null };
+  partes: ParteConsolidada[];
+  avisos: string[];
+  listo: boolean;
+}
+
 export interface ProformaPendienteComex {
   numberPF: string;
   cliente: string | null;

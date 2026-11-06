@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { LiquidacionPanel, type LiquidacionEstado } from './LiquidacionPanel';
+import { ConsolidadaPanel } from './ConsolidadaPanel';
 import { TIPO_LABEL } from './DocumentoPanel';
 import { EnvioPanel } from './EnvioPanel';
 import { Card, SimuladoBadge, btnSecondary, fecha, usd } from './ui';
@@ -58,6 +59,15 @@ export default function FacturacionPage() {
   const [paso, setPaso] = useState<Paso>('liquidacion');
   // Proformas de exportación pendientes de aprobación de COMEX (Hernán, 16-oct): reemplazan las "órdenes recientes".
   const [pendientes, setPendientes] = useState<ProformaPendienteComex[] | null>(null);
+  // Liquidación consolidada (6-nov): las PF escogidas con su casilla, más las que se agreguen por número.
+  const [consolidar, setConsolidar] = useState<string[]>([]);
+  const [pfExtra, setPfExtra] = useState('');
+  const alternarConsolidar = (pf: string) => setConsolidar((c) => (c.includes(pf) ? c.filter((x) => x !== pf) : [...c, pf]));
+  const agregarExtra = () => {
+    const pf = pfExtra.trim().replace(/\D/g, '');
+    if (pf && !consolidar.includes(pf)) setConsolidar((c) => [...c, pf]);
+    setPfExtra('');
+  };
   const [liqEstado, setLiqEstado] = useState<LiquidacionEstado | null>(null);
   const reqId = useRef(0);
   const primeraCarga = useRef(true);
@@ -297,14 +307,22 @@ export default function FacturacionPage() {
                 return (
                   <span
                     key={p.numberPF}
-                    className={`group inline-flex items-center rounded-full border text-xs transition ${
+                    className={`group inline-flex items-center rounded-full border text-xs transition ${consolidar.includes(p.numberPF) ? 'ring-2 ring-emerald-400 ' : ''}${
                       activa ? 'border-[#F47735] bg-orange-50 text-[#C4521A]' : 'border-gray-200 bg-white text-gray-700 hover:border-[#F47735]/50 hover:bg-orange-50/50'
                     }`}
                   >
+                    <input
+                      type="checkbox"
+                      className="ml-2"
+                      checked={consolidar.includes(p.numberPF)}
+                      onChange={() => alternarConsolidar(p.numberPF)}
+                      title={t('Escoger para una liquidación consolidada')}
+                      aria-label={`Consolidar la PF ${p.numberPF}`}
+                    />
                     <button
                       onClick={() => void cargarProforma(p.numberPF)}
                       disabled={loading}
-                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1"
+                      className="inline-flex items-center gap-1.5 pl-1.5 pr-1.5 py-1"
                       title={[p.cliente, p.pais, p.incoterm, p.ordenesVenta.length ? `OV ${p.ordenesVenta.join(', ')}` : null].filter(Boolean).join(' · ')}
                       aria-label={`Cargar PF ${p.numberPF}${p.cliente ? ` · ${p.cliente}` : ''}`}
                     >
@@ -326,7 +344,23 @@ export default function FacturacionPage() {
           </div>
         )}
         {pendientes && pendientes.length === 0 && <p className="mt-3 text-[11px] text-gray-400">{t('No hay proformas de exportación pendientes de aprobación de COMEX.')}</p>}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+          <span>{t('Consolidar en una sola liquidación: marca las proformas o agrega otra por número')}</span>
+          <input
+            value={pfExtra}
+            onChange={(e) => setPfExtra(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && agregarExtra()}
+            className="w-28 rounded-lg border border-gray-200 px-2 py-1 text-xs"
+            placeholder={t('PF ej. 11500')}
+          />
+          <button type="button" className="text-[#E5641F] hover:underline disabled:opacity-40" onClick={agregarExtra} disabled={!pfExtra.trim()}>
+            {t('Agregar')}
+          </button>
+          {consolidar.length === 1 && <span className="text-amber-700">{t('Escoge al menos otra proforma para consolidar.')}</span>}
+        </div>
       </Card>
+
+      {consolidar.length >= 2 && <ConsolidadaPanel pfs={consolidar} onCambiar={setConsolidar} />}
 
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">

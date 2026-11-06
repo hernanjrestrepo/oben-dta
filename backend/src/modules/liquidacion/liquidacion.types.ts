@@ -97,6 +97,8 @@ export interface LiquidacionInput {
   lines?: Record<string, LiquidacionLineValues>;
   /** Solo para la factura (no va a Oben en la liquidación). */
   factura?: LiquidacionFacturaInput;
+  /** Liquidación consolidada (6-nov): las PF del envío y la parte del peso que le toca a esta. */
+  consolidacion?: { pfs: string[]; principal: string; participacion: number } | null;
 }
 
 /** Texto que va junto a la partida NCM en las observaciones de la factura (por cliente, reunión del 20-oct). */
