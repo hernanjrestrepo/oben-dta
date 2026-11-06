@@ -29,7 +29,7 @@ const ENTRADA = {
 
 type Resp = { ok: boolean; data?: unknown; error?: string; mode?: string };
 
-function armar(opts: { escribir?: (paso: string, valores: Record<string, unknown>) => Resp; empaque?: (prod: number) => boolean; sinPar?: boolean; cliente?: Record<string, unknown>; fijo?: Record<string, unknown>; obs?: 'codigo_item' } = {}) {
+function armar(opts: { escribir?: (paso: string, valores: Record<string, unknown>) => Resp; empaque?: (prod: number) => boolean; sinPar?: boolean; cliente?: Record<string, unknown>; fijo?: Record<string, unknown>; obs?: 'codigo_item'; par?: Record<string, unknown> } = {}) {
   const filas: Array<Record<string, unknown>> = [];
   const repo = {
     create: (x: Record<string, unknown>) => ({ ...x }),
@@ -51,7 +51,7 @@ function armar(opts: { escribir?: (paso: string, valores: Record<string, unknown
     }),
     parametrizacion: jest.fn(async () => {
       if (opts.sinPar) throw new BadRequestException('Oben no tiene parametrización comercial cargada para "PRINCIPAL"');
-      return { datos: PAR, simulado: false };
+      return { datos: { ...PAR, ...(opts.par ?? {}) }, simulado: false };
     }),
     validarEmpaque: jest.fn(async (p: { codSecProduct: number }) => {
       const ok = opts.empaque ? opts.empaque(p.codSecProduct) : true;
@@ -201,6 +201,13 @@ describe('OBS. ETIQUETA por cliente y límites de la proforma (5-nov)', () => {
     const { svc } = armar();
     const v = await svc.previsualizar({ ...ENTRADA, lineas: [{ referencia: 'ET---0012RT0600S0760', kilos: 1000, precio: 2.5, etiqueta: 'X', codigoItem: '1007407' }] });
     expect(v.lineas[0].etiqueta).toBe('X');
+  });
+
+  it('Estados Unidos va siempre en DDP aunque la parametrización diga otro Incoterm', async () => {
+    const { svc } = armar({ par: { CodSec_Incoterms: 6, Incoterms: 'CFR' } });
+    const v = await svc.previsualizar(ENTRADA);
+    expect(v.encabezado.CodSecIncoterm).toBe(7);
+    expect(v.avisos.join(' ')).toMatch(/Estados Unidos va siempre en DDP.*CFR/);
   });
 
   it('bloquea si los kilos netos pasan el tope del destino (bruto máximo de Oben menos 2.000 kg)', async () => {

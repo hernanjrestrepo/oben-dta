@@ -208,10 +208,10 @@ describe('ComercialFlujoService — flujo Comercial de punta a punta (reunión 2
       expect(caso).toMatchObject({ estado: 'oc_recibida', cliente: CLIENTE_DEMO.name, ocNumero: 'OC-SIM-0001', fechaRequerida: '2026-10-30', missing: [] });
       expect(caso.lineas.map((l) => [l.codigoOben, l.kilos, l.anchoMm])).toEqual([
         ['SIM-SC15TN', 1000, 425],
-        ['SIM-ET12', 999.99, 431.8],
+        ['SIM-ET12', 999.99, 432],
         ['SIM-MT20', 500, 600],
       ]);
-      expect(caso.lineas[1].conversiones).toEqual(expect.arrayContaining([expect.stringMatching(/2\.204,6 lb → 999,99 kg/), expect.stringMatching(/in → 431,8 mm/)]));
+      expect(caso.lineas[1].conversiones).toEqual(expect.arrayContaining([expect.stringMatching(/2\.204,6 lb → 999,99 kg/), expect.stringMatching(/in → 432 mm/)]));
       // Gramaje: no se convierte con fórmula (Alejandra lo hace por referencia) — lo resolvió la equivalencia.
       expect(caso.lineas[1].espesorMicras).toBeNull();
       expect(caso.lineas[1].conversiones.join(' ')).toMatch(/Gramaje 15 g\/m²: no se convierte/);

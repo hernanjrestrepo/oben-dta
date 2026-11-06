@@ -225,6 +225,43 @@ export class ComercialFlujoService {
     return this.solicitarAccion(caso, { tipo: 'crear_proforma', detalle: `Crear la Proforma en OBEN MAS con ${caso.lineas.length} línea(s).` });
   }
 
+  /**
+   * Vuelve a leer la orden de compra guardada (texto del correo y de los adjuntos ya leídos) con las reglas vigentes: cliente,
+   * destino, líneas y precios. Solo antes de crear la Proforma. Sirve cuando cambió una regla (pedidos triangulados con OBEN US,
+   * 6-nov) o se creó el cliente o su equivalencia después de que llegó la orden.
+   */
+  async releer(id: string): Promise<ComercialCase> {
+    const caso = await this.obtener(id);
+    if (caso.estado !== 'oc_recibida') {
+      throw new BadRequestException(`El caso está "${caso.estado}": la Proforma ya existe — no se puede volver a leer la orden.`);
+    }
+    const { config } = await this.config();
+    const data = await this.intake.construir(
+      { from: caso.contactoEmail ?? '', subject: caso.ocAsunto ?? '', body: caso.ocTexto ?? '', messageId: caso.ocMessageId, receivedAt: caso.ocRecibidaEn ?? undefined },
+      config,
+    );
+    caso.clientId = data.clientId ?? null;
+    caso.cliente = data.cliente ?? null;
+    caso.codigoClienteOben = data.codigoClienteOben ?? null;
+    caso.clienteFinal = data.clienteFinal ?? null;
+    caso.comercialEmail = data.comercialEmail ?? null;
+    caso.ocNumero = data.ocNumero ?? caso.ocNumero;
+    caso.extraidoPor = data.extraidoPor ?? caso.extraidoPor;
+    caso.tipo = data.tipo ?? null;
+    caso.pais = data.pais ?? null;
+    caso.destino = data.destino ?? null;
+    caso.fechaRequerida = data.fechaRequerida ?? caso.fechaRequerida;
+    caso.lineas = data.lineas ?? [];
+    caso.atencion = data.atencion ?? [];
+    caso.missing = data.missing ?? [];
+    caso.simulated = data.simulated ?? false;
+    caso.simulatedItems = data.simulatedItems ?? [];
+    caso.accionPendiente = null;
+    this.evento(caso, 'correccion', `Orden de compra leída de nuevo: cliente ${caso.cliente ?? '(sin identificar)'}, destino ${caso.destino?.direccion ?? '(sin destino)'}, ${caso.lineas.length} línea(s).`, this.ctx.userId);
+    await this.casos.save(caso);
+    return this.avanzarOc(caso);
+  }
+
   async editar(id: string, dto: EditarCasoInput): Promise<ComercialCase> {
     const caso = await this.obtener(id);
     if (caso.estado !== 'oc_recibida') {

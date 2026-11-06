@@ -168,6 +168,16 @@ export class ClientsService {
   }
 
   /**
+   * Cliente activo con ese código de OBEN MAS. Si varios lo comparten (el cliente demo de Paradixe usa el de OBEN US),
+   * gana el que coincide con `nombre`; si no hay uno solo, null.
+   */
+  async findByObenCode(codigo: string, nombre?: RegExp): Promise<Client | null> {
+    const todos = await this.clientRepository.find({ where: { tenantId: this.ctx.tenantId, isActive: true, obenCode: codigo } });
+    const candidatos = nombre ? todos.filter((c) => nombre.test(c.name)) : todos;
+    return candidatos.length === 1 ? candidatos[0] : null;
+  }
+
+  /**
    * Cliente de una orden cuyo remitente no está registrado (Gmail, dominio nuevo): se identifica por lo que dice la orden.
    *  1. Los dominios de los correos que aparecen en el texto (copias, firma): si los que reconocemos son de un mismo cliente.
    *  2. El nombre del cliente: su primera palabra (7+ letras, no "oben") aparece en el texto y ningún otro cliente empieza igual.

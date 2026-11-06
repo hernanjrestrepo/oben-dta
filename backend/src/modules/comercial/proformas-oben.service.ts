@@ -23,6 +23,7 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v).trim());
+const esEstadosUnidos = (pais: string) => /^(USA|US|EE\.?\s*UU\.?|ESTADOS UNIDOS|UNITED STATES)/i.test(pais.trim());
 
 export interface LineaEntrada {
   /** CodSec_Prod del maestro de referencias, o la referencia (p. ej. "ET---0012RT0600S0760"). */
@@ -162,6 +163,11 @@ export class ProformasObenService {
         }
       }
       if (!par) bloqueos.push(`Oben no devolvió la parametrización comercial de ${destino} (condición de pago, Incoterm, moneda, puerto).`);
+    }
+    // Estados Unidos va siempre en DDP (Hernán, 6-nov): manda sobre lo que tenga la parametrización; el tránsito se calcula con ese Incoterm.
+    if (par && esEstadosUnidos(txt(par.Pais ?? filaCliente?.Pais_Cliente)) && num(par.CodSec_Incoterms) !== 7) {
+      avisos.push(`Estados Unidos va siempre en DDP: se cambió el Incoterm de la parametrización (${txt(par.Incoterms) || num(par.CodSec_Incoterms) || 'sin Incoterm'}) por DDP.`);
+      par = { ...par, CodSec_Incoterms: 7, Incoterms: 'DDP' };
     }
 
     // Despacho = entrega − días HÁBILES de tránsito al puerto (lista de tránsitos de Oben; sin sábados, domingos ni festivos de Colombia).

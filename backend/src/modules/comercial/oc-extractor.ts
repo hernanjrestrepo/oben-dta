@@ -54,6 +54,8 @@ export interface EjemploOc {
 }
 
 const logger = new Logger('OcExtractor');
+/** Número como se lee en Colombia (40.000; 18.143,7). */
+const es = (n: number): string => n.toLocaleString('es-CO', { maximumFractionDigits: 3 });
 
 /**
  * Cuando el cliente escribe las líneas en el correo Y adjunta la orden con las mismas líneas, cada línea se leería
@@ -384,6 +386,7 @@ export async function extraerConIa(
     'Si la tabla trae un código interno del ítem (p. ej. "02720") Y una descripción del material (p. ej. "BOPP-SC 17 MICRAS TRANSP."), "codigoCliente" es la DESCRIPCIÓN del material, nunca el código del ítem.',
     '"FCL 40\"", "40 HC" o "contenedor de 20\'" es el tamaño del CONTENEDOR, nunca un ancho. Si el correo es un hilo reenviado, la orden vigente es la tabla o el pedido más reciente con cantidades por renglón (por ejemplo materiales, anchos en mm, kg); ignora los mensajes antiguos citados más abajo.',
     'Las cantidades con punto de miles ("2.580", "23.203") son miles: devuélvelas como entero (2580, 23203), nunca como decimal.',
+    '"direccionEntrega" es la dirección a la que se entrega el material ("Deliver To", "Ship To", "Entregar en"): nunca la del proveedor ("Supplier", "Vendor") ni la de quien compra o factura.',
     'Si la columna de ancho no trae unidad: los valores menores a 200 son centímetros ("unidadAncho":"cm") y los de 200 o más son milímetros ("mm"). Nunca dejes un ancho sin unidad.',
     input.clienteFinalEnAsunto ? 'Este cliente es intermediario: el cliente final viene en el asunto.' : '',
     input.equivalencias.length
@@ -476,9 +479,20 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
   if (c.cantidad && up) {
     const r = aKilos(c.cantidad, up);
     kilos = r.kilos;
-    if (r.nota) conversiones.push(r.nota);
+    if (up === 'lb') {
+      // Estados Unidos (Hernán, 6-nov): libras a kilos hacia arriba con 2 decimales (40.000 lb → 18.143,70 kg).
+      kilos = Math.ceil(r.kilos * 100 - 1e-6) / 100;
+      conversiones.push(`${es(c.cantidad)} lb → ${es(kilos)} kg`);
+    } else if (r.nota) conversiones.push(r.nota);
   } else {
     faltantes.push('cantidad en kg o lb');
+  }
+  // Pedido en libras (Estados Unidos): el precio viene por libra y OBEN MAS lo pide por kilo (precio lb / 0,453592, especificaciones de Oben).
+  let precioUnitario = c.precioUnitario ?? null;
+  if (precioUnitario && up === 'lb') {
+    const porKg = Math.round((precioUnitario / 0.45359237) * 10_000) / 10_000;
+    conversiones.push(`precio ${precioUnitario} /lb → ${porKg} /kg`);
+    precioUnitario = porKg;
   }
 
   let anchoMm: number | null = null;
@@ -488,7 +502,11 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
   if (c.ancho && ul) {
     const r = aMilimetros(c.ancho, ul);
     anchoMm = r.mm;
-    if (r.nota) conversiones.push(r.nota);
+    if (ul === 'in') {
+      // Estados Unidos (Hernán, 6-nov): pulgadas a mm sin decimales, hacia arriba (38,25 in → 972 mm, el ancho de la referencia de Oben).
+      anchoMm = Math.ceil(r.mm - 1e-6);
+      conversiones.push(`${es(c.ancho)} in → ${anchoMm} mm`);
+    } else if (r.nota) conversiones.push(r.nota);
   } else {
     faltantes.push(c.ancho ? `unidad del ancho (${c.ancho})` : 'ancho');
   }
@@ -519,7 +537,7 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
     kilos,
     anchoMm,
     espesorMicras,
-    precioUnitario: c.precioUnitario ?? null,
+    precioUnitario,
     moneda: c.moneda ?? null,
     conversiones,
     faltantes,
@@ -611,6 +629,14 @@ export function inferirPelicula(texto: string, peliculas: string[]): string | nu
   // Código compacto "ET12TA": letras + espesor + sufijo, tal cual está en el catálogo ("ET---0012TA").
   for (const m of texto.matchAll(/\b([A-Za-z]{1,4})(\d{2,3})([A-Za-z]{2})\b/g)) {
     const [letras, espesor, sufijo] = [m[1].toUpperCase(), Number(m[2]), m[3].toUpperCase()];
+    for (const p of peliculas) {
+      const k = p.toUpperCase().replace(/-/g, '').match(/^([A-Z]+)(\d{4})([A-Z]{2})$/);
+      if (k && k[1] === letras && Number(k[2]) === espesor && k[3] === sufijo) encontrados.add(p.toUpperCase());
+    }
+  }
+  // Forma de Estados Unidos "ET-TN-11": letras, sufijo y espesor ("ET---0011TN"; OC 3019081, 6-nov).
+  for (const m of texto.matchAll(/\b([A-Za-z]{1,4})[-\s]([A-Za-z]{2})[-\s](\d{2,3})\b/g)) {
+    const [letras, sufijo, espesor] = [m[1].toUpperCase(), m[2].toUpperCase(), Number(m[3])];
     for (const p of peliculas) {
       const k = p.toUpperCase().replace(/-/g, '').match(/^([A-Z]+)(\d{4})([A-Z]{2})$/);
       if (k && k[1] === letras && Number(k[2]) === espesor && k[3] === sufijo) encontrados.add(p.toUpperCase());

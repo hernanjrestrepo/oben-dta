@@ -358,6 +358,16 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
               <Download className="w-4 h-4" />{' '}{t('Proforma firmada')}
             </button>
           )}
+          {caso.estado === 'oc_recibida' && (
+            <button
+              className={btnSecondary}
+              disabled={!!busy}
+              title={t('Lee de nuevo el correo y la orden con las reglas vigentes: cliente, destino, líneas y precios')}
+              onClick={() => confirm('¿Volver a leer la orden de compra? Se reemplazan cliente, destino y líneas con lo que lea el sistema.') && void accion('releer', () => api.rereadComercialCaso(id))}
+            >
+              {t('Volver a leer la orden')}
+            </button>
+          )}
           {abierto && (
             <button
               className="inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-700 hover:bg-red-50 rounded-lg text-sm font-medium disabled:opacity-50"

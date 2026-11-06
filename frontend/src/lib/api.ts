@@ -633,6 +633,11 @@ class ApiClient {
     return data;
   }
 
+  async rereadComercialCaso(id: string): Promise<ComercialCaso> {
+    const { data } = await this.client.post<ComercialCaso>(`/comercial/casos/${id}/releer`, {});
+    return data;
+  }
+
   async cancelComercialCaso(id: string, motivo: string): Promise<ComercialCaso> {
     const { data } = await this.client.post<ComercialCaso>(`/comercial/casos/${id}/anular`, { motivo });
     return data;

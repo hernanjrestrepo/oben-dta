@@ -10,6 +10,7 @@ import { IaModelosService } from '../ia/ia-modelos.service';
 import { extraerConIa, extraerConReglas, normTexto, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef, type OcAdjunto, type OcExtraccion } from './oc-extractor';
 import type { ComercialConfig } from './comercial-config';
 import { ComercialMaestrosService } from './comercial-maestros.service';
+import { OBEN_US_CODIGO, esPedidoObenUs, fechaCdd, precioParaLinea, preciosTransferencia } from './triangulado';
 
 export interface OcEntrada {
   from: string;
@@ -96,7 +97,24 @@ export class ComercialIntakeService {
     const unico = sinLineasRepetidas(input.body, adj.texto);
     if (unico.quitadas > 0) adj.notas.push(`El correo y el adjunto traen las mismas líneas: se contaron una sola vez (${unico.quitadas} repetida(s) del adjunto).`);
     let texto = [input.body, unico.texto].filter(Boolean).join('\n');
-    if (!client && !ambiguous) {
+    // Triangulado con OBEN US (Alejandra, 6-nov): la orden del cliente final va dirigida a OBEN US, que es NUESTRO cliente;
+    // no cuenta el dominio de quien la manda ni el nombre del cliente final.
+    const triangulado = esPedidoObenUs(`${input.subject}\n${texto}`);
+    if (triangulado) {
+      const obenUs = await this.clients.findByObenCode(OBEN_US_CODIGO, /\boben\s+us\b/i);
+      if (obenUs) {
+        if (client && client.id !== obenUs.id) atencion.push(`La orden va dirigida a OBEN US: el cliente es OBEN US, no ${client.name} (dueño del dominio "${dominio}").`);
+        client = obenUs;
+        ambiguous = false;
+        atencion.push('Pedido triangulado con OBEN US: el cliente es OBEN US, el destino es la dirección de entrega de la orden y el precio es el Transfer Price del correo.');
+      } else {
+        // Nunca el dueño del dominio ni el cliente final: sin OBEN US creado, la orden queda sin cliente.
+        client = null;
+        ambiguous = false;
+        atencion.push(`La orden va dirigida a OBEN US, pero OBEN US, LLC (código ${OBEN_US_CODIGO} de OBEN MAS) no está creado en Clientes: créalo para que estas órdenes se asignen solas.`);
+      }
+    }
+    if (!client && !ambiguous && !triangulado) {
       client = await this.clients.identificarPorContenido(`${input.subject}\n${texto}`, DOMINIOS_INTERNOS_OBEN);
     }
     if (internoOben && original) {
@@ -145,8 +163,28 @@ export class ComercialIntakeService {
         }
       }
     }
+    if (triangulado) {
+      // El precio de la orden es el de OBEN US con su cliente; el nuestro es el Transfer Price del cuerpo del correo (en US$/kg).
+      const precios = preciosTransferencia(texto);
+      if (precios.length === 0) {
+        atencion.push('Pedido triangulado con OBEN US: el correo no trae el cuadro con el Transfer Price — escribe el precio por kilo de cada línea (el de la orden es el de OBEN US con su cliente).');
+      }
+      extraccion = {
+        ...extraccion,
+        lineas: extraccion.lineas.map((l) => {
+          const p = precioParaLinea(precios, `${l.codigoCliente ?? ''} ${l.textoCliente}`);
+          const conversiones = l.conversiones.filter((c) => !/^precio /.test(c));
+          return p ? { ...l, precioUnitario: p.porKg, moneda: 'USD', conversiones: [...conversiones, p.nota] } : { ...l, precioUnitario: null, conversiones };
+        }),
+      };
+    }
+    // CDD del cuerpo del correo (pedidos de Estados Unidos) = fecha requerida por el cliente: manda sobre la que lea la orden.
+    const cdd = fechaCdd(`${input.subject}\n${texto}`);
+    if (cdd) extraccion = { ...extraccion, fechaRequerida: cdd };
     const maestro = client?.obenCode ? await this.maestro(client.obenCode) : null;
-    const destino = maestro && 'error' in maestro ? null : this.resolverDestino(maestro, extraccion.direccionEntrega);
+    // Sin dirección legible en la orden, se busca entre los destinos del cliente la que aparece en los adjuntos (la orden en sí).
+    const textoAdjuntos = texto.split(/^--- .+ ---\s*$/m).slice(1).join('\n');
+    const destino = maestro && 'error' in maestro ? null : this.resolverDestino(maestro, extraccion.direccionEntrega, textoAdjuntos);
 
     const simulatedItems = [
       ...(maestro && !('error' in maestro) && maestro.simulated ? [MAESTRO_SIMULADO_LABEL] : []),
@@ -254,17 +292,19 @@ export class ComercialIntakeService {
    * entre las direcciones creadas del cliente. Con varias direcciones y
    * ninguna identificable, no se escoge una: queda como faltante.
    */
-  resolverDestino(maestro: MaestroCliente | null, direccionOc: string | null): CasoDestino | { error: string } | null {
+  resolverDestino(maestro: MaestroCliente | null, direccionOc: string | null, textoOrden?: string): CasoDestino | { error: string } | null {
     if (!maestro) return null;
     const dirs = maestro.direcciones;
     if (dirs.length === 0) return { error: 'El cliente no tiene ninguna dirección de entrega creada en OBEN MAS.' };
+    const enOrden = dirs.length > 1 && textoOrden?.trim() ? mejorDireccion(textoOrden, dirs, 0.8) : null;
     if (direccionOc) {
-      const match = mejorDireccion(direccionOc, dirs);
+      const match = mejorDireccion(direccionOc, dirs) ?? enOrden;
       if (match) return { direccion: match.direccion, ciudad: match.ciudad, pais: match.pais, direccionId: match.id, fuente: 'orden_compra' };
       return {
         error: `La dirección de la orden de compra ("${direccionOc.slice(0, 120)}") no coincide con ninguna dirección creada del cliente en OBEN MAS — créala allí o escoge una.`,
       };
     }
+    if (enOrden) return { direccion: enOrden.direccion, ciudad: enOrden.ciudad, pais: enOrden.pais, direccionId: enOrden.id, fuente: 'orden_compra' };
     if (dirs.length === 1) {
       const d = dirs[0];
       return { direccion: d.direccion, ciudad: d.ciudad, pais: d.pais, direccionId: d.id, fuente: 'maestro' };
@@ -356,7 +396,7 @@ export function calcularMissing(
   ctx: { client?: Client | null; maestroError?: string | null; destinoError?: string | null } = {},
 ): string[] {
   const missing: string[] = [];
-  if (!caso.clientId) missing.push('Cliente: no identificado por el dominio del remitente.');
+  if (!caso.clientId) missing.push('Cliente: no identificado (ni por el correo ni por lo que dice la orden de compra).');
   else if (!caso.codigoClienteOben) missing.push(`Cliente ${caso.cliente}: falta su código en OBEN MAS (maestro de clientes).`);
   if (ctx.maestroError) missing.push(ctx.maestroError);
   if (!caso.destino) missing.push(ctx.destinoError ?? 'Destino: no hay una dirección de entrega del cliente para esta orden.');
@@ -383,15 +423,23 @@ export function faltantesLinea(l: CasoLinea): string[] {
   return f;
 }
 
-function mejorDireccion<T extends { direccion: string; ciudad: string | null }>(texto: string, dirs: T[]): T | null {
+/**
+ * La dirección del cliente que más se parece al texto (proporción de sus palabras que aparecen). También se mide solo la
+ * dirección, sin el nombre del destino ("AMERICAN PACKAGING CORPORATION — 1 GOLF DRIVE DEERFIELD…"): la orden suele traer la
+ * calle y el código postal con otro nombre de bodega. Un empate no se adivina.
+ */
+function mejorDireccion<T extends { direccion: string; ciudad: string | null }>(texto: string, dirs: T[], minimo = 0.6): T | null {
   const oc = new Set(normTexto(texto).trim().split(' ').filter((t) => t.length >= 3 || /^\d+$/.test(t)));
+  const tokensDe = (s: string) => normTexto(s).trim().split(' ').filter((t) => t.length >= 3 || /^\d+$/.test(t));
   let best: T | null = null;
   let bestScore = 0;
   let empate = false;
   for (const d of dirs) {
-    const tokens = normTexto(`${d.direccion} ${d.ciudad ?? ''}`).trim().split(' ').filter((t) => t.length >= 3 || /^\d+$/.test(t));
-    if (tokens.length === 0) continue;
-    const score = tokens.filter((t) => oc.has(t)).length / tokens.length;
+    const partes = d.direccion.split(' — ');
+    const variantes = [`${d.direccion} ${d.ciudad ?? ''}`, ...(partes.length > 1 ? [`${partes.slice(1).join(' ')} ${d.ciudad ?? ''}`] : [])];
+    const puntajes = variantes.map(tokensDe).filter((t) => t.length > 0).map((t) => t.filter((x) => oc.has(x)).length / t.length);
+    if (puntajes.length === 0) continue;
+    const score = Math.max(...puntajes);
     if (score > bestScore) {
       best = d;
       bestScore = score;
@@ -400,5 +448,5 @@ function mejorDireccion<T extends { direccion: string; ciudad: string | null }>(
       empate = true;
     }
   }
-  return best && bestScore >= 0.6 && !empate ? best : null;
+  return best && bestScore >= minimo && !empate ? best : null;
 }

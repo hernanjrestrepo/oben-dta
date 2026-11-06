@@ -338,6 +338,13 @@ export class ComercialCasosController {
     return this.flujo.registrarNumeroOV(id, dto.numero);
   }
 
+  /** Vuelve a leer la orden de compra (cliente, destino, líneas y precios) con las reglas vigentes; solo antes de la Proforma. */
+  @Post('casos/:id/releer')
+  @RequirePermission('orders.update')
+  releer(@Param('id', ParseUUIDPipe) id: string) {
+    return this.flujo.releer(id);
+  }
+
   /** Dar de baja (el cliente no sigue): anula la Proforma en OBEN MAS. */
   @Post('casos/:id/anular')
   @RequirePermission('orders.update')

@@ -210,8 +210,8 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(caso.destino).toMatchObject({ direccionId: '1828', fuente: 'orden_compra' });
     expect(caso.lineas.map((l) => [l.codigoOben, l.kilos, l.anchoMm, l.precioUnitario])).toEqual([
       ['SC---0015TN', 1000, 1000, 2.85],
-      ['ET---0012RT', 907.185, 600, 3.1],
-      ['SC---0020TN', 500, 609.6, 2.95],
+      ['ET---0012RT', 907.19, 600, 6.8343],
+      ['SC---0020TN', 500, 610, 2.95],
     ]);
     expect(caso.accionPendiente).toMatchObject({ tipo: 'crear_proforma' });
     expect(w.escrituras).toHaveLength(0); // freno de mano: nada se escribe sin confirmar
@@ -220,7 +220,7 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     caso = await w.flujo.confirmar(caso.id);
     expect(caso).toMatchObject({ estado: 'sin_cubicar', numberPF: '11547', accionPendiente: null });
     expect(w.escrituras.map((e) => e.paso)).toEqual(['encabezado', 'detalle', 'detalle', 'detalle']);
-    expect(w.escrituras.slice(1).map((e) => e.valores.CodSecProduct)).toEqual([1024, 5622, 261]); // 609,6 mm → referencia de 610 mm
+    expect(w.escrituras.slice(1).map((e) => e.valores.CodSecProduct)).toEqual([1024, 5622, 261]); // 24 in → 610 mm (hacia arriba) → referencia de 610 mm
     expect(w.escrituras[0].valores).toMatchObject({ CodSecEntity: 9995, CodSedCustomerAddress: 1828, PurchaseOrder: 'OC-PARADIXE-0002', DestinationPort: 1186, Export: 'true' });
     expect(w.escrituras[0].valores.Notes).toBe('PRUEBA OBEN XMART - NO PROCESAR.'); // servidor de pruebas
     expect(caso.eventos.at(-1)!.detalle).toMatch(/Proforma 11547 creada en OBEN MAS \(servidor de PRUEBAS de Oben, código interno 13400\)/);
@@ -365,7 +365,7 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(caso.ocNumero).toBe('4992');
     expect(caso.lineas.map((l) => [l.codigoOben, l.kilos, l.anchoMm])).toEqual([
       ['SC---0015TN', 1000, 1000],
-      ['SC---0020TN', 500, 609.6],
+      ['SC---0020TN', 500, 610],
     ]);
     expect(caso.atencion.join(' ')).not.toMatch(/Verifica/);
     expect(caso.atencion.join(' ')).not.toMatch(/firmadigital/);

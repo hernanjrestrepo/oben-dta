@@ -83,7 +83,7 @@ describe('extracción por reglas', () => {
     );
     expect(r).toMatchObject({ numero: 'PO-7788', fechaRequerida: '2026-11-15', direccionEntrega: 'Warehouse 4, Miami FL', extraidoPor: 'reglas' });
     expect(r.lineas).toHaveLength(2);
-    expect(r.lineas[0]).toMatchObject({ codigoOben: 'SC15TN', anchoMm: 431.8, precioUnitario: 3.1, moneda: 'USD', faltantes: [] });
+    expect(r.lineas[0]).toMatchObject({ codigoOben: 'SC15TN', anchoMm: 432, precioUnitario: 6.8343, moneda: 'USD', faltantes: [] });
     expect(r.lineas[0].kilos).toBeCloseTo(1000, 1);
     // "$" solo es ambiguo (pesos o dólares): la moneda no se adivina.
     expect(r.lineas[1]).toMatchObject({ codigoOben: 'ET12', kilos: 500, anchoMm: 600, precioUnitario: 2.85, moneda: null });
