@@ -852,7 +852,7 @@ export class ImapConnectorService implements OnModuleInit, OnModuleDestroy {
         case 'purchase_order': {
           if (comercial) {
             const caso = await this.callRequestScoped(tenantId, ComercialFlujoService, (svc) =>
-              svc.recibirOc({ from, subject, body, messageId, attachments: fullAttachments }, 'correo'),
+              svc.recibirOc({ from, subject, body, messageId, attachments: fullAttachments, fuente: msg.source as Buffer }, 'correo'),
             );
             resultRef = `comercial:${caso.id}`;
             break;

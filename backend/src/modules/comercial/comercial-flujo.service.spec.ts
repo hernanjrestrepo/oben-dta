@@ -279,6 +279,34 @@ describe('ComercialFlujoService — flujo Comercial de punta a punta (reunión 2
       expect(detalle).not.toMatch(/\bu1\b/);
     });
 
+    it('recubicaje fuera del 10 %: el pedido queda en excepción en cubicada y la Proforma no sale hasta que Customer Service la revise', async () => {
+      const w = world();
+      let caso = await w.flujo.recibirOc(await ocDemo(), 'correo');
+      caso = await w.flujo.confirmar(caso.id);
+      // Mientras se espera la cubicación no se puede registrar recubicaje (no hay nada cubicado todavía que comparar con envío).
+      const base = caso.lineas[0].kilos!;
+      // Sube 9 %: dentro del umbral, el flujo sigue normal.
+      caso = await w.flujo.registrarRecubicaje(caso.id, [{ n: 1, kilos: Math.round(base * 1.09 * 100) / 100 }]);
+      expect(caso.accionPendiente).toBeNull();
+      // Baja 12 %: excepción.
+      const correos = w.emails.length;
+      caso = await w.flujo.registrarRecubicaje(caso.id, [{ n: 1, kilos: Math.round(base * 0.88 * 100) / 100 }]);
+      expect(caso.accionPendiente).toMatchObject({ tipo: 'revisar_recubicaje' });
+      expect(caso.accionPendiente!.detalle).toMatch(/Recubicaje fuera del 10 %/);
+      expect(w.emails.length).toBe(correos + 1); // aviso a Customer Service
+      // Cubicada por Planeación: la Proforma NO sale mientras esté en excepción.
+      await w.sim('sim.cubicar', 'SIM-95001');
+      caso = await w.tick(caso.id);
+      expect(caso.accionPendiente).toMatchObject({ tipo: 'revisar_recubicaje' });
+      expect(caso.estado).not.toBe('enviada_cliente');
+      await expect(w.flujo.enviarAlCliente(caso.id)).rejects.toThrow(/excepción por recubicaje/);
+      // Customer Service revisa y confirma: se libera y la Proforma sale.
+      caso = await w.flujo.confirmar(caso.id);
+      expect(caso.accionPendiente).toBeNull();
+      caso = await w.tick(caso.id);
+      expect(caso.estado).toBe('enviada_cliente');
+    });
+
     it('recorre el ciclo completo en modo supervisado, con cada escritura confirmada por una persona', async () => {
       const w = world();
       let caso = await w.flujo.recibirOc(await ocDemo(), 'correo');

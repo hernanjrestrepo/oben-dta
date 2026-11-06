@@ -53,7 +53,7 @@ export interface CasoDestino {
   fuente: 'maestro' | 'orden_compra' | 'manual';
 }
 
-export type AccionPendienteTipo = 'crear_proforma' | 'aprobar' | 'rechazar' | 'modificar' | 'activar';
+export type AccionPendienteTipo = 'crear_proforma' | 'aprobar' | 'rechazar' | 'modificar' | 'activar' | 'revisar_recubicaje';
 export interface AccionPendiente {
   tipo: AccionPendienteTipo;
   detalle: string;
@@ -212,6 +212,10 @@ export class ComercialCase extends TenantScopedEntity {
 
   @Column({ name: 'proforma_pdf_nombre', type: 'varchar', nullable: true })
   proformaPdfNombre: string | null;
+
+  /** El correo de la orden de compra tal como llegó (.eml, con sus adjuntos): Customer Service lo abre desde el caso. */
+  @Column({ name: 'oc_eml', type: 'bytea', nullable: true, select: false })
+  ocEml: Buffer | null;
 
   /** Proforma firmada/aprobada que devolvió el cliente (adjunto de su respuesta). */
   @Column({ name: 'proforma_firmada', type: 'bytea', nullable: true, select: false })

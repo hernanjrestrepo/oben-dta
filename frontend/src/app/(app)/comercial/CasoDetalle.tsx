@@ -25,6 +25,7 @@ const BOTON_CONFIRMAR: Record<string, string> = {
   rechazar: 'Anular la Proforma',
   modificar: 'Modificar la Proforma',
   activar: 'Activar la orden de venta',
+  revisar_recubicaje: 'Revisé el recubicaje: seguir',
 };
 
 const PASO_OBEN: Record<string, string> = { encabezado: 'Encabezado', detalle: 'Línea', ov: 'Orden de venta', activar: 'Activar', validar: 'Validar' };
@@ -53,6 +54,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [edits, setEdits] = useState<Record<number, EdicionLinea>>({});
+  const [recub, setRecub] = useState<Record<number, string>>({});
   const [nueva, setNueva] = useState({ codigoCliente: '', codigoOben: '', kilos: '', anchoMm: '', precio: '' });
   const [respuesta, setRespuesta] = useState<{ tipo: 'aprueba' | 'rechaza' | 'modifica'; nota: string; lineas: string }>({ tipo: 'aprueba', nota: '', lineas: '' });
 
@@ -139,6 +141,30 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
       }),
     );
     setNueva({ codigoCliente: '', codigoOben: '', kilos: '', anchoMm: '', precio: '' });
+  }
+
+  async function abrirCorreo() {
+    await accion('correo', async () => {
+      const blob = await api.downloadComercialCorreo(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `OC-${(caso?.ocNumero ?? id).replace(/[^\w.-]+/g, '_')}.eml`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  async function registrarRecubicaje() {
+    const lineas = Object.entries(recub)
+      .filter(([, v]) => v.trim() !== '')
+      .map(([n, v]) => ({ n: Number(n), kilos: Number(v.replace(',', '.')) }));
+    if (lineas.length === 0 || lineas.some((l) => !(l.kilos >= 0))) {
+      setError('Escribe los kilos recubicados de cada línea (un número).');
+      return;
+    }
+    await accion('recubicaje', () => api.registerComercialRecubicaje(id, lineas));
+    setRecub({});
   }
 
   async function descargarFirmada() {
@@ -343,6 +369,23 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
               {busy === 'lineas' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}{' '}{t('Guardar correcciones')}
             </button>
           )}
+          {caso.numberPF && (caso.estado === 'sin_cubicar' || caso.estado === 'cubicada') && (
+            <div className="mt-3 rounded-lg border border-gray-200 p-3 text-xs">
+              <p className="font-semibold text-gray-900">{t('Recubicaje')}</p>
+              <p className="text-gray-500 mb-2">{t('Kilos que reportó Producción en OBEN MAS. Si en alguna línea suben o bajan más del 10 %, el pedido queda en excepción hasta que Customer Service lo revise.')}</p>
+              <div className="flex flex-wrap items-end gap-3">
+                {caso.lineas.map((l) => (
+                  <label key={l.n} className="flex flex-col gap-1 text-gray-600">
+                    {t('Línea')} {l.n} ({l.kilos ?? '—'} kg)
+                    <input value={recub[l.n] ?? ''} onChange={(ev) => setRecub({ ...recub, [l.n]: ev.target.value })} className={`${inputCls} w-28 !py-1 tabular-nums`} placeholder={t('Kg recubicados')} />
+                  </label>
+                ))}
+                <button type="button" className={btnSecondary} disabled={!!busy} onClick={() => void registrarRecubicaje()}>
+                  {busy === 'recubicaje' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} {t('Registrar recubicaje')}
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -400,6 +443,9 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
               <Download className="w-4 h-4" />{' '}{t('Proforma firmada')}
             </button>
           )}
+          <button className={btnSecondary} disabled={!!busy} title={t('Descarga el correo de la orden tal como llegó (.eml, con sus adjuntos) para abrirlo en tu programa de correo')} onClick={abrirCorreo}>
+            <Download className="w-4 h-4" />{' '}{t('Abrir correo')}
+          </button>
           {caso.estado === 'oc_recibida' && (
             <button
               className={btnSecondary}

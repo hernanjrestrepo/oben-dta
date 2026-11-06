@@ -21,6 +21,7 @@ import {
   type CasoLinea,
   ComercialCase,
 } from '../../entities/comercial-case.entity';
+import { UMBRAL_RECUBICAJE_PCT, evaluarRecubicaje } from './recubicaje';
 import { ComercialIntakeService, calcularMissing, esDestinoDePrueba, faltantesLinea, type OcEntrada } from './comercial-intake.service';
 import { horasHastaSiguiente, leerConfig, parseSeguimiento, type ComercialConfig, type ConfigLeida } from './comercial-config';
 import { clasificarRespuesta, type TipoRespuesta } from './comercial-respuesta';
@@ -274,6 +275,41 @@ export class ComercialFlujoService {
     return this.avanzarOc(caso);
   }
 
+  /**
+   * Recubicaje (Hernán, 6-nov): Producción recubica y lo reporta en OBEN MAS. Si en cualquier línea la cantidad recubicada sube
+   * o baja MÁS del 10 % frente a la de la Proforma, el pedido queda en excepción en "cubicada" esperando la revisión de Customer
+   * Service: la Proforma no sale al cliente hasta que ella la confirme. Oben aún no expone una API con la cantidad recubicada
+   * (probado el 6-nov), así que hoy la digita Customer Service; cuando exista, esta misma función es la que se llama.
+   */
+  async registrarRecubicaje(id: string, items: Array<{ n: number; kilos: number }>): Promise<ComercialCase> {
+    const caso = await this.obtener(id);
+    if (!caso.numberPF || (caso.estado !== 'cubicada' && caso.estado !== 'sin_cubicar')) {
+      throw new BadRequestException(`El recubicaje se registra mientras la Proforma está en cubicaje (el caso está "${caso.estado}").`);
+    }
+    const resultado = evaluarRecubicaje(caso.lineas, items);
+    if (resultado.error) throw new BadRequestException(resultado.error);
+    const resumen = resultado.lineas.map((l) => `línea ${l.n}: ${l.antes} → ${l.despues} kg (${l.pct > 0 ? '+' : ''}${l.pct.toLocaleString('es-CO', { maximumFractionDigits: 1 })} %)`).join('; ');
+    this.evento(caso, 'recubicaje', `Recubicaje registrado${resumen ? `: ${resumen}` : ''}.`, this.ctx.userId);
+    if (resultado.fuera.length === 0) {
+      await this.casos.save(caso);
+      return caso;
+    }
+    const detalle = `Recubicaje fuera del ${UMBRAL_RECUBICAJE_PCT} %: ${resultado.fuera.map((l) => `línea ${l.n} ${l.antes} → ${l.despues} kg (${l.pct > 0 ? '+' : ''}${l.pct.toLocaleString('es-CO', { maximumFractionDigits: 1 })} %)`).join('; ')}. Customer Service debe revisar antes de enviar la Proforma al cliente.`;
+    caso.accionPendiente = { tipo: 'revisar_recubicaje', detalle, creadaEn: new Date().toISOString() };
+    caso.atencion = [...caso.atencion.filter((a) => !a.startsWith('Recubicaje fuera')), detalle];
+    this.evento(caso, 'excepcion_recubicaje', detalle);
+    await this.casos.save(caso);
+    await this.avisarCS(caso, `Excepción de recubicaje: Proforma ${caso.numberPF}`, `<p>${esc(detalle)}</p><p>El pedido queda en excepción en "cubicada": la Proforma no sale al cliente hasta que la revises en Oben Xmart → Comercial.</p>`);
+    return caso;
+  }
+
+  /** El correo de la orden de compra como archivo .eml (null si no se guardó). */
+  async correoOriginal(id: string): Promise<{ nombre: string; buffer: Buffer } | null> {
+    const caso = await this.casos.findOne({ where: { id, tenantId: this.ctx.tenantId }, select: ['id', 'ocNumero', 'ocEml'] });
+    if (!caso?.ocEml || caso.ocEml.length === 0) return null;
+    return { nombre: `OC-${(caso.ocNumero ?? caso.id).replace(/[^\w.-]+/g, '_')}.eml`, buffer: caso.ocEml };
+  }
+
   async editar(id: string, dto: EditarCasoInput): Promise<ComercialCase> {
     const caso = await this.obtener(id);
     if (caso.estado !== 'oc_recibida') {
@@ -413,6 +449,14 @@ export class ComercialFlujoService {
     }
     if (accion.tipo === 'modificar' && (accion.lineas ?? []).some((l) => faltantesLinea(l).length > 0)) {
       throw new BadRequestException('La modificación tiene líneas incompletas: corrígelas antes de confirmar.');
+    }
+    if (accion.tipo === 'revisar_recubicaje') {
+      // Customer Service revisó la excepción y da el visto bueno: no se escribe nada en OBEN MAS; la Proforma puede salir al cliente.
+      caso.accionPendiente = null;
+      caso.atencion = caso.atencion.filter((a) => !a.startsWith('Recubicaje fuera'));
+      this.evento(caso, 'recubicaje_revisado', `Customer Service revisó el recubicaje y aprueba seguir (${this.ctx.userId ? await this.nombreUsuario(this.ctx.userId) : 'sin usuario'}).`, this.ctx.userId);
+      await this.casos.save(caso);
+      return caso;
     }
     return this.ejecutar(caso, accion, { confirmadoPor: this.ctx.userId, verificadoEnObenMas: !!opts.verificadoEnObenMas });
   }
@@ -706,6 +750,9 @@ export class ComercialFlujoService {
     if (!caso.numberPF || (caso.estado !== 'cubicada' && caso.estado !== 'enviada_cliente')) {
       throw new BadRequestException(`La Proforma solo se envía cuando está cubicada (el caso está "${caso.estado}").`);
     }
+    if (caso.accionPendiente?.tipo === 'revisar_recubicaje') {
+      throw new BadRequestException('El pedido está en excepción por recubicaje: Customer Service debe revisarlo y confirmarlo antes de enviar la Proforma.');
+    }
     // El PDF oficial llega adjunto al correo de cubicación de OBEN MAS; solo si no llegó se pide al simulador.
     const oficial = await this.proformaPdfOficial(caso.id);
     const pdfRes: { ok: boolean; mode?: string; error?: string | null; data?: Record<string, unknown> } = oficial
@@ -823,6 +870,7 @@ export class ComercialFlujoService {
     this.evento(caso, 'cubicada', `Planeación cubicó la Proforma ${numberPF}: lo confirmó OBEN MAS por correo ("${correo.subject.trim()}").${ref}`);
     await this.casos.save(caso);
     await this.audit.log({ workflowName: WORKFLOW, action: 'comercial_cubicada_por_correo', entityType: 'comercial_case', entityId: caso.id, actorId: null, outputData: { numberPF } });
+    if (caso.accionPendiente?.tipo === 'revisar_recubicaje') return { caso, numberPF, detalle: 'Cubicada; en excepción por recubicaje: espera la revisión de Customer Service.' };
     return { caso: await this.enviarAlCliente(caso), numberPF, detalle: 'Cubicada; la Proforma sale al cliente.' };
   }
 
@@ -978,11 +1026,13 @@ export class ComercialFlujoService {
           caso.fechas = { ...caso.fechas, cubicada: new Date().toISOString() };
           this.evento(caso, 'cubicada', 'Planeación cubicó la Proforma.');
           await this.casos.save(caso);
+          if (caso.accionPendiente?.tipo === 'revisar_recubicaje') return caso; // en excepción: no sale hasta que Customer Service la revise
           return this.enviarAlCliente(caso);
         }
         this.sincronizarAvance(caso, estadoOben, status.data);
         break;
       case 'cubicada':
+        if (caso.accionPendiente?.tipo === 'revisar_recubicaje') break; // en excepción: espera a Customer Service
         if (!caso.atencion.some((a) => a.startsWith('Candado:'))) return this.enviarAlCliente(caso);
         break;
       case 'enviada_cliente':

@@ -35,6 +35,7 @@ export const ACCION_LABEL: Record<string, string> = {
   rechazar: 'Anular la Proforma (el cliente rechazó)',
   modificar: 'Modificar la Proforma (vuelve a "sin cubicar")',
   activar: 'Activar la orden de venta (cartera liberó)',
+  revisar_recubicaje: 'Revisar el recubicaje (excepción)',
 };
 
 export function EstadoBadge({ estado }: { estado: CasoEstado }) {

@@ -643,6 +643,16 @@ class ApiClient {
     return data;
   }
 
+  async downloadComercialCorreo(id: string): Promise<Blob> {
+    const { data } = await this.client.get(`/comercial/casos/${id}/correo`, { responseType: 'blob' });
+    return data;
+  }
+
+  async registerComercialRecubicaje(id: string, lineas: Array<{ n: number; kilos: number }>): Promise<ComercialCaso> {
+    const { data } = await this.client.post<ComercialCaso>(`/comercial/casos/${id}/recubicaje`, { lineas });
+    return data;
+  }
+
   async downloadProformaFirmada(id: string): Promise<Blob> {
     const { data } = await this.client.get(`/comercial/casos/${id}/proforma-firmada`, { responseType: 'blob' });
     return data;

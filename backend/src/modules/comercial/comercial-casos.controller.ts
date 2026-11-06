@@ -108,6 +108,22 @@ class AgregarLineaDto {
   codigoOben?: string;
 }
 
+class RecubicajeItemDto {
+  @IsInt()
+  @IsPositive()
+  n!: number;
+
+  @IsNumber()
+  kilos!: number;
+}
+
+class RecubicajeDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RecubicajeItemDto)
+  lineas!: RecubicajeItemDto[];
+}
+
 class DireccionManualDto {
   @IsString()
   @IsNotEmpty()
@@ -365,6 +381,24 @@ export class ComercialCasosController {
   @RequirePermission('orders.update')
   registrarNumeroOV(@Param('id', ParseUUIDPipe) id: string, @Body() dto: NumeroOvDto) {
     return this.flujo.registrarNumeroOV(id, dto.numero);
+  }
+
+  /** Kilos recubicados por línea (los reporta Producción en OBEN MAS): fuera del 10 % el caso queda en excepción. */
+  @Post('casos/:id/recubicaje')
+  @RequirePermission('orders.update')
+  recubicaje(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RecubicajeDto) {
+    return this.flujo.registrarRecubicaje(id, dto.lineas);
+  }
+
+  /** El correo de la orden de compra tal como llegó (.eml), para abrirlo en el programa de correo. */
+  @Get('casos/:id/correo')
+  @RequirePermission('orders.read')
+  async correo(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const c = await this.flujo.correoOriginal(id);
+    if (!c) throw new NotFoundException('Este caso no tiene el correo guardado.');
+    res.setHeader('Content-Type', 'message/rfc822');
+    res.setHeader('Content-Disposition', `attachment; filename="${c.nombre}"`);
+    res.send(c.buffer);
   }
 
   /** Vuelve a leer la orden de compra (cliente, destino, líneas y precios) con las reglas vigentes; solo antes de la Proforma. */

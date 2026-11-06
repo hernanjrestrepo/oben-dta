@@ -19,6 +19,8 @@ export interface OcEntrada {
   messageId?: string | null;
   receivedAt?: Date;
   attachments?: OcAdjunto[];
+  /** El correo completo tal como llegó (.eml): se guarda para abrirlo desde el caso. */
+  fuente?: Buffer;
 }
 
 /** Maestro del cliente en OBEN MAS (`obenPlus` → `cliente.consultar`). */
@@ -205,6 +207,7 @@ export class ComercialIntakeService {
       comercialEmail: client?.comercialEmail ?? (maestro && !('error' in maestro) ? maestro.comercialEmail : null),
       ocNumero: extraccion.numero,
       ocMessageId: input.messageId ?? null,
+      ocEml: input.fuente ?? null,
       ocAsunto: input.subject.slice(0, 500),
       ocRecibidaEn: input.receivedAt ?? new Date(),
       ocTexto: texto.slice(0, 50_000),
