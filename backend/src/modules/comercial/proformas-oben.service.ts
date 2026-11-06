@@ -1,4 +1,5 @@
 import { revisarLimitesProforma } from './limites-proforma';
+import { lineasParaCubicarAMano } from './cubicacion-nacional';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
@@ -267,6 +268,8 @@ export class ProformasObenService {
       avisos.push(...limites.avisos);
       bloqueos.push(...limites.bloqueos);
     }
+    // Cubicación (6-nov): en nacionales, las líneas de especialidad o de menos de 4.000 kg las cubica Planeación a mano.
+    if (!exporta) avisos.push(...lineasParaCubicarAMano(lineas.map((l, i) => ({ n: i + 1, codigoOben: l.referencia, kilos: l.kilos }))).map((t) => `Cubicar a mano: ${t}.`));
     if (!e.pesoBruto) avisos.push(`Peso bruto estimado: kilos netos + 7 % (${pesoBruto} kg). Cámbialo si tienes el real.`);
     // ISO con T: producción rechaza (400) la forma con espacio que pruebas sí acepta (confirmado el 4-nov con la PF 11845).
     const conHora = (f: string | null) => (f ? `${f}T${this.horaBogota()}` : '');
