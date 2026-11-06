@@ -869,6 +869,8 @@ export interface LiquidacionHeaderValues {
   notes?: string | null;
   paNcm?: string | null;
   paNaladi?: string | null;
+  /** La NALADI aplica a este destino (casilla sin marcar por defecto; EE. UU. nunca). */
+  naladiAplica?: boolean | null;
   description?: string | null;
   puertoArribo?: string | null;
   puertoEmbarque?: string | null;

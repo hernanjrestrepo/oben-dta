@@ -21,7 +21,7 @@ import { defaultsDeOben, paisDeDireccion, type DefaultsDeOben } from './check-se
 import { SP_PROFORMAS_COMEX, incotermDeCheck, incotermDeProforma, paisDeProforma, parsearProformasComex } from './incoterm-de-oben';
 import { unwrapCheckSettlement } from './check-settlement-respuesta';
 import { ProformaDocumentoService } from './proforma-documento.service';
-import { ARANCEL_USA_PCT, partidaComun } from './partidas-arancelarias';
+import { ARANCEL_USA_PCT, idiomaDeDestino, partidaComun } from './partidas-arancelarias';
 import { LiquidacionCierreService } from './liquidacion-cierre.service';
 import type {
   CambioRuta,
@@ -340,7 +340,17 @@ export class LiquidacionService {
     const partidaOben = paridaComun ?? [...new Set(check.Detalle.map((l) => String(l.TipoPelicula ?? '').trim()).filter(Boolean))].sort().join('+');
     const preferencia = await this.preferenciaDe(check.Cliente, partidaOben);
     const ajustesCliente: string[] = [];
+    // NALADI (Hernán, 6-nov): casilla sin marcar por defecto; solo se pide, se calcula y se envía si aplica a este destino
+    // (EE. UU. nunca). Lo digitado o aprobado manda; si el cliente ya tenía una NALADI guardada, parte marcada.
+    const naladiPropia = !this.isBlank(header.paNaladi) && (headerOrigen.paNaladi === 'usuario' || headerOrigen.paNaladi === 'comex');
+    const aplicaNaladi = typeof header.naladiAplica === 'boolean' ? header.naladiAplica : naladiPropia || !!preferencia?.paNaladi;
+    header.naladiAplica = aplicaNaladi;
+    if (!aplicaNaladi) {
+      header.paNaladi = null;
+      delete headerOrigen.paNaladi;
+    }
     for (const key of ['paNcm', 'paNaladi'] as const) {
+      if (key === 'paNaladi' && !aplicaNaladi) continue;
       const v = preferencia?.[key];
       if (!v || headerOrigen[key] === 'usuario' || headerOrigen[key] === 'comex') continue;
       header[key] = v;
@@ -476,7 +486,7 @@ export class LiquidacionService {
         header.paNcm = partida.ncm;
         headerOrigen.paNcm = 'maestro';
       }
-      if (this.isBlank(header.paNaladi) && partida.naladi) {
+      if (aplicaNaladi && this.isBlank(header.paNaladi) && partida.naladi) {
         header.paNaladi = partida.naladi;
         headerOrigen.paNaladi = 'maestro';
       }
@@ -501,12 +511,13 @@ export class LiquidacionService {
     }
     if (prov) {
       for (const key of ['paNcm', 'paNaladi'] as const) {
+        if (key === 'paNaladi' && !aplicaNaladi) continue;
         if (this.isBlank(header[key])) {
           header[key] = VALORES_PROVISIONALES.partida;
           headerOrigen[key] = 'provisional';
         }
       }
-      if (headerOrigen.paNcm === 'provisional' || headerOrigen.paNaladi === 'provisional') {
+      if (headerOrigen.paNcm === 'provisional' || (aplicaNaladi && headerOrigen.paNaladi === 'provisional')) {
         ajustes.push(
           `Partida arancelaria PROVISIONAL ${VALORES_PROVISIONALES.partida}: Oben no entregó la partida (Parida) de estos SKU.`,
         );
@@ -608,6 +619,7 @@ export class LiquidacionService {
 
     const headerMissing: string[] = [];
     for (const [key, label] of HEADER_REQUIRED) {
+      if (key === 'paNaladi' && !aplicaNaladi) continue;
       if (this.isBlank(header[key])) headerMissing.push(`Encabezado — ${label}`);
     }
     if (esUSA) {
@@ -657,7 +669,7 @@ export class LiquidacionService {
       partidaTipo: partida,
       descripcionSku,
       terminoPago: typeof check.TerminoPago === 'string' && check.TerminoPago.trim() ? check.TerminoPago.trim() : null,
-      factura: this.textoFactura(input, aprobada, preferencia, header.paNcm ?? null, descripcionSku, partida, check.Detalle.map((l) => l.TipoPelicula)),
+      factura: this.textoFactura(input, aprobada, preferencia, header.paNcm ?? null, descripcionSku, partida, check.Detalle.map((l) => l.TipoPelicula), pais),
       partidaOben,
       ruta: opcionesRuta
         ? {
@@ -1428,12 +1440,13 @@ export class LiquidacionService {
     descripcionSku: string | null,
     partida: import('./partidas-arancelarias').PartidaArancelaria | null,
     tipos: string[],
+    pais: string | null,
   ): NonNullable<LiquidacionDraft['factura']> {
     const primero = <T>(...c: Array<[T | null | undefined, OrigenValor]>) =>
       c.find(([v]) => v !== null && v !== undefined && !(typeof v === 'string' && !v.trim())) ?? null;
     const d = primero<string>([input.factura?.ncmDescripcion, 'usuario'], [aprobada?.factura?.ncmDescripcion, 'comex'], [preferencia?.ncmDescripcion, 'cliente']);
     const c = primero<boolean>([input.factura?.ncmConDescripcion, 'usuario'], [aprobada?.factura?.ncmConDescripcion, 'comex'], [preferencia?.ncmConDescripcion, 'cliente']);
-    const porDefecto = descripcionNcm(ncm, descripcionSku, partida ?? descripcionPartida(ncm, tipos)).trim() || null;
+    const porDefecto = descripcionNcm(ncm, descripcionSku, partida ?? descripcionPartida(ncm, tipos), idiomaDeDestino(pais)).trim() || null;
     return {
       ncmDescripcion: d ? String(d[0]).trim() : null,
       ncmConDescripcion: c ? c[0] !== false : true,
@@ -1448,7 +1461,7 @@ export class LiquidacionService {
     if (!this.preferencias || !clave) return;
     const propio = (o: OrigenValor | null | undefined) => o === 'usuario' || o === 'comex' || o === 'cliente';
     const paNcm = propio(draft.headerOrigen.paNcm) ? (draft.header.paNcm ?? null) : null;
-    const paNaladi = propio(draft.headerOrigen.paNaladi) ? (draft.header.paNaladi ?? null) : null;
+    const paNaladi = draft.header.naladiAplica !== false && propio(draft.headerOrigen.paNaladi) ? (draft.header.paNaladi ?? null) : null;
     const f = draft.factura;
     const conTexto = !!f && propio(f.origen);
     if (!paNcm && !paNaladi && !conTexto) return;

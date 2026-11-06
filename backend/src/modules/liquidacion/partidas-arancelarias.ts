@@ -15,6 +15,8 @@ export interface PartidaArancelaria {
   naladi: string | null;
   descripcionEs: string;
   descripcionEn: string;
+  /** Propuesta para destinos en portugués (Brasil, Portugal): validar con Oben antes de tomarla como oficial. */
+  descripcionPt: string;
 }
 
 /**
@@ -31,6 +33,7 @@ export const PARTIDAS: Record<TipoPelicula, PartidaArancelaria> = {
     naladi: '3920.20.10',
     descripcionEs: 'PELICULA DE POLIPROPILENO BIORIENTADO',
     descripcionEn: 'BIORIENTED POLYPROPYLENE FILM',
+    descripcionPt: 'FILME DE POLIPROPILENO BIORIENTADO',
   },
   bopp_metalizado: {
     tipo: 'bopp_metalizado',
@@ -38,6 +41,7 @@ export const PARTIDAS: Record<TipoPelicula, PartidaArancelaria> = {
     naladi: null,
     descripcionEs: 'PELICULA DE POLIPROPILENO BIORIENTADO METALIZADO',
     descripcionEn: 'METALLIZED BIAXIALLY BIORIENTED POLYPROPYLENE FILM',
+    descripcionPt: 'FILME DE POLIPROPILENO BIORIENTADO METALIZADO',
   },
   pet: {
     tipo: 'pet',
@@ -45,6 +49,7 @@ export const PARTIDAS: Record<TipoPelicula, PartidaArancelaria> = {
     naladi: null,
     descripcionEs: 'PELICULA DE POLIETILENO TEREFTALATO',
     descripcionEn: 'POLYETHYLENE-TEREPHTHALATE BIORIENTED FILM',
+    descripcionPt: 'FILME DE POLIETILENO TEREFTALATO BIORIENTADO',
   },
   pet_termoencogible: {
     tipo: 'pet_termoencogible',
@@ -52,6 +57,7 @@ export const PARTIDAS: Record<TipoPelicula, PartidaArancelaria> = {
     naladi: null,
     descripcionEs: 'PELICULA DE COPOLIESTER TERMOCONTRAIBLE',
     descripcionEn: 'POLYESTER FILM, HEAT-SHRINKABLE',
+    descripcionPt: 'FILME DE POLIÉSTER TERMOCONTRAÍVEL',
   },
 };
 
@@ -118,4 +124,25 @@ export function partidaComun(materiales: Array<string | MaterialOben>): { partid
   const distintas = new Set(resueltas.filter((x) => x.p).map((x) => x.p!.tipo));
   if (sinPartida.length || distintas.size !== 1) return { partida: null, sinPartida, mezcla: distintas.size > 1 };
   return { partida: resueltas[0].p, sinPartida: [], mezcla: false };
+}
+
+export type IdiomaDestino = 'es' | 'en' | 'pt';
+
+const PAISES_ES = /(^|)(colombia|mexico|argentina|chile|peru|ecuador|venezuela|bolivia|uruguay|paraguay|costa rica|panama|guatemala|honduras|el salvador|nicaragua|cuba|republica dominicana|dominican republic|puerto rico|espana|spain)(|$)/;
+const PAISES_PT = /(^|)(brasil|brazil|portugal)(|$)/;
+
+/**
+ * Idioma en que va la descripción del producto junto a la partida (Hernán, 6-nov): el del país de destino. Español para
+ * los países hispanohablantes, portugués para Brasil y Portugal y inglés para el resto (EE. UU., Canadá, Europa…): es la
+ * lengua del comercio internacional cuando no hay descripción oficial en el idioma local.
+ */
+export function idiomaDeDestino(pais: string | null | undefined): IdiomaDestino {
+  const p = (pais ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+  if (PAISES_PT.test(p)) return 'pt';
+  if (PAISES_ES.test(p)) return 'es';
+  return 'en';
 }

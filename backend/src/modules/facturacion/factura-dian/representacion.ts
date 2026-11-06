@@ -1,7 +1,7 @@
 import type { FacturaElectronica, FacturacionDraft } from '../facturacion.types';
 import type { LiquidacionDraft } from '../../liquidacion/liquidacion.types';
 import { EMISOR_OBEN, FAMILIA_PELICULA, RESOLUCIONES_DIAN } from './emisor';
-import { PARTIDAS, partidaComun, type PartidaArancelaria } from '../../liquidacion/partidas-arancelarias';
+import { PARTIDAS, idiomaDeDestino, partidaComun, type IdiomaDestino, type PartidaArancelaria } from '../../liquidacion/partidas-arancelarias';
 import { totalesEnPesos, valorEnLetras, valueInWords } from './letras';
 import type { FacturaDian, FacturaDianLinea, TipoFacturaDian } from './factura-dian.types';
 
@@ -101,12 +101,18 @@ export function descripcionMaterial(codigo: string): string {
  * DescripcionSKU que entrega Oben ("PELÍCULA … / BIAXIALLY …", 16-oct); si no
  * viene, la de la tabla de partidas por tipo de película.
  */
-export function descripcionNcm(ncm: string | null, descripcionSku: string | null, desc: PartidaArancelaria | null): string {
+export function descripcionNcm(ncm: string | null, descripcionSku: string | null, desc: PartidaArancelaria | null, idioma: IdiomaDestino = 'en'): string {
+  // "ES // NCM <idioma del país de destino>" (Hernán, 6-nov; EE. UU.: "…BIORIENTADO // 3920.20.19 BIORIENTED POLYPROPYLENE FILM").
+  // Destino hispanohablante: solo el español, sin repetirlo.
   if (descripcionSku) {
     const [es, en] = descripcionSku.split(/\s+\/\s+/);
-    return en ? ` ${es.trim()} // ${ncm ?? ''} ${en.trim()}` : ` ${descripcionSku}`;
+    if (idioma === 'es') return ` ${es.trim()}`;
+    const otro = idioma === 'pt' ? (desc?.descripcionPt ?? en) : en;
+    return otro ? ` ${es.trim()} // ${ncm ?? ''} ${otro.trim()}` : ` ${descripcionSku}`;
   }
-  return desc ? ` ${desc.descripcionEs} // ${ncm} ${desc.descripcionEn}` : '';
+  if (!desc) return '';
+  if (idioma === 'es') return ` ${desc.descripcionEs}`;
+  return ` ${desc.descripcionEs} // ${ncm} ${idioma === 'pt' ? desc.descripcionPt : desc.descripcionEn}`;
 }
 
 /**
@@ -242,8 +248,9 @@ export function construirFacturaDian(datos: DatosFacturaDian): { factura: Factur
       `PESO BRUTO / GROSS WEIGHT: ${e?.pesoBrutoKg ?? ''} KG`,
       `PALETAS / PALLETS: ${e?.pallets ?? ''}`,
       `BOBINAS / ROLLS: ${e?.bobinas ?? ''}`,
-      `PA NCM: ${ncm ?? ''}${textoJuntoAPartida(liquidacion, descripcionNcm(ncm, liquidacion?.descripcionSku ?? null, desc))}`,
-      `PA NALADI: ${naladi ?? ''} `,
+      `PA NCM: ${ncm ?? ''}${textoJuntoAPartida(liquidacion, descripcionNcm(ncm, liquidacion?.descripcionSku ?? null, desc, idiomaDeDestino(liquidacion?.pais)))}`,
+      // La NALADI solo se imprime si aplica a este destino (6-nov: EE. UU. nunca la lleva).
+      ...(naladi && liquidacion?.header.naladiAplica !== false ? [`PA NALADI: ${naladi} `] : []),
       `TOTAL FOB: US$ ${enUS(subtotal)}`,
       `TOTAL FLETE / FREIGHT: US$ ${enUS(flete)}`,
       `TOTAL SEGURO / INSURANCE: US$ ${enUS(seguro)} - `,

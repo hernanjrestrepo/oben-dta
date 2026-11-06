@@ -292,8 +292,13 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
 
     it('la partida sale de la película (SC = BOPP: 3920.20.19 / NALADI 3920.20.10) y lo digitado manda', async () => {
       const { service } = build({ calculator: new IncotermFormulaCalculator() });
-      const auto = await service.getDraft('10867');
-      expect(auto.header).toMatchObject({ paNcm: '3920.20.19', paNaladi: '3920.20.10' });
+      // NALADI (6-nov): solo si se marca "aplica"; sin marcar no se pide ni se llena.
+      const sinMarcar = await service.getDraft('10867');
+      expect(sinMarcar.header).toMatchObject({ paNcm: '3920.20.19', paNaladi: null, naladiAplica: false });
+      expect(sinMarcar.headerOrigen.paNaladi).toBeUndefined();
+      expect(sinMarcar.missing.some((m) => m.includes('NALADI'))).toBe(false);
+      const auto = await service.getDraft('10867', { header: { naladiAplica: true } });
+      expect(auto.header).toMatchObject({ paNcm: '3920.20.19', paNaladi: '3920.20.10', naladiAplica: true });
       expect(auto.headerOrigen).toMatchObject({ paNcm: 'maestro', paNaladi: 'maestro' });
       expect(auto.ajustes).toContain('Partida arancelaria de la tabla de Oben: 3920.20.19 — PELICULA DE POLIPROPILENO BIORIENTADO.');
       const digitada = await service.getDraft('10867', { header: { paNcm: '3920.20.99' } });
@@ -303,7 +308,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
 
     it('respuesta actual de Oben (Parida + Linea BOPP + CRISTAL): Pa_Ncm = partida de Colombia y tipo BOPP para la factura', async () => {
       const { service } = build({ calculator: new IncotermFormulaCalculator() });
-      const d = await service.getDraft('99010');
+      const d = await service.getDraft('99010', { header: { naladiAplica: true } });
       expect(d.header.paNcm).toBe('39.20.10.90');
       expect(d.headerOrigen.paNcm).toBe('oben');
       expect(d.partidaTipo?.tipo).toBe('bopp');
@@ -1180,7 +1185,7 @@ describe('Liquidación — simulación completa (datos reales de spCheckSettleme
     it('sin flete, partidas ni HMF calculable: se llenan, se avisan y la liquidación queda completa', async () => {
       const { service, rates } = prov();
       rates.resolveSurcharges.mockResolvedValue({ entryFee: 110, importerSecurityFiling: 20, harborMaintenanceFee: null, harborMaintenanceFeeFormula: null, destinationCharges: null, missing: [] });
-      const draft = await service.getDraft('11271', { header: HEADER_USA, totales: { incoterm: 'DDP' } });
+      const draft = await service.getDraft('11271', { header: { ...HEADER_USA, naladiAplica: true }, totales: { incoterm: 'DDP' } });
 
       expect(draft.header).toMatchObject({ paNcm: '3920.62.00', paNaladi: '3920.62.00', harborMaintenanceFee: 300, destinationCharges: 2174 });
       expect(draft.headerOrigen).toMatchObject({ paNcm: 'provisional', paNaladi: 'provisional', harborMaintenanceFee: 'provisional' });

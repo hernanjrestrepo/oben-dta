@@ -45,6 +45,8 @@ export interface LiquidacionHeaderValues {
   notes?: string | null;
   paNcm?: string | null;
   paNaladi?: string | null;
+  /** La partida NALADI aplica a este destino (6-nov): sin marcar no se pide, no se calcula y no se envía (p. ej. EE. UU. nunca aplica). */
+  naladiAplica?: boolean | null;
   description?: string | null;
   puertoArribo?: string | null;
   puertoEmbarque?: string | null;

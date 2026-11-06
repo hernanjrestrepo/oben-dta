@@ -520,6 +520,16 @@ export const TEXTOS_PANTALLAS: Record<string, { en: string; pt: string; fr: stri
   "pt": "Junto à posição NCM na fatura",
   "fr": "À côté de la position NCM sur la facture"
  },
+ "Aplica partida NALADI": {
+  "en": "NALADI heading applies",
+  "pt": "Aplica posição NALADI",
+  "fr": "La position NALADI s'applique"
+ },
+ "Márcala solo cuando corresponda al destino (a EE. UU. nunca le aplica): sin marcar no se pide ni se envía a Oben.": {
+  "en": "Tick it only when it applies to the destination (it never applies to the USA): unticked, it is neither required nor sent to Oben.",
+  "pt": "Marque somente quando corresponder ao destino (nos EUA nunca se aplica): sem marcar, não é exigida nem enviada à Oben.",
+  "fr": "Cochez-la seulement si elle s'applique à la destination (jamais pour les États-Unis) : décochée, elle n'est ni demandée ni envoyée à Oben."
+ },
  "Sin nombre del producto (la partida va sola). Lo que dejes queda para este cliente.": {
   "en": "Without the product name (the heading goes alone). What you leave is kept for this customer.",
   "pt": "Sem o nome do produto (a posição vai sozinha). O que você deixar fica para este cliente.",

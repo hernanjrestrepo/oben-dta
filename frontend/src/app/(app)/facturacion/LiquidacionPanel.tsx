@@ -108,9 +108,13 @@ export function LiquidacionPanel({
   // Texto junto a la partida NCM en la factura (por cliente, 20-oct): undefined = lo que trae el sistema.
   const [ncmTexto, setNcmTexto] = useState<string | undefined>(undefined);
   const [ncmSin, setNcmSin] = useState<boolean | undefined>(undefined);
+  // NALADI (6-nov): casilla sin marcar; undefined = lo que trae el sistema (sin marcar, o marcada si el cliente ya tenía una).
+  const [naladiMarcada, setNaladiMarcada] = useState<boolean | undefined>(undefined);
   const [verProforma, setVerProforma] = useState(false);
 
   const [liq, setLiq] = useState<LiquidacionDraft | null>(null);
+  // La casilla refleja lo que marcó la persona; si no ha tocado nada, lo que decidió el sistema (sin marcar, salvo que el cliente ya tuviera NALADI).
+  const naladiAplica = naladiMarcada ?? liq?.header.naladiAplica === true;
   const [calculando, setCalculando] = useState(true);
   const [error, setError] = useState('');
   const reqId = useRef(0);
@@ -129,7 +133,8 @@ export function LiquidacionPanel({
 
   const payload = useMemo(() => {
     const header: LiquidacionHeaderValues = {};
-    for (const [k, v] of Object.entries(textos) as Array<[TextoKey, string]>) if (v.trim()) header[k] = v.trim();
+    for (const [k, v] of Object.entries(textos) as Array<[TextoKey, string]>) if (v.trim() && (k !== 'paNaladi' || naladiMarcada !== false)) header[k] = v.trim();
+    if (naladiMarcada !== undefined) header.naladiAplica = naladiMarcada;
     for (const [k, v] of Object.entries(montos) as Array<[MontoKey, string]>) {
       const n = parseNum(v);
       if (n !== null) header[k] = n;
@@ -143,7 +148,7 @@ export function LiquidacionPanel({
         ...(ncmSin !== undefined ? { ncmConDescripcion: !ncmSin } : {}),
       },
     };
-  }, [textos, montos, incoterm, otros, poliza, ncmTexto, ncmSin]);
+  }, [textos, montos, incoterm, otros, poliza, ncmTexto, ncmSin, naladiMarcada]);
 
   useEffect(() => {
     if (!pf) return;
@@ -313,7 +318,7 @@ export function LiquidacionPanel({
             >
               <input value={textoValor('direccion')} onChange={(e) => setTextos((t) => ({ ...t, direccion: e.target.value }))} className={`${inputCls} w-full`} placeholder={t('Dirección del consignatario')} />
             </Field>
-            {TEXTOS.map(([k, label, ph]) => (
+            {TEXTOS.filter(([k]) => k !== 'paNaladi' || naladiAplica).map(([k, label, ph]) => (
               <Field
                 key={k}
                 label={
@@ -325,6 +330,13 @@ export function LiquidacionPanel({
                 <input value={textoValor(k)} onChange={(e) => setTextos((t) => ({ ...t, [k]: e.target.value }))} className={`${inputCls} w-full`} placeholder={ph} />
               </Field>
             ))}
+            <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={naladiAplica} onChange={(e) => setNaladiMarcada(e.target.checked)} />
+                {t('Aplica partida NALADI')}
+              </label>
+              <span className="text-[11px] text-gray-500">{t('Márcala solo cuando corresponda al destino (a EE. UU. nunca le aplica): sin marcar no se pide ni se envía a Oben.')}</span>
+            </div>
             <Field
               className="sm:col-span-2"
               label={

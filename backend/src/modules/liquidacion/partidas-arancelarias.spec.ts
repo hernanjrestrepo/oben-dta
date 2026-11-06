@@ -66,3 +66,31 @@ describe('partidas arancelarias de Oben (2026-10-02)', () => {
     expect(r).toMatchObject({ partida: null, mezcla: true });
   });
 });
+
+describe('descripción junto a la partida en el idioma del país de destino (6-nov)', () => {
+  const { idiomaDeDestino, PARTIDAS } = jest.requireActual('./partidas-arancelarias') as typeof import('./partidas-arancelarias');
+  const { descripcionNcm } = jest.requireActual('../facturacion/factura-dian/representacion') as typeof import('../facturacion/factura-dian/representacion');
+
+  it('idioma: EE. UU. y el resto del mundo en inglés, Brasil y Portugal en portugués, hispanohablantes en español', () => {
+    expect(idiomaDeDestino('USA')).toBe('en');
+    expect(idiomaDeDestino('United States')).toBe('en');
+    expect(idiomaDeDestino('Poland')).toBe('en');
+    expect(idiomaDeDestino('BRASIL')).toBe('pt');
+    expect(idiomaDeDestino('Portugal')).toBe('pt');
+    expect(idiomaDeDestino('México')).toBe('es');
+    expect(idiomaDeDestino('ECUADOR')).toBe('es');
+    expect(idiomaDeDestino('España')).toBe('es');
+    expect(idiomaDeDestino(null)).toBe('en');
+  });
+
+  it('EE. UU. queda como en la FEXP real: "ES // NCM EN"; Brasil: el segundo idioma es el portugués; hispanohablantes: solo español', () => {
+    const bopp = PARTIDAS.bopp;
+    expect(descripcionNcm('3920.20.19', null, bopp, 'en')).toBe(' PELICULA DE POLIPROPILENO BIORIENTADO // 3920.20.19 BIORIENTED POLYPROPYLENE FILM');
+    expect(descripcionNcm('3920.20.19', null, bopp, 'pt')).toBe(' PELICULA DE POLIPROPILENO BIORIENTADO // 3920.20.19 FILME DE POLIPROPILENO BIORIENTADO');
+    expect(descripcionNcm('3920.20.19', null, bopp, 'es')).toBe(' PELICULA DE POLIPROPILENO BIORIENTADO');
+    // La descripción de Oben por SKU ("ES / EN") también respeta el idioma.
+    const sku = 'PELÍCULA DE POLIPROPILENO BIORIENTADA / BIAXIALLY ORIENTED POLYPROPYLENE FILM';
+    expect(descripcionNcm('3920.20.19', sku, null, 'en')).toBe(' PELÍCULA DE POLIPROPILENO BIORIENTADA // 3920.20.19 BIAXIALLY ORIENTED POLYPROPYLENE FILM');
+    expect(descripcionNcm('3920.20.19', sku, null, 'es')).toBe(' PELÍCULA DE POLIPROPILENO BIORIENTADA');
+  });
+});
