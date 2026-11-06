@@ -481,12 +481,21 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
 
   // Sin equivalencia: la película se infiere de "SC 25" (letras + espesor) si en Oben existe una sola así. "ET-TN" sin número
   // (EE. UU.) toma el espesor del gauge: "48 ga. ET-TN" → ET-TN-12 → ET---0012TN.
-  const conEspesor = (t: string) => (espesorMicras ? t.replace(/\b([A-Za-z]{1,4})-([A-Za-z]{2})\b(?!-\d)/g, `$1-$2-${Math.round(espesorMicras)}`) : t);
+  // Si la lectura no trajo el espesor, se toma del texto: "10MC", "12 MIC", "12 micras" o "48 ga." (Microplast, BAYSHORE, 6-nov).
+  const textoLinea = `${c.codigoCliente ?? ''} ${c.textoCliente}`;
+  const micrasTexto = (() => {
+    const mc = textoLinea.match(/\b(\d{1,3})\s*(?:mc|mic|micras?|micrones?|µm|um)\b/i);
+    if (mc) return Number(mc[1]);
+    const ga = textoLinea.match(/\b(\d{2,3})\s*ga(?:uge)?\b/i);
+    return ga ? Number(ga[1]) * 0.254 : null;
+  })();
+  const micras = espesorMicras ?? micrasTexto;
+  const conEspesor = (t: string) => (micras ? t.replace(/\b([A-Za-z]{1,4})-([A-Za-z]{2})\b(?!-\d)/g, `$1-$2-${Math.round(micras)}`) : t);
   const inferida = eqTabla
     ? null
     : (inferirPelicula(c.codigoCliente ?? '', peliculasConocidas) ??
       inferirPelicula(c.textoCliente, peliculasConocidas) ??
-      inferirPelicula(conEspesor(`${c.codigoCliente ?? ''} ${c.textoCliente}`), peliculasConocidas));
+      inferirPelicula(conEspesor(textoLinea), peliculasConocidas));
   const eq: EquivalenciaRef | null = eqTabla ?? (inferida ? { id: '', clientCode: c.codigoCliente ?? c.textoCliente.slice(0, 60), obenCode: inferida } : null);
 
   let kilos: number | null = null;

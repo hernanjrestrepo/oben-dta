@@ -153,3 +153,10 @@ describe('BAYSHORE FILMS (cliente directo de EE. UU., 6-nov)', () => {
     expect(l.conversiones.join(' ')).not.toMatch(/Gramaje/);
   });
 });
+
+describe('Microplast (6-nov): "POLIESTER 10MC 1060MM ET-RT OPP30"', () => {
+  it('el espesor sale del texto (10MC) y "ET-RT" da la película ET---0010RT', () => {
+    const l = construirLinea(1, { textoCliente: 'ENS POLIESTER 10MC 1060MM ET-RT OPP30', codigoCliente: 'ENS POLIESTER 10MC 1060MM ET-RT OPP30', cantidad: 562, unidad: 'kg', ancho: 1060, unidadAncho: 'mm', precioUnitario: 2.52 }, [], ['ET---0010RT', 'ET---0010TN', 'ET---0012RT']);
+    expect(l).toMatchObject({ codigoOben: 'ET---0010RT', kilos: 562, anchoMm: 1060, precioUnitario: 2.52, faltantes: [] });
+  });
+});

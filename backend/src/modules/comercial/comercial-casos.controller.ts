@@ -85,6 +85,29 @@ class EditarLineaDto {
   moneda?: string;
 }
 
+class AgregarLineaDto {
+  @IsString()
+  @IsNotEmpty()
+  codigoCliente!: string;
+
+  @IsNumber()
+  @IsPositive()
+  kilos!: number;
+
+  @IsNumber()
+  @IsPositive()
+  anchoMm!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  precioUnitario?: number;
+
+  @IsOptional()
+  @IsString()
+  codigoOben?: string;
+}
+
 class DireccionManualDto {
   @IsString()
   @IsNotEmpty()
@@ -110,6 +133,12 @@ export class EditarCasoDto {
   @IsArray()
   @IsInt({ each: true })
   quitarLineas?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AgregarLineaDto)
+  agregarLineas?: AgregarLineaDto[];
 
   @IsOptional()
   @IsString()

@@ -63,6 +63,8 @@ export interface RespuestaCorreo {
 export interface EditarCasoInput {
   lineas?: Array<Partial<Pick<CasoLinea, 'codigoOben' | 'kilos' | 'anchoMm' | 'espesorMicras' | 'precioUnitario' | 'moneda'>> & { n: number; guardarEquivalencia?: boolean }>;
   quitarLineas?: number[];
+  /** Líneas nuevas escritas por Comercial (en kg y mm). */
+  agregarLineas?: Array<{ codigoCliente: string; kilos: number; anchoMm: number; precioUnitario?: number | null; codigoOben?: string | null }>;
   direccionId?: string;
   direccionManual?: { direccion: string; ciudad?: string | null; pais: string };
   fechaRequerida?: string | null;
@@ -308,6 +310,20 @@ export class ComercialFlujoService {
       }
       l.faltantes = faltantesLinea(l);
       cambios.push(`corrigió la línea ${e.n}`);
+    }
+    if (dto.agregarLineas?.length) {
+      const nuevas = await this.lineasManuales(
+        caso,
+        dto.agregarLineas.map((x) => ({ codigoCliente: x.codigoCliente.trim(), kilos: x.kilos, anchoMm: x.anchoMm, codigoOben: x.codigoOben?.trim() || undefined })),
+      );
+      nuevas.forEach((l, i) => {
+        const precio = dto.agregarLineas![i].precioUnitario;
+        if (precio && precio > 0) l.precioUnitario = precio;
+        l.moneda = l.moneda ?? lineas.find((x) => x.moneda)?.moneda ?? null;
+        l.faltantes = faltantesLinea(l);
+      });
+      lineas = [...lineas, ...nuevas];
+      cambios.push(`agregó ${nuevas.length} línea(s)`);
     }
     caso.lineas = lineas.map((l, i) => ({ ...l, n: i + 1 }));
 

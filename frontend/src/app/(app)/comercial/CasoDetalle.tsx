@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { extractMessage } from '@/lib/errors';
 import type { CasoEstado, CasoLinea, ComercialCaso, EmbarqueCaso, ProformaOben } from '@/types';
-import { AlertCircle, AlertTriangle, Building2, Check, CheckCircle2, Download, FlaskConical, Loader2, Send, ShieldAlert, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Building2, Check, CheckCircle2, Download, FlaskConical, Loader2, Plus, Send, ShieldAlert, Trash2, X } from 'lucide-react';
 import { ACCION_LABEL, EstadoBadge, SimuladoBadge, btnPrimary, btnSecondary, fecha, inputCls } from './comun';
 
 /** Etapas del caso, en orden, para la línea de progreso. */
@@ -53,6 +53,7 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [edits, setEdits] = useState<Record<number, EdicionLinea>>({});
+  const [nueva, setNueva] = useState({ codigoCliente: '', codigoOben: '', kilos: '', anchoMm: '', precio: '' });
   const [respuesta, setRespuesta] = useState<{ tipo: 'aprueba' | 'rechaza' | 'modifica'; nota: string; lineas: string }>({ tipo: 'aprueba', nota: '', lineas: '' });
 
   useEffect(() => {
@@ -116,6 +117,28 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
       ...(e.precio ? { precioUnitario: Number(e.precio.replace(',', '.')) } : {}),
     }));
     await accion('lineas', () => api.editComercialCaso(id, { lineas }));
+  }
+
+  async function borrarLinea(n: number) {
+    if (!confirm(`¿Borrar la línea ${n}? No se puede deshacer.`)) return;
+    await accion('lineas', () => api.editComercialCaso(id, { quitarLineas: [n] }));
+    setEdits({});
+  }
+
+  async function agregarLinea() {
+    const kilos = Number(nueva.kilos.replace(',', '.'));
+    const anchoMm = Number(nueva.anchoMm.replace(',', '.'));
+    const precio = Number(nueva.precio.replace(',', '.'));
+    if (!nueva.codigoCliente.trim() || !(kilos > 0) || !(anchoMm > 0)) {
+      setError('Para agregar una línea escribe cómo la pidió el cliente, los kilos y el ancho en mm.');
+      return;
+    }
+    await accion('lineas', () =>
+      api.editComercialCaso(id, {
+        agregarLineas: [{ codigoCliente: nueva.codigoCliente.trim(), kilos, anchoMm, ...(precio > 0 ? { precioUnitario: precio } : {}), ...(nueva.codigoOben.trim() ? { codigoOben: nueva.codigoOben.trim() } : {}) }],
+      }),
+    );
+    setNueva({ codigoCliente: '', codigoOben: '', kilos: '', anchoMm: '', precio: '' });
   }
 
   async function descargarFirmada() {
@@ -245,7 +268,14 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
                   const e = edit(l);
                   return (
                     <tr key={l.n} className={l.faltantes.length ? 'bg-red-50/40' : ''}>
-                      <td className="px-2 py-1.5 text-gray-500">{l.n}</td>
+                      <td className="px-2 py-1.5 text-gray-500">
+                        {l.n}
+                        {editable && (
+                          <button type="button" className="block mt-1 text-red-600 hover:text-red-800 disabled:opacity-40" disabled={!!busy} title={t('Borrar esta línea')} onClick={() => void borrarLinea(l.n)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </td>
                       <td className="px-2 py-1.5 text-gray-800">
                         {l.textoCliente}
                         {l.codigoItem && <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">{t('Ítem')} {l.codigoItem}</span>}
@@ -296,6 +326,18 @@ export function CasoDetalle({ id, onClose, onChange }: { id: string; onClose: ()
               </tbody>
             </table>
           </div>
+          {editable && (
+            <div className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-gray-300 p-2 text-xs">
+              <input value={nueva.codigoCliente} onChange={(ev) => setNueva({ ...nueva, codigoCliente: ev.target.value })} className={`${inputCls} w-56 !py-1`} placeholder={t('Como lo pidió el cliente')} />
+              <input value={nueva.codigoOben} onChange={(ev) => setNueva({ ...nueva, codigoOben: ev.target.value })} className={`${inputCls} w-28 !py-1`} placeholder={t('Ref. Oben')} />
+              <input value={nueva.kilos} onChange={(ev) => setNueva({ ...nueva, kilos: ev.target.value })} className={`${inputCls} w-24 !py-1`} placeholder={t('Kg')} />
+              <input value={nueva.anchoMm} onChange={(ev) => setNueva({ ...nueva, anchoMm: ev.target.value })} className={`${inputCls} w-20 !py-1`} placeholder={t('Ancho mm')} />
+              <input value={nueva.precio} onChange={(ev) => setNueva({ ...nueva, precio: ev.target.value })} className={`${inputCls} w-20 !py-1`} placeholder={t('USD/kg')} />
+              <button type="button" className={btnSecondary} disabled={!!busy} onClick={() => void agregarLinea()}>
+                <Plus className="w-4 h-4" /> {t('Agregar línea')}
+              </button>
+            </div>
+          )}
           {editable && Object.keys(edits).length > 0 && (
             <button className={`${btnPrimary} mt-2`} disabled={!!busy} onClick={guardarLineas}>
               {busy === 'lineas' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}{' '}{t('Guardar correcciones')}
