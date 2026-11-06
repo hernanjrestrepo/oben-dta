@@ -275,9 +275,6 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
   const [trabajando, setTrabajando] = useState(false);
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
-  // Vigencia del cuadro (Hernán, 23-oct): el sistema la pide al cargar; reemplaza las fechas del Excel.
-  const [desde, setDesde] = useState('');
-  const [hasta, setHasta] = useState('');
   const input = useRef<HTMLInputElement>(null);
 
   const cargarHistorial = () =>
@@ -309,10 +306,9 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
     try {
       setTrabajando(true);
       setError('');
-      const r = await api.cargarTarifarioExportacion(archivo, true, { desde, hasta });
-      setOk(`Tarifario cargado: ${r.maritimas.total} tarifas marítimas y ${r.inland.total} Inland, vigentes del ${desde} al ${hasta}. Quedó en el histórico.`);
-      setDesde('');
-      setHasta('');
+      const r = await api.cargarTarifarioExportacion(archivo, true);
+      const vig = r.vigencia?.hasta ? `, con las vigencias del Excel (hasta el ${r.vigencia.hasta})` : '';
+      setOk(`Tarifario cargado: ${r.maritimas.total} tarifas marítimas y ${r.inland.total} Inland${vig}. Quedó en el histórico.`);
       setVista(null);
       setArchivo(null);
       await cargarHistorial();
@@ -404,24 +400,13 @@ export function TarifarioCard({ puedeCargar, onCargado }: { puedeCargar: boolean
                 </ul>
               </details>
             )}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <label className="text-[11px] font-medium text-gray-700">
-                {t('Fecha de vigencia (desde) *')}
-                <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={`${inputCls} w-full mt-0.5`} />
-              </label>
-              <label className="text-[11px] font-medium text-gray-700">
-                {t('Fecha de expiración (hasta) *')}
-                <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} className={`${inputCls} w-full mt-0.5`} />
-              </label>
-            </div>
-            {desde && hasta && desde > hasta && <p className="text-red-700">{t('La fecha de vigencia no puede ser posterior a la de expiración.')}</p>}
+            {vista.vigencia?.hasta && (
+              <p>
+                <b>{t('Vigencias del Excel:')}</b> {vista.vigencia.desde ? `${t('desde el')} ${vista.vigencia.desde} ` : ''}{t('hasta el')} {vista.vigencia.hasta}
+              </p>
+            )}
             <div className="flex gap-2 pt-1">
-              <button
-                className={btnPrimary}
-                onClick={() => void aplicar()}
-                disabled={trabajando || !desde || !hasta || desde > hasta}
-                title={!desde || !hasta ? 'Indica la vigencia del tarifario' : undefined}
-              >
+              <button className={btnPrimary} onClick={() => void aplicar()} disabled={trabajando}>
                 {trabajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}{' '}{t('Cargar este tarifario')}
               </button>
               <button className={btnSecondary} onClick={() => (setVista(null), setArchivo(null))} disabled={trabajando}>

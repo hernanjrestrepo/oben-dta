@@ -29,6 +29,8 @@ export interface ResultadoCargaTarifario {
   cambios: CambioTarifa[];
   descartadas: TarifarioLeido['descartadas'];
   avisos: string[];
+  /** Vigencias que trae el Excel (más temprana y más tardía). */
+  vigencia: { desde: string | null; hasta: string | null };
   cargaId?: string;
 }
 
@@ -75,23 +77,18 @@ export class TarifarioExportacionService {
   async cargar(
     buffer: Buffer,
     archivo: string,
-    opciones: { confirmar: boolean; usuario: string | null; vigenteDesde?: string | null; vigenteHasta?: string | null },
+    opciones: { confirmar: boolean; usuario: string | null },
   ): Promise<ResultadoCargaTarifario> {
-    // Vigencia del cuadro (Hernán, 23-oct: "cuando se cargue un archivo de fletes el sistema debe preguntar la fecha de
-    // vigencia y de expiración"): obligatoria para aplicar; reemplaza las fechas que traiga el Excel en todas las tarifas.
-    const vigencia = validarVigencia(opciones.vigenteDesde, opciones.vigenteHasta, opciones.confirmar);
     let leido: TarifarioLeido;
     try {
       leido = leerTarifarioExportacion(buffer);
     } catch (err) {
       throw new BadRequestException(`No se pudo leer el tarifario: ${(err as Error).message}`);
     }
-    if (vigencia) {
-      leido = {
-        ...leido,
-        maritimas: leido.maritimas.map((m) => ({ ...m, effectiveDate: vigencia.desde, validUntil: vigencia.hasta })),
-        inland: leido.inland.map((i) => ({ ...i, validUntil: vigencia.hasta })),
-      };
+    // Vigencias (Hernán, 6-nov): salen del Excel (EffectiveDate y ExpirationDate de cada tarifa), ya no se digitan al cargar.
+    const vigencia = vigenciaDelExcel(leido);
+    if (opciones.confirmar && vigencia.conFecha === 0 && vigencia.total > 0) {
+      throw new BadRequestException('El Excel no trae fechas de expiración (columna ExpirationDate) en ninguna tarifa: no se carga para no dejarlas sin vencimiento. Agrégalas en el Excel y súbelo de nuevo.');
     }
     const tenantId = this.ctx.tenantId;
     const hoy = new Date().toISOString().slice(0, 10);
@@ -156,12 +153,13 @@ export class TarifarioExportacionService {
     const avisos: string[] = [];
     if (rM.vencidas || rI.vencidas) avisos.push(`${rM.vencidas} tarifas marítimas y ${rI.vencidas} Inland ya están vencidas: se cargan igual y la liquidación lo avisa al usarlas.`);
     if (rM.quitadas || rI.quitadas) avisos.push(`Salen ${rM.quitadas} tarifas marítimas y ${rI.quitadas} Inland que no están en el archivo. Si una liquidación abierta las tenía escogidas, vuelve a la sugerida (COMEX la puede escoger de nuevo).`);
-    if (vigencia) avisos.push(`Todas las tarifas quedan vigentes del ${vigencia.desde} al ${vigencia.hasta} (las fechas del Excel no se usan).`);
+    if (vigencia.hasta) avisos.push(`Vigencias tomadas del Excel: ${vigencia.desde ? `desde el ${vigencia.desde} ` : ''}hasta el ${vigencia.hasta} (cada tarifa conserva su propia fecha de expiración).`);
+    if (vigencia.sinFecha > 0) avisos.push(`${vigencia.sinFecha} tarifas del Excel no traen fecha de expiración: quedan sin vencimiento hasta que se cargue otro archivo.`);
     if (leido.descartadas.length) avisos.push(`${leido.descartadas.length} filas del archivo no se cargan (ver detalle).`);
     avisos.push('Los recargos de destino (Entry Fee 120, ISF 45, HMF) no cambian: el archivo no los trae.');
 
     const strip = (r: ReturnType<typeof resumen>) => ({ total: r.total, nuevas: r.nuevas, cambiadas: r.cambiadas, iguales: r.iguales, quitadas: r.quitadas, vencidas: r.vencidas });
-    const base: ResultadoCargaTarifario = { archivo, aplicado: false, maritimas: strip(rM), inland: strip(rI), cambios: cambios.slice(0, 60), descartadas: leido.descartadas, avisos };
+    const base: ResultadoCargaTarifario = { archivo, aplicado: false, maritimas: strip(rM), inland: strip(rI), cambios: cambios.slice(0, 60), descartadas: leido.descartadas, avisos, vigencia: { desde: vigencia.desde, hasta: vigencia.hasta } };
     if (!opciones.confirmar) return base;
 
     const fuenteM = `${archivo} (Leg2)`;
@@ -174,7 +172,7 @@ export class TarifarioExportacionService {
           archivo,
           contenido: buffer,
           tamano: buffer.length,
-          resumen: { maritimas: base.maritimas, inland: base.inland, descartadas: leido.descartadas.length, vigenteDesde: vigencia?.desde ?? null, vigenteHasta: vigencia?.hasta ?? null },
+          resumen: { maritimas: base.maritimas, inland: base.inland, descartadas: leido.descartadas.length, vigenteDesde: vigencia.desde, vigenteHasta: vigencia.hasta },
           tarifas: { maritimas: leido.maritimas, inland: leido.inland },
           respaldo: { maritimas: actualesM, inland: actualesI },
           usuarioId: this.ctx.userId ?? null,
@@ -221,7 +219,7 @@ export class TarifarioExportacionService {
         entityType: 'tarifario',
         entityId: cargaId,
         actorId: this.ctx.userId,
-        inputData: { archivo, usuario: opciones.usuario, vigenteDesde: vigencia?.desde ?? null, vigenteHasta: vigencia?.hasta ?? null },
+        inputData: { archivo, usuario: opciones.usuario, vigenteDesde: vigencia.desde, vigenteHasta: vigencia.hasta },
         outputData: { maritimas: base.maritimas, inland: base.inland, descartadas: leido.descartadas.length },
       })
       .catch(() => undefined);
@@ -243,6 +241,17 @@ export class TarifarioExportacionService {
 }
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Vigencias que trae el Excel: la fecha de vigencia más temprana (EffectiveDate de las marítimas) y la expiración más tardía
+ * (ExpirationDate de marítimas e Inland), cuántas tarifas traen fecha de expiración y cuántas no.
+ */
+export function vigenciaDelExcel(l: TarifarioLeido): { desde: string | null; hasta: string | null; total: number; conFecha: number; sinFecha: number } {
+  const expiraciones = [...l.maritimas.map((m) => m.validUntil), ...l.inland.map((i) => i.validUntil)];
+  const fechas = expiraciones.filter((f): f is string => !!f).sort();
+  const desdes = l.maritimas.map((m) => m.effectiveDate).filter((f): f is string => !!f).sort();
+  return { desde: desdes[0] ?? null, hasta: fechas.at(-1) ?? null, total: expiraciones.length, conFecha: fechas.length, sinFecha: expiraciones.length - fechas.length };
+}
 
 /** Vigencia del cuadro: ambas fechas AAAA-MM-DD y desde ≤ hasta; obligatoria para aplicar (en la vista previa es opcional). */
 export function validarVigencia(desde: string | null | undefined, hasta: string | null | undefined, obligatoria: boolean): { desde: string; hasta: string } | null {

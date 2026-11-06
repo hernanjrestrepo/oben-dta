@@ -23,7 +23,7 @@ class CargaTarifarioDto {
   @IsString()
   confirmar?: string;
 
-  /** Vigencia del cuadro (AAAA-MM-DD): obligatoria para aplicar; reemplaza las fechas del Excel. */
+  /** Ya no se usan (6-nov): la vigencia sale del Excel. Se aceptan para no rechazar una pantalla vieja que aún las envíe. */
   @IsOptional()
   @IsString()
   vigenteDesde?: string;
@@ -166,7 +166,7 @@ export class FreightRatesController {
     if (!/\.xlsx?$/i.test(archivo.originalname ?? '')) throw new BadRequestException('El tarifario debe ser un archivo de Excel (.xlsx).');
     const u = req.user ?? {};
     const usuario = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || null;
-    return this.tarifario.cargar(archivo.buffer, archivo.originalname, { confirmar: dto.confirmar === 'true', usuario, vigenteDesde: dto.vigenteDesde, vigenteHasta: dto.vigenteHasta });
+    return this.tarifario.cargar(archivo.buffer, archivo.originalname, { confirmar: dto.confirmar === 'true', usuario });
   }
 
   /** Histórico de cuadros de tarifas subidos (quién, cuándo, cuántas tarifas). */

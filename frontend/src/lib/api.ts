@@ -462,14 +462,10 @@ class ApiClient {
   }
 
   /** Sube el tarifario de exportación de COMEX: sin `confirmar` solo muestra lo que cambiaría. */
-  async cargarTarifarioExportacion(archivo: File, confirmar: boolean, vigencia?: { desde: string; hasta: string }): Promise<ResultadoCargaTarifario> {
+  async cargarTarifarioExportacion(archivo: File, confirmar: boolean): Promise<ResultadoCargaTarifario> {
     const form = new FormData();
     form.append('archivo', archivo, archivo.name);
     form.append('confirmar', confirmar ? 'true' : 'false');
-    if (vigencia) {
-      form.append('vigenteDesde', vigencia.desde);
-      form.append('vigenteHasta', vigencia.hasta);
-    }
     const { data } = await this.client.post<ResultadoCargaTarifario>('/freight-rates/tarifario-exportacion', form, {
       timeout: 180_000,
       headers: { 'Content-Type': 'multipart/form-data' },

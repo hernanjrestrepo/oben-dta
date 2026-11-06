@@ -978,6 +978,8 @@ export interface ResultadoCargaTarifario {
   cambios: CambioTarifa[];
   descartadas: Array<{ hoja: string; fila: number; motivo: string }>;
   avisos: string[];
+  /** Vigencias que trae el Excel (más temprana y más tardía). */
+  vigencia?: { desde: string | null; hasta: string | null };
   cargaId?: string;
 }
 
