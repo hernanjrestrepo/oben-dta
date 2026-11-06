@@ -14,10 +14,12 @@
 const LB_KG = 0.45359237;
 const IN_MM = 25.4;
 const MIL_UM = 25.4;
+/** Gauge (EE. UU.): 100 ga = 1 mil = 25,4 µm → 1 ga = 0,254 µm (44 ga ≈ 11 µm, 48 ga ≈ 12 µm). */
+const GA_UM = 0.254;
 
 export type UnidadPeso = 'kg' | 'lb' | 't';
 export type UnidadLongitud = 'mm' | 'cm' | 'm' | 'in';
-export type UnidadEspesor = 'um' | 'mil' | 'gm2';
+export type UnidadEspesor = 'um' | 'mil' | 'ga' | 'gm2';
 
 export function unidadPeso(u: string): UnidadPeso | null {
   const n = norm(u);
@@ -40,6 +42,7 @@ export function unidadEspesor(u: string): UnidadEspesor | null {
   const n = norm(u);
   if (/^(um|µm|μm|micra|micras|micron|micrones|mic|microns?)$/.test(n)) return 'um';
   if (/^(mil|mils)$/.test(n)) return 'mil';
+  if (/^(ga|gauge|gage)$/.test(n)) return 'ga';
   if (/^(g|gr|grs|gramos?|g\/m2|g\/m²|gm2|gsm)$/.test(n)) return 'gm2';
   return null;
 }
@@ -63,6 +66,10 @@ export function aMicras(valor: number, unidad: UnidadEspesor): { micras: number 
   if (unidad === 'mil') {
     const micras = round(valor * MIL_UM, 2);
     return { micras, nota: `${fmt(valor)} mil → ${fmt(micras)} µm` };
+  }
+  if (unidad === 'ga') {
+    const micras = round(valor * GA_UM, 2);
+    return { micras, nota: `${fmt(valor)} ga → ${fmt(micras)} µm` };
   }
   return {
     micras: null,

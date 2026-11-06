@@ -182,9 +182,14 @@ export class ComercialIntakeService {
     const cdd = fechaCdd(`${input.subject}\n${texto}`);
     if (cdd) extraccion = { ...extraccion, fechaRequerida: cdd };
     const maestro = client?.obenCode ? await this.maestro(client.obenCode) : null;
-    // Sin dirección legible en la orden, se busca entre los destinos del cliente la que aparece en los adjuntos (la orden en sí).
+    // Sin dirección legible en la orden, se busca entre los destinos del cliente la que aparece en la orden adjunta y, si ahí no
+    // está, en el cuerpo del correo (Hernán, 6-nov). Un empate (p. ej. la dirección de la firma) no se adivina.
     const textoAdjuntos = texto.split(/^--- .+ ---\s*$/m).slice(1).join('\n');
-    const destino = maestro && 'error' in maestro ? null : this.resolverDestino(maestro, extraccion.direccionEntrega, textoAdjuntos);
+    let destino = maestro && 'error' in maestro ? null : this.resolverDestino(maestro, extraccion.direccionEntrega, textoAdjuntos);
+    if (destino && 'error' in destino && maestro && !('error' in maestro)) {
+      const porCorreo = this.resolverDestino(maestro, null, `${input.subject}\n${texto}`);
+      if (porCorreo && 'direccion' in porCorreo) destino = porCorreo;
+    }
 
     const simulatedItems = [
       ...(maestro && !('error' in maestro) && maestro.simulated ? [MAESTRO_SIMULADO_LABEL] : []),

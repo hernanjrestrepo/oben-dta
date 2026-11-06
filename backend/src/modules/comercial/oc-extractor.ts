@@ -238,7 +238,7 @@ const RE_ANCHO_ETIQUETA = new RegExp(`(?:ancho|width|anch\\.?)\\s*[:=]?\\s*${NUM
 // "FCL 40\"" / "container 40'" es el tamaño del CONTENEDOR (pies), no un ancho de bobina (4-nov: se leía como 1016 mm).
 const RE_ANCHO_SUELTO = new RegExp(`(?<!\\bfcl\\s)(?<!\\bcontainer\\s)(?<!\\bcontenedor\\s)(?<!\\bcont\\.\\s)${NUM}${SEP}(mm|cms|cm|pulgadas|pulg|in|inch(?:es)?|")(?![a-z])`, 'i');
 // "2 mil kg" es "dos mil kilos", no 2 mils de espesor.
-const RE_ESPESOR = new RegExp(`${NUM}${SEP}(µm|μm|um|micras?|micrones|mic|mils?|g/m2|g/m²|gsm|grs?|g)(?![a-z])(?!\\s*(?:kg|kilos?|lbs?|libras?)\\b)`, 'i');
+const RE_ESPESOR = new RegExp(`${NUM}${SEP}(µm|μm|um|micras?|micrones|mic|mils?|gauge|ga|g/m2|g/m²|gsm|grs?|g)(?![a-z])(?!\\s*(?:kg|kilos?|lbs?|libras?)\\b)`, 'i');
 const RE_PRECIO = new RegExp(`(?:precio(?:\\s+unitario)?|price|unit\\s+price|valor\\s+unitario|p\\.?\\s*unit\\.?)\\s*[:=]?\\s*(usd|us\\$|cop|\\$)?\\s*${NUM}\\s*(usd|cop)?`, 'i');
 const RE_PRECIO_SIMBOLO = new RegExp(`(u\\$d|u\\$s|us\\$|\\$)\\s*${NUM}`, 'i');
 // "USD 2,50" / "2,50 USD" sin etiqueta de precio. 1 = moneda antes, 2 = valor, 3 = valor antes, 4 = moneda después.
@@ -379,7 +379,8 @@ export async function extraerConIa(
     'Lee la orden de compra y devuelve SOLO un JSON con esta forma:',
     '{"numero": string|null, "fechaRequerida": "YYYY-MM-DD"|null, "direccionEntrega": string|null, "clienteFinal": string|null,',
     ' "lineas": [{"textoCliente": string, "codigoCliente": string|null, "codigoItem": string|null, "cantidad": number|null, "unidad": "kg"|"lb"|"t"|null,',
-    '   "ancho": number|null, "unidadAncho": "mm"|"cm"|"m"|"in"|null, "espesor": number|null, "unidadEspesor": "um"|"mil"|"g"|null,',
+    '   "ancho": number|null, "unidadAncho": "mm"|"cm"|"m"|"in"|null, "espesor": number|null, "unidadEspesor": "um"|"mil"|"ga"|"g"|null,',
+    '"ga" o "ga." es gauge (calibre de EE. UU.: "48 ga."), nunca gramaje: "unidadEspesor":"ga". "g" es solo gramaje (g/m²).',
     '   "precioUnitario": number|null, "moneda": "USD"|"COP"|null}]}',
     'Reglas: no inventes datos — si algo no está en la orden, usa null. "codigoCliente" es el nombre o código con que el cliente pide el material, copiado tal cual.',
     '"codigoItem" es el código o ID del ítem de esa línea tal como aparece en la columna de código de la tabla ("Código ID", "Item", "Código"), copiado tal cual con sus ceros a la izquierda; null si la tabla no trae esa columna. No es la posición (10, 20) ni la referencia de Oben.',
@@ -468,8 +469,24 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
   const eqTabla =
     (c.codigoCliente ? buscarEquivalencia(c.codigoCliente, equivalencias, true) : null) ??
     buscarEquivalencia(c.textoCliente, equivalencias);
-  // Sin equivalencia: la película se infiere de "SC 25" (letras + espesor) si en Oben existe una sola así.
-  const inferida = eqTabla ? null : (inferirPelicula(c.codigoCliente ?? '', peliculasConocidas) ?? inferirPelicula(c.textoCliente, peliculasConocidas));
+  // Espesor. "48 ga." es gauge de EE. UU., aunque la IA lo haya tomado como gramaje (BAYSHORE, 6-nov).
+  let espesorMicras: number | null = null;
+  let ue = c.unidadEspesor ? unidadEspesor(c.unidadEspesor) : null;
+  if (c.espesor && ue === 'gm2' && new RegExp(`\\b${c.espesor}\\s*ga(?:uge)?\\b`, 'i').test(`${c.codigoCliente ?? ''} ${c.textoCliente}`)) ue = 'ga';
+  if (c.espesor && ue) {
+    const r = aMicras(c.espesor, ue);
+    espesorMicras = r.micras;
+    if (r.nota) conversiones.push(r.nota);
+  }
+
+  // Sin equivalencia: la película se infiere de "SC 25" (letras + espesor) si en Oben existe una sola así. "ET-TN" sin número
+  // (EE. UU.) toma el espesor del gauge: "48 ga. ET-TN" → ET-TN-12 → ET---0012TN.
+  const conEspesor = (t: string) => (espesorMicras ? t.replace(/\b([A-Za-z]{1,4})-([A-Za-z]{2})\b(?!-\d)/g, `$1-$2-${Math.round(espesorMicras)}`) : t);
+  const inferida = eqTabla
+    ? null
+    : (inferirPelicula(c.codigoCliente ?? '', peliculasConocidas) ??
+      inferirPelicula(c.textoCliente, peliculasConocidas) ??
+      inferirPelicula(conEspesor(`${c.codigoCliente ?? ''} ${c.textoCliente}`), peliculasConocidas));
   const eq: EquivalenciaRef | null = eqTabla ?? (inferida ? { id: '', clientCode: c.codigoCliente ?? c.textoCliente.slice(0, 60), obenCode: inferida } : null);
 
   let kilos: number | null = null;
@@ -509,14 +526,6 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
     } else if (r.nota) conversiones.push(r.nota);
   } else {
     faltantes.push(c.ancho ? `unidad del ancho (${c.ancho})` : 'ancho');
-  }
-
-  let espesorMicras: number | null = null;
-  const ue = c.unidadEspesor ? unidadEspesor(c.unidadEspesor) : null;
-  if (c.espesor && ue) {
-    const r = aMicras(c.espesor, ue);
-    espesorMicras = r.micras;
-    if (r.nota) conversiones.push(r.nota);
   }
 
   if (!eq) {

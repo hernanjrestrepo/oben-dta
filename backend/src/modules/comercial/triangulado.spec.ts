@@ -138,3 +138,18 @@ describe('fecha CDD y película de Estados Unidos', () => {
     expect(inferirPelicula('44 ga ET-TN-11', ['ET---0012TN'])).toBeNull();
   });
 });
+
+describe('BAYSHORE FILMS (cliente directo de EE. UU., 6-nov)', () => {
+  it('"48 ga. ET-TN" es gauge (12 µm) y da la película ET---0012TN; libras, pulgadas y precio a kilo', () => {
+    const texto = '49-1/2" 48 ga. ET-TN - one side corona treated PET - 6" core - 30" OD - Corona Out';
+    const l = construirLinea(
+      1,
+      { textoCliente: texto, codigoCliente: texto, cantidad: 43000, unidad: 'lb', ancho: 49.5, unidadAncho: 'in', espesor: 48, unidadEspesor: 'g', precioUnitario: 1.097, moneda: 'USD' },
+      [],
+      ['ET---0011TN', 'ET---0012TN', 'ET---0012RT'],
+    );
+    expect(l).toMatchObject({ codigoOben: 'ET---0012TN', kilos: 19504.48, anchoMm: 1258, espesorMicras: 12.19, faltantes: [] });
+    expect(l.precioUnitario).toBeCloseTo(2.4185, 4);
+    expect(l.conversiones.join(' ')).not.toMatch(/Gramaje/);
+  });
+});

@@ -646,7 +646,10 @@ export class ComercialFlujoService {
         ...(esReferencia(l.codigoOben!) ? { referencia: l.codigoOben!.toUpperCase() } : { pelicula: l.codigoOben!.toUpperCase(), anchoMm: l.anchoMm ?? undefined }),
         kilos: l.kilos ?? 0,
         precio: l.precioUnitario ?? 0,
-        etiqueta: l.codigoCliente ?? undefined,
+        // OBS. ETIQUETA = número de la orden de compra del cliente; Part Number = como lo pidió el cliente (Hernán, 6-nov).
+        // Los clientes de client_obs_etiqueta (Microplast, Agraf) llevan en cambio el código del ítem (lo decide la proforma).
+        etiqueta: caso.ocNumero && caso.ocNumero !== '-' ? caso.ocNumero : undefined,
+        numeroParte: (l.codigoCliente ?? l.textoCliente).slice(0, 100) || undefined,
         codigoItem: l.codigoItem ?? undefined,
       })),
     };
