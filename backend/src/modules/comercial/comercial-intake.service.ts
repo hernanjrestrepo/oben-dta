@@ -7,7 +7,7 @@ import { EquivalencesService } from '../equivalences/equivalences.service';
 import type { Client } from '../../entities/client.entity';
 import type { CasoDestino, CasoLinea, ComercialCase } from '../../entities/comercial-case.entity';
 import { IaModelosService } from '../ia/ia-modelos.service';
-import { extraerConIa, extraerConReglas, normTexto, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef, type OcAdjunto, type OcExtraccion } from './oc-extractor';
+import { construirLinea, extraerConIa, extraerConReglas, normTexto, sinLineasRepetidas, textoDeAdjuntos, type EquivalenciaRef, type OcAdjunto, type OcExtraccion } from './oc-extractor';
 import type { ComercialConfig } from './comercial-config';
 import { ComercialMaestrosService } from './comercial-maestros.service';
 import { OBEN_US_CODIGO, esPedidoObenUs, fechaCdd, precioParaLinea, preciosTransferencia } from './triangulado';
@@ -225,6 +225,54 @@ export class ComercialIntakeService {
       destinoError: destino && 'error' in destino ? destino.error : null,
     });
     return caso;
+  }
+
+  /**
+   * Las líneas ya guardadas de un caso, traducidas otra vez con las reglas vigentes (equivalencias del cliente, película por
+   * texto, gauge, libras/pulgadas y precio por kilo). Para "Volver a leer la orden" (6-nov): releer solo el texto guardado,
+   * sin los PDF adjuntos, leía peor que la primera vez (650.000 kg en vez de 650, 51 mm en vez de 1.258); las cantidades,
+   * anchos y precios que ya estaban bien leídos se conservan. `releida` aporta lo que la relectura sí lee bien: el código
+   * del ítem de cada línea y el Transfer Price de los pedidos triangulados con OBEN US.
+   */
+  async reconstruirLineas(guardadas: CasoLinea[], clientId: string | null, releida: { lineas?: CasoLinea[]; triangulado?: boolean } = {}): Promise<CasoLinea[]> {
+    const equivalencias = clientId ? (await this.equivalences.findAll(clientId)).map((e) => ({ id: e.id, clientCode: e.clientCode, obenCode: e.obenCode })) : [];
+    const peliculas = await this.peliculasConocidas();
+    const transfer = releida.triangulado ? (releida.lineas ?? []).find((l) => l.conversiones.some((c) => /precio de transferencia/.test(c))) : undefined;
+    return guardadas.map((l, i) => {
+      const r = (releida.lineas ?? []).find((x) => x.n === l.n && x.anchoMm === l.anchoMm);
+      const enLb = l.unidad != null && /^(lb|lbs|libras?|pounds?)$/i.test(l.unidad.trim());
+      const linea = construirLinea(
+        i + 1,
+        {
+          textoCliente: l.textoCliente,
+          codigoCliente: l.codigoCliente,
+          codigoItem: r?.codigoItem ?? l.codigoItem ?? null,
+          cantidad: l.cantidad,
+          unidad: l.unidad,
+          // El ancho guardado ya está en mm; en libras se vuelve a pulgadas para aplicar el redondeo de EE. UU. (hacia arriba, sin decimales).
+          ancho: l.anchoMm ? (enLb ? l.anchoMm / 25.4 : l.anchoMm) : null,
+          unidadAncho: l.anchoMm ? (enLb ? 'in' : 'mm') : null,
+          espesor: l.espesorMicras,
+          unidadEspesor: l.espesorMicras ? 'um' : null,
+          precioUnitario: l.precioUnitario,
+          moneda: l.moneda,
+        },
+        equivalencias,
+        peliculas,
+      );
+      // Ya estaba en Ref. Oben (corrección humana o equivalencia): se respeta.
+      if (l.codigoOben && !linea.codigoOben) {
+        linea.codigoOben = l.codigoOben;
+        linea.equivalenciaId = l.equivalenciaId;
+        linea.faltantes = linea.faltantes.filter((f) => !/^sin equivalencia/.test(f));
+      }
+      if (transfer?.precioUnitario) {
+        linea.precioUnitario = transfer.precioUnitario;
+        linea.moneda = 'USD';
+        linea.conversiones = [...linea.conversiones.filter((c) => !/^precio /.test(c)), ...transfer.conversiones.filter((c) => /precio de transferencia/.test(c))];
+      }
+      return linea;
+    });
   }
 
   /** Lee las líneas de una respuesta del cliente que pide modificar cantidades. */

@@ -54,6 +54,8 @@ export interface EjemploOc {
 }
 
 const logger = new Logger('OcExtractor');
+/** Peso bruto máximo de un contenedor (Colombia, tabla de Oben): ninguna línea de una orden pesa más. */
+const MAX_KG_POR_LINEA = 30_000;
 /** Número como se lee en Colombia (40.000; 18.143,7). */
 const es = (n: number): string => n.toLocaleString('es-CO', { maximumFractionDigits: 3 });
 
@@ -513,6 +515,11 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
   } else {
     faltantes.push('cantidad en kg o lb');
   }
+  // Ninguna línea pesa más que un contenedor completo (30.000 kg, Colombia): una cifra así es casi siempre un error de lectura
+  // ("650,000" leído como 650.000 en vez de 650; OC OCI-00000143 de Agraf, 6-nov). No se corrige sola: Comercial la confirma.
+  if (kilos !== null && kilos > MAX_KG_POR_LINEA) {
+    faltantes.push(`cantidad sospechosa: ${es(kilos)} kg en una sola línea es más que un contenedor (${es(MAX_KG_POR_LINEA)} kg) — confírmala o corrígela`);
+  }
   // Pedido en libras (Estados Unidos): el precio viene por libra y OBEN MAS lo pide por kilo (precio lb / 0,453592, especificaciones de Oben).
   let precioUnitario = c.precioUnitario ?? null;
   if (precioUnitario && up === 'lb') {
@@ -523,7 +530,8 @@ export function construirLinea(n: number, c: LineaCampos, equivalencias: Equival
 
   let anchoMm: number | null = null;
   // Ancho sin unidad (columna "ANCHO" de una tabla): menos de 200 se toma como cm (ningún rollo mide 200 cm); de 200 en adelante NO se adivina.
-  const unidadAncho = c.unidadAncho ?? (c.ancho && c.ancho < 200 ? 'cm' : null);
+  // En un pedido en libras (Estados Unidos) el ancho sin unidad está en pulgadas ("Web Width: 38.250", OC 3019081, 6-nov).
+  const unidadAncho = c.unidadAncho ?? (c.ancho && up === 'lb' && c.ancho < 120 ? 'in' : c.ancho && c.ancho < 200 ? 'cm' : null);
   const ul = unidadAncho ? unidadLongitud(unidadAncho) : null;
   if (c.ancho && ul) {
     const r = aMilimetros(c.ancho, ul);

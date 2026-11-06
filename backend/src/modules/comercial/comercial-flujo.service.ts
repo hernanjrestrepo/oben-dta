@@ -248,14 +248,24 @@ export class ComercialFlujoService {
     caso.clienteFinal = data.clienteFinal ?? null;
     caso.comercialEmail = data.comercialEmail ?? null;
     caso.ocNumero = data.ocNumero ?? caso.ocNumero;
-    caso.extraidoPor = data.extraidoPor ?? caso.extraidoPor;
     caso.tipo = data.tipo ?? null;
     caso.pais = data.pais ?? null;
     caso.destino = data.destino ?? null;
     caso.fechaRequerida = data.fechaRequerida ?? caso.fechaRequerida;
-    caso.lineas = data.lineas ?? [];
+    // Las líneas ya leídas (con los PDF adjuntos) se conservan y se traducen otra vez; releer solo el texto guardado leía peor.
+    const triangulado = (data.atencion ?? []).some((a) => /triangulado con OBEN US/.test(a));
+    if (caso.lineas.length > 0) {
+      caso.lineas = await this.intake.reconstruirLineas(caso.lineas, caso.clientId, { lineas: data.lineas, triangulado });
+    } else {
+      caso.lineas = data.lineas ?? [];
+      caso.extraidoPor = data.extraidoPor ?? caso.extraidoPor;
+    }
     caso.atencion = data.atencion ?? [];
-    caso.missing = data.missing ?? [];
+    const client = caso.clientId ? await this.clients.findOne(caso.clientId).catch(() => null) : null;
+    caso.missing = [
+      ...(data.missing ?? []).filter((m) => !/^Línea \d+/.test(m)),
+      ...calcularMissing(caso, { client }).filter((m) => /^Línea \d+/.test(m)),
+    ];
     caso.simulated = data.simulated ?? false;
     caso.simulatedItems = data.simulatedItems ?? [];
     caso.accionPendiente = null;
