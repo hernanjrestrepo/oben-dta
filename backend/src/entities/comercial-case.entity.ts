@@ -59,6 +59,8 @@ export interface AccionPendiente {
   detalle: string;
   creadaEn: string;
   lineas?: CasoLinea[];
+  /** Solo 'revisar_recubicaje': 'sin_kilos' = llegó otro correo de cubicación y faltan los kilos; 'fuera_umbral' = cambió más del 10 %. */
+  motivo?: 'sin_kilos' | 'fuera_umbral';
 }
 
 export interface CasoSeguimiento {

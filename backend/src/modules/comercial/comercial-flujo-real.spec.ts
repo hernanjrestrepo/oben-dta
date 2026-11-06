@@ -294,6 +294,34 @@ describe('Demo comercial con la Proforma REAL en OBEN MAS (servidor de pruebas)'
     expect(enviado.attachments[0]).toMatchObject({ filename: 'Proforma 11547.pdf', content: oficial.toString('base64') });
   });
 
+  it('otro correo de cubicación de la misma Proforma = recubicaje: el caso vuelve a cubicada y espera los kilos; dentro del 10 % sigue solo, fuera queda en excepción', async () => {
+    const w = world();
+    let caso = await w.flujo.recibirOc(OC, 'correo');
+    caso = await w.flujo.confirmar(caso.id);
+    const correo = (id: string) => ({
+      from: 'Sistemas <notif.app.co@obengroup.com>',
+      subject: 'Cubicación de Proforma #11547 - OBEN US, LLC (Multi-Plastics )',
+      body: 'Se realizó la cubicación de la Proforma #11547 por parte del area de Planeación, favor validar.',
+      messageId: id,
+    });
+    // Primer correo: cubicada y la Proforma sale al cliente.
+    expect((await w.flujo.registrarCubicacionDesdeCorreo(correo('<c1@obengroup.com>'))).caso).toMatchObject({ estado: 'enviada_cliente' });
+    // Segundo correo: Producción recubicó → vuelve a cubicada, espera los kilos (el aviso a Customer Service sale por su lista de distribución).
+    const r = await w.flujo.registrarCubicacionDesdeCorreo(correo('<c2@obengroup.com>'));
+    expect(r.caso).toMatchObject({ estado: 'cubicada', accionPendiente: { tipo: 'revisar_recubicaje', motivo: 'sin_kilos' } });
+    expect(r.caso!.eventos.map((e) => e.tipo)).toEqual(expect.arrayContaining(['recubicaje', 'devuelta']));
+    // Mientras espera los kilos, la Proforma NO sale otra vez.
+    await expect(w.flujo.enviarAlCliente(caso.id)).rejects.toThrow(/excepción por recubicaje/);
+    // Kilos dentro del 10 %: el pedido sigue solo.
+    const kilos = r.caso!.lineas[0].kilos!;
+    let c = await w.flujo.registrarRecubicaje(caso.id, [{ n: 1, kilos: Math.round(kilos * 1.05 * 100) / 100 }]);
+    expect(c.accionPendiente).toBeNull();
+    // Otro recubicaje con kilos fuera del 10 %: excepción por umbral.
+    await w.flujo.registrarCubicacionDesdeCorreo(correo('<c3@obengroup.com>'));
+    c = await w.flujo.registrarRecubicaje(caso.id, [{ n: 1, kilos: Math.round(kilos * 0.8 * 100) / 100 }]);
+    expect(c.accionPendiente).toMatchObject({ tipo: 'revisar_recubicaje', motivo: 'fuera_umbral' });
+  });
+
   it('pdfDeProforma: solo toma un adjunto que de verdad es PDF y prefiere el que dice "proforma"', () => {
     const pdf = (n: string, c = '%PDF-1.4') => ({ filename: n, contentType: 'application/pdf', content: Buffer.from(c) });
     expect(pdfDeProforma([], '11547')).toBeNull();

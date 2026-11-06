@@ -291,16 +291,49 @@ export class ComercialFlujoService {
     const resumen = resultado.lineas.map((l) => `línea ${l.n}: ${l.antes} → ${l.despues} kg (${l.pct > 0 ? '+' : ''}${l.pct.toLocaleString('es-CO', { maximumFractionDigits: 1 })} %)`).join('; ');
     this.evento(caso, 'recubicaje', `Recubicaje registrado${resumen ? `: ${resumen}` : ''}.`, this.ctx.userId);
     if (resultado.fuera.length === 0) {
+      // Ninguna línea cambió más del 10 %: si el pedido esperaba los kilos del recubicaje, sigue solo (la Proforma vuelve a salir).
+      if (caso.accionPendiente?.tipo === 'revisar_recubicaje') {
+        caso.accionPendiente = null;
+        caso.atencion = caso.atencion.filter((a) => !a.startsWith('Recubicaje'));
+        caso.nextCheckAt = new Date();
+        this.evento(caso, 'recubicaje_ok', 'Ninguna línea cambió más del 10 %: el pedido sigue su curso.');
+      }
       await this.casos.save(caso);
       return caso;
     }
     const detalle = `Recubicaje fuera del ${UMBRAL_RECUBICAJE_PCT} %: ${resultado.fuera.map((l) => `línea ${l.n} ${l.antes} → ${l.despues} kg (${l.pct > 0 ? '+' : ''}${l.pct.toLocaleString('es-CO', { maximumFractionDigits: 1 })} %)`).join('; ')}. Customer Service debe revisar antes de enviar la Proforma al cliente.`;
-    caso.accionPendiente = { tipo: 'revisar_recubicaje', detalle, creadaEn: new Date().toISOString() };
-    caso.atencion = [...caso.atencion.filter((a) => !a.startsWith('Recubicaje fuera')), detalle];
+    caso.accionPendiente = { tipo: 'revisar_recubicaje', detalle, creadaEn: new Date().toISOString(), motivo: 'fuera_umbral' };
+    caso.atencion = [...caso.atencion.filter((a) => !a.startsWith('Recubicaje')), detalle];
     this.evento(caso, 'excepcion_recubicaje', detalle);
     await this.casos.save(caso);
     await this.avisarCS(caso, `Excepción de recubicaje: Proforma ${caso.numberPF}`, `<p>${esc(detalle)}</p><p>El pedido queda en excepción en "cubicada": la Proforma no sale al cliente hasta que la revises en Oben Xmart → Comercial.</p>`);
     return caso;
+  }
+
+  /**
+   * Llegó otro correo de cubicación de una Proforma que ya estaba cubicada: Producción recubicó. Oben no manda los kilos (ni por el
+   * correo ni por API durante el cubicaje), así que el caso vuelve a "cubicada" y queda en excepción esperando los kilos recubicados:
+   * al registrarlos, si ninguna línea cambió más del 10 % sigue solo; si alguna cambió más, espera la revisión de Customer Service.
+   */
+  private async recubicajePorCorreo(caso: ComercialCase, numberPF: string, asunto: string, ref: string): Promise<{ caso: ComercialCase; numberPF: string; detalle: string }> {
+    const vez = caso.eventos.filter((e) => e.tipo === 'cubicada' || e.tipo === 'recubicaje').length + 1;
+    const yaSalio = caso.estado === 'enviada_cliente';
+    this.evento(caso, 'recubicaje', `Oben envió otro correo de cubicación de la Proforma ${numberPF} ("${asunto.trim()}"): Producción recubicó (aviso n.° ${vez}).${ref}`);
+    if (yaSalio) {
+      caso.estado = 'cubicada';
+      caso.seguimiento = { tipo: null, enviados: caso.seguimiento.enviados, proximoEn: null, ultimoEn: caso.seguimiento.ultimoEn };
+      this.evento(caso, 'devuelta', 'El caso vuelve a "cubicada": la Proforma que ya salió al cliente cambió con el recubicaje.');
+    }
+    if (caso.accionPendiente?.tipo !== 'revisar_recubicaje') {
+      const detalle = `Recubicaje recibido: Producción recubicó la Proforma ${numberPF} (otro correo de cubicación de Oben). Registra los kilos recubicados de cada línea: si ninguna cambia más del 10 %, el pedido sigue solo; si alguna cambia más, queda en excepción para tu revisión.${yaSalio ? ' La Proforma anterior ya había salido al cliente.' : ''}`;
+      caso.accionPendiente = { tipo: 'revisar_recubicaje', detalle, creadaEn: new Date().toISOString(), motivo: 'sin_kilos' };
+      caso.atencion = [...caso.atencion.filter((a) => !a.startsWith('Recubicaje')), detalle];
+      await this.casos.save(caso);
+      await this.avisarCS(caso, `Recubicaje: Proforma ${numberPF}`, `<p>${esc(detalle)}</p>`);
+    } else {
+      await this.casos.save(caso);
+    }
+    return { caso, numberPF, detalle: 'Recubicaje: el caso vuelve a cubicada y espera los kilos recubicados.' };
   }
 
   /** El correo de la orden de compra como archivo .eml (null si no se guardó). */
@@ -856,6 +889,8 @@ export class ComercialFlujoService {
       caso.proformaPdfNombre = pdf.filename;
       this.evento(caso, 'proforma_pdf', `Llegó el PDF oficial de la Proforma ${numberPF} adjunto al correo de cubicación (${pdf.filename}).${ref}`);
     }
+    // Otro correo de cubicación de la misma Proforma = Producción recubicó (Hernán, 6-nov): el caso vuelve a "cubicada" y espera los kilos.
+    if (caso.estado === 'cubicada' || caso.estado === 'enviada_cliente') return this.recubicajePorCorreo(caso, numberPF, correo.subject, ref);
     if (caso.estado !== 'sin_cubicar') {
       this.evento(caso, 'cubicada', `OBEN MAS confirmó otra vez el cubicaje de la Proforma ${numberPF} ("${correo.subject.trim()}"); el caso ya estaba "${caso.estado}".${ref}`);
       await this.casos.save(caso);
